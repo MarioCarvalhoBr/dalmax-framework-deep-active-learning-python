@@ -158,6 +158,24 @@ The hyperparameters of the model are defined in a JSON file. The JSON file must 
 
 DalMax is under the MIT License. See the [LICENSE](LICENSE) file for more details.
 
+
+## Citing
+
+If you use our code in your research or applications, please consider citing our repository.
+
+```
+@misc{Carvalho2024dalmax,
+  author       = {Mário de Araújo Carvalho},
+  title        = {DalMax: Framework for Deep Active Learning Approaches},
+  howpublished = {\url{https://github.com/MarioCarvalhoBr/dalmax-framework-deep-active-learning-python}},
+  month        = {dec},
+  year         = {2024},
+  note         = {Available on GitHub},
+  annote       = {A Python framework for implementing and comparing deep active learning methods.}
+}
+
+```
+
 ## Contact
 
 - Author: Mário de Araújo Carvalho
@@ -180,3 +198,6 @@ DalMax is under the MIT License. See the [LICENSE](LICENSE) file for more detail
 [6] Adversarial Active Learning for Deep Networks: a Margin Based Approach, arXiv, 2018
 
 
+## Extras
+
+This project is based on some code from the repository [DeepAL: Deep Active Learning in Python](https://github.com/ej0cl6/deep-active-learning). Additionally, please consider citing the corresponding work. For more details, refer to the publication available [here](https://arxiv.org/abs/2111.15258). 
