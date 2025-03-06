@@ -66,6 +66,7 @@ class DeepLearning:
         loader = DataLoader(data, shuffle=False, **self.params['test_args'])
         with torch.no_grad():
             for x, y, idxs in loader:
+                
                 x, y = x.to(self.device), y.to(self.device)
                 out, e1 = self.clf(x)
                 pred = out.max(1)[1]

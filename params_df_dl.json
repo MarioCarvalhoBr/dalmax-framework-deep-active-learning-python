@@ -1,0 +1,38 @@
+{
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_full/",
+        "n_epoch": 10,
+        "n_drop": 5,
+        "n_classes": 5,
+        "train_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "test_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "optimizer_args": {
+            "lr": 0.05,
+            "momentum": 0.3
+        }
+    },
+    "CIFAR10": {
+        "data_dir": "DATA/DATA_CIFAR10/",
+        "n_epoch": 20,
+        "n_drop": 10,
+        "n_classes": 10,
+        "train_args": {
+            "batch_size": 64,
+            "num_workers": 1
+        },
+        "test_args": {
+            "batch_size": 1000,
+            "num_workers": 1
+        },
+        "optimizer_args": {
+            "lr": 0.05,
+            "momentum": 0.3
+        }
+    }
+}

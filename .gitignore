@@ -5,6 +5,7 @@ data/*
 local_assets/*
 results/*
 logs/*
+TRASH_TEXT.md
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

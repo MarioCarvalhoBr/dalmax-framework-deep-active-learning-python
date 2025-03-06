@@ -33,7 +33,7 @@ class Strategy:
         self.net.train(labeled_data)
 
     def train_full(self):
-        self.logger.warning("Training FULL DATASET the DAL strategy")
+        self.logger.warning("Training FULL DATASET the without DAL strategy")
         labeled_idxs, labeled_data = self.dataset.get_train_data()
         self.net.train(labeled_data)
 
@@ -41,7 +41,7 @@ class Strategy:
         self.logger.warning("Predicting with the DAL strategy")
         preds = self.net.predict(data)
         return preds
-
+    
     def predict_prob(self, data):
         self.logger.warning("Predicting probabilities with the DAL strategy")
         probs = self.net.predict_prob(data)

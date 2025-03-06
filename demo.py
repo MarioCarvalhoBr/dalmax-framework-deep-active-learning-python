@@ -4,6 +4,7 @@ import time
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 
 # Plot Confusion matrix: Gera a matriz de confusão em .pdf para o modelo
 import seaborn as sns
@@ -87,25 +88,31 @@ def main(args):
     preds = strategy.predict(dataset.get_test_data())
 
     acc = dataset.cal_test_acc(preds)
-    precision, recall, f1_score = dataset.calc_metrics(preds)
+    acc_skl, precision, recall, f1_score = dataset.calc_metrics_sklearn(preds)
     
     all_acc.append(acc)
     all_precision.append(precision)
     all_recall.append(recall)
     all_f1_score.append(f1_score)
-    
+
+    logger.warning("==========================================================================>\n")
+    print("INITIAL METRICS: ")
     logger.warning(f"Round 0 testing accuracy: {acc}")
+    logger.warning(f"Round 0 acc_skl: {acc_skl}")
     logger.warning(f"Round 0 precision: {precision}")
     logger.warning(f"Round 0 recall: {recall}")
     logger.warning(f"Round 0 f1_score: {f1_score}")
+    logger.warning("==========================================================================>\n")
 
     # Get class names from the dataset
     class_names = dataset.get_classes_names()
     # ADD ROUNDS
     all_rounds.append(0)
-    preds = None 
-
+    if args.n_round > 0:
+        preds = None 
+    
     for rd in range(1, args.n_round+1):
+        print("FOR LOOP")
         logger.warning("==========================================================================>")
         logger.warning(f"Round {rd}")
         # query
@@ -123,7 +130,7 @@ def main(args):
         # calculate accuracy
         preds = strategy.predict(dataset.get_test_data())
         acc = dataset.cal_test_acc(preds)
-        precision, recall, f1_score = dataset.calc_metrics(preds)
+        acc_skl, precision, recall, f1_score = dataset.calc_metrics_sklearn(preds)
         all_precision.append(precision)
         all_recall.append(recall)
         all_f1_score.append(f1_score)
@@ -144,6 +151,7 @@ def main(args):
         logger.warning("==========================================================================>")
 
     cm = confusion_matrix(dataset.Y_test, preds)
+
     def plot_confusion_matrix(cm, class_names):
         fig, ax = plt.subplots(figsize=(10, 7))
         sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=class_names, yticklabels=class_names, ax=ax)
@@ -156,11 +164,22 @@ def main(args):
         plt.savefig(f"{dir_results}/confusion_matrix.pdf")
 
     plot_confusion_matrix(cm, class_names)
+
+    # Convert all_acc, all_precision, all_recall and all_f1_score to float list
+    all_acc = [float(x) for x in all_acc]
+    all_precision = [float(x) for x in all_precision]
+    all_recall = [float(x) for x in all_recall]
+    all_f1_score = [float(x) for x in all_f1_score]
     
+    
+    logger.warning("==========================================================================>\n")
+    logger.warning(f'FINAL METRICS: ')
     logger.warning(f'Final Accuracies: {all_acc}')
+    logger.warning(f'Final Accuracies (sklearn): {acc_skl}')
     logger.warning(f'Final Precision: {all_precision}')
     logger.warning(f'Final Recall: {all_recall}')
     logger.warning(f'Final F1-Score: {all_f1_score}')
+    logger.warning("==========================================================================>\n")
     logger.warning(f'Final Rounds: {all_rounds}')
 
     end_time = time.time()
@@ -213,7 +232,23 @@ def main(args):
     with open(json_path, "w") as json_file:
         json.dump(dados_config_results, json_file, indent=4)
 
+    predictions = []
+    for i in range(len(dataset.Y_test)):
+        real_class = dataset.Y_test[i].item()
+        predicted_class = preds[i].item()
+        real_class_name = dataset.get_class_name(real_class)
+        predicted_class_name = dataset.get_class_name(predicted_class)
+        correct = 1 if real_class == predicted_class else 0
+        path = dataset.Z_test_paths[i]
+        predictions.append([i, real_class_name, predicted_class_name, correct, path])
+
+    predictions_df = pd.DataFrame(predictions, columns=["Image Index", "Real Class", "Predicted Class", "Correct", "Path"])
+    predictions_csv_path = os.path.join(dir_results, "predictions.csv")
+    predictions_df.to_csv(predictions_csv_path, index=False)
+    logger.warning(f"Predictions saved to {predictions_csv_path}")
+
     print(f"Dados salvos em {json_path}")
+    print(f"Predictions saved in {predictions_csv_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
