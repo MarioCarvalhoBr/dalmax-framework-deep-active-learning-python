@@ -175,6 +175,28 @@ If you use our code in your research or applications, please consider citing our
 }
 
 ```
+## PhD Qualification Document
+
+This repository contains the PhD qualification document that presents the theoretical foundation and methodology behind the DalMax framework. The document is available in the `phd_files/` folder and provides comprehensive details about the deep active learning approaches for precision agriculture.
+
+**Document**: [`qualificacao-doutorado-mario-carvalho.pdf`](phd_files/qualificacao-doutorado-mario-carvalho.pdf)
+
+### Citation for PhD Qualification Document
+
+```
+@phdthesis{Carvalho2025qualificacao,
+  author    = {Mário de Araújo Carvalho, 
+              Wesley Nunes Gonçalves},
+  title     = {Deep Active Learning for Precision Agriculture: A Computational Approach},
+  school    = {Universidade Federal de Mato Grosso do Sul, Faculdade de Computação},
+  year      = {2025},
+  month     = {mar},
+  type      = {Qualificação de Doutorado},
+  address   = {Campo Grande, MS, Brazil},
+  note      = {PhD Qualification Examination},
+  supervisor = {Wesley Nunes Gonçalves}
+}
+```
 
 ## Contact
 
