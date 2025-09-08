@@ -1,3 +1,4 @@
+import pickle
 import os
 import numpy as np
 from PIL import Image
@@ -37,6 +38,15 @@ class Data:
         self.create_indexes_path()
         
     def create_feature_maps_vctex(self):
+        # Verifica se o arquivo results/features_dict_vctex.pkl existe. Se sim, carrega e adiciona a features_dict
+        path_pkl = 'results/features_dict_vctex.pkl'
+        if os.path.exists(path_pkl):
+            with open(path_pkl, 'rb') as f:
+                self.features_dict = pickle.load(f)
+            print(f"Features dictionary loaded from {path_pkl}")
+        else:
+            print(f"Features dictionary file {path_pkl} not found.")
+            
         # Imprime todos os ids samples do dataset inteiro que já estão anotados e que não estão anotados (pool)
         labeled_ids = np.where(self.labeled_idxs==1)[0]
         unlabeled_ids = np.where(self.labeled_idxs==0)[0]
@@ -96,6 +106,16 @@ class Data:
         
 
     def create_feature_maps_ssrae(self):
+
+        # Verifica se o arquivo results/features_dict_vctex.pkl existe. Se sim, carrega e adiciona a features_dict
+        path_pkl = 'results/features_dict_vctex.pkl'
+        if os.path.exists(path_pkl):
+            with open(path_pkl, 'rb') as f:
+                self.features_dict = pickle.load(f)
+            print(f"Features dictionary loaded from {path_pkl}")
+        else:
+            print(f"Features dictionary file {path_pkl} not found.")
+
         # Imprime todos os ids samples do dataset inteiro que já estão anotados e que não estão anotados (pool)
         labeled_ids = np.where(self.labeled_idxs==1)[0]
         unlabeled_ids = np.where(self.labeled_idxs==0)[0]
@@ -188,6 +208,13 @@ class Data:
         elif self.strategy_name == "VCTexKmeansSampling":
             print(f"Creating VCTex feature maps...")
             self.create_feature_maps_vctex()
+            
+        # Verifica se o arquivo results/features_dict_vctex.pkl existe. Se não existe, cria
+        path_pkl = 'results/features_dict_vctex.pkl'
+        if not os.path.exists(path_pkl):
+            with open(path_pkl, 'wb') as f:
+                pickle.dump(self.features_dict, f)
+            print(f"Features dictionary saved to {path_pkl}")
             
     
     def get_labeled_data(self):
