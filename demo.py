@@ -74,10 +74,11 @@ def main(args):
     dataset = get_dataset(args.dataset_name, params)
     net = get_network_deep_learning(args.dataset_name, device, params)
     strategy = get_strategy(args.strategy_name)(dataset, net, logger)
+    
 
     # start experiment
     start_time = time.time()
-    dataset.initialize_labels(args.n_init_labeled)
+    dataset.initialize_labels(args.n_init_labeled, args.strategy_name)
 
     # round 0 accuracy
     logger.warning("Round 0")
@@ -273,7 +274,8 @@ if __name__ == "__main__":
                                 "BALDDropout", 
                                 "AdversarialBIM", 
                                 "AdversarialDeepFool",
-                                "SSRAEKmeansSampling"], help="query strategy")
+                                "SSRAEKmeansSampling",
+                                "VCTexKmeansSampling"], help="query strategy")
     args = parser.parse_args()
 
     main(args)

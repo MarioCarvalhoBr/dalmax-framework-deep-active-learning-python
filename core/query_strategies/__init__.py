@@ -11,3 +11,4 @@ from .bayesian_active_learning_disagreement_dropout import BALDDropout
 from .adversarial_bim import AdversarialBIM
 from .adversarial_deepfool import AdversarialDeepFool
 from .ssrae_kmeans_sampling import SSRAEKmeansSampling
+from .vctex_kmeans_sampling import VCTexKmeansSampling

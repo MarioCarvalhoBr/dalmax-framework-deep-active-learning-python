@@ -32,6 +32,7 @@ class Data:
         self.labeled_idxs = np.zeros(self.n_pool, dtype=bool)
         
         self.features_dict = {}
+        self.strategy_name = ""
         
         self.create_indexes_path()
         
@@ -172,13 +173,22 @@ class Data:
     def get_classes_to_idx(self):
         return self.class_to_idx
         
-    def initialize_labels(self, num):
+    def initialize_labels(self, n_init_labeled, strategy_name):
+        print(f"Initializing with {n_init_labeled} labeled samples using strategy: {strategy_name}")
+        self.strategy_name = strategy_name
+
         # generate initial labeled pool
         tmp_idxs = np.arange(self.n_pool)
         np.random.shuffle(tmp_idxs)
-        self.labeled_idxs[tmp_idxs[:num]] = True
-        
-        self.create_feature_maps_vctex()
+        self.labeled_idxs[tmp_idxs[:n_init_labeled]] = True
+
+        if self.strategy_name == "SSRAEKmeansSampling":
+            print(f"Creating SSRAE feature maps...")
+            self.create_feature_maps_ssrae()
+        elif self.strategy_name == "VCTexKmeansSampling":
+            print(f"Creating VCTex feature maps...")
+            self.create_feature_maps_vctex()
+            
     
     def get_labeled_data(self):
         labeled_idxs = np.arange(self.n_pool)[self.labeled_idxs]

@@ -4,12 +4,12 @@ from .strategy import Strategy
 from sklearn.cluster import KMeans
 import time 
 
-class SSRAEKmeansSampling(Strategy):
+class VCTexKmeansSampling(Strategy):
     def __init__(self, dataset, net, logger):
-        super(SSRAEKmeansSampling, self).__init__(dataset, net, logger)
+        super(VCTexKmeansSampling, self).__init__(dataset, net, logger)
 
     def query(self, n):
-        print(f"Initializing the DAL strategy with SSRAESampling query {n} samples")
+        print(f"Initializing the DAL strategy with VCTexKmeansSamplingSampling query {n} samples")
         
         labeled_ids = np.where(self.dataset.labeled_idxs==1)[0]
         unlabeled_ids = np.where(self.dataset.labeled_idxs==0)[0]
@@ -18,7 +18,7 @@ class SSRAEKmeansSampling(Strategy):
 
         # Convert features dictionary to matrix for K-means
         image_ids = list(features_dict.keys())
-        features_matrix = np.vstack([features_dict[img_id].numpy() for img_id in image_ids])
+        features_matrix = np.vstack([features_dict[img_id] for img_id in image_ids])
         
         print(f"\nRunning K-means clustering with n={n} clusters...")
         
@@ -44,7 +44,7 @@ class SSRAEKmeansSampling(Strategy):
             print(f"Cluster {i}: Selected image ID {selected_img_id} (distance: {distances[closest_idx]:.4f})")
         
         selected_samples = np.array(selected_samples)
-        print(f"\nSelected samples using SSRAE + K-means: {selected_samples}")
+        print(f"\nSelected samples using VCTexKmeansSampling + K-means: {selected_samples}")
         
 
         # Remove selected_samples do features_dict
