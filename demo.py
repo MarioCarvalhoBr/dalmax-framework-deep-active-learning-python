@@ -272,7 +272,8 @@ if __name__ == "__main__":
                                 "KCenterGreedy", 
                                 "BALDDropout", 
                                 "AdversarialBIM", 
-                                "AdversarialDeepFool"], help="query strategy")
+                                "AdversarialDeepFool",
+                                "SSRAEKmeansSampling"], help="query strategy")
     args = parser.parse_args()
 
     main(args)

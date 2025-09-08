@@ -8,7 +8,7 @@ from core.cifar10_model import CIFAR10Model
 from core.query_strategies import RandomSampling, LeastConfidence, MarginSampling, EntropySampling, \
                              LeastConfidenceDropout, MarginSamplingDropout, EntropySamplingDropout, \
                              KMeansSampling, KCenterGreedy, BALDDropout, \
-                          AdversarialBIM, AdversarialDeepFool
+                          AdversarialBIM, AdversarialDeepFool, SSRAEKmeansSampling
 
 # CONFIGURE YOUR HANDLER HERE AND ADD NEW HANDLERS TO THE get_handler FUNCTION
 def get_handler(name):
@@ -67,5 +67,7 @@ def get_strategy(name):
         return AdversarialBIM
     elif name == "AdversarialDeepFool":
         return AdversarialDeepFool
+    elif name == "SSRAEKmeansSampling":
+        return SSRAEKmeansSampling
     else:
         raise NotImplementedError
