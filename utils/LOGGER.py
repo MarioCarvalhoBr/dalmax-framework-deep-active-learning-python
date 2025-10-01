@@ -7,7 +7,7 @@ logger.setLevel(logging.DEBUG)
 
 # Criar um handler para escrever no arquivo de log
 text_time_log = time.strftime('%Y-%m-%d-%H-%M-%S')
-PATH_LOGS = 'logs/'
+PATH_LOGS = 'results/logs/'
 if not os.path.exists(PATH_LOGS):
     os.makedirs(PATH_LOGS)
 
