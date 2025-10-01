@@ -45,134 +45,147 @@ class Data:
                 self.features_dict = pickle.load(f)
             print(f"Features dictionary loaded from {path_pkl}")
         else:
-            print(f"Features dictionary file {path_pkl} not found.")
+            print(f"Features dictionary file {path_pkl} NOT FOUND. Please run the feature extraction first.")
+                        
+            # Imprime todos os ids samples do dataset inteiro que já estão anotados e que não estão anotados (pool)
+            labeled_ids = np.where(self.labeled_idxs==1)[0]
+            unlabeled_ids = np.where(self.labeled_idxs==0)[0]
+            # Print len 
+            print(f"---->Labeled IDs length: {len(labeled_ids)}")
+            print(f"---->Unlabeled IDs length: {len(unlabeled_ids)}")
+            print(f"---->Labeled IDs: {labeled_ids}")
+            print(f"---->Unlabeled IDs: {unlabeled_ids}")
             
-        # Imprime todos os ids samples do dataset inteiro que já estão anotados e que não estão anotados (pool)
-        labeled_ids = np.where(self.labeled_idxs==1)[0]
-        unlabeled_ids = np.where(self.labeled_idxs==0)[0]
-        # Print len 
-        print(f"---->Labeled IDs length: {len(labeled_ids)}")
-        print(f"---->Unlabeled IDs length: {len(unlabeled_ids)}")
-        print(f"---->Labeled IDs: {labeled_ids}")
-        print(f"---->Unlabeled IDs: {unlabeled_ids}")
-        
-        
-        
-                # Device.
-        device = torch.device("cuda:0")
-
-        # Method's hyperparameters.
-        Q = [5,17] #best parameters of the paper. You can test different vales 
-
-        # Instantiate the color feature extractor.
-        extractor = VCTexMethod(Q=Q, device=device)
-
-        # Dictionary to store features for each unlabeled image
-        features_dict = {}
-        
-        print(f"Extracting features for {len(unlabeled_ids)} unlabeled images...")
-        start_time = time.time()
-        
-        # Extract features for each unlabeled image
-        for i, img_id in enumerate(unlabeled_ids):
-            # Get the image from the dataset
-            image = self.X_train[img_id]
-
-            # Extract features from the image
-            features = extractor(image)
             
-            # Store in dictionary
-            features_dict[img_id] = np.array(features)
+            # Device.
+            device = torch.device("cuda:0")
 
-            # Print progress every 100 images
-            if (i + 1) % 100 == 0 or i == 0:
-                print(f"Processed {i + 1}/{len(unlabeled_ids)} images...")
-        
-        end_time = time.time()
-        print(f"Feature extraction completed in {end_time - start_time:.2f} seconds")
-        print(f"Features dictionary contains {len(features_dict)} entries")
-        print(f"Feature shape for each image: {list(features_dict.values())[0].shape}")
-        
-        # Show example of first few entries
-        first_ids = list(features_dict.keys())[:3]
-        print(f"\nExample features for first 3 images:")
-        for img_id in first_ids:
-            print(f"Image ID {img_id}: Features shape = {features_dict[img_id].shape}")
+            # Method's hyperparameters.
+            Q = [5,17] #best parameters of the paper. You can test different vales 
 
-        self.features_dict = features_dict
-        
-        # Use t-SNE to convert each image features to 2D and plot with class colors
-        # self.plot_features_tsne()
+            # Instantiate the color feature extractor.
+            extractor = VCTexMethod(Q=Q, device=device)
+
+            # Dictionary to store features for each unlabeled image
+            features_dict = {}
+            
+            print(f"Extracting features for {len(unlabeled_ids)} unlabeled images...")
+            start_time = time.time()
+            
+            # Extract features for each unlabeled image
+            for i, img_id in enumerate(unlabeled_ids):
+                # Get the image from the dataset
+                image = self.X_train[img_id]
+
+                # Extract features from the image
+                features = extractor(image)
+                
+                # Store in dictionary
+                features_dict[img_id] = np.array(features)
+
+                # Print progress every 100 images
+                if (i + 1) % 100 == 0 or i == 0:
+                    print(f"Processed {i + 1}/{len(unlabeled_ids)} images...")
+            
+            end_time = time.time()
+            print(f"Feature extraction completed in {end_time - start_time:.2f} seconds")
+            print(f"Features dictionary contains {len(features_dict)} entries")
+            print(f"Feature shape for each image: {list(features_dict.values())[0].shape}")
+            
+            # Show example of first few entries
+            first_ids = list(features_dict.keys())[:3]
+            print(f"\nExample features for first 3 images:")
+            for img_id in first_ids:
+                print(f"Image ID {img_id}: Features shape = {features_dict[img_id].shape}")
+
+            self.features_dict = features_dict
+            
+            # Use t-SNE to convert each image features to 2D and plot with class colors
+            # self.plot_features_tsne()
+            
+            
+            ## SAVE PICKLE
+            if not os.path.exists(path_pkl):
+                with open(path_pkl, 'wb') as f:
+                    pickle.dump(self.features_dict, f)
+                print(f"Features dictionary saved to {path_pkl}")
         
 
     def create_feature_maps_ssrae(self):
 
-        # Verifica se o arquivo results/features_dict_vctex.pkl existe. Se sim, carrega e adiciona a features_dict
-        path_pkl = 'results/features_dict_vctex.pkl'
+        # Verifica se o arquivo results/features_dict_ssrae.pkl existe. Se sim, carrega e adiciona a features_dict
+        path_pkl = 'results/features_dict_ssrae.pkl'
         if os.path.exists(path_pkl):
             with open(path_pkl, 'rb') as f:
                 self.features_dict = pickle.load(f)
             print(f"Features dictionary loaded from {path_pkl}")
+            
         else:
-            print(f"Features dictionary file {path_pkl} not found.")
+            print(f"Features dictionary file {path_pkl} NOT FOUND. Please run the feature extraction first.")
 
-        # Imprime todos os ids samples do dataset inteiro que já estão anotados e que não estão anotados (pool)
-        labeled_ids = np.where(self.labeled_idxs==1)[0]
-        unlabeled_ids = np.where(self.labeled_idxs==0)[0]
-        # Print len 
-        print(f"---->Labeled IDs length: {len(labeled_ids)}")
-        print(f"---->Unlabeled IDs length: {len(unlabeled_ids)}")
-        print(f"---->Labeled IDs: {labeled_ids}")
-        print(f"---->Unlabeled IDs: {unlabeled_ids}")
+            # Imprime todos os ids samples do dataset inteiro que já estão anotados e que não estão anotados (pool)
+            labeled_ids = np.where(self.labeled_idxs==1)[0]
+            unlabeled_ids = np.where(self.labeled_idxs==0)[0]
+            # Print len 
+            print(f"---->Labeled IDs length: {len(labeled_ids)}")
+            print(f"---->Unlabeled IDs length: {len(unlabeled_ids)}")
+            print(f"---->Labeled IDs: {labeled_ids}")
+            print(f"---->Unlabeled IDs: {unlabeled_ids}")
 
-        # Method's hyperparameters.
-        Q = 13  # The number of hidden neurons.
+            # Method's hyperparameters.
+            Q = 13  # The number of hidden neurons.
 
-        # Instantiate the color feature extractor.
-        extractor = ColorFeatureExtractor(Q=Q)
+            # Instantiate the color feature extractor.
+            extractor = ColorFeatureExtractor(Q=Q)
 
-        # Dictionary to store features for each unlabeled image
-        features_dict = {}
-        
-        print(f"Extracting features for {len(unlabeled_ids)} unlabeled images...")
-        start_time = time.time()
-        
-        # Extract features for each unlabeled image
-        for i, img_id in enumerate(unlabeled_ids):
-            # Get the image from the dataset
-            image = self.X_train[img_id]
-
-            # Extract features from the image
-            features = extractor.extract(image)
+            # Dictionary to store features for each unlabeled image
+            features_dict = {}
             
-            # Store in dictionary
-            features_dict[img_id] = features
+            print(f"Extracting features for {len(unlabeled_ids)} unlabeled images...")
+            start_time = time.time()
             
-            # Print progress every 100 images
-            if (i + 1) % 100 == 0 or i == 0:
-                print(f"Processed {i + 1}/{len(unlabeled_ids)} images...")
-        
-        end_time = time.time()
-        print(f"Feature extraction completed in {end_time - start_time:.2f} seconds")
-        print(f"Features dictionary contains {len(features_dict)} entries")
-        print(f"Feature shape for each image: {list(features_dict.values())[0].shape}")
-        
-        # Show example of first few entries
-        first_ids = list(features_dict.keys())[:3]
-        print(f"\nExample features for first 3 images:")
-        for img_id in first_ids:
-            print(f"Image ID {img_id}: Features shape = {features_dict[img_id].shape}")
+            # Extract features for each unlabeled image
+            for i, img_id in enumerate(unlabeled_ids):
+                # Get the image from the dataset
+                image = self.X_train[img_id]
 
-        self.features_dict = features_dict
+                # Extract features from the image
+                features = extractor.extract(image)
+                
+                # Store in dictionary
+                features_dict[img_id] = features
+                
+                # Print progress every 100 images
+                if (i + 1) % 100 == 0 or i == 0:
+                    print(f"Processed {i + 1}/{len(unlabeled_ids)} images...")
+            
+            end_time = time.time()
+            print(f"Feature extraction completed in {end_time - start_time:.2f} seconds")
+            print(f"Features dictionary contains {len(features_dict)} entries")
+            print(f"Feature shape for each image: {list(features_dict.values())[0].shape}")
+            
+            # Show example of first few entries
+            first_ids = list(features_dict.keys())[:3]
+            print(f"\nExample features for first 3 images:")
+            for img_id in first_ids:
+                print(f"Image ID {img_id}: Features shape = {features_dict[img_id].shape}")
+
+            self.features_dict = features_dict
         
-        # Use t-SNE to convert each image features to 2D and plot with class colors
-        # self.plot_features_tsne()
+            # Use t-SNE to convert each image features to 2D and plot with class colors
+            # self.plot_features_tsne()
+            
+            ## SAVE PICKLE
+            if not os.path.exists(path_pkl):
+                with open(path_pkl, 'wb') as f:
+                    pickle.dump(self.features_dict, f)
+                print(f"Features dictionary saved to {path_pkl}")
         
 
     def create_indexes_path(self):
         # Salva em um arquivo indices.txt o indice (id) da imagem, classe_nome, e seu caminho
         # Faça com cabeçalho e separado por ;
-        with open("indices.txt", "w") as f:
+        with open("results/original_indices.txt", "w") as f:
             f.write("id;class_name;path\n")
             for i, path in enumerate(self.Z_train_paths):
                 f.write(f"{i};{self.Y_train[i]};{path}\n")
@@ -208,15 +221,7 @@ class Data:
         elif self.strategy_name == "VCTexKmeansSampling":
             print(f"Creating VCTex feature maps...")
             self.create_feature_maps_vctex()
-            
-        # Verifica se o arquivo results/features_dict_vctex.pkl existe. Se não existe, cria
-        path_pkl = 'results/features_dict_vctex.pkl'
-        if not os.path.exists(path_pkl):
-            with open(path_pkl, 'wb') as f:
-                pickle.dump(self.features_dict, f)
-            print(f"Features dictionary saved to {path_pkl}")
-            
-    
+                
     def get_labeled_data(self):
         labeled_idxs = np.arange(self.n_pool)[self.labeled_idxs]
         return labeled_idxs, self.handler(self.X_train[labeled_idxs], self.Y_train[labeled_idxs])

@@ -11,9 +11,6 @@ class SSRAEKmeansSampling(Strategy):
     def query(self, n):
         print(f"Initializing the DAL strategy with SSRAESampling query {n} samples")
         
-        labeled_ids = np.where(self.dataset.labeled_idxs==1)[0]
-        unlabeled_ids = np.where(self.dataset.labeled_idxs==0)[0]
-
         features_dict = self.dataset.features_dict
 
         # Convert features dictionary to matrix for K-means
