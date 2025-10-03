@@ -274,6 +274,7 @@ if __name__ == "__main__":
                                 "BALDDropout", 
                                 "AdversarialBIM", 
                                 "AdversarialDeepFool",
+                                "SSRAEKmeansHCSampling",
                                 "SSRAEKmeansSampling",
                                 "VCTexKmeansSampling"], help="query strategy")
     args = parser.parse_args()

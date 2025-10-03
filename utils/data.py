@@ -19,6 +19,12 @@ class Data:
         self.class_to_idx = class_to_idx
         self.X_train = X_train
         self.Y_train = Y_train
+        # Save Y_train with picke in results/Y_train.pkl
+        path_pkl = 'results/Y_train.pkl'
+        if not os.path.exists(path_pkl):
+            with open(path_pkl, 'wb') as f:
+                pickle.dump(self.Y_train, f)
+            print(f"Y_train saved to {path_pkl}")
         self.Z_train_paths = Z_train_paths
 
         self.X_test = X_test
@@ -172,14 +178,16 @@ class Data:
 
             self.features_dict = features_dict
         
-            # Use t-SNE to convert each image features to 2D and plot with class colors
-            # self.plot_features_tsne()
+            
             
             ## SAVE PICKLE
             if not os.path.exists(path_pkl):
                 with open(path_pkl, 'wb') as f:
                     pickle.dump(self.features_dict, f)
                 print(f"Features dictionary saved to {path_pkl}")
+                
+        # Use t-SNE to convert each image features to 2D and plot with class colors
+        # self.plot_features_tsne()
         
 
     def create_indexes_path(self):
@@ -215,12 +223,14 @@ class Data:
         np.random.shuffle(tmp_idxs)
         self.labeled_idxs[tmp_idxs[:n_init_labeled]] = True
 
-        if self.strategy_name == "SSRAEKmeansSampling":
+        if self.strategy_name == "SSRAEKmeansSampling" or self.strategy_name == "SSRAEKmeansHCSampling":
             print(f"Creating SSRAE feature maps...")
             self.create_feature_maps_ssrae()
-        elif self.strategy_name == "VCTexKmeansSampling":
+        elif self.strategy_name == "VCTexKmeansSampling" or self.strategy_name == "VCTexKmeansHCSampling":
             print(f"Creating VCTex feature maps...")
             self.create_feature_maps_vctex()
+            
+        self.plot_features_tsne()
                 
     def get_labeled_data(self):
         labeled_idxs = np.arange(self.n_pool)[self.labeled_idxs]
@@ -429,6 +439,7 @@ def get_CIFAR10(handler, data_dir, img_size=32):
     # Função para carregar imagens e rótulos
     def load_images_and_labels(path, classes, class_to_idx):
         images, labels = [], []
+        images_path = []
         for class_name in classes:
             class_dir = os.path.join(path, class_name)
             if not os.path.isdir(class_dir):
@@ -440,9 +451,10 @@ def get_CIFAR10(handler, data_dir, img_size=32):
                     img = Image.open(img_path).convert("RGB").resize((img_size, img_size))
                     images.append(np.array(img))  # Converter para array numpy
                     labels.append(class_to_idx[class_name])  # Obter índice da classe
+                    images_path.append(img_path)
                 except Exception as e:
                     print(f"Erro ao carregar a imagem {img_path}: {e}")
-        return np.array(images), np.array(labels)
+        return np.array(images), np.array(labels), images_path
 
     # Diretórios de treino e teste
     train_dir = os.path.join(data_dir, "train")
@@ -459,7 +471,7 @@ def get_CIFAR10(handler, data_dir, img_size=32):
     X_test, Y_test, Z_test_paths = load_images_and_labels(test_dir, classes, class_to_idx)
 
     # Criar instância da classe `Data`
-    return Data(X_train, Y_train,Z_train_paths, X_test, Y_test,Z_test_paths, handler)
+    return Data(X_train, Y_train, Z_train_paths, X_test, Y_test, Z_test_paths, handler, classes, class_to_idx)
 
 def get_CIFAR10_Download(handler):
     data_train = datasets.CIFAR10('./DATA/NEW_CIFAR10', train=True, download=True)

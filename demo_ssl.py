@@ -5,7 +5,6 @@ from PIL import Image
 import numpy as np
 import torch
 
-from demo_lda_vctex import extract_features_from_folder
 from utils.LOGGER import get_logger, get_path_logger
 import core.tools.SSL.code_kmh as code_kmh
 

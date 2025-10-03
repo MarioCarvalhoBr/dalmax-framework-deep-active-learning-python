@@ -12,3 +12,4 @@ from .adversarial_bim import AdversarialBIM
 from .adversarial_deepfool import AdversarialDeepFool
 from .ssrae_kmeans_sampling import SSRAEKmeansSampling
 from .vctex_kmeans_sampling import VCTexKmeansSampling
+from .ssl_ssrae_sampling import SSRAEKmeansHCSampling
