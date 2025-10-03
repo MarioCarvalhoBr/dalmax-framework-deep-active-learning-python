@@ -48,6 +48,8 @@ class SSRAEKmeansHCSampling(Strategy):
         super(SSRAEKmeansHCSampling, self).__init__(dataset, net, logger)
         
         self.index = 0  # To keep track of the next sample to select
+        self.flag = True
+        self.features_2d = None
 
     def query(self, n):
         print(f"Initializing the DAL strategy with SSRAEKmeansHCSampling query {n} samples")
@@ -58,12 +60,14 @@ class SSRAEKmeansHCSampling(Strategy):
         print(f"Features dictionary contains {len(features_dict)} items.")
         print(f"Example feature vector shape: {next(iter(features_dict.values())).shape}")
     
-        features_2d = get_features_2d(features_dict)
-        
-        print(f'Shape of features_2d: {features_2d.shape}')
-        print(f'Item example of features_2d: {next(iter(features_2d))}')
+        if self.flag:
+            self.features_2d = get_features_2d(features_dict)
+            self.flag = False
 
-        data = features_2d
+        print(f'Shape of features_2d: {self.features_2d.shape}')
+        print(f'Item example of features_2d: {next(iter(self.features_2d))}')
+
+        data = self.features_2d
         
         # Get image IDs and labels for coloring
         image_ids = list(features_dict.keys())
@@ -83,8 +87,6 @@ class SSRAEKmeansHCSampling(Strategy):
         selected_samples = np.array(sampled_indices)
         print(f"\nSelected samples using SSRAE + K-means HierarchicalCluster: {selected_samples}")
         
-        # Get labels for sampled data
-        sampled_labels = [labels[i] for i in sampled_indices]
         
         # Create single plot with overlapping circles and stars
         plt.figure(figsize=(14, 10))
@@ -142,6 +144,9 @@ class SSRAEKmeansHCSampling(Strategy):
         for img_id in selected_samples:
             if img_id in features_dict:
                 del features_dict[img_id]
+                
+        # Remove selected_samples do self.features_2d
+        self.features_2d = np.delete(self.features_2d, selected_samples, axis=0)
                 
         return selected_samples
     
