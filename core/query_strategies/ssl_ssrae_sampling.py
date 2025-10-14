@@ -1,3 +1,4 @@
+from abc import abstractmethod
 import numpy as np
 import matplotlib.pyplot as plt
 from .strategy import Strategy
@@ -43,18 +44,20 @@ def get_features_2d(features_dict):
         
         return features_2d
 
-class SSRAEKmeansHCSampling(Strategy):
+class SSLStrategy(Strategy):
     def __init__(self, dataset, net, logger):
-        super(SSRAEKmeansHCSampling, self).__init__(dataset, net, logger)
-        
+        super(SSLStrategy, self).__init__(dataset, net, logger)
+
         self.index = 0  # To keep track of the next sample to select
         self.flag = True
         self.features_2d = None
 
+        print(f"\n\n---->INSTANCE> DAL strategy with {self.__class__.__name__}")
+
     def query(self, n):
-        print(f"Initializing the DAL strategy with SSRAEKmeansHCSampling query {n} samples")
-        
-        
+        print(f"\n\n---->QUERY> Initializing the DAL strategy with {self.__class__.__name__} query {n} samples")
+
+
         features_dict = self.dataset.features_dict
         # Print shape of path_pkl
         print(f"Features dictionary contains {len(features_dict)} items.")
@@ -90,7 +93,7 @@ class SSRAEKmeansHCSampling(Strategy):
         sampled_indices = hs.hierarchical_sampling(cl, target_size=n)
 
         selected_samples = np.array(sampled_indices)
-        print(f"\nSelected samples using SSRAE + K-means HierarchicalCluster: {selected_samples}")
+        print(f"\nSelected samples using {self.__class__.__name__} + K-means HierarchicalCluster: {selected_samples}")
         
         
         # Create single plot with overlapping circles and stars
@@ -162,7 +165,7 @@ class SSRAEKmeansHCSampling(Strategy):
                 plt.scatter(data[pos, 0], data[pos, 1], 
                            c=vibrant_color_map[label],  # Vibrant color for selected items
                            s=250, alpha=1.0, marker=marker_map[label],  # Different marker per class
-                           edgecolors='black', linewidths=2.0)
+                           edgecolors='yellow', linewidths=2.0)
         
         plt.title(f"t-SNE Visualization - Round {self.index}\nCircles: All Data | Markers: Sampled Data", fontsize=14)
         plt.xlabel("t-SNE Component 1", fontsize=12)
@@ -201,8 +204,8 @@ class SSRAEKmeansHCSampling(Strategy):
         
         # Save figure
         plt.tight_layout()
-        plt.savefig(f'results/nq_{n}_round_{self.index}_ssl_features_visualization.png', dpi=600, bbox_inches='tight')
-        plt.savefig(f'results/nq_{n}_round_{self.index}_ssl_features_visualization.pdf', dpi=600, bbox_inches='tight')
+        plt.savefig(f'results/nq_{n}_round_{self.index}_{self.__class__.__name__}_ssl_features_visualization.png', dpi=600, bbox_inches='tight')
+        plt.savefig(f'results/nq_{n}_round_{self.index}_{self.__class__.__name__}_ssl_features_visualization.pdf', dpi=600, bbox_inches='tight')
         
         # plt.show()
         
@@ -230,7 +233,7 @@ class SSRAEKmeansHCSampling(Strategy):
     
 
     def query1(self, n):
-        print(f"Initializing the DAL strategy with SSRAEKmeansHCSampling query {n} samples")
+        print(f"Initializing the DAL strategy with {self.__class__.__name__} query {n} samples")
         
         
         features_dict = self.dataset.features_dict
@@ -263,3 +266,14 @@ class SSRAEKmeansHCSampling(Strategy):
                 
         return selected_samples
                 
+
+        
+
+
+class SSRAEKmeansHCSampling(SSLStrategy):
+    def __init__(self, dataset, net, logger):
+        super(SSRAEKmeansHCSampling, self).__init__(dataset, net, logger)
+
+class VCTexKmeansHCSampling(SSLStrategy):
+    def __init__(self, dataset, net, logger):
+        super(VCTexKmeansHCSampling, self).__init__(dataset, net, logger)

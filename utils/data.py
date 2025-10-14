@@ -216,10 +216,6 @@ class Data:
         tmp_idxs = np.arange(self.n_pool)
         np.random.shuffle(tmp_idxs)
         self.labeled_idxs[tmp_idxs[:n_init_labeled]] = True
-        
-        self.create_feature_maps_vctex()
-        self.plot_features_tsne_2d(title="VCTex")
-        self.plot_features_tsne_3d(title="VCTex")
 
         if self.strategy_name == "SSRAEKmeansSampling" or self.strategy_name == "SSRAEKmeansHCSampling":
             print(f"Creating SSRAE feature maps...")
@@ -461,6 +457,7 @@ class Data:
         plt.savefig(f'3d_tsne_{title}_features_visualization.png', dpi=600, bbox_inches='tight')
         plt.savefig(f'3d_tsne_{title}_features_visualization.pdf', dpi=600, bbox_inches='tight')
         print(f"3D t-SNE visualization saved as '3d_tsne_{title}_features_visualization.pdf'")
+        # plt.show()
         plt.close()
 
 
