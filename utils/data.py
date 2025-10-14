@@ -220,13 +220,13 @@ class Data:
         if self.strategy_name == "SSRAEKmeansSampling" or self.strategy_name == "SSRAEKmeansHCSampling":
             print(f"Creating SSRAE feature maps...")
             self.create_feature_maps_ssrae()
-            self.plot_features_tsne_2d(title="SSRAE")
-            self.plot_features_tsne_3d(title="SSRAE")
+            # self.plot_features_tsne_2d(title="SSRAE")
+            # self.plot_features_tsne_3d(title="SSRAE")
         elif self.strategy_name == "VCTexKmeansSampling" or self.strategy_name == "VCTexKmeansHCSampling":
             print(f"Creating VCTex feature maps...")
             self.create_feature_maps_vctex()
-            self.plot_features_tsne_2d(title="VCTex")
-            self.plot_features_tsne_3d(title="VCTex")
+            # self.plot_features_tsne_2d(title="VCTex")
+            # self.plot_features_tsne_3d(title="VCTex")
                 
     def get_labeled_data(self):
         labeled_idxs = np.arange(self.n_pool)[self.labeled_idxs]
@@ -377,10 +377,13 @@ class Data:
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         
+        if not os.path.exists('results'):
+            os.makedirs('results')
+            
         # Save the plot PDF 
-        plt.savefig(f'2d_tsne_{title}_features_visualization.png', dpi=600, bbox_inches='tight')
-        plt.savefig(f'2d_tsne_{title}_features_visualization.pdf', dpi=600, bbox_inches='tight')
-        print(f"t-SNE visualization saved as '2d_tsne_{title}_features_visualization.pdf'")
+        plt.savefig(f'results/2d_tsne_{title}_features_visualization.png', dpi=600, bbox_inches='tight')
+        plt.savefig(f'results/2d_tsne_{title}_features_visualization.pdf', dpi=600, bbox_inches='tight')
+        print(f"t-SNE visualization saved as 'results/2d_tsne_{title}_features_visualization.pdf'")
 
     def plot_features_tsne_3d(self, title):
         """Use t-SNE to convert each image features to 3D and plot with class colors and different markers"""
@@ -454,9 +457,11 @@ class Data:
         plt.tight_layout()
         
         # Save the plot
-        plt.savefig(f'3d_tsne_{title}_features_visualization.png', dpi=600, bbox_inches='tight')
-        plt.savefig(f'3d_tsne_{title}_features_visualization.pdf', dpi=600, bbox_inches='tight')
-        print(f"3D t-SNE visualization saved as '3d_tsne_{title}_features_visualization.pdf'")
+        if not os.path.exists('results'):
+            os.makedirs('results')
+        plt.savefig(f'results/3d_tsne_{title}_features_visualization.png', dpi=600, bbox_inches='tight')
+        plt.savefig(f'results/3d_tsne_{title}_features_visualization.pdf', dpi=600, bbox_inches='tight')
+        print(f"3D t-SNE visualization saved as 'results/3d_tsne_{title}_features_visualization.pdf'")
         # plt.show()
         plt.close()
 

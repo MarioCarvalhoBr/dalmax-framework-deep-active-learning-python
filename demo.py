@@ -275,10 +275,10 @@ if __name__ == "__main__":
                                 "AdversarialBIM", 
                                 "AdversarialDeepFool",
                                 
-                                "SSRAEKmeansHCSampling",
                                 "SSRAEKmeansSampling",
-                                
                                 "VCTexKmeansSampling",
+                                
+                                "SSRAEKmeansHCSampling",
                                 "VCTexKmeansHCSampling"], help="query strategy")
     args = parser.parse_args()
 
