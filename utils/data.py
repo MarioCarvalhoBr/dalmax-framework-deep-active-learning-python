@@ -105,10 +105,7 @@ class Data:
                 print(f"Image ID {img_id}: Features shape = {features_dict[img_id].shape}")
 
             self.features_dict = features_dict
-            
-            # Use t-SNE to convert each image features to 2D and plot with class colors
-            # self.plot_features_tsne()
-            
+                        
             
             ## SAVE PICKLE
             if not os.path.exists(path_pkl):
@@ -185,10 +182,7 @@ class Data:
                 with open(path_pkl, 'wb') as f:
                     pickle.dump(self.features_dict, f)
                 print(f"Features dictionary saved to {path_pkl}")
-                
-        # Use t-SNE to convert each image features to 2D and plot with class colors
-        # self.plot_features_tsne()
-        
+                        
 
     def create_indexes_path(self):
         # Salva em um arquivo indices.txt o indice (id) da imagem, classe_nome, e seu caminho
@@ -222,15 +216,21 @@ class Data:
         tmp_idxs = np.arange(self.n_pool)
         np.random.shuffle(tmp_idxs)
         self.labeled_idxs[tmp_idxs[:n_init_labeled]] = True
+        
+        self.create_feature_maps_vctex()
+        self.plot_features_tsne_2d(title="VCTex")
+        self.plot_features_tsne_3d(title="VCTex")
 
         if self.strategy_name == "SSRAEKmeansSampling" or self.strategy_name == "SSRAEKmeansHCSampling":
             print(f"Creating SSRAE feature maps...")
             self.create_feature_maps_ssrae()
+            self.plot_features_tsne_2d(title="SSRAE")
+            self.plot_features_tsne_3d(title="SSRAE")
         elif self.strategy_name == "VCTexKmeansSampling" or self.strategy_name == "VCTexKmeansHCSampling":
             print(f"Creating VCTex feature maps...")
             self.create_feature_maps_vctex()
-            
-        self.plot_features_tsne()
+            self.plot_features_tsne_2d(title="VCTex")
+            self.plot_features_tsne_3d(title="VCTex")
                 
     def get_labeled_data(self):
         labeled_idxs = np.arange(self.n_pool)[self.labeled_idxs]
@@ -314,8 +314,8 @@ class Data:
         handler = self.get_test_data()
         return len(handler)
     
-    def plot_features_tsne(self):
-        """Use t-SNE to convert each image features to 2D and plot with class colors"""
+    def plot_features_tsne_2d(self, title):
+        """Use t-SNE to convert each image features to 2D and plot with class colors and different markers"""
         from sklearn.manifold import TSNE
         import matplotlib.pyplot as plt
         import matplotlib.colors as mcolors
@@ -344,31 +344,126 @@ class Data:
         # Create the plot
         plt.figure(figsize=(12, 8))
         
-        # Get unique classes and assign colors
+        # Get unique classes and assign colors and markers
         unique_classes = np.unique(labels)
-        colors = plt.cm.Set1(np.linspace(0, 1, len(unique_classes)))
         
-        # Plot each class with different color
+        # Define a list of distinct markers
+        markers = ['o', 's', '^', '*', 'v', '<', '>', 'p', 'D', 'h', 'H', '+', 'x', 'd', '|', '_']
+        
+        # Define a list of distinct colors using different colormaps
+        # old: color_palette = plt.cm.tab20(np.linspace(0, 1, 20))  # 20 distinct colors
+        # New: começar com as cores black, yellow, blue, red, orange, purple, brown, pink, gray, cyan, magenta, lime, olive, navy, teal, maroon, gold, silver, coral
+        color_palette = ['black', 'yellow', 'blue', 'red', 'orange', 'purple', 'brown', 'pink', 'gray', 'cyan', 
+                         'magenta', 'lime', 'olive', 'navy', 'teal', 'maroon', 'gold', 'silver', 'coral']
+        
+        # Plot each class with different color and marker
         for i, class_idx in enumerate(unique_classes):
             mask = np.array(labels) == class_idx
             class_name = self.get_class_name(class_idx)
             
+            # Cycle through markers and colors if there are more classes than available
+            marker = markers[i % len(markers)]
+            color = color_palette[i % len(color_palette)]
+            
             plt.scatter(features_2d[mask, 0], features_2d[mask, 1], 
-                       c=[colors[i]], label=f'Class {class_idx}: {class_name}', 
-                       alpha=0.7, s=50)
+                       c=[color], 
+                       marker=marker,
+                       label=f'Class {class_idx}: {class_name}', 
+                       alpha=0.7, 
+                       s=80,
+                       edgecolors='black',
+                       linewidths=0.5)
         
-        plt.title('t-SNE Visualization of SSRAE Features by Class')
-        plt.xlabel('t-SNE Component 1')
-        plt.ylabel('t-SNE Component 2')
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        plt.title(f't-SNE Visualization of {title} Features by Class', fontsize=14, fontweight='bold')
+        plt.xlabel('t-SNE Component 1', fontsize=12)
+        plt.ylabel('t-SNE Component 2', fontsize=12)
+        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=9)
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         
+        # Save the plot PDF 
+        plt.savefig(f'2d_tsne_{title}_features_visualization.png', dpi=600, bbox_inches='tight')
+        plt.savefig(f'2d_tsne_{title}_features_visualization.pdf', dpi=600, bbox_inches='tight')
+        print(f"t-SNE visualization saved as '2d_tsne_{title}_features_visualization.pdf'")
+
+    def plot_features_tsne_3d(self, title):
+        """Use t-SNE to convert each image features to 3D and plot with class colors and different markers"""
+        from sklearn.manifold import TSNE
+        import matplotlib.pyplot as plt
+        from mpl_toolkits.mplot3d import Axes3D
+        import matplotlib.colors as mcolors
+        
+        if not self.features_dict:
+            print("No features dictionary found. Skipping t-SNE 3D plot.")
+            return
+        
+        print("Creating 3D t-SNE visualization of features...")
+        
+        # Get image IDs and convert features to matrix
+        image_ids = list(self.features_dict.keys())
+        features_matrix = np.vstack([self.features_dict[img_id] for img_id in image_ids])
+        
+        # Get corresponding labels for the unlabeled images
+        labels = [self.Y_train[img_id] for img_id in image_ids]
+        
+        print(f"Running 3D t-SNE on {features_matrix.shape[0]} samples with {features_matrix.shape[1]} features...")
+        
+        # Apply t-SNE with 3 components
+        perplexity = min(30, len(image_ids) - 1)  # Ensure perplexity is valid
+        tsne = TSNE(n_components=3, learning_rate='auto', init='random', 
+                   perplexity=perplexity, random_state=42)
+        features_3d = tsne.fit_transform(features_matrix)
+        
+        # Create the 3D plot
+        fig = plt.figure(figsize=(14, 10))
+        ax = fig.add_subplot(111, projection='3d')
+        
+        # Get unique classes and assign colors and markers
+        unique_classes = np.unique(labels)
+        
+        # Define a list of distinct markers
+        markers = ['o', 's', '^', '*', 'v', '<', '>', 'p', 'D', 'h', 'H', '+', 'x', 'd', '|', '_']
+        
+        # Define a list of distinct colors
+        color_palette = ['black', 'yellow', 'blue', 'red', 'orange', 'purple', 'brown', 'pink', 'gray', 'cyan', 
+                         'magenta', 'lime', 'olive', 'navy', 'teal', 'maroon', 'gold', 'silver', 'coral']
+        
+        # Plot each class with different color and marker
+        for i, class_idx in enumerate(unique_classes):
+            mask = np.array(labels) == class_idx
+            class_name = self.get_class_name(class_idx)
+            
+            # Cycle through markers and colors if there are more classes than available
+            marker = markers[i % len(markers)]
+            color = color_palette[i % len(color_palette)]
+            
+            ax.scatter(features_3d[mask, 0], 
+                      features_3d[mask, 1], 
+                      features_3d[mask, 2],
+                      c=color, 
+                      marker=marker,
+                      label=f'Class {class_idx}: {class_name}', 
+                      alpha=0.7, 
+                      s=80,
+                      edgecolors='black',
+                      linewidths=0.5)
+        
+        ax.set_title(f'3D t-SNE Visualization of {title} Features by Class', fontsize=14, fontweight='bold')
+        ax.set_xlabel('t-SNE Component 1', fontsize=12)
+        ax.set_ylabel('t-SNE Component 2', fontsize=12)
+        ax.set_zlabel('t-SNE Component 3', fontsize=12)
+        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=9)
+        ax.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        
         # Save the plot
-        plt.savefig('tsne_features_visualization.png', dpi=300, bbox_inches='tight')
-        print("t-SNE visualization saved as 'tsne_features_visualization.png'")
-        plt.show()
-    
+        plt.savefig(f'3d_tsne_{title}_features_visualization.png', dpi=600, bbox_inches='tight')
+        plt.savefig(f'3d_tsne_{title}_features_visualization.pdf', dpi=600, bbox_inches='tight')
+        print(f"3D t-SNE visualization saved as '3d_tsne_{title}_features_visualization.pdf'")
+        plt.close()
+
+
 
 def get_DANINHAS(handler, data_dir, img_size=128):
     """

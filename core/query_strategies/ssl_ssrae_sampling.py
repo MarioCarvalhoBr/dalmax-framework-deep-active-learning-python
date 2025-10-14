@@ -98,10 +98,23 @@ class SSRAEKmeansHCSampling(Strategy):
         
         # Get unique classes and assign colors
         unique_classes = np.unique(labels)
-        colors = plt.cm.Set1(np.linspace(0, 1, len(unique_classes)))
-        color_map = {class_idx: colors[i] for i, class_idx in enumerate(unique_classes)}
         
-        # Plot all data as circles colored by class
+        # Define soft color palette for non-selected items (original palette)
+        soft_colors = plt.cm.Set1(np.linspace(0, 1, len(unique_classes)))
+        
+        # Define vibrant color palette for selected items
+        vibrant_color_palette = ['black', 'yellow', 'blue', 'red', 'orange', 'purple', 'brown', 'pink', 'gray', 'cyan', 
+                         'magenta', 'lime', 'olive', 'navy', 'teal', 'maroon', 'gold', 'silver', 'coral']
+        
+        # Define markers for sampled data (one marker per class)
+        markers = ['o', 's', '^', '*', 'v', '<', '>', 'p', 'D', 'h', 'H', '+', 'x', 'd', '|', '_']
+        
+        # Create color maps: soft colors for all data, vibrant for selected
+        soft_color_map = {class_idx: soft_colors[i] for i, class_idx in enumerate(unique_classes)}
+        vibrant_color_map = {class_idx: vibrant_color_palette[i % len(vibrant_color_palette)] for i, class_idx in enumerate(unique_classes)}
+        marker_map = {class_idx: markers[i % len(markers)] for i, class_idx in enumerate(unique_classes)}
+        
+        # Plot all data as circles colored by class (soft colors)
         for class_idx in unique_classes:
             mask = np.array(labels) == class_idx
             class_name = self.dataset.get_class_name(class_idx)
@@ -111,9 +124,10 @@ class SSRAEKmeansHCSampling(Strategy):
                 min_len = min(mask.shape[0], data.shape[0])
                 mask = mask[:min_len]
             plt.scatter(data[mask, 0], data[mask, 1], 
-                       c=[color_map[class_idx]], 
+                       c=[soft_color_map[class_idx]], 
                        label=f'{class_name}', 
-                       s=30, alpha=0.5, marker='o')
+                       s=80, alpha=0.6, marker='o',
+                       edgecolors='black', linewidths=0.5)
         
         # Plot sampled data as stars on top, colored by their class
         # Determine whether sampled indices are positions (relative to data rows) or image ids
@@ -139,28 +153,58 @@ class SSRAEKmeansHCSampling(Strategy):
             # Add label only once per class for sampled items
             if label not in sampled_classes_plotted:
                 plt.scatter(data[pos, 0], data[pos, 1], 
-                           c=[color_map[label]], 
-                           s=200, alpha=1.0, marker='*',
-                           edgecolors='black', linewidths=1.5,
+                           c=vibrant_color_map[label],  # Vibrant color for selected items
+                           s=250, alpha=1.0, marker=marker_map[label],  # Different marker per class
+                           edgecolors='black', linewidths=2.0,
                            label=f'{class_name} (sampled)')
                 sampled_classes_plotted.add(label)
             else:
                 plt.scatter(data[pos, 0], data[pos, 1], 
-                           c=[color_map[label]], 
-                           s=200, alpha=1.0, marker='*',
-                           edgecolors='black', linewidths=1.5)
+                           c=vibrant_color_map[label],  # Vibrant color for selected items
+                           s=250, alpha=1.0, marker=marker_map[label],  # Different marker per class
+                           edgecolors='black', linewidths=2.0)
         
-        plt.title(f"t-SNE Visualization - Round {self.index}\nCircles: All Data | Stars: Sampled Data", fontsize=14)
+        plt.title(f"t-SNE Visualization - Round {self.index}\nCircles: All Data | Markers: Sampled Data", fontsize=14)
         plt.xlabel("t-SNE Component 1", fontsize=12)
         plt.ylabel("t-SNE Component 2", fontsize=12)
-        plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=9)
+        
+        # Create two separate legends
+        handles, labels = plt.gca().get_legend_handles_labels()
+        
+        # Separate handles and labels into two groups
+        non_sampled_handles = []
+        non_sampled_labels = []
+        sampled_handles = []
+        sampled_labels = []
+        
+        for handle, label in zip(handles, labels):
+            if '(sampled)' in label:
+                sampled_handles.append(handle)
+                sampled_labels.append(label)
+            else:
+                non_sampled_handles.append(handle)
+                non_sampled_labels.append(label)
+        
+        # Create first legend for non-sampled classes
+        first_legend = plt.legend(non_sampled_handles, non_sampled_labels, 
+                                 bbox_to_anchor=(1.05, 1), loc='upper left', 
+                                 fontsize=9, title='Non-Selected Samples', title_fontsize=10)
+        plt.gca().add_artist(first_legend)
+        
+        # Create second legend for sampled classes
+        plt.legend(sampled_handles, sampled_labels, 
+                  bbox_to_anchor=(1.05, 0.5), loc='center left', 
+                  fontsize=9, title='Selected Samples', title_fontsize=10, markerscale=0.4)
+        
         plt.axis('equal')
         plt.grid(True, alpha=0.3)
         
         # Save figure
         plt.tight_layout()
-        plt.savefig(f'results/nq_{n}_round_{self.index}_ssl_features_visualization.png', dpi=300, bbox_inches='tight')
-        plt.show()
+        plt.savefig(f'results/nq_{n}_round_{self.index}_ssl_features_visualization.png', dpi=600, bbox_inches='tight')
+        plt.savefig(f'results/nq_{n}_round_{self.index}_ssl_features_visualization.pdf', dpi=600, bbox_inches='tight')
+        
+        # plt.show()
         
         # Increment index for next round
         self.index += 1

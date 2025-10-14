@@ -1,0 +1,20 @@
+{
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_full_recortado/",
+        "n_epoch": 10,
+        "n_drop": 10,
+        "n_classes": 4,
+        "train_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "test_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "optimizer_args": {
+            "lr": 0.05,
+            "momentum": 0.3
+        }
+    }
+}
