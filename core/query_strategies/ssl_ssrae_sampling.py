@@ -54,7 +54,7 @@ class SSLStrategy(Strategy):
 
         print(f"\n\n---->INSTANCE> DAL strategy with {self.__class__.__name__}")
 
-    def query(self, n):
+    def query1(self, n):
         print(f"\n\n---->QUERY> Initializing the DAL strategy with {self.__class__.__name__} query {n} samples")
 
 
@@ -232,7 +232,7 @@ class SSLStrategy(Strategy):
         return selected_samples
     
 
-    def query1(self, n):
+    def query(self, n):
         print(f"Initializing the DAL strategy with {self.__class__.__name__} query {n} samples")
         
         
@@ -240,15 +240,33 @@ class SSLStrategy(Strategy):
         # Print shape of path_pkl
         print(f"Features dictionary contains {len(features_dict)} items.")
         print(f"Example feature vector shape: {next(iter(features_dict.values())).shape}")
-    
-        data = np.vstack([features_dict[key].numpy() for key in features_dict])
-            
+        
+        print(f'Type of features_dict: {type(features_dict)}')
+        # Tipo de um item do vetor dicionario features_dict
+        print(f'Type of an item in features_dict: {type(next(iter(features_dict.values())))}')
+
+        # Converte features_dict de forma segura para usar o .numpy(): OS itens podem ser tensores ou arrays: <class 'numpy.ndarray'> ou <class 'torch.Tensor'>
+        data = None
+        if isinstance(next(iter(features_dict.values())), np.ndarray):
+            data = np.vstack([features_dict[key] for key in features_dict])
+        elif isinstance(next(iter(features_dict.values())), torch.Tensor):
+            data = np.vstack([features_dict[key].numpy() for key in features_dict])
+        else:
+            raise ValueError("Unsupported data type in features_dict values.")
+
+        NUMERO_GRUPOS_1_ITER = 500 # 300, 200
+        NUMERO_GRUPOS_2_ITER = 200 # 100, 50
+        NUMERO_GRUPOS_3_ITER = 50 # 50, 25
+        
+        N_LEVELS = 2
+        
+        sample_sizes = [15, 2] # 30, 15, 2
         
         clusters = hkmg.hierarchical_kmeans_with_resampling(
             data=torch.tensor(data, device="cuda", dtype=torch.float32),
-            n_clusters=[800, 756],
-            n_levels=2,
-            sample_sizes=[15, 2],
+            n_clusters=[NUMERO_GRUPOS_1_ITER, NUMERO_GRUPOS_2_ITER],
+            n_levels=N_LEVELS,
+            sample_sizes=[15, 2], # 30, 15, 2
             verbose=False
         )
 
