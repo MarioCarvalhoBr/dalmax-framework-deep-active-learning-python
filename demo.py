@@ -75,6 +75,9 @@ def main(args):
     net = get_network_deep_learning(args.dataset_name, device, params)
     strategy = get_strategy(args.strategy_name)(dataset, net, logger)
     
+    # Adiciona dinamicamente o objeto params ao objeto strategy para ficar strategy.params
+    setattr(strategy, "params", params)
+    
 
     # start experiment
     start_time = time.time()
