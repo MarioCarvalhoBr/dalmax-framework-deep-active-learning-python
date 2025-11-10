@@ -1,6 +1,8 @@
 # My LOCAL Files
 DATA/*
 data/*
+ExperimentNotifier/*
+ExperimentNotifier/
 
 local_assets/*
 results/*

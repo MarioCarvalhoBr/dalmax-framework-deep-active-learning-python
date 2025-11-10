@@ -53,13 +53,15 @@ class SSLStrategy(Strategy):
 
 
         TARGET_SIZE = n  # Number of samples to select
-        NUMERO_GRUPOS_1_ITER = 500 # 300, 200
-        NUMERO_GRUPOS_2_ITER = 200 # 100, 50
-        NUMERO_GRUPOS_3_ITER = 50 # 50, 25
+        NUMERO_GRUPOS_1_ITER = 500 # 500, 300, 200
+        NUMERO_GRUPOS_2_ITER = 200 # 200, 100, 50
+        NUMERO_GRUPOS_3_ITER = 50 #  50, 25, 10
         
-        N_LEVELS = 2
+        N_LEVELS = 3
         
-        sample_sizes = [15, 2] # 30, 15, 2
+        sample_sizes = [50, 25, 5] 
+        # Exp_1:  30, 15, 2
+        # Exp_2:  50, 25, 5
         
         # self.logger.warning build info
         self.logger.warning("\n\n-----------------------------------------------------")
@@ -67,14 +69,14 @@ class SSLStrategy(Strategy):
         self.logger.warning(f"--->Target size for sampling: {TARGET_SIZE}")
         self.logger.warning(f"--->Data shape for clustering: {data.shape}")
         self.logger.warning(f"--->Number of levels: {N_LEVELS}")
-        self.logger.warning(f"--->Number of clusters per level: {[NUMERO_GRUPOS_1_ITER, NUMERO_GRUPOS_2_ITER]}")
+        self.logger.warning(f"--->Number of clusters per level: {[NUMERO_GRUPOS_1_ITER, NUMERO_GRUPOS_2_ITER, NUMERO_GRUPOS_3_ITER]}")
         self.logger.warning(f"--->Sample sizes per level: {sample_sizes}")
         self.logger.warning("-----------------------------------------------------\n\n")
 
         
         clusters = hkmg.hierarchical_kmeans_with_resampling(
             data=torch.tensor(data, device="cuda", dtype=torch.float32),
-            n_clusters=[NUMERO_GRUPOS_1_ITER, NUMERO_GRUPOS_2_ITER],
+            n_clusters=[NUMERO_GRUPOS_1_ITER, NUMERO_GRUPOS_2_ITER, NUMERO_GRUPOS_3_ITER],
             n_levels=N_LEVELS,
             sample_sizes=sample_sizes,
             verbose=False
