@@ -53,32 +53,39 @@ class SSLStrategy(Strategy):
 
 
         TARGET_SIZE = n  # Number of samples to select
-        NUMERO_GRUPOS_1_ITER = 500 # 500, 300, 200
-        NUMERO_GRUPOS_2_ITER = 200 # 200, 100, 50
-        NUMERO_GRUPOS_3_ITER = 50 #  50, 25, 10
         
-        N_LEVELS = 3
-        
-        sample_sizes = [50, 25, 5] 
-        # Exp_1:  30, 15, 2
-        # Exp_2:  50, 25, 5
+        # Recuperar
+        """config_kmh": {
+            "n_clusters": [300, 100, 50, 25],
+            "n_levels": 4,
+            "sample_sizes": [45, 25, 15, 5]
+        } da params_df.json"""
+        """
+        {'DANINHAS': {'data_dir': 'DATA/daninhas_full/', 'n_epoch': 10, 'n_drop': 10, 'n_classes': 5, 'train_args': {'batch_size': 256, 'num_workers': 4}, 'test_args': {'batch_size': 256, 'num_workers': 4}, 'optimizer_args': {'lr': 0.05, 'momentum': 0.3}, 'config_kmh': {'n_clusters': [300, 100, 50, 25], 'n_levels': 4, 'sample_sizes': [45, 25, 15, 5]}}, 'CIFAR10': {'data_dir': 'DATA/DATA_CIFAR10/', 'n_epoch': 20, 'n_drop': 10, 'n_classes': 10, 'train_args': {'batch_size': 64, 'num_workers': 1}, 'test_args': {'batch_size': 1000, 'num_workers': 1}, 'optimizer_args': {'lr': 0.05, 'momentum': 0.3}}}
+        """
+        config_kmh = self.params['DANINHAS']['config_kmh']
+        print(f"Config KMH: {config_kmh}")
+        N_CLUSTERS = config_kmh['n_clusters']
+        N_LEVELS = config_kmh['n_levels']
+        SAMPLE_SIZES = config_kmh['sample_sizes']
+
         
         # self.logger.warning build info
         self.logger.warning("\n\n-----------------------------------------------------")
         self.logger.warning(f"--->Starting {self.__class__.__name__} hierarchical K-means clustering with resampling...")
         self.logger.warning(f"--->Target size for sampling: {TARGET_SIZE}")
         self.logger.warning(f"--->Data shape for clustering: {data.shape}")
-        self.logger.warning(f"--->Number of levels: {N_LEVELS}")
-        self.logger.warning(f"--->Number of clusters per level: {[NUMERO_GRUPOS_1_ITER, NUMERO_GRUPOS_2_ITER, NUMERO_GRUPOS_3_ITER]}")
-        self.logger.warning(f"--->Sample sizes per level: {sample_sizes}")
+        self.logger.warning(f"###--->Number of levels: {N_LEVELS}")
+        self.logger.warning(f"###--->Number of clusters per level: {N_CLUSTERS}")
+        self.logger.warning(f"###--->Sample sizes per level: {SAMPLE_SIZES}")
         self.logger.warning("-----------------------------------------------------\n\n")
 
         
         clusters = hkmg.hierarchical_kmeans_with_resampling(
             data=torch.tensor(data, device="cuda", dtype=torch.float32),
-            n_clusters=[NUMERO_GRUPOS_1_ITER, NUMERO_GRUPOS_2_ITER, NUMERO_GRUPOS_3_ITER],
+            n_clusters=N_CLUSTERS,
             n_levels=N_LEVELS,
-            sample_sizes=sample_sizes,
+            sample_sizes=SAMPLE_SIZES,
             verbose=False
         )
 

@@ -88,6 +88,7 @@ def calculate_average(method_name, round_num, nq, input_folder, seed_pattern):
         print("-"*50)
     # Calcular e exibir as médias
     print("\n" + "="*50)
+    print(f"MÉTRICAS DE {method_name}")
     print(f"MÉDIAS DE {len(seed_dirs)} SEEDS")
     print("="*50)
     
