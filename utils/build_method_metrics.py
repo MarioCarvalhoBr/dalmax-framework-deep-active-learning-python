@@ -113,8 +113,8 @@ if __name__ == "__main__":
 Exemplos de uso:
   python3 build_method_metrics.py --method MarginSampling --round 8 --nq 100
   python3 build_method_metrics.py --method LeastConfidence --round 5 --nq 50 --input_folder ./resultados
-  python3 utils/build_method_metrics.py --method SSRAEKmeansHCSampling --round 8 --nq 100 --seed "SEED_*" --input_folder results/dalmax/daninhas_full/
-  python3 utils/build_method_metrics.py --method VCTexKmeansHCSampling --round 8 --nq 100 --seed "SEED_*" --input_folder results/dalmax/daninhas_full/
+  python3 utils/build_method_metrics.py --method SSRAEKmeansHCSampling --round 10 --nq 100 --seed "SEED_*" --input_folder results/exp_3_dalmax/daninhas_full/
+  python3 utils/build_method_metrics.py --method VCTexKmeansHCSampling --round 10 --nq 100 --seed "SEED_*" --input_folder results/exp_3_dalmax/daninhas_full/
         """
     )
     

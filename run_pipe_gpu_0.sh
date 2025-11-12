@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # --- Configurações ---
-QUERIES=(10 50 100)
+QUERIES=(100)
 SEEDS=(1 2 3)
 
 GPU_NUMBER=0
