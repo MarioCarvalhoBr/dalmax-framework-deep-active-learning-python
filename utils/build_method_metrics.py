@@ -35,7 +35,7 @@ def calculate_average(method_name, round_num, nq, input_folder, seed_pattern):
     os.chdir(input_folder)
     
     # Construir o padrão do diretório NQ
-    nq_pattern = f"NQ_{nq}_NIL_100_NR_10_NE_10"
+    nq_pattern = f"NQ_{nq}_NIL_100_NR_{round_num}_NE_10"
     
     # Encontrar todas as pastas SEED_*
     seed_dirs = sorted(glob(seed_pattern))
@@ -113,9 +113,9 @@ if __name__ == "__main__":
 Exemplos de uso:
   python3 build_method_metrics.py --method MarginSampling --round 8 --nq 100
   python3 build_method_metrics.py --method LeastConfidence --round 5 --nq 50 --input_folder ./resultados
-  python3 utils/build_method_metrics.py --method SSRAEKmeansHCSampling --round 10 --nq 100 --seed "SEED_*" --input_folder results/dalmax0/daninhas_full/
-  python3 utils/build_method_metrics.py --method VCTexKmeansHCSampling --round 10 --nq 100 --seed "SEED_*" --input_folder results/dalmax0/daninhas_full/
-  python3 utils/build_method_metrics.py --method MarginSampling --round 10 --nq 100 --seed "SEED_*" --input_folder results/dalmax0/daninhas_full/
+  python3 utils/build_method_metrics.py --method SSRAEKmeansHCSampling --round 8 --nq 100 --seed "SEED_*" --input_folder results/dalmax1/daninhas_full/
+  python3 utils/build_method_metrics.py --method VCTexKmeansHCSampling --round 8 --nq 100 --seed "SEED_*" --input_folder results/dalmax1/daninhas_full/
+  python3 utils/build_method_metrics.py --method MarginSampling --round 8 --nq 100 --seed "SEED_*" --input_folder results/dalmax0/daninhas_full/
 
         """
     )

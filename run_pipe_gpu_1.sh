@@ -8,7 +8,7 @@ GPU_NUMBER=1
 
 PARAMS_FILE="params_df_gpu_${GPU_NUMBER}.json"
 DATASET_NAME="DANINHAS"
-STRATEGY_1="LeastConfidenceDropout"
+STRATEGY_1="AdversarialDeepFool"
 
 # ---------------------
 

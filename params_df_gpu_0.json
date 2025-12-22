@@ -19,7 +19,7 @@
         "config_kmh": {
             "n_clusters": [300, 100, 50],
             "n_levels": 3,
-            "sample_sizes": [35, 10, 2]
+            "sample_sizes": [30, 15, 2]
         }
     },
     "CIFAR10": {

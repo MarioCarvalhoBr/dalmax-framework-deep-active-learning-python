@@ -1,4 +1,4 @@
-# Example usage: python utils/plot_results_dir.py --input_dir results/new_dalmax_balanceado_train_10_epochs_10_n_query
+# Example usage: python utils/plot_results_dir.py --input_dir results/dalmax1
 
 import os
 import json
@@ -23,9 +23,9 @@ class MetricsType(enum.Enum):
 def create_csv_tables(dados, dir_results):
     # List of NQ configurations to process
     nq_configs = [
-        "NQ_10_NIL_100_NR_10_NE_10",
-        "NQ_50_NIL_100_NR_10_NE_10",
-        "NQ_100_NIL_100_NR_10_NE_10"
+        "NQ_10_NIL_100_NR_8_NE_10",
+        "NQ_50_NIL_100_NR_8_NE_10",
+        "NQ_100_NIL_100_NR_8_NE_10"
     ]
     
     # Loop through each NQ configuration

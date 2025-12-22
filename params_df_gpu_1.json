@@ -17,9 +17,9 @@
             "momentum": 0.3
         },
         "config_kmh": {
-            "n_clusters": [300, 100, 50, 10, 5],
-            "n_levels": 5,
-            "sample_sizes": [30, 25,20,15, 2]
+            "n_clusters": [300, 100, 50],
+            "n_levels": 3,
+            "sample_sizes": [30,15, 2]
         }
     },
     "CIFAR10": {
