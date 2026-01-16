@@ -8,7 +8,7 @@ GPU_NUMBER=0
 
 PARAMS_FILE="params_df_gpu_${GPU_NUMBER}.json"
 DATASET_NAME="DANINHAS"
-STRATEGY_1="AdversarialBIM"
+STRATEGY_1="SSRAEKmeansHCSampling"
 
 # ---------------------
 

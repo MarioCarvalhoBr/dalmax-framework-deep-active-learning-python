@@ -17,7 +17,7 @@
             "momentum": 0.3
         },
         "config_kmh": {
-            "n_clusters": [300, 100, 50],
+            "n_clusters": [600, 200, 100],
             "n_levels": 3,
             "sample_sizes": [30, 15, 2]
         }

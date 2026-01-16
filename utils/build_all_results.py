@@ -242,15 +242,18 @@ def save_plot(new_data_config, is_show=False):
 
         for i, (method, values) in enumerate(data.items()):
             marker = markers[i % len(markers)]
-            plt.plot(local_rounds, values[value], label=method, color=colors[i], marker=marker, markersize=8, linestyle='-')
-            '''
-            if method == 'RandomSampling':
+            # plt.plot(local_rounds, values[value], label=method, color=colors[i], marker=marker, markersize=8, linestyle='-')
+            
+            if method != 'RandomSampling':
                 plt.plot(local_rounds, values[value], label=method, color=colors[i], marker=marker, markersize=8, linestyle='-')
             else:
-                plt.plot(local_rounds, values[value], label=method, color=colors[i])
-            '''
+                # A linha deve ser preta
+                plt.plot(local_rounds, values[value], label=method, color='black', marker=marker, markersize=8, linestyle='--')
+            
         
-        plt.title("Model comparison", fontsize=14)
+        # plt.title("Model comparison", fontsize=14)
+        # New: Model comparison with n_query 10
+        plt.title(f"Model comparison with n_query {new_data_config['n_query']}", fontsize=14)
         plt.xlabel("Rounds", fontsize=12)
         plt.ylabel(ylabel, fontsize=12)
         plt.legend(title="Models")

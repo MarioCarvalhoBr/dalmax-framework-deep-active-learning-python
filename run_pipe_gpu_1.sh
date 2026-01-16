@@ -8,7 +8,7 @@ GPU_NUMBER=1
 
 PARAMS_FILE="params_df_gpu_${GPU_NUMBER}.json"
 DATASET_NAME="DANINHAS"
-STRATEGY_1="AdversarialDeepFool"
+STRATEGY_1="SSRAEKmeansHCSampling"
 
 # ---------------------
 
@@ -33,10 +33,10 @@ for n_query in "${QUERIES[@]}"; do
       --n_query $n_query \
       --seed $seed \
       --n_round 8 \
-      --dir_results=results/dalmax1/
+      --dir_results=results/dalmax2/
 
 
-    echo "Comando executado: CUDA_VISIBLE_DEVICES=$GPU_NUMBER python demo.py --n_round 8 --params_json $PARAMS_FILE --dataset_name=$DATASET_NAME --strategy_name $STRATEGY_1 --n_query $n_query --seed $seed --dir_results=results/dalmax1/"
+    echo "Comando executado: CUDA_VISIBLE_DEVICES=$GPU_NUMBER python demo.py --n_round 8 --params_json $PARAMS_FILE --dataset_name=$DATASET_NAME --strategy_name $STRATEGY_1 --n_query $n_query --seed $seed --dir_results=results/dalmax2/"
 
     echo "Par (n_query=$n_query, seed=$seed) finalizado."
 
@@ -49,4 +49,4 @@ echo "Todos os testes foram concluídos."
 echo "------------------------------------------------------------"
 
 # Run ExperimentNotifier to send email notification
-python3 ExperimentNotifier/main.py --dir_results=results/dalmax1/ --args "GPU_NUMBER=$GPU_NUMBER, STRATEGY_1=$STRATEGY_1"
+python3 ExperimentNotifier/main.py --dir_results=results/dalmax2/ --args "GPU_NUMBER=$GPU_NUMBER, STRATEGY_1=$STRATEGY_1"
