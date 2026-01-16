@@ -1,4 +1,5 @@
-# Example usage: python utils/plot_results_dir.py --input_dir results/dalmax1
+# Example usage: python 4_report_build_average_results.py  --input_dir results/dalmax/daninhas_full/results/ --pattern SEED*
+# Example usage: python 4_report_build_average_results.py
 
 import os
 import json
@@ -19,14 +20,13 @@ class MetricsType(enum.Enum):
 
     DICT = {'Accuracy': ALL_ACC, 'Precision': ALL_PRECISION, 'Recall': ALL_RECALL, 'F1-score': ALL_F1_SCORE}
 
-
 def create_csv_tables(dados, dir_results):
     # List of NQ configurations to process
-    nq_configs = [
-        "NQ_10_NIL_100_NR_8_NE_10",
-        "NQ_50_NIL_100_NR_8_NE_10",
-        "NQ_100_NIL_100_NR_8_NE_10"
-    ]
+    nq_configs = []
+    
+    # Get all keys seed_data[nq_config] (methods) from dados
+    nq_configs_keys = dados[list(dados.keys())[0]].keys()
+    nq_configs = sorted(list(nq_configs_keys))
     
     # Loop through each NQ configuration
     for nq_config in nq_configs:
@@ -92,7 +92,6 @@ def create_csv_tables(dados, dir_results):
 
         print(f"FULL CSV with data experiment saved in {csv_file}")
 
-
 def list_folders_with_pattern(initial_path, pattern="*"):
     """Lists folders within a given path that match a specific pattern.
 
@@ -109,48 +108,6 @@ def list_folders_with_pattern(initial_path, pattern="*"):
     folders = [file for file in matching_files if os.path.isdir(file)]
     folders = sorted(folders)
     return folders
-
-
-def main(args):
-    input_dir = args.input_dir
-    pattern = args.pattern
-
-    # Listar todas as pastas de input_dir
-    folders_seeds = list_folders_with_pattern(input_dir, pattern)
-
-    print(f"Pasta de entrada: {input_dir}")
-    print(f"Padrão: {pattern}")
-    print(f"Diretórios com o padrão {pattern}: {folders_seeds}")
-    print(f"Total de diretórios: {len(folders_seeds)}")
-    print("\n")
-
-    dict_data_seeds = {}
-    for path_folder in folders_seeds:
-        print(f"\nPath: {path_folder}")
-        basename_path_seed = os.path.basename(path_folder)
-        
-        nq_folders = list_folders_with_pattern(path_folder, "NQ_*")
-
-        dict_data_nq = {}
-        for path_nq_folder in nq_folders:
-            print(f"\nPath NQ: {path_nq_folder}")
-            basename_path_nq = os.path.basename(path_nq_folder)
-            
-            method_folders = list_folders_with_pattern(path_nq_folder, "*")
-
-            data_nq = plot_results(input_dir, path_nq_folder,  method_folders, basename_path_seed)
-            dict_data_nq[basename_path_nq] = data_nq
-
-        dict_data_seeds[basename_path_seed] = dict_data_nq
-        print("\n")
-    
-    # SAve in JSON file
-    save_dict_to_json(dict_data_seeds, os.path.join(input_dir, "data_results.json"))
-
-    # Create CSV tables
-    create_csv_tables(dict_data_seeds, input_dir)
-
-
 
 def save_dict_to_json(data, json_path):
         # SAVE JSON
@@ -242,18 +199,15 @@ def save_plot(new_data_config, is_show=False):
 
         for i, (method, values) in enumerate(data.items()):
             marker = markers[i % len(markers)]
-            # plt.plot(local_rounds, values[value], label=method, color=colors[i], marker=marker, markersize=8, linestyle='-')
-            
-            if method != 'RandomSampling':
+            plt.plot(local_rounds, values[value], label=method, color=colors[i], marker=marker, markersize=8, linestyle='-')
+            '''
+            if method == 'RandomSampling':
                 plt.plot(local_rounds, values[value], label=method, color=colors[i], marker=marker, markersize=8, linestyle='-')
             else:
-                # A linha deve ser preta
-                plt.plot(local_rounds, values[value], label=method, color='black', marker=marker, markersize=8, linestyle='--')
-            
+                plt.plot(local_rounds, values[value], label=method, color=colors[i])
+            '''
         
-        # plt.title("Model comparison", fontsize=14)
-        # New: Model comparison with n_query 10
-        plt.title(f"Model comparison with n_query {new_data_config['n_query']}", fontsize=14)
+        plt.title("Model comparison", fontsize=14)
         plt.xlabel("Rounds", fontsize=12)
         plt.ylabel(ylabel, fontsize=12)
         plt.legend(title="Models")
@@ -266,15 +220,112 @@ def save_plot(new_data_config, is_show=False):
         if is_show:
             plt.show()
 
+def main(args):
+    input_dir = args.input_dir
+    pattern = args.pattern
+
+    # Listar todas as pastas de input_dir
+    folders_seeds = list_folders_with_pattern(input_dir, pattern)
+
+    print(f"Pasta de entrada: {input_dir}")
+    print(f"Padrão: {pattern}")
+    print(f"Diretórios com o padrão {pattern}: {folders_seeds}")
+    print(f"Total de diretórios: {len(folders_seeds)}")
+    print("\n")
+
+    dict_data_seeds = {}
+    for path_folder in folders_seeds:
+        print(f"\n==>Path: {path_folder}")
+        basename_path_seed = os.path.basename(path_folder)
+        
+        nq_folders = list_folders_with_pattern(path_folder, "NQ_*")
+
+        dict_data_nq = {}
+        for path_nq_folder in nq_folders:
+            print(f"\n==>Path NQ: {path_nq_folder}\n")
+            basename_path_nq = os.path.basename(path_nq_folder)
+            
+            json_path = os.path.join(path_nq_folder, "data_experiment.json")
+        
+            if not os.path.exists(json_path):
+                raise ValueError(f"File {json_path} not found.")
+            
+            local_data_json = {}
+            with open(json_path, "r") as json_file:
+                local_data_json = json.load(json_file)
+
+            dict_data_nq[basename_path_nq] = local_data_json['data']
+
+        dict_data_seeds[basename_path_seed] = dict_data_nq
+
+    
+    # print("\ndict_data_seeds: ", dict_data_seeds)
+    
+    # NEW: Extract SEEDS, NQS e METHODS from dict_data_seeds
+    SEEDS = sorted(list(dict_data_seeds.keys()))
+    NQS = sorted(list(dict_data_seeds[SEEDS[0]].keys()))
+    METHODS = sorted(list(dict_data_seeds[SEEDS[0]][NQS[0]].keys()))
+    
+    print("\nSEEDS: ", SEEDS)
+    print("NQS: ", NQS)
+    print("METHODS: ", METHODS)
+    print("\n")
+    
+    def calculate_mean(list1, list2, list3):
+                    return [sum(x) / 3 for x in zip(list1, list2, list3)]
+    metrics = MetricsType.DICT.value
+    for metric_value, metric_key in metrics.items():
+        METRIC = metric_key
+        for nq in NQS:
+            dict_data_final = {}
+            for method in METHODS:
+                # print(f'\nMETHOD: {method}')
+
+                acc_1 = dict_data_seeds[SEEDS[0]][nq][method][METRIC]
+                acc_2 = dict_data_seeds[SEEDS[1]][nq][method][METRIC]
+                acc_3 = dict_data_seeds[SEEDS[2]][nq][method][METRIC]
+                
+                sum_all_acc_method = calculate_mean(acc_1, acc_2, acc_3)
+                # print(f'Average seed for metric {METRIC}, nq ({nq}) and method {method}: {sum_all_acc_method}')
+                dict_data_final[method] = sum_all_acc_method
+
+            
+            # Plot results
+            markers = ['o', '*', 's', 'D', '^', 'P', 'X']
+            colors = sns.color_palette("husl", len(dict_data_final))
+
+            plt.figure(figsize=(12, 7))
+            for i, (method, values) in enumerate(dict_data_final.items()):
+                marker = markers[i % len(markers)]
+                
+                if method == 'RandomSampling':
+                    # COnfigure a fonte da legenda
+                    plt.plot(values, label=f'{method}', marker='o', markersize=8, linestyle='-', color='black')
+                else:
+                    plt.plot(values, label=method, color=colors[i], marker=marker, markersize=8, linestyle='-')
+
+            # Deixar plot com grid 
+            plt.grid()
+            nq_split = nq.split('_')[1]
+            plt.title(f"Model comparison with n_query {nq_split}", fontsize=14, color='black')
+            plt.xlabel("Rounds", fontsize=12)
+            plt.ylabel(f"{metric_value}", fontsize=12)
+            plt.legend()
+            path_save = f"results/dalmax/daninhas_full/results/AVERAGES/{nq}/metric_{metric_key}_methods_comparison.pdf"
+            plt.savefig(path_save)
+            is_show = False
+            print(f"Save plot in {path_save}")
+            if is_show:
+                plt.show()
+            plt.close()
+
 if __name__ == "__main__":
 
     # Argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_dir", type=str, default="results/", help="Input directory path.")
-    parser.add_argument("--pattern", type=str, default="*", help="Pattern to match (default is '*', matching all).")
+    parser.add_argument("--input_dir", type=str, default="results/dalmax/daninhas_full/results/", help="Input directory path.")
+    parser.add_argument("--pattern", type=str, default="SEED*", help="Pattern to match (default is '*', matching all).")
 
     args = parser.parse_args()
 
     main(args)
-
-
