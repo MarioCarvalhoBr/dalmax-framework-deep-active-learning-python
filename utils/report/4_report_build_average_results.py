@@ -1,4 +1,4 @@
-# Example usage: python 4_report_build_average_results.py  --input_dir results/dalmax/daninhas_full/results/ --pattern SEED*
+# Example usage: python 4_report_build_average_results.py  --input_dir results/dalmax1/daninhas_full/results/ --pattern SEED*
 # Example usage: python 4_report_build_average_results.py
 
 import os
@@ -311,7 +311,7 @@ def main(args):
             plt.xlabel("Rounds", fontsize=12)
             plt.ylabel(f"{metric_value}", fontsize=12)
             plt.legend()
-            path_save = f"results/dalmax/daninhas_full/results/AVERAGES/{nq}/metric_{metric_key}_methods_comparison.pdf"
+            path_save = f"results/dalmax1/daninhas_full/results/AVERAGES/{nq}/metric_{metric_key}_methods_comparison.pdf"
             plt.savefig(path_save)
             is_show = False
             print(f"Save plot in {path_save}")
@@ -323,7 +323,7 @@ if __name__ == "__main__":
 
     # Argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_dir", type=str, default="results/dalmax/daninhas_full/results/", help="Input directory path.")
+    parser.add_argument("--input_dir", type=str, default="results/dalmax1/daninhas_full/results/", help="Input directory path.")
     parser.add_argument("--pattern", type=str, default="SEED*", help="Pattern to match (default is '*', matching all).")
 
     args = parser.parse_args()

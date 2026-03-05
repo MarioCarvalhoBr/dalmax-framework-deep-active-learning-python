@@ -1,4 +1,4 @@
-# Example usage: python 2_report_build_chunk_results.py  --input_dir results/dalmax/daninhas_full/ --pattern SEED*
+# Example usage: python 2_report_build_chunk_results.py  --input_dir results/dalmax1/daninhas_full/ --pattern SEED*
 # Example usage: python 2_report_build_chunk_results.py
 
 import os
@@ -278,7 +278,7 @@ if __name__ == "__main__":
 
     # Argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_dir", type=str, default="results/dalmax/daninhas_full/", help="Input directory path.")
+    parser.add_argument("--input_dir", type=str, default="results/dalmax1/daninhas_full/", help="Input directory path.")
     parser.add_argument("--pattern", type=str, default="SEED*", help="Pattern to match (default is '*', matching all).")
 
     args = parser.parse_args()

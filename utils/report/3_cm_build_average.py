@@ -1,4 +1,4 @@
-# Example usage:  python3 3_cm_build_average.py  --input_dir results/dalmax/daninhas_full/results/ --pattern SEED*
+# Example usage:  python3 3_cm_build_average.py  --input_dir results/dalmax1/daninhas_full/results/ --pattern SEED*
 # Example usage:  python3 3_cm_build_average.py
 import os
 import json
@@ -361,7 +361,7 @@ if __name__ == "__main__":
 
     # Argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_dir", type=str, default="results/dalmax/daninhas_full/results/", help="Input directory path.")
+    parser.add_argument("--input_dir", type=str, default="results/dalmax1/daninhas_full/results/", help="Input directory path.")
     parser.add_argument("--pattern", type=str, default="SEED*", help="Pattern to match (default is '*', matching all).")
 
     args = parser.parse_args()
