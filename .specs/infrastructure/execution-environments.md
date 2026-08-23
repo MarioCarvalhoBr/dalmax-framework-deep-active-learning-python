@@ -133,3 +133,21 @@ running concurrently (one job per GPU, per `run_pipe_gpu_0.sh` /
 `run_pipe_gpu_1.sh`) share any resource (e.g. shared dataset loading, disk
 I/O) that could bottleneck parallel throughput even with `CUDA_VISIBLE_DEVICES`
 correctly isolating compute.
+
+## Lab handoff — Phase 3 ablation batch (pre-flighted 2026-08-23, verdict GO)
+
+```bash
+git fetch origin && git checkout refactor/phase-3-ablations && git pull
+pip install -r requirements.txt          # lab env (not Poetry)
+# ExperimentNotifier/.env must exist on the lab machine (gitignored)
+tmux new -s gpu0   # bash scripts/ablations/run_ablation_gpu_0.sh   (5 configs)
+tmux new -s gpu1   # bash scripts/ablations/run_ablation_gpu_1.sh   (6 configs)
+# check results/ablations/gpu{0,1}_failures.log afterwards (should be empty)
+python -m dalmax.reporting.ablation_report --root results/ablations --out docs/results/ablation_tables
+git add docs/results/ablation_tables/ && git commit -m "Add Phase 3 ablation study results" && git push
+```
+
+Audit facts: expected embedding recomputes = 3 SSRAE + 3 ResNet (one per seed; all SSRAE configs
+share one cache per pool); SSRAE extraction ~2 min CPU per pool (measured 12.13 ms/image);
+GPU load split ratio ~1.1x; no VRAM/MEMORY_LIMIT concern at ~10k x 756-d/2048-d scale.
+Non-blocking: ExperimentNotifier email shows a generic message for these runs (no STRATEGY_1 token).
