@@ -34,18 +34,33 @@ git commit)**. Given those four things, the same results.json must be reproducib
 
 ## Embedding cache discipline
 
-- `utils/data.py` caches full-dataset embeddings at fixed paths:
-  `results/features_dict_ssrae.pkl`, `results/features_dict_vctex.pkl`,
-  `results/Y_train.pkl` — with **no cache key** for dataset name, `Q`
-  (SSRAE `Q=13`, VCTex `Q=[5,17]`), or embedding variant (`full`/`spatial`/
-  `spectral`, per the representation ablation). **Never reuse an embedding cache
-  across a different `(dataset, extractor, Q, variant)` combination** — if you are
-  about to run an ablation variant, first verify (or force-recompute) that the
-  cache file was produced for that exact combination. This is the single highest-
-  risk reproducibility hazard in the ablation study (`.specs/experiments/ablation-study.md`).
-- Longer term, the fix is a keyed cache path (e.g.
-  `results/features_dict_{dataset}_{extractor}_{Q}_{variant}.pkl`) — part of
-  refactor Phase 2 (embedding provider abstraction).
+- `utils/data.py`'s `cache_file_path(name, dataset_folder, q=None, pool_hash=None)`
+  keys SSRAE/VCTex feature caches and `Y_train` under `results/cache/` as
+  `{name}_{dataset_folder}[_Q{q}[_pool{pool_hash}]].pkl` (e.g.
+  `results/cache/features_ssrae_daninhas_micro_Q13_pool<12-hex>.pkl`). SSRAE/VCTex
+  feature extraction runs only over the **unlabeled pool** at the moment
+  `create_feature_maps_ssrae`/`create_feature_maps_vctex` is called, and that pool
+  depends on `--seed` and `--n_init_labeled` — so `pool_hash` is
+  `hashlib.sha256(np.where(self.labeled_idxs==0)[0].astype(np.int64).tobytes()).hexdigest()[:12]`,
+  computed before the cache path is built. This closes the seed/`n_init_labeled`
+  collision hazard: two runs with the same `(dataset_folder, Q)` but different
+  seeds/`n_init_labeled` never silently share a cache file. `Y_train` has no pool
+  concept (`q=None`) and never carries a `pool_hash` segment, even if one is passed.
+  The old fixed-path caches (`results/features_dict_ssrae.pkl`,
+  `results/features_dict_vctex.pkl`, `results/Y_train.pkl`) are orphaned — no
+  longer read or written by this code path — and must never be resurrected.
+- **Still missing**: an `embedding_variant` (`full`/`spatial`/`spectral`, per the
+  representation ablation) key component, and `Q` itself is still a hardcoded
+  literal (`13` for SSRAE, `[5,17]` for VCTex) rather than config-driven. **Never
+  reuse an embedding cache across a different `(dataset, extractor, Q, pool,
+  variant)` combination** — if you are about to run an ablation variant, first
+  verify (or force-recompute) that the cache file was produced for that exact
+  combination. This remaining gap is the highest-risk reproducibility hazard left
+  in the ablation study (`.specs/experiments/ablation-study.md`).
+- Longer term, the fix is the fuller `EmbeddingProvider`/`EmbeddingCache`
+  abstraction (ADR 0003) that supersedes `cache_file_path` with a
+  `(dataset, extractor, Q, variant, split)`-keyed cache — part of refactor Phase 2.
+  See `.specs/quality/known-issues.md` KI-3.
 
 ## Enforcement
 

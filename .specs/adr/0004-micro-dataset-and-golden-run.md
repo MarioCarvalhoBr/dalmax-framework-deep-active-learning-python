@@ -73,3 +73,37 @@ We will:
 - Follow-up: Phase 2's `EmbeddingProvider`/`EmbeddingCache` (ADR 0003) supersedes `cache_file_path`
   with a fuller `(dataset, extractor, Q, variant, split)`-keyed cache; `cache_file_path` and its
   call sites should be removed/migrated at that point, not kept as a parallel mechanism.
+
+## Update (2026-08-23): deterministic sampling seed + pool-identity cache key
+
+Two follow-up fixes were made against this same decision, found in code review before this branch
+merged:
+
+1. **`scripts/make_micro_dataset.py`'s per-`(split, class)` sampling seed used Python's built-in
+   `hash((split, class_name))`.** `hash()` on a tuple is salted per-process
+   (`PYTHONHASHSEED` randomization by default), so two processes running the exact same script could
+   silently select a *different* set of files for `DATA/daninhas_micro/` — directly contradicting
+   this ADR's "deterministic" and "re-running always selects the same files" claims. Fixed by
+   deriving the seed from `hashlib.sha256(f"{split}:{class_name}".encode())` instead, which is stable
+   across processes and machines. `DATA/daninhas_micro/` was deleted and regenerated; determinism was
+   re-verified by regenerating it in 2 separate processes (different `PYTHONHASHSEED` values) and
+   diffing `find DATA/daninhas_micro -type f | sort | sha256sum` (identical digest both times).
+2. **`cache_file_path` (decision item 2) keyed caches on `(dataset_folder, Q)` but not on which
+   pool of images the cache was computed for.** SSRAE/VCTex feature extraction runs only over the
+   *unlabeled pool* at the time `create_feature_maps_ssrae`/`create_feature_maps_vctex` is called,
+   and that pool depends on `--seed` and `--n_init_labeled` — so two runs with the same
+   `(dataset_folder, Q)` but a different seed/`n_init_labeled` could silently load each other's
+   stale features. Fixed by adding an optional `pool_hash: str | None = None` parameter to
+   `cache_file_path`; call sites compute
+   `pool_hash = hashlib.sha256(np.where(self.labeled_idxs==0)[0].astype(np.int64).tobytes()).hexdigest()[:12]`
+   before building the cache path, giving `results/cache/{name}_{dataset_folder}_Q{q}_pool{pool_hash}.pkl`.
+   `Y_train` has no pool concept and is unaffected (still `q=None`, no `pool_hash` segment).
+
+Both `tests/golden/random_sampling_micro_seed1.json` and `tests/golden/ssrae_kmeans_micro_seed1.json`
+were regenerated against the corrected micro dataset (same recorded CLI, git commit updated). The
+`RandomSampling` fixture's indices/metrics happened to come out unchanged (indices are pool
+*positions*, not filenames, and per-class counts didn't change); the `SSRAEKmeansSampling` fixture's
+`round_1_query_idxs_sorted` legitimately changed (`[11, 12, 19, 25, 26]` → `[5, 21, 37, 45, 47]`)
+because the actual files selected into the micro dataset changed — not a regression in SSRAE/KMeans
+behavior. See `.specs/quality/known-issues.md` KI-3 and the fixtures' own `notes` for detail.
+`tests/test_cache_paths.py` was extended with `pool_hash` collision/idempotency/omission tests.

@@ -1,3 +1,4 @@
+import hashlib
 import pickle
 import os
 import numpy as np
@@ -14,23 +15,40 @@ from core.tools.VCTex.VCTexMethod import VCTexMethod
 import time
 
 
-def cache_file_path(name: str, dataset_folder: str, q: int | list[int] | None = None) -> str:
-    """Build a cache file path keyed by dataset folder name (and Q, if given).
+def cache_file_path(
+    name: str,
+    dataset_folder: str,
+    q: int | list[int] | None = None,
+    pool_hash: str | None = None,
+) -> str:
+    """Build a cache file path keyed by dataset folder name (and Q, and the
+    unlabeled-pool identity, if given).
 
     Prevents the hazard described in `.claude/rules/reproducibility.md` and
     `.specs/quality/known-issues.md` KI-3: a cache file computed for one
-    dataset/Q silently being reused for another. Files live under
-    `results/cache/` (created if missing) so they never collide with the
-    legacy fixed-path caches (`results/features_dict_ssrae.pkl`,
-    `results/features_dict_vctex.pkl`, `results/Y_train.pkl`), which are left
-    in place untouched for backward compatibility.
+    dataset/Q/pool silently being reused for another. Feature caches
+    (SSRAE/VCTex) are extracted only for the current unlabeled pool, which
+    depends on `--seed` and `--n_init_labeled`; without `pool_hash` in the key,
+    two runs with different seeds/`n_init_labeled` (and therefore different
+    unlabeled pools) could silently load each other's stale features. `Y_train`
+    has no notion of a pool (it covers the whole training split) so it is
+    called with `q=None` and never carries a `pool_hash` segment, regardless of
+    what is passed in.
+
+    Files live under `results/cache/` (created if missing) so they never
+    collide with the legacy fixed-path caches
+    (`results/features_dict_ssrae.pkl`, `results/features_dict_vctex.pkl`,
+    `results/Y_train.pkl`), which are left in place untouched for backward
+    compatibility.
     """
     cache_dir = "results/cache/"
     os.makedirs(cache_dir, exist_ok=True)
     if q is None:
         return f"{cache_dir}{name}_{dataset_folder}.pkl"
     q_str = "-".join(str(v) for v in q) if isinstance(q, (list, tuple)) else str(q)
-    return f"{cache_dir}{name}_{dataset_folder}_Q{q_str}.pkl"
+    if pool_hash is None:
+        return f"{cache_dir}{name}_{dataset_folder}_Q{q_str}.pkl"
+    return f"{cache_dir}{name}_{dataset_folder}_Q{q_str}_pool{pool_hash}.pkl"
 
 
 class Data:
@@ -69,26 +87,32 @@ class Data:
         # Method's hyperparameters.
         Q = [5, 17]  # best parameters of the paper. You can test different values
 
-        # Cache is keyed by dataset folder name and Q so different datasets or
-        # Q values never silently share a cache file (see cache_file_path).
-        path_pkl = cache_file_path("features_vctex", self.dataset_folder, Q)
+        # Imprime todos os ids samples do dataset inteiro que já estão anotados e que não estão anotados (pool)
+        labeled_ids = np.where(self.labeled_idxs==1)[0]
+        unlabeled_ids = np.where(self.labeled_idxs==0)[0]
+        # Print len
+        print(f"---->Labeled IDs length: {len(labeled_ids)}")
+        print(f"---->Unlabeled IDs length: {len(unlabeled_ids)}")
+        print(f"---->Labeled IDs: {labeled_ids}")
+        print(f"---->Unlabeled IDs: {unlabeled_ids}")
+
+        # Features are extracted only for the unlabeled pool, which depends on
+        # --seed and --n_init_labeled (see .claude/rules/reproducibility.md
+        # KI-3). Hash the pool identity into the cache key so two runs with
+        # different seeds/n_init_labeled never silently share a cache file.
+        pool_hash = hashlib.sha256(unlabeled_ids.astype(np.int64).tobytes()).hexdigest()[:12]
+
+        # Cache is keyed by dataset folder name, Q, and pool_hash so different
+        # datasets, Q values, or unlabeled pools never silently share a cache
+        # file (see cache_file_path).
+        path_pkl = cache_file_path("features_vctex", self.dataset_folder, Q, pool_hash)
         if os.path.exists(path_pkl):
             with open(path_pkl, 'rb') as f:
                 self.features_dict = pickle.load(f)
             print(f"Features dictionary loaded from {path_pkl}")
         else:
             print(f"Features dictionary file {path_pkl} NOT FOUND. Please run the feature extraction first.")
-                        
-            # Imprime todos os ids samples do dataset inteiro que já estão anotados e que não estão anotados (pool)
-            labeled_ids = np.where(self.labeled_idxs==1)[0]
-            unlabeled_ids = np.where(self.labeled_idxs==0)[0]
-            # Print len 
-            print(f"---->Labeled IDs length: {len(labeled_ids)}")
-            print(f"---->Unlabeled IDs length: {len(unlabeled_ids)}")
-            print(f"---->Labeled IDs: {labeled_ids}")
-            print(f"---->Unlabeled IDs: {unlabeled_ids}")
-            
-            
+
             # Device.
             device = torch.device("cuda:0")
 
@@ -141,25 +165,32 @@ class Data:
         # Method's hyperparameters.
         Q = 13  # The number of hidden neurons.
 
-        # Cache is keyed by dataset folder name and Q so different datasets or
-        # Q values never silently share a cache file (see cache_file_path).
-        path_pkl = cache_file_path("features_ssrae", self.dataset_folder, Q)
+        # Imprime todos os ids samples do dataset inteiro que já estão anotados e que não estão anotados (pool)
+        labeled_ids = np.where(self.labeled_idxs==1)[0]
+        unlabeled_ids = np.where(self.labeled_idxs==0)[0]
+        # Print len
+        print(f"---->Labeled IDs length: {len(labeled_ids)}")
+        print(f"---->Unlabeled IDs length: {len(unlabeled_ids)}")
+        print(f"---->Labeled IDs: {labeled_ids}")
+        print(f"---->Unlabeled IDs: {unlabeled_ids}")
+
+        # Features are extracted only for the unlabeled pool, which depends on
+        # --seed and --n_init_labeled (see .claude/rules/reproducibility.md
+        # KI-3). Hash the pool identity into the cache key so two runs with
+        # different seeds/n_init_labeled never silently share a cache file.
+        pool_hash = hashlib.sha256(unlabeled_ids.astype(np.int64).tobytes()).hexdigest()[:12]
+
+        # Cache is keyed by dataset folder name, Q, and pool_hash so different
+        # datasets, Q values, or unlabeled pools never silently share a cache
+        # file (see cache_file_path).
+        path_pkl = cache_file_path("features_ssrae", self.dataset_folder, Q, pool_hash)
         if os.path.exists(path_pkl):
             with open(path_pkl, 'rb') as f:
                 self.features_dict = pickle.load(f)
             print(f"Features dictionary loaded from {path_pkl}")
-            
+
         else:
             print(f"Features dictionary file {path_pkl} NOT FOUND. Please run the feature extraction first.")
-
-            # Imprime todos os ids samples do dataset inteiro que já estão anotados e que não estão anotados (pool)
-            labeled_ids = np.where(self.labeled_idxs==1)[0]
-            unlabeled_ids = np.where(self.labeled_idxs==0)[0]
-            # Print len 
-            print(f"---->Labeled IDs length: {len(labeled_ids)}")
-            print(f"---->Unlabeled IDs length: {len(unlabeled_ids)}")
-            print(f"---->Labeled IDs: {labeled_ids}")
-            print(f"---->Unlabeled IDs: {unlabeled_ids}")
 
             # Instantiate the color feature extractor.
             extractor = ColorFeatureExtractor(Q=Q)

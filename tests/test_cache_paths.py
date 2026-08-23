@@ -1,14 +1,24 @@
-"""`utils.data.cache_file_path` must key cache files on dataset + Q.
+"""`utils.data.cache_file_path` must key cache files on dataset + Q + pool.
 
 See `.claude/rules/reproducibility.md` and `.specs/quality/known-issues.md`
 KI-3: before this helper existed, `utils/data.py` cached SSRAE/VCTex features
 and `Y_train` at fixed, unkeyed paths (`results/features_dict_ssrae.pkl`,
 `results/features_dict_vctex.pkl`, `results/Y_train.pkl`), so a cache computed
-for one dataset/Q was silently reused for a different one. These tests pin
-down that different `(dataset_folder, q)` combinations never collide, that the
-same combination is stable/idempotent, and that the cache directory is
-created as a side effect (mirroring the pre-existing behavior of writing
-under `results/`, which is gitignored — see `.claude/rules/data-safety.md`).
+for one dataset/Q was silently reused for a different one. A later gap in the
+same helper is that features are extracted only for the *unlabeled pool*,
+which depends on `--seed`/`--n_init_labeled`: two runs with the same
+`(dataset_folder, q)` but a different pool could otherwise silently share a
+cache file. `pool_hash` closes that gap. These tests pin down that different
+`(dataset_folder, q, pool_hash)` combinations never collide, that the same
+combination is stable/idempotent, that `Y_train` (which has no pool concept)
+never carries a pool segment, and that the cache directory is created as a
+side effect (mirroring the pre-existing behavior of writing under `results/`,
+which is gitignored — see `.claude/rules/data-safety.md`).
+
+Note: every `cache_file_path(...)` call below has the side effect of calling
+`os.makedirs("results/cache/", exist_ok=True)` — these tests create that real
+directory under the repo's `results/` (gitignored), they do not mock the
+filesystem.
 """
 
 from __future__ import annotations
@@ -59,3 +69,30 @@ def test_different_extractor_names_never_collide():
     ssrae = cache_file_path("features_ssrae", "daninhas_micro", 13)
     vctex = cache_file_path("features_vctex", "daninhas_micro", 13)
     assert ssrae != vctex
+
+
+def test_different_pool_hashes_never_collide():
+    pool_a = cache_file_path("features_ssrae", "daninhas_micro", 13, pool_hash="aaaaaaaaaaaa")
+    pool_b = cache_file_path("features_ssrae", "daninhas_micro", 13, pool_hash="bbbbbbbbbbbb")
+    assert pool_a != pool_b
+
+
+def test_pool_hash_is_deterministic_for_same_inputs():
+    a = cache_file_path("features_ssrae", "daninhas_micro", 13, pool_hash="aaaaaaaaaaaa")
+    b = cache_file_path("features_ssrae", "daninhas_micro", 13, pool_hash="aaaaaaaaaaaa")
+    assert a == b
+
+
+def test_pool_hash_none_omits_pool_segment():
+    path = cache_file_path("features_ssrae", "daninhas_micro", 13)
+    assert "pool" not in os.path.basename(path)
+
+
+def test_y_train_never_carries_a_pool_segment():
+    # Y_train has no notion of an unlabeled pool (it covers the whole training
+    # split), so it is always called with q=None, and cache_file_path must
+    # ignore any pool_hash passed alongside q=None.
+    without_pool = cache_file_path("Y_train", "daninhas_micro")
+    with_pool_ignored = cache_file_path("Y_train", "daninhas_micro", pool_hash="aaaaaaaaaaaa")
+    assert without_pool == with_pool_ignored
+    assert "pool" not in os.path.basename(without_pool)
