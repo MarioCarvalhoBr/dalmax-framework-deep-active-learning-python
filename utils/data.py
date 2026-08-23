@@ -345,8 +345,41 @@ class Data:
         precision = precision_score(self.Y_test, preds, average='weighted', zero_division=0)
         recall = recall_score(self.Y_test, preds, average='weighted', zero_division=0)
         f1 = f1_score(self.Y_test, preds, average='weighted', zero_division=0)
-        
+
         return accuracy, precision, recall, f1
+
+    def calc_metrics(self, preds) -> dict:
+        """Weighted AND macro-averaged accuracy/precision/recall/F1.
+
+        Extends `calc_metrics_sklearn` (kept intact above, unused by new
+        code but left for backward compatibility) with macro-averaged
+        variants, per `.specs/architecture/refactor-plan.md` Phase 2's
+        macro-F1 acceptance criterion — weighted metrics can look strong
+        while a minority class is never predicted; macro metrics catch that.
+        """
+        from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
+
+        # Converter self.Y_test para tensor caso seja um array NumPy
+        if isinstance(self.Y_test, np.ndarray):
+            self.Y_test = torch.from_numpy(self.Y_test).to(torch.int64)
+        else:
+            self.Y_test = self.Y_test.to(torch.int64)
+
+        return {
+            "acc": accuracy_score(self.Y_test, preds),
+            "precision_weighted": precision_score(
+                self.Y_test, preds, average="weighted", zero_division=0
+            ),
+            "recall_weighted": recall_score(
+                self.Y_test, preds, average="weighted", zero_division=0
+            ),
+            "f1_weighted": f1_score(self.Y_test, preds, average="weighted", zero_division=0),
+            "precision_macro": precision_score(
+                self.Y_test, preds, average="macro", zero_division=0
+            ),
+            "recall_macro": recall_score(self.Y_test, preds, average="macro", zero_division=0),
+            "f1_macro": f1_score(self.Y_test, preds, average="macro", zero_division=0),
+        }
 
     def get_size_pool_unlabeled(self):
         unlabeled_idxs, handler = self.get_unlabeled_data()
