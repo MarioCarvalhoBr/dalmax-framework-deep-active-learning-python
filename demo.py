@@ -82,6 +82,12 @@ def main(args):
     # start experiment
     start_time = time.time()
     dataset.initialize_labels(args.n_init_labeled, args.strategy_name)
+    # Log the initial labeled indices so a golden-run fixture can pin them down
+    # (see tests/golden/ and .specs/quality/testing-strategy.md) — nothing else
+    # in this codebase currently exposes them.
+    logger.warning(
+        f"Initial labeled idxs (sorted): {sorted(int(i) for i in np.where(dataset.labeled_idxs)[0])}"
+    )
 
     # round 0 accuracy
     logger.warning("Round 0")
@@ -121,6 +127,12 @@ def main(args):
         logger.warning(f"Round {rd}")
         # query
         query_idxs = strategy.query(args.n_query)
+        # Log the queried indices so a golden-run fixture can pin them down
+        # (see tests/golden/ and .specs/quality/testing-strategy.md) — nothing
+        # else in this codebase currently exposes them.
+        logger.warning(
+            f"Round {rd} query_idxs (sorted): {sorted(int(i) for i in query_idxs)}"
+        )
 
         # update labels
         strategy.update(query_idxs)
