@@ -143,7 +143,7 @@ def _summarize_metric(values_per_seed: list[list[float]]) -> MetricSummary:
     per seed (see module docstring for why a plain mean is a valid AUC proxy
     here). Both are then reduced to mean +/- std **across seeds**. `std` uses
     the population standard deviation (`statistics.pstdev`) -- consistent
-    with `utils/report/4_report_build_average_results.py`'s existing
+    with `dalmax/reporting/average_results.py`'s existing
     `numpy.std` (population, not sample) convention for averaging DalMax
     seeds.
     """

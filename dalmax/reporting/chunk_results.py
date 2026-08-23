@@ -1,16 +1,19 @@
-# Example usage: python 2_report_build_chunk_results.py  --input_dir results/dalmax1/daninhas_full/ --pattern SEED*
-# Example usage: python 2_report_build_chunk_results.py
+# Example usage: python dalmax/reporting/chunk_results.py --input_dir results/dalmax1/daninhas_full/ --pattern SEED*
+# Or: python -m dalmax.reporting.chunk_results --input_dir results/dalmax1/daninhas_full/ --pattern SEED*
+# Example usage: python dalmax/reporting/chunk_results.py
 
-import os
-import json
-import csv
-import glob
-import enum
 import argparse
-import pandas as pd
-import numpy as np
+import csv
+import enum
+import glob
+import json
+import os
+
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 import seaborn as sns
+
 
 class MetricsType(enum.Enum):
     ALL_ACC = "all_acc"
@@ -23,18 +26,18 @@ class MetricsType(enum.Enum):
 def create_csv_tables(dados, dir_results):
     # List of NQ configurations to process
     nq_configs = []
-    
+
     # Get all keys seed_data[nq_config] (methods) from dados
     nq_configs_keys = dados[list(dados.keys())[0]].keys()
     nq_configs = sorted(list(nq_configs_keys))
-    
+
     # Loop through each NQ configuration
     for nq_config in nq_configs:
         # Dictionary to hold lists of metrics for each method
         method_metrics = {}
-        
+
         # Loop through each seed
-        for seed, seed_data in dados.items():
+        for _seed, seed_data in dados.items():
             if nq_config in seed_data:
                 # Get all keys seed_data[nq_config] (methods)
                 methods = seed_data[nq_config]
@@ -51,13 +54,13 @@ def create_csv_tables(dados, dir_results):
                     method_metrics[method]['precision'].append(metrics['all_precision'])
                     method_metrics[method]['recall'].append(metrics['all_recall'])
                     method_metrics[method]['f1_score'].append(metrics['all_f1_score'])
-        
+
         # Prepare data for CSV
         csv_data = []
         # Write header
         header = ['method', 'acc', 'precision', 'recall', 'f1_score']
         csv_data.append(header)
-        
+
         # Write method data
         for method, metrics in method_metrics.items():
             # Calculate mean and std for each metric
@@ -69,23 +72,23 @@ def create_csv_tables(dados, dir_results):
             recall_std = np.std(metrics['recall'])
             f1_mean = np.mean(metrics['f1_score'])
             f1_std = np.std(metrics['f1_score'])
-            
+
             # Format the values as "mean ± std"
             acc = f"{acc_mean:.4f} (±{acc_std:.4f})"
             precision = f"{precision_mean:.4f} (±{precision_std:.4f})"
             recall = f"{recall_mean:.4f} (±{recall_std:.4f})"
             f1_score = f"{f1_mean:.4f} (±{f1_std:.4f})"
-            
+
             # Append the row
             csv_data.append([method, acc, precision, recall, f1_score])
-        
+
         # Create directory if it doesn't exist
         config_dir = os.path.join(dir_results,"results", "AVERAGES", nq_config)
         os.makedirs(config_dir, exist_ok=True)
-        
+
         # Define the CSV file path
         csv_file = os.path.join(config_dir, "tablea_com_media.csv")
-        
+
         # Write to CSV
         with open(csv_file, 'w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file, delimiter=';')
@@ -126,25 +129,24 @@ def plot_results(input_dir, path_nq_folder, folders, basename_path_seed):
     data_strategies = {}
     data_settings = {}
     data_matrix = {}
-    
+
 
     for folder in folders:
         print(f"==>Folder: {folder}")
-        method_name = os.path.basename(folder)
         #-----------------------------------
         json_path = os.path.join(folder, "results.json")
         if not os.path.exists(json_path):
             raise ValueError(f"File {json_path} not found.")
         local_data_json = {}
-        with open(json_path, "r") as json_file:
+        with open(json_path) as json_file:
             local_data_json = json.load(json_file)
-        
+
         # -----------------------------------
         json_path_matrix = os.path.join(folder, "confusion_matrix.json")
         if not os.path.exists(json_path_matrix):
             raise ValueError(f"File {json_path_matrix} not found.")
         matrix_data = {}
-        with open(json_path_matrix, "r") as json_file:
+        with open(json_path_matrix) as json_file:
             matrix_data = json.load(json_file)
         # -----------------------------------
 
@@ -170,7 +172,7 @@ def plot_results(input_dir, path_nq_folder, folders, basename_path_seed):
     new_data_config['dir_results'] = dir_results
     new_data_config['data'] = data_strategies
     new_data_config['matrix'] = data_matrix
-    
+
     data_result = {}
     for method, value_dict in data_strategies.items():
         last_values = {}
@@ -178,7 +180,7 @@ def plot_results(input_dir, path_nq_folder, folders, basename_path_seed):
             last_values[metric] = value_list[-1]
 
         data_result[method] = last_values
-        
+
     # SAVE CSV
     df = pd.DataFrame(data_result).T
     df.to_csv(os.path.join(dir_results, "data_experiment.csv"), sep=';')
@@ -186,7 +188,7 @@ def plot_results(input_dir, path_nq_folder, folders, basename_path_seed):
 
     # SAVE JSON
     save_dict_to_json(new_data_config, os.path.join(dir_results, "data_experiment.json"))
-    
+
     # SAVE PLOT
     save_plot(new_data_config, is_show=False)
 
@@ -196,10 +198,10 @@ def save_plot(new_data_config, is_show=False):
     data = new_data_config['data']
     local_rounds = new_data_config['rounds']
     dir_results = new_data_config['dir_results']
-    
+
     metrics = MetricsType.DICT.value
     for key, value in metrics.items():
-    
+
         # SETTINGS PLOT
         sns.set_theme(style="whitegrid")
         plt.figure(figsize=(8, 6))
@@ -220,7 +222,7 @@ def save_plot(new_data_config, is_show=False):
             else:
                 plt.plot(local_rounds, values[value], label=method, color=colors[i])
             '''
-        
+
         plt.title("Model comparison", fontsize=14)
         plt.xlabel("Rounds", fontsize=12)
         plt.ylabel(ylabel, fontsize=12)
@@ -251,14 +253,14 @@ def main(args):
     for path_folder in folders_seeds:
         print(f"\n==>Path: {path_folder}")
         basename_path_seed = os.path.basename(path_folder)
-        
+
         nq_folders = list_folders_with_pattern(path_folder, "NQ_*")
 
         dict_data_nq = {}
         for path_nq_folder in nq_folders:
             print(f"\n==>Path NQ: {path_nq_folder}\n")
             basename_path_nq = os.path.basename(path_nq_folder)
-            
+
             method_folders = list_folders_with_pattern(path_nq_folder, "*")
 
             data_nq = plot_results(input_dir, path_nq_folder,  method_folders, basename_path_seed)
@@ -266,7 +268,7 @@ def main(args):
 
         dict_data_seeds[basename_path_seed] = dict_data_nq
         print("\n")
-    
+
     # Save in JSON file
     save_dict_to_json(dict_data_seeds, os.path.join(input_dir, "data_results.json"))
 

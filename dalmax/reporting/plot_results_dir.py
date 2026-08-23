@@ -1,10 +1,13 @@
-# Example usage: python utils/plot_results_dir.py --dir_input results/new_dalmax_balanceado_train_10_epochs_10_n_query
+# Example usage: python dalmax/reporting/plot_results_dir.py --dir_input results/new_dalmax_balanceado_train_10_epochs_10_n_query
+# Or: python -m dalmax.reporting.plot_results_dir --dir_input results/new_dalmax_balanceado_train_10_epochs_10_n_query
 
-import os
-import json
 import argparse
+import json
+import os
+
 import matplotlib.pyplot as plt
 import seaborn as sns
+
 
 def main(args):
     dir_input = args.dir_input
@@ -22,13 +25,13 @@ def main(args):
     for folder in folders:
         # Ler o arquivo JSON
         json_path = os.path.join(dir_input, folder, "results.json")
-        
+
         # Verifica se o arquivo existe: Se não, imprime um aviso e pula para a próxima iteração
         if not os.path.exists(json_path):
             print(f"Arquivo {json_path} não encontrado.")
             continue
-        
-        with open(json_path, "r") as json_file:
+
+        with open(json_path) as json_file:
             dados_config = json.load(json_file)
 
         # Adicionar ao dicionário de dados

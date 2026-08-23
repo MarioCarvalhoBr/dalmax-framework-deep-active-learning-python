@@ -1,4 +1,4 @@
-"""`utils.data.cache_file_path` must key cache files on dataset + Q + pool.
+"""`dalmax.data.datasets.cache_file_path` must key cache files on dataset + Q + pool.
 
 See `.claude/rules/reproducibility.md` and `.specs/quality/known-issues.md`
 KI-3: before this helper existed, `utils/data.py` cached SSRAE/VCTex features
@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import os
 
-from utils.data import cache_file_path
+from dalmax.data.datasets import cache_file_path
 
 
 def test_same_inputs_produce_the_same_path():

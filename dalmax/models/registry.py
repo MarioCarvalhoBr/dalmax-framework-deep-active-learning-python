@@ -1,9 +1,9 @@
 """`MODEL_REGISTRY` / `get_network`: replaces `utils/orchestrator.py`'s
-`get_network_deep_learning` `if/elif` chain for the `dalmax`-routed CLI.
+(deleted, Phase 4) `get_network_deep_learning` `if/elif` chain for the
+`dalmax`-routed CLI.
 
-`utils/orchestrator.py` itself is left untouched and keeps working for any
-legacy caller. `DeepLearning` (`core/deep_learning.py`, vendored, untouched)
-still expects a plain dict of the historical shape
+`DeepLearning` (`dalmax/models/base.py`, vendored, untouched) still expects a
+plain dict of the historical shape
 (`n_epoch`/`n_classes`/`n_drop`/`train_args`/`test_args`/`optimizer_args`) —
 `_legacy_params_dict` is the one place that reconstructs that dict from the
 typed `dalmax.config.schema.DatasetConfig`, so no other new code has to know
@@ -17,10 +17,10 @@ from typing import Any
 
 import torch
 
-from core.cifar10_model import CIFAR10Model
-from core.daninhas_model import DaninhasModelResNet50
-from core.deep_learning import DeepLearning
 from dalmax.config.schema import DatasetConfig, ExperimentConfig
+from dalmax.models.base import DeepLearning
+from dalmax.models.cifar10_cnn import CIFAR10Model
+from dalmax.models.daninhas_resnet50 import DaninhasModelResNet50
 
 MODEL_REGISTRY: dict[str, Callable] = {
     "DANINHAS": DaninhasModelResNet50,
@@ -30,7 +30,7 @@ MODEL_REGISTRY: dict[str, Callable] = {
 
 def _legacy_params_dict(dataset_config: DatasetConfig) -> dict[str, Any]:
     """Rebuild the historical `params[dataset_name]` dict shape that
-    `core.deep_learning.DeepLearning` indexes into (`self.params['n_epoch']`,
+    `dalmax.models.base.DeepLearning` indexes into (`self.params['n_epoch']`,
     `self.params['train_args']`, ...)."""
     return {
         "n_epoch": dataset_config.n_epoch,

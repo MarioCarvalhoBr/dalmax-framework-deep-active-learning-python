@@ -1,6 +1,7 @@
-from torchvision import transforms
-from torch.utils.data import Dataset
 from PIL import Image
+from torch.utils.data import Dataset
+from torchvision import transforms
+
 
 class DANINHAS_Hander(Dataset):
     def __init__(self, X, Y):
@@ -32,7 +33,7 @@ class DANINHAS_Hander(Dataset):
 
     def __len__(self):
         return len(self.X)
-    
+
 class CIFAR10_Handler(Dataset):
     def __init__(self, X, Y):
         self.X = X

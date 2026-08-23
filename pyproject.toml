@@ -53,6 +53,13 @@ exclude = [
     "ExperimentNotifier",
     "local_assets",
     ".venv",
+    # Vendored/adapted third-party code (SSRAE, VCTex, and the Meta-licensed
+    # SSL hierarchical k-means pipeline), moved as-is into dalmax/tools/ in
+    # refactor Phase 4 (.specs/architecture/refactor-plan.md) with only the
+    # import-line edits required to resolve under the new path. Left
+    # unlinted/unformatted rather than mechanically rewritten, per that
+    # phase's "vendored code moves with ONLY import-line edits" constraint.
+    "dalmax/tools",
 ]
 
 [tool.ruff.lint]

@@ -1,6 +1,7 @@
 import logging
+import os
 import time
-import os 
+
 # Configuração do logger
 logger = logging.getLogger(__name__)  # Define o logger apenas para o seu módulo
 logger.setLevel(logging.DEBUG)

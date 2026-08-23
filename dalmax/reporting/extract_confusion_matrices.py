@@ -1,8 +1,10 @@
-import os
-import re
 import argparse
 import json
+import os
+import re
+
 from PyPDF2 import PdfReader  # type: ignore
+
 
 def extract_confusion_matrix(pdf_path, output_path):
     """
@@ -72,10 +74,10 @@ def process_all_pdfs(folder_root):
         for nq in NQS:
             print(f"Processando {nq}...")
             input_dir = os.path.join(folder_root, seed, nq)
-            
+
             # Iterar sobre todos os arquivos PDF no diretório
             folders = os.listdir(input_dir)
-            
+
             print(f"Processando {len(folders)} arquivos PDF em {input_dir}...")
             print(f"Folders: {folders}")
             for method_folder in folders:

@@ -2,11 +2,11 @@
 
 Notes
 -----
-- The repository does not install ``core``/``utils`` as packages (they are
-  plain top-level packages used in-place, see ``pyproject.toml``'s
+- The repository does not install ``dalmax`` as a package (it is a plain
+  top-level package used in-place, see ``pyproject.toml``'s
   ``package-mode = false``), so the repo root must be on ``sys.path`` for
-  ``import core...`` / ``import utils...`` to work regardless of how pytest
-  is invoked (``poetry run pytest``, ``pytest`` from a subdirectory, etc).
+  ``import dalmax...`` to work regardless of how pytest is invoked
+  (``poetry run pytest``, ``pytest`` from a subdirectory, etc).
 - Markers (``gpu``, ``dataset``, ``slow``) are already declared in
   ``pyproject.toml`` under ``[tool.pytest.ini_options]``. The registration
   below is defensive: if a future session runs this suite against a

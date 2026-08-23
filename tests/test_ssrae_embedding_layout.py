@@ -39,9 +39,9 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from core.tools.SSRAE.extractor import ColorFeatureExtractor
-from core.tools.SSRAE.rnn import RNN
-from core.tools.SSRAE.splitter import WindowSplitter
+from dalmax.tools.SSRAE.extractor import ColorFeatureExtractor
+from dalmax.tools.SSRAE.rnn import RNN
+from dalmax.tools.SSRAE.splitter import WindowSplitter
 
 
 def _prep_channel(channel: np.ndarray) -> tuple[torch.Tensor, torch.Tensor]:

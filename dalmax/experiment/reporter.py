@@ -105,7 +105,7 @@ def write_report(result: RunResult, path_logger: str) -> None:
     result:
         The `RunResult` returned by `dalmax.experiment.runner.ExperimentRunner.run()`.
     path_logger:
-        Path to the in-progress log file (`utils.LOGGER.get_path_logger()`),
+        Path to the in-progress log file (`dalmax.logging_utils.get_path_logger()`),
         moved into `result.dir_results` as `log-dalmax.log`, exactly as
         `demo.py` always has.
     """

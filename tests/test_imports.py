@@ -1,6 +1,6 @@
-"""Every module under ``core/`` and ``utils/`` must import cleanly.
+"""Every module under ``dalmax/`` must import cleanly.
 
-This test walks both packages and dynamically parametrizes one
+This test walks the `dalmax` package and dynamically parametrizes one
 ``importlib.import_module`` check per discovered module. A handful of modules
 are excluded up front (see ``SKIP_MODULES`` below) because they are not
 meant to be imported as part of the package: they are standalone scripts
@@ -13,6 +13,14 @@ DATA/, or running training. This was verified by reading each source file:
 no module outside the skip list calls ``torch.cuda`` (or similar) at module
 scope, all such calls live inside function/method bodies and only run when
 those functions are called.
+
+Before refactor Phase 4 (`.specs/architecture/refactor-plan.md`), this test
+walked the legacy `core`/`utils` packages that `dalmax` wrapped. Phase 4
+physically moved every remaining module into `dalmax/` and deleted the dead
+files (`core/query_strategies/old_functions.py`, `core/tools/SSL/code_kmh.py`,
+the `SSRAE`/`VCTex` `example.py` scripts, `utils/orchestrator.py`, and the
+four superseded representation-strategy files) — see
+`.specs/architecture/current-state.md` §0 for the full inventory.
 """
 
 from __future__ import annotations
@@ -26,62 +34,23 @@ import pytest
 # Modules intentionally excluded from the "must import cleanly" contract,
 # with the verified reason (read the source before adding an entry here).
 SKIP_MODULES: dict[str, str] = {
-    # Entirely a triple-quoted string literal (dead code kept for reference,
-    # see .specs/quality/known-issues.md). It technically imports without
-    # raising, but it is explicitly called out in the harness spec as a file
-    # to skip: it is not real, executable module content.
-    "core.query_strategies.old_functions": (
-        "dead/experimental file (body is a single docstring, see known-issues.md); "
-        "explicitly excluded per harness spec"
-    ),
-    # Example/demo scripts meant to be run directly from within their own
-    # directory (e.g. `cd core/tools/SSRAE && python example.py`). They both
-    # (a) run real feature extraction on a random image at module scope, and
-    # (b) use a bare `from extractor import ColorFeatureExtractor` style
-    # import that only resolves when the script's own directory is on
-    # sys.path (as happens when run as `python example.py`), not when
-    # imported as `core.tools.SSRAE.example`.
-    "core.tools.SSRAE.example": (
-        "standalone demo script: runs feature extraction at import time and "
-        "uses a non-relative `from extractor import ...` import that fails "
-        "under normal package import"
-    ),
-    "core.tools.VCTex.example": (
-        "standalone demo script: runs feature extraction at import time and "
-        "uses a non-relative `from VCTexMethod import ...`-style import that "
-        "fails under normal package import"
-    ),
-    # Same non-relative-import problem, plus a module-level `os.listdir` +
-    # `print` side effect executed unconditionally.
-    "core.tools.SSRAE.classification": (
+    # Standalone scripts meant to be run directly from within their own
+    # directory (e.g. `cd dalmax/tools/SSRAE && python classification.py`).
+    # They (a) run real feature extraction/classification at module scope,
+    # and (b) use a bare `from extractor import ColorFeatureExtractor` /
+    # `from VCTexMethod import VCTexMethod` style import that only resolves
+    # when the script's own directory is on sys.path (as happens when run
+    # directly), not when imported as `dalmax.tools.SSRAE.classification`.
+    "dalmax.tools.SSRAE.classification": (
         "standalone script: non-relative `from extractor import "
         "ColorFeatureExtractor` import fails under normal package import "
-        "(designed to run as `python classification.py` from its own folder)"
+        "(designed to run as `python classification.py` from its own folder); "
+        "also has a module-level `os.listdir(...)` side effect"
     ),
-    "core.tools.VCTex.classification": (
+    "dalmax.tools.VCTex.classification": (
         "standalone script: module-level `os.listdir(...)` + `print(...)` "
         "side effect, and a non-relative `from VCTexMethod import "
         "VCTexMethod` import that fails under normal package import"
-    ),
-    # This is the most severe offender: an exploratory script, not a module.
-    # At import time it unconditionally (a) loads
-    # results/features_dict_ssrae.pkl (~130 MB on this machine) and
-    # results/Y_train.pkl, calling `exit()` if either is missing (so a fresh
-    # clone without a prior experiment run would raise SystemExit on
-    # import); (b) runs a full sklearn TSNE.fit_transform over the *entire*
-    # cached feature set (confirmed to take minutes of 100%+ CPU — this is
-    # what made the first `pytest` run of this suite appear to hang); (c)
-    # builds `torch.tensor(..., device="cuda", ...)` unconditionally, which
-    # raises on any machine without a GPU; and (d) ends with `plt.show()`,
-    # which blocks indefinitely waiting for a GUI event loop on any machine
-    # with a display/GUI matplotlib backend (confirmed: this machine's
-    # default backend is TkAgg with DISPLAY set). No `if __name__ ==
-    # "__main__":` guard exists anywhere in the file.
-    "core.tools.SSL.code_kmh": (
-        "exploratory script, not an importable module: unconditionally loads "
-        "large results/*.pkl caches (or exit()s if absent), runs a full "
-        "TSNE.fit_transform at import time (minutes of CPU), requires CUDA, "
-        "and ends with a blocking plt.show()"
     ),
 }
 
@@ -110,10 +79,7 @@ def _discover_modules(package_name: str) -> list[str]:
 
 
 def _all_module_names() -> list[str]:
-    names: list[str] = []
-    for top in ("core", "utils"):
-        names.extend(_discover_modules(top))
-    return sorted(set(names))
+    return sorted(set(_discover_modules("dalmax")))
 
 
 ALL_MODULES = _all_module_names()
@@ -129,13 +95,14 @@ def test_module_imports_cleanly(module_name):
         # A missing *third-party* dependency (not one of our own modules) is
         # an environment/packaging gap, not a code defect this test should
         # fail on. Historically this covered utils/report/1_cm_extract_from_pdf.py's
-        # PyPDF2 import (undeclared in requirements.txt/pyproject.toml, see
+        # (now dalmax/reporting/extract_confusion_matrices.py) PyPDF2 import
+        # (undeclared in requirements.txt/pyproject.toml, see
         # known-issues.md KI-28); PyPDF2 is now a declared dependency
         # (pyproject.toml) and that module imports cleanly, but this
         # fallback stays as a defensive guard for any future undeclared
-        # third-party import elsewhere in core/utils.
+        # third-party import elsewhere in dalmax.
         missing = exc.name or ""
-        if not missing.startswith(("core", "utils")):
+        if not missing.startswith("dalmax"):
             pytest.skip(f"optional/undeclared dependency not installed: {missing}")
         raise
 
@@ -148,7 +115,7 @@ def test_skip_list_matches_discovered_modules():
 
 def test_no_discovery_errors():
     """`pkgutil.walk_packages` must have been able to descend into every
-    subpackage; a failure here means some part of core/utils was silently
+    subpackage; a failure here means some part of dalmax was silently
     excluded from `MODULES_TO_TEST` above instead of being tested or
     explicitly skipped."""
     assert not DISCOVERY_ERRORS, f"failed to walk into subpackage(s): {DISCOVERY_ERRORS}"

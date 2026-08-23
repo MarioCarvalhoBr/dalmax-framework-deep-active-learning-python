@@ -5,7 +5,7 @@ NEW provider (ablation 6.3, "without representation module" —
 features from a `torchvision` ResNet50 pretrained on ImageNet, used as a
 generic-representation stand-in for SSRAE while keeping the hierarchical
 selection stage (`dalmax/selection/hierarchical_kmeans.py`) unchanged. This
-is the same backbone `core/daninhas_model.py::DaninhasModelResNet50` uses,
+is the same backbone `dalmax/models/daninhas_resnet50.py::DaninhasModelResNet50` uses,
 but here the raw penultimate (pre-`fc`) 2048-d vector is returned directly,
 with no learned embedding/classification head, since it is meant to be fed
 to a `SelectionStrategy`, not trained.

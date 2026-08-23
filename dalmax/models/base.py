@@ -1,13 +1,10 @@
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-import torch
-import torch.nn as nn
-import torchvision.models as models
+
 
 class DeepLearning:
     def __init__(self, net, params, device):
@@ -17,19 +14,19 @@ class DeepLearning:
 
     def save_model(self, path):
         torch.save(self.net, path)
-    
+
     # TODO: FIX THIS
     def load_model(self, path):
         self.net = torch.load(path, map_location=torch.device("cuda" if torch.cuda.is_available() else "cpu"))
         self.net.eval()
-        n_classes = self.params['n_classes']    
+        n_classes = self.params['n_classes']
         self.clf = self.net(n_classes).to(self.device)
 
         return self.net
 
     def train(self, data):
         n_epoch = self.params['n_epoch']
-        n_classes = self.params['n_classes']    
+        n_classes = self.params['n_classes']
         self.clf = self.net(n_classes).to(self.device)
         self.clf.train()
         optimizer = optim.SGD(self.clf.parameters(), **self.params['optimizer_args'])
@@ -38,7 +35,7 @@ class DeepLearning:
         for epoch in tqdm(range(1, n_epoch+1), ncols=100):
             all_acc = []
             all_loss = []
-            for batch_idx, (x, y, idxs) in enumerate(loader):
+            for _batch_idx, (x, y, _idxs) in enumerate(loader):
                 x, y = x.to(self.device), y.to(self.device)
                 optimizer.zero_grad()
                 out, e1 = self.clf(x)
@@ -66,13 +63,13 @@ class DeepLearning:
         loader = DataLoader(data, shuffle=False, **self.params['test_args'])
         with torch.no_grad():
             for x, y, idxs in loader:
-                
+
                 x, y = x.to(self.device), y.to(self.device)
                 out, e1 = self.clf(x)
                 pred = out.max(1)[1]
                 preds[idxs] = pred.cpu()
         return preds
-    
+
     def predict_prob(self, data):
         self.clf.eval()
         probs = torch.zeros([len(data), len(np.unique(data.Y))])
@@ -84,14 +81,14 @@ class DeepLearning:
                 prob = F.softmax(out, dim=1)
                 probs[idxs] = prob.cpu()
         return probs
-    
+
     def predict_prob_dropout(self, data, n_drop):
         n_drop = self.params['n_drop']
         print("predict_prob_dropout with n_drop", n_drop)
         self.clf.train()
         probs = torch.zeros([len(data), len(np.unique(data.Y))])
         loader = DataLoader(data, shuffle=False, **self.params['test_args'])
-        for i in range(n_drop):
+        for _i in range(n_drop):
             with torch.no_grad():
                 for x, y, idxs in loader:
                     x, y = x.to(self.device), y.to(self.device)
@@ -100,7 +97,7 @@ class DeepLearning:
                     probs[idxs] += prob.cpu()
         probs /= n_drop
         return probs
-    
+
     def predict_prob_dropout_split(self, data, n_drop):
         n_drop = self.params['n_drop']
         print("predict_prob_dropout_split with n_drop", n_drop)
@@ -112,10 +109,9 @@ class DeepLearning:
                 for x, y, idxs in loader:
                     x, y = x.to(self.device), y.to(self.device)
                     out, e1 = self.clf(x)
-                    prob = F.softmax(out, dim=1)
                     probs[i][idxs] += F.softmax(out, dim=1).cpu()
         return probs
-    
+
     def get_embeddings(self, data):
         self.clf.eval()
         embeddings = torch.zeros([len(data), self.clf.get_embedding_dim()])

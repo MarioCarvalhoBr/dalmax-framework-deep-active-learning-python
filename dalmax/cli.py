@@ -10,7 +10,7 @@ The list of valid `--strategy_name` values here is the single source of
 truth `tests/test_registry.py`/`tests/test_strategy_registry.py` parse via
 `ast` (see those tests' docstrings for why they never `import dalmax.cli`
 directly: importing it eagerly creates a `results/logs/` log file via
-`utils.LOGGER`, same side effect `demo.py` always had).
+`dalmax.logging_utils`, same side effect `demo.py` always had).
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from dalmax.config.loader import load_experiment_config, to_dict
 from dalmax.config.schema import ExperimentConfig
 from dalmax.experiment.reporter import write_report
 from dalmax.experiment.runner import ExperimentRunner
-from utils.LOGGER import get_logger, get_path_logger
+from dalmax.logging_utils import get_logger, get_path_logger
 
 
 def build_arg_parser() -> argparse.ArgumentParser:

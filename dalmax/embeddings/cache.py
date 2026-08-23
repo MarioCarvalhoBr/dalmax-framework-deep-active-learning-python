@@ -29,7 +29,7 @@ DEFAULT_CACHE_ROOT = "results/cache/embeddings"
 def pool_hash(unlabeled_ids: np.ndarray) -> str:
     """Hash the identity of the current unlabeled pool.
 
-    Must equal `utils/data.py`'s inline pool-hash computation
+    Must equal the now-deleted `Data.create_feature_maps_ssrae`/`_vctex`'s inline pool-hash computation
     (`hashlib.sha256(unlabeled_ids.astype(np.int64).tobytes()).hexdigest()[:12]`,
     see `create_feature_maps_ssrae`/`create_feature_maps_vctex`) so that an
     identical unlabeled pool produced by the legacy code path and by the new

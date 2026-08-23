@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from core.tools.SSRAE.extractor import ColorFeatureExtractor
 from dalmax.embeddings.ssrae_provider import SSRAEProvider
+from dalmax.tools.SSRAE.extractor import ColorFeatureExtractor
 
 
 def test_embed_matches_direct_extractor_call_for_a_single_image(tiny_rgb_image):

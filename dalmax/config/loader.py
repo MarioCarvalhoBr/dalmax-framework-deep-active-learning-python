@@ -87,7 +87,7 @@ def _build_hierarchy_config(d: dict[str, Any], context: str) -> HierarchyConfig:
 
 # Legacy `Q` per extractor, applied only when the "embedding" block (or the
 # whole "embedding" key) omits "q" explicitly. Mirrors the historical
-# literals `utils/data.py` always used: `Q=13` for SSRAE,
+# literals the now-deleted `Data.create_feature_maps_ssrae`/`_vctex` always used: `Q=13` for SSRAE,
 # `Q=[5, 17]` for VCTex; ResNet-ImageNet has no `Q` (fixed 2048-d penultimate
 # layer). A flat `d.get("q", 13)` here would silently force VCTex's Q down
 # to SSRAE's 13 whenever "q" is absent — this table is the fix (see

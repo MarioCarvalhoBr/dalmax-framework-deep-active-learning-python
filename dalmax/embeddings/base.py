@@ -19,7 +19,7 @@ import numpy as np
 def format_q(q: Any) -> str:
     """Render a provider's `q` hyperparameter as a filename-safe string.
 
-    Mirrors `utils/data.py::cache_file_path`'s `q_str` convention so cache
+    Mirrors the (still-live) `dalmax.data.datasets.cache_file_path`'s `q_str` convention so cache
     keys stay human-readable and stable: a `list`/`tuple` (e.g. VCTex's
     `[5, 17]`) is rendered as `"5-17"`; anything else (an `int`, or `None`
     for the ResNet-ImageNet provider, which has no `Q` hyperparameter) is

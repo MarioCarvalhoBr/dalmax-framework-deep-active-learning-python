@@ -1,4 +1,4 @@
-"""Hierarchical k-means selection: wraps the vendored `core/tools/SSL` pipeline.
+"""Hierarchical k-means selection: wraps the vendored `dalmax/tools/SSL` pipeline.
 
 Replaces today's `SSLStrategy` (`core/query_strategies/ssl_ssrae_sampling.py`,
 backing `SSRAEKmeansHCSampling` / `VCTexKmeansHCSampling`), fixing two known
@@ -13,9 +13,9 @@ couplings (`.specs/architecture/target-architecture.md` §6):
 ## Vendored pipeline, unmodified
 
 This wraps, without editing:
-- `core.tools.SSL.src.hierarchical_kmeans_gpu.hierarchical_kmeans_with_resampling`
-- `core.tools.SSL.src.clusters.HierarchicalCluster.from_dict`
-- `core.tools.SSL.src.hierarchical_sampling.hierarchical_sampling`
+- `dalmax.tools.SSL.src.hierarchical_kmeans_gpu.hierarchical_kmeans_with_resampling`
+- `dalmax.tools.SSL.src.clusters.HierarchicalCluster.from_dict`
+- `dalmax.tools.SSL.src.hierarchical_sampling.hierarchical_sampling`
 
 ## CPU compatibility (verified)
 
@@ -27,7 +27,7 @@ call and run correctly on CPU tensors — verified empirically with a 200-point
 `sample_sizes=[4, 2]`, `device="cpu"`. The only hardcoded-device default in
 that source tree is `kmeans_gpu.sort_cluster_by_distance`'s
 `device="cuda"` keyword argument default
-(`core/tools/SSL/src/kmeans_gpu.py:407`), a function that this pipeline
+(`dalmax/tools/SSL/src/kmeans_gpu.py:407`), a function that this pipeline
 (`hierarchical_kmeans_with_resampling` + `hierarchical_sampling`) never
 calls — the hardcoded `device="cuda"` actually seen in production
 (`core/query_strategies/ssl_ssrae_sampling.py:85`) is a choice made by the
@@ -38,9 +38,9 @@ CUDA is actually available (see `tests/test_selection_hierarchical.py`).
 
 ## A separate, data-dependent vendored quirk (documented, not fixed here)
 
-`core.tools.SSL.src.utils.create_clusters_from_cluster_assignment` builds
+`dalmax.tools.SSL.src.utils.create_clusters_from_cluster_assignment` builds
 `np.array(clusters, dtype=object)` from a Python list of per-cluster index
-arrays (`core/tools/SSL/src/utils.py:28`). When every cluster happens to
+arrays (`dalmax/tools/SSL/src/utils.py:28`). When every cluster happens to
 have **exactly** the same size, NumPy interprets that list of equal-length
 arrays as a regular 2-D array and casts it to `dtype=object` element-wise,
 so each "cluster" row silently becomes an object array of Python ints
@@ -110,10 +110,10 @@ from typing import Any
 import numpy as np
 import torch
 
-from core.tools.SSL.src import hierarchical_kmeans_gpu as hkmg
-from core.tools.SSL.src import hierarchical_sampling as hs
-from core.tools.SSL.src.clusters import HierarchicalCluster
 from dalmax.selection.base import SelectionStrategy
+from dalmax.tools.SSL.src import hierarchical_kmeans_gpu as hkmg
+from dalmax.tools.SSL.src import hierarchical_sampling as hs
+from dalmax.tools.SSL.src.clusters import HierarchicalCluster
 
 _MAX_SEED = 2**32 - 1
 

@@ -1,17 +1,10 @@
-import numpy as np
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
-from torch.utils.data import DataLoader
-from tqdm import tqdm
-import torch
-import torch.nn as nn
-import torchvision.models as models
+
 
 class CIFAR10Model(nn.Module):
     def __init__(self, n_classes):
-        super(CIFAR10Model, self).__init__()
+        super().__init__()
         self.n_classes = n_classes
         self.conv1 = nn.Conv2d(3, 32, kernel_size=5)
         self.conv2 = nn.Conv2d(32, 32, kernel_size=5)
