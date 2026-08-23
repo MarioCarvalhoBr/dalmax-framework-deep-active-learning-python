@@ -8,7 +8,9 @@ For full detail, always defer to `.specs/` and `.claude/`.
 DalMax — a PhD research lab (UFMS) for Deep Active Learning applied to UAV weed
 recognition. Main contribution: **RNHAL**, combining a randomized-network
 spatio-spectral representation (SSRAE) with hierarchical k-means batch selection.
-Entry point: `demo.py`.
+Entry point: `demo.py` (a thin shim calling `dalmax.cli.main()`). All Python
+source lives in one package, `dalmax/` — the old `core/`/`utils/` split no
+longer exists (consolidated in Phase 4).
 
 ## Source of truth
 
@@ -48,9 +50,10 @@ decisions get an ADR under `.specs/adr/`.
 
 ## Current phase
 
-Phase 1 (safety net: tests, golden run, CI) → Phase 2 (core refactor: config
-layer, embedding provider abstraction, registries) → Phase 3 (ablation study) →
-Phase 4 (polish). Details:
+Phase 1 (safety net: tests, golden run, CI — done) → Phase 2 (core refactor:
+config layer, embedding provider abstraction, registries — done) → Phase 3
+(ablation study: config/code done, lab-machine runs outstanding) → Phase 4
+(polish: package consolidated into `dalmax/`, dead code deleted — done). Details:
 [`.specs/architecture/refactor-plan.md`](.specs/architecture/refactor-plan.md).
 
 ## Never do
@@ -70,6 +73,9 @@ Phase 4 (polish). Details:
   `MarginSamplingDropout`, `EntropySamplingDropout`, `KMeansSampling`,
   `KCenterGreedy`, `BALDDropout`, `AdversarialBIM`, `AdversarialDeepFool`,
   `SSRAEKmeansSampling`, `VCTexKmeansSampling`, `SSRAEKmeansHCSampling`,
-  `VCTexKmeansHCSampling`.
+  `VCTexKmeansHCSampling`, plus the generic `RepresentationStrategy` (driven by
+  the params JSON's `"embedding"`/`"selection"` blocks).
+- `--device {auto,cuda,cpu}` and `--embedding_variant {full,spatial,spectral}`
+  are additional CLI flags on top of the original set.
 - One params JSON per lab GPU (`params_df_gpu_0.json`, `params_df_gpu_1.json`),
   run via `run_pipe_gpu_0.sh` / `run_pipe_gpu_1.sh`.

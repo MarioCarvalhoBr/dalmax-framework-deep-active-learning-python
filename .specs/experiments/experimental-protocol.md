@@ -1,7 +1,8 @@
 # Experimental protocol
 
 This describes the active-learning experiment protocol as it exists in code
-today (`demo.py` → `dalmax/cli.py`, `utils/data.py`, `utils/dataset.py`) and
+today (`demo.py` → `dalmax/cli.py`, `dalmax/data/datasets.py`, `dalmax/data/handlers.py`
+— Phase 4 moved these from `utils/data.py`/`utils/dataset.py`, both now deleted) and
 as actually invoked by the run scripts. Where the scripts diverge from
 `demo.py`/`dalmax.cli` defaults, both are recorded explicitly — do not
 assume the CLI default is what was actually run.
@@ -20,7 +21,8 @@ every existing params JSON keep working unchanged. See
 
 - **`daninhas_full`** (primary): `DATA/daninhas_full/{train,test}/DATASET_<CLASS>/`,
   5 classes (`BRACHIARIA`, `COLONIAO`, `GRAMINEA`, `MAMONA`,
-  `OUTRAS_FOLHAS_LARGAS`), loaded by `utils.data.get_DANINHAS`, images
+  `OUTRAS_FOLHAS_LARGAS`), loaded by `dalmax.data.loaders.get_DANINHAS`
+  (was `utils.data.get_DANINHAS`, moved in Phase 4), images
   resized to 128×128 RGB. See `research-rules/dataset-protocol.md` for
   per-class counts and imbalance notes.
 - **`CIFAR10`**: `DATA/DATA_CIFAR10/{train,test}/`, secondary benchmark, 10
@@ -32,8 +34,8 @@ every existing params JSON keep working unchanged. See
 
 Train/test split is **fixed by directory layout** (`train/` vs `test/` under
 each dataset root), not by a random split at run time — `X_train`/`Y_train`
-and `X_test`/`Y_test` are loaded independently in `utils/data.py`
-(`get_DANINHAS`, `get_CIFAR10`). The active-learning pool is the entire
+and `X_test`/`Y_test` are loaded independently in `dalmax/data/loaders.py`
+(was `utils/data.py`, moved in Phase 4) (`get_DANINHAS`, `get_CIFAR10`). The active-learning pool is the entire
 `train/` set; `initialize_labels` randomly selects `n_init_labeled` of it as
 the seed labeled set (seeded by `np.random.seed(args.seed)` in `demo.py`).
 The held-out `test/` set is used for every round's evaluation
@@ -87,7 +89,8 @@ TBD, file absent from repo.
 
 ## Model / classifier
 
-ResNet50 (`core/daninhas_model.py`, TBD verify exact torchvision variant and
+ResNet50 (`dalmax/models/daninhas_resnet50.py`, was `core/daninhas_model.py` before
+Phase 4's move, TBD verify exact torchvision variant and
 pretrained-weights flag — not read in this batch), trained per round via
 `Strategy.train()` → `net.train(labeled_data)`. `optimizer_args`:
 `lr=0.05`, `momentum=0.3` (both `params_df_gpu_0.json` and

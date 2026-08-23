@@ -8,7 +8,8 @@ Use conventional commit prefixes:
 - `fix:` — bug fix (e.g. threading the experiment seed into `KMeansSampling`
   instead of the hardcoded `random_state=3`).
 - `refactor:` — behavior-preserving restructuring (e.g. replacing an if/elif
-  registry in `utils/orchestrator.py` with a dict-based one).
+  registry with a dict-based one, as done in `dalmax/query_strategies/registry.py`,
+  superseding the now-deleted `utils/orchestrator.py`).
 - `docs:` — README, CLAUDE.md, `.specs/` changes with no code behavior change.
 - `exp:` — experiment configs or results metadata (e.g. a new
   `params_df_gpu_*.json`, an ablation run script, a `results/` metadata update —
@@ -25,9 +26,9 @@ Use conventional commit prefixes:
 
 - **Never push without explicit user confirmation.** Committing locally is fine
   within a task; `git push` requires the user to say so.
-- **Branch for anything touching `core/` behavior.** Changes to
-  `core/query_strategies/`, `core/deep_learning.py`, `core/daninhas_model.py`,
-  or `core/tools/` (SSRAE, SSL) should happen on a feature branch, not directly
+- **Branch for anything touching core `dalmax/` behavior.** Changes to
+  `dalmax/query_strategies/`, `dalmax/models/base.py`, `dalmax/models/daninhas_resnet50.py`,
+  or `dalmax/tools/` (SSRAE, SSL) should happen on a feature branch, not directly
   on `main` — this repo's `main` is also what gets pulled onto the lab machine
   (see `.claude/commands/handoff-lab.md`), so keeping it stable matters.
 - Root-level docs, `.specs/`, and `.claude/` changes may go directly on `main`

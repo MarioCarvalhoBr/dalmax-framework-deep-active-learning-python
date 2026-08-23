@@ -1,14 +1,14 @@
 ---
 name: adding-query-strategy
-description: Step-by-step checklist of every file that must change to add a new active-learning query strategy to DalMax, via the dalmax/ registries (Phase 2) or the legacy path.
+description: Step-by-step checklist of every file that must change to add a new active-learning query strategy to DalMax, via the dalmax/ registries (Phase 2) or a new legacy-style Strategy subclass.
 ---
 
 # Adding a query strategy
 
-**Rewritten 2026-08-23 for Phase 2.** DalMax now routes `demo.py`/`--strategy_name` through
-`dalmax/query_strategies/registry.py::build_strategy`, not `utils/orchestrator.py::get_strategy`
-(that if/elif chain is dead code as of Phase 2 — unreachable from `demo.py`/`dalmax.cli`, see
-`.specs/architecture/current-state.md` §0). Full spec:
+**Rewritten 2026-08-23 for Phase 2; paths re-verified 2026-08-23 for Phase 4.** DalMax routes
+`demo.py`/`--strategy_name` through `dalmax/query_strategies/registry.py::build_strategy`. The old
+`utils/orchestrator.py::get_strategy` if/elif chain this replaced was **deleted in Phase 4** (it had
+been dead code since Phase 2). Full spec:
 `.specs/use-cases/add-new-strategy.md` — read it first if this summary is not enough context.
 
 ## Which path?
@@ -50,9 +50,9 @@ JSON `"embedding"`/`"selection"` block already reaches any combination (see
 
 ## Path B — new legacy-style `Strategy` subclass
 
-1. `core/query_strategies/<snake_case_name>.py`:
+1. `dalmax/query_strategies/<snake_case_name>.py`:
    ```python
-   from .strategy import Strategy
+   from dalmax.query_strategies.base import Strategy
 
    class YourStrategyName(Strategy):
        def __init__(self, dataset, net, logger):
@@ -61,10 +61,10 @@ JSON `"embedding"`/`"selection"` block already reaches any combination (see
        def query(self, n):
            ...  # return an array of selected sample ids
    ```
-2. Add the import/export line to `core/query_strategies/__init__.py`.
+2. Add the import/export line to `dalmax/query_strategies/__init__.py`.
 3. **Register in `dalmax/query_strategies/registry.py::LEGACY_STRATEGY_REGISTRY`** — a plain dict
-   entry (`"YourStrategyName": YourStrategyName`). Do **not** add to `utils/orchestrator.py`
-   (dead code, unreachable — see `.specs/architecture/current-state.md` §0).
+   entry (`"YourStrategyName": YourStrategyName`). There is no `utils/orchestrator.py` any more
+   (deleted in Phase 4) — the registry dict is the only place to register a strategy.
 4. Add `"YourStrategyName"` to `dalmax/cli.py`'s `--strategy_name` `choices=[...]` list —
    `demo.py` itself has no `choices=[...]` of its own any more (12-line shim).
 5. If the strategy needs new hyperparameters, add a typed field to `dalmax/config/schema.py`,
@@ -82,11 +82,12 @@ JSON `"embedding"`/`"selection"` block already reaches any combination (see
 ```bash
 poetry run python -c "from dalmax.query_strategies.registry import STRATEGY_REGISTRY; print(sorted(STRATEGY_REGISTRY))"
 poetry run pytest -k "registry or strategy_registry"
-poetry run ruff check dalmax/ core/query_strategies/<touched files>
+poetry run ruff check dalmax/query_strategies/<touched files>
 ```
 
-Do not verify against `utils.orchestrator.get_strategy` — it no longer reflects what `demo.py`
-actually resolves.
+`utils.orchestrator.get_strategy` no longer exists (deleted in Phase 4) — there is nothing to
+verify against there any more; `dalmax/query_strategies/registry.py::STRATEGY_REGISTRY` is the
+single source of truth for what `demo.py`/`dalmax.cli` resolves.
 
 ## Do not skip spec sync
 

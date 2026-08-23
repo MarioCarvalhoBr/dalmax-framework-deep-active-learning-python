@@ -26,12 +26,12 @@ question — escalate those back to the orchestrating session.
   only, fail-fast.
 - **`.claude/rules/reproducibility.md`** — thread the experiment seed through
   any stochastic component you add or touch (no literal `random_state=3` like
-  `SSRAEKmeansSampling` has); never let a new embedding cache collide with an
-  existing one on disk.
+  the now-deleted `SSRAEKmeansSampling` used to have); never let a new embedding
+  cache collide with an existing one on disk.
 - **`.claude/rules/data-safety.md`** — never write under `DATA/`, `results/`,
   or `phd_files/`.
 - **`.claude/rules/git-workflow.md`** — conventional commit prefixes if asked
-  to commit; branch for `core/` behavior changes.
+  to commit; branch for `dalmax/` core behavior changes.
 - **`.claude/architecture/refactor-plan.md`** (`.specs/architecture/refactor-plan.md`)
   — if your task is part of the phased refactor, follow the phase's acceptance
   criteria; do not jump ahead to a later phase's abstractions without being
@@ -43,9 +43,9 @@ Per `.claude/rules/spec-sync.md`, any change to behavior, CLI, params schema,
 strategy registry, or experiment protocol must update the corresponding
 `.specs/` file **in the same task**:
 - New/changed strategy → `.specs/use-cases/add-new-strategy.md` +
-  `.specs/architecture/current-state.md` + `demo.py` choices +
-  `core/query_strategies/__init__.py` + `utils/orchestrator.get_strategy` +
-  `tests/test_registry.py`.
+  `.specs/architecture/current-state.md` + `dalmax/cli.py` choices +
+  `dalmax/query_strategies/__init__.py` + `dalmax/query_strategies/registry.py` +
+  `tests/test_strategy_registry.py`.
 - New architectural decision → an ADR in `.specs/adr/` using
   `.specs/adr/template.md`.
 - New convention discovered mid-task → written into `.claude/rules/` too.

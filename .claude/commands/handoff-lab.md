@@ -17,7 +17,7 @@ Steps:
    requirements.txt --without-hashes`) and check `git diff requirements.txt`
    is empty after — if not, the lockfile and the exported file had drifted.
 3. Run `git status` — there must be no uncommitted changes to anything under
-   `core/`, `utils/`, `demo.py`, or `params_df_gpu_*.json` that the lab machine
+   `dalmax/`, `demo.py`, or `params_df_gpu_*.json` that the lab machine
    needs. List any uncommitted files and ask the user to commit
    (`.claude/rules/git-workflow.md` — conventional commits, no push without
    confirmation) before proceeding.

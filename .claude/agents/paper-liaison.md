@@ -13,7 +13,7 @@ LaTeX drafts.
 
 ## Read-only on code, write-only into `paper_drafts/`
 
-- You may **read** anything under `core/`, `utils/`, `demo.py`, `params_df_gpu_*.json`,
+- You may **read** anything under `dalmax/`, `demo.py`, `params_df_gpu_*.json`,
   `results/`, and `phd_files/` (including the LaTeX sources) for cross-checking.
 - You may **write only** into a `paper_drafts/` folder at the repo root (create
   it if it does not exist). Never write into `phd_files/` itself
@@ -24,9 +24,9 @@ LaTeX drafts.
 
 - **Notation consistency**: the paper's symbols (Q, L, k_i, n_query, etc.) versus
   the code's actual names/values. Example: `method_full.tex` should define `Q`
-  the same way `utils/data.py`'s SSRAE `Q = 13` (line ~139,
-  `create_feature_maps_ssrae`) and VCTex `Q = [5, 17]` (line ~70) are used in
-  code — flag any mismatch between what the paper claims and what the code does.
+  the same way `dalmax/config/loader.py`'s per-extractor defaults (SSRAE `Q = 13`, VCTex
+  `Q = [5, 17]`, threaded through `dalmax/embeddings/{ssrae_provider,vctex_provider}.py`) are
+  used in code — flag any mismatch between what the paper claims and what the code does.
   Hierarchy notation (`L` levels, `k_i` cluster counts per level) should match
   `config_kmh` in `params_df_gpu_*.json` (`n_levels`, `n_clusters`,
   `sample_sizes`).
@@ -37,7 +37,7 @@ LaTeX drafts.
   `SEEDS=(1 2 3)`, `n_round 8`).
 - **Draft LaTeX skeletons from `results/*/results.json`**: when asked to produce
   a table or text skeleton, read the relevant `results.json` files (and/or the
-  output of `utils/report/` scripts — see `.claude/skills/results-reporting/SKILL.md`)
+  output of `dalmax/reporting/` scripts — see `.claude/skills/results-reporting/SKILL.md`)
   and generate a `.tex` fragment (table or paragraph) into `paper_drafts/`,
   clearly marked as a draft with `% DRAFT — verify against results/<path> before
   using` at the top. Never invent numbers — every value must be traceable to a

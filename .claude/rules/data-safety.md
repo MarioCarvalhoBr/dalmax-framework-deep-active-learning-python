@@ -8,7 +8,7 @@
   agent or command. No code change should write into `DATA/`.
 - **`results/` is append-only.** Never edit or delete a past run's directory
   (`results/<run>/<dataset>/SEED_*/NQ_*_NIL_*_NR_*_NE_*/<strategy>/`). Reporting
-  scripts (`utils/report/*.py`) may read from `results/` and write new derived
+  scripts (`dalmax/reporting/*.py`, was `utils/report/*.py`) may read from `results/` and write new derived
   files (CSVs, averaged plots) but must not overwrite or remove existing raw
   `results.json` / `predictions.csv` / plot files from prior runs.
 - **`phd_files/` is read-only context** (the qualification PDF, the paper under

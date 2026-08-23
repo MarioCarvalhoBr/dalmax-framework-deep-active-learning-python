@@ -15,8 +15,8 @@ Steps:
    correctness, reproducibility (seed handling, cache invalidation per
    `.claude/rules/reproducibility.md`), performance on the lab's 10 GB GPUs, and
    adherence to `.claude/rules/*.md`.
-3. If the diff touches `core/query_strategies/`, `utils/orchestrator.py`, or
-   `demo.py`'s strategy choices, explicitly ask the agent to verify registry
+3. If the diff touches `dalmax/query_strategies/`, `dalmax/query_strategies/registry.py`, or
+   `dalmax/cli.py`'s strategy choices, explicitly ask the agent to verify registry
    consistency (see `.claude/agents/code-reviewer.md` point 5) and cross-check
    against `.specs/use-cases/add-new-strategy.md`.
 4. Relay the agent's findings verbatim, grouped by severity (Blocking /

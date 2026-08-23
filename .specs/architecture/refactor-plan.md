@@ -221,56 +221,88 @@ not a code change, if Phase 2 landed the config layer correctly.
 
 **Goal:** finish the professionalization pass now that behavior is stable and tested.
 
+**Status: Phase 4 landed 2026-08-23** (branch `refactor/phase-4-package`,
+`git log --oneline b51fb59..HEAD`: `307c7f1` query strategies moved, `38c4b0e` models/data/tools/
+reporting moved, `d58e116` dead code deleted, `48a4682` `dalmax/tools/` follow-up, `79e628c`
+vendored `.DS_Store` cleanup).
+
 Work:
-- Physically rename/move the remaining `core/` + `utils/` modules into the single `dalmax/` package
-  per ADR 0002 — Phase 2 already created `dalmax/` and populated it with new modules, but left
-  `core/`/`utils/` in place as the implementation those modules wrap (see `current-state.md` §0);
-  Phase 4 finishes the consolidation `target-architecture.md` describes (moving
-  `core/daninhas_model.py`/`cifar10_model.py` → `dalmax/models/`, `utils/data.py`/`dataset.py` →
-  `dalmax/data/`, the legacy uncertainty/diversity/adversarial/bayesian strategy files →
-  `dalmax/query_strategies/`, `core/tools/` → `dalmax/tools/`, and `utils/report/` →
-  `dalmax/reporting/`).
-- **Delete the dead code Phase 2 identified but did not remove** (kept per ADR 0002's "wrap, don't
-  delete, until Phase 4" policy — see `current-state.md` §0 for why each is unreachable):
-  - `utils/orchestrator.py` (superseded by `dalmax/{data,models,query_strategies}/registry.py`;
-    only remaining reference is `tests/test_registry.py`'s own coverage of it — delete or repurpose
-    that test alongside this file).
-  - `core/query_strategies/ssrae_kmeans_sampling.py` (`SSRAEKmeansSampling` class; superseded by
-    the `RepresentationStrategy` preset `("ssrae", "flat_closest")`).
-  - `core/query_strategies/vctex_kmeans_sampling.py` (`VCTexKmeansSampling`; superseded by
-    `("vctex", "flat_closest")`).
+- Physically renamed/moved the remaining `core/` + `utils/` modules into the single `dalmax/`
+  package per ADR 0002 — **done**: `core/daninhas_model.py`/`cifar10_model.py` →
+  `dalmax/models/{daninhas_resnet50,cifar10_cnn}.py`, `core/deep_learning.py` →
+  `dalmax/models/base.py`, `utils/data.py`'s live logic → `dalmax/data/{datasets,handlers,
+  loaders,registry}.py` (the file itself was deleted, not moved — see below), the 12 legacy
+  strategy files → `dalmax/query_strategies/*.py` (module names kept 1:1, not regrouped into
+  family files — see `target-architecture.md`'s landed-vs-residual table), `core/tools/` →
+  `dalmax/tools/`, and `utils/report/` → `dalmax/reporting/`.
+- **Deleted the dead code Phase 2 identified but did not remove** (previously kept per ADR 0002's
+  "wrap, don't delete, until Phase 4" policy):
+  - `utils/orchestrator.py` — **deleted**. `tests/test_registry.py` was updated to no longer cover
+    the removed module (superseded by `tests/test_strategy_registry.py`).
+  - `core/query_strategies/ssrae_kmeans_sampling.py` (`SSRAEKmeansSampling`) — **deleted**;
+    superseded by the `RepresentationStrategy` preset `("ssrae", "flat_closest")`.
+  - `core/query_strategies/vctex_kmeans_sampling.py` (`VCTexKmeansSampling`) — **deleted**;
+    superseded by `("vctex", "flat_closest")`.
   - `core/query_strategies/ssl_ssrae_sampling.py` (`SSLStrategy`, `SSRAEKmeansHCSampling`,
-    `VCTexKmeansHCSampling`; superseded by the `("ssrae"|"vctex", "hierarchical")` presets).
+    `VCTexKmeansHCSampling`) — **deleted**; superseded by the `("ssrae"|"vctex", "hierarchical")`
+    presets.
   - `Data.create_feature_maps_ssrae`/`create_feature_maps_vctex` and the
-    `initialize_labels(..., compute_legacy_features)` flag in `utils/data.py` (only reached when
-    `compute_legacy_features=True`, which `dalmax.experiment.runner.ExperimentRunner` never passes)
-    — remove the flag and the `if self.strategy_name == "SSRAE..."` branch entirely once the four
-    classes above are gone.
-  - The three corresponding `from .<module> import <Class>` lines in
-    `core/query_strategies/__init__.py`.
-  - The orphaned unkeyed pickle caches on disk: `results/features_dict_ssrae.pkl`,
-    `results/features_dict_vctex.pkl` (superseded twice over — first by Phase 1's
-    `cache_file_path`, then by Phase 2's `EmbeddingCache` — never read or written by any live code
-    path; safe to delete once confirmed unused on the lab machine's `results/` tree too).
-- Remove the other dead files identified in `known-issues.md`: `temp_teste.py`, `test.py` (root, not
-  pytest), `TRASH_TEXT.md`, `sampled_data.pdf`, `core/query_strategies/old_functions.py`,
-  `demo_ssl.py` (if still unused after Phase 3).
-- Docs refresh: update `README.md`, `CLAUDE.md`, `.specs/` cross-links to the new `dalmax/` paths.
-- Sweep remaining known-issues items that were deferred (duplicate imports, unused imports, logging
-  levels) via `mechanic`.
+    `initialize_labels(..., compute_legacy_features)` flag — **deleted along with all of
+    `utils/data.py`** (683 lines); its live logic had already moved to `dalmax/data/` and
+    `dalmax/embeddings/` in Phase 2/3, so nothing needed to be carried over from the file itself.
+  - The three corresponding `from .<module> import <Class>` lines — gone along with
+    `core/query_strategies/__init__.py` itself (superseded by `dalmax/query_strategies/__init__.py`).
+  - The orphaned unkeyed pickle caches (`results/features_dict_ssrae.pkl`,
+    `results/features_dict_vctex.pkl`) — **left on disk, not deleted** (`.claude/rules/
+    data-safety.md`: never delete `results/` content automatically); confirmed unread/unwritten by
+    any live code path. Deleting them is a lab-machine housekeeping task, not a code change — see
+    `known-issues.md` KI-3.
+- Removed the other dead files identified in `known-issues.md`: `temp_teste.py`, `test.py` (root),
+  `TRASH_TEXT.md`, `sampled_data.pdf`, `TODO.md`, `core/query_strategies/old_functions.py`,
+  `demo_ssl.py`, `code_kmh.py` (vendored SSL exploratory script) — all **deleted**.
+  `DaninhasModelVitB16` (unused second model class, KI-25) was dropped rather than moved.
+- Docs refresh: `README.md`, `CLAUDE.md`, `AGENTS.md`, `.specs/` cross-links, `.claude/agents/`,
+  `.claude/commands/`, `.claude/skills/`, `.claude/rules/` all updated to the new `dalmax/` paths
+  — **done** (this batch, `docs: sync specs, rules, agents and guides with Phase 4 package
+  consolidation`).
+- Sweep remaining known-issues items that were deferred (duplicate imports, unused imports) —
+  **done**: the duplicate-import KIs (KI-15/16/17) and unused-import KIs (KI-18/19/20) were closed
+  by deletion of the files that had them (`core/daninhas_model.py`, `core/cifar10_model.py`,
+  `ssl_ssrae_sampling.py`, `ssrae_kmeans_sampling.py`, `vctex_kmeans_sampling.py` — their moved
+  replacements, `dalmax/models/{daninhas_resnet50,cifar10_cnn}.py`, do not have the duplicate
+  imports). Logging-level misuse (KI-11, `logger.warning` used for informational messages) is
+  **still open** — untouched by Phase 4, tracked separately in `known-issues.md`.
 
 **Acceptance criteria:**
-- [ ] `import dalmax` works; no references to `core.` / `utils.` remain outside historical docs.
-- [ ] `known-issues.md` has zero remaining "Open" items rated Medium or higher.
-- [ ] Full test suite + a real lab-machine smoke run both pass post-rename.
+- [x] `import dalmax` works; no references to `core.` / `utils.` remain outside historical docs.
+      Verified: `python -c "import dalmax"` succeeds; `grep -rn "^import core\|^from core\|^import
+      utils\|^from utils"` across `dalmax/`, `tests/`, `demo.py` → zero hits; `ls core utils` → both
+      "No such file or directory".
+- [x] Full test suite passes locally: `poetry run pytest -q -m "not gpu and not dataset and not
+      slow"` → 277 passed. Golden-run fixtures (`tests/golden/*.json`) bit-identical; all 17 CLI
+      strategy names resolve via `dalmax/query_strategies/registry.py`.
+- [ ] A real lab-machine smoke run has not yet been executed post-move (this repo's local dev
+      environment has no GPU; the lab-machine `git pull` + `run_pipe_gpu_*.sh`/
+      `scripts/ablations/run_ablation_gpu_*.sh` smoke pass is still outstanding — also still needs
+      the orphaned `results/*.pkl` scratch files and old caches deleted there, per
+      `known-issues.md`).
+- [ ] `known-issues.md` has zero remaining "Open" items rated Medium or higher — **not yet true**:
+      KI-21 (`Data.__init__` disk side effects), KI-22 (`DeepLearning.load_model` TODO), KI-23
+      (CIFAR10 params missing `config_kmh`/`selection.hierarchy`), KI-30 (vendored `dtype=object`
+      edge case), KI-31 (`worker_init_fn` landmine), and KI-32 (`ExperimentNotifier`'s stale
+      `utils/report/` path, found by this docs-sync batch) remain open at Medium; none of these are
+      things Phase 4's move-and-delete work was scoped to fix — they are pre-existing content/scope
+      gaps (KI-21/22/23/30/31) or a stale reference in a tool outside `dalmax/` (KI-32).
 
-**Driver agent:** `implementer` (the move itself, likely scripted rename + import-path fixes),
-`mechanic` (mechanical cleanup, dead file removal), `code-reviewer` (final review),
-`spec-keeper` (final `.specs/` sync).
+**Driver agent:** `implementer` (the move itself — scripted rename + import-path fixes),
+`mechanic` (mechanical cleanup, dead file removal), `code-reviewer` (final review, APPROVEd with
+stale-docs flagged), `spec-keeper` (this docs-sync batch).
 
-**Risks:** a rename this large is easy to get subtly wrong (missed import, stale `.pyc`, a lab-machine
-`git pull` mid-experiment). Do it in its own branch, merge only after Phase 3's ablation runs are
-safely archived, and re-run the golden-run regression test immediately after.
+**Risks (materialized, mitigated):** the move was split into small, reviewable commits
+(query_strategies first, then models/data/tools/reporting, then dead-code deletion, then a
+`dalmax/tools/` follow-up fixing a missed spot, then a `.DS_Store` cleanup) rather than one
+big-bang commit, and the golden-run regression test was re-run after each structural commit — no
+missed import or stale `.pyc` was found by the time `code-reviewer` ran.
 
 ## Ablation enablers checklist
 
@@ -294,7 +326,8 @@ starts. **Status: all met, 2026-08-23 (Phase 2 landed).**
 - [x] `FlatKMeansProportionalRandom` exists and is documented as distinct from `FlatKMeansClosest`.
       — `dalmax/selection/flat_kmeans_proportional.py`; see `target-architecture.md` §6's comparison
       table.
-- [x] Macro F1 is computed and reported (not just weighted F1). — `utils/data.py::Data.calc_metrics`,
+- [x] Macro F1 is computed and reported (not just weighted F1). —
+      `dalmax/data/datasets.py::Data.calc_metrics` (was `utils/data.py::Data.calc_metrics`),
       `results.json`'s `all_precision_macro`/`all_recall_macro`/`all_f1_macro`.
 - [x] Every strategy's clustering randomness derives from the experiment seed. —
       `dalmax/seeding.py::seed_everything`/`derive_seed`; no literal `random_state=N` anywhere in

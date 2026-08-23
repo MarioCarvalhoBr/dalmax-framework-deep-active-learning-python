@@ -15,11 +15,12 @@ Read this before the first lab-machine run after pulling Phase 2 (`refactor/phas
   live (e.g. if CUDA drivers are misconfigured, `auto` would silently fall back to `cpu` and the run
   would be extremely slow rather than failing loudly). Add `--device cuda` to
   `run_pipe_gpu_0.sh`/`run_pipe_gpu_1.sh` (and any new ablation run scripts) explicitly.
-- **`num_workers`/`worker_init_fn` landmine if augmentation is re-enabled.** `utils/dataset.py`
-  currently has every stochastic `transforms.Random*` augmentation commented out, so
-  `train_args`/`test_args`' `num_workers=4` (DANINHAS) / `num_workers=1` (CIFAR10) is safe today.
-  If anyone uncomments an augmentation transform, `core/deep_learning.py`'s `DataLoader(...)` calls
-  have no `worker_init_fn` — worker processes are not independently reseeded for any
+- **`num_workers`/`worker_init_fn` landmine if augmentation is re-enabled.** `dalmax/data/handlers.py`
+  (was `utils/dataset.py`) currently has every stochastic `transforms.Random*` augmentation commented
+  out, so `train_args`/`test_args`' `num_workers=4` (DANINHAS) / `num_workers=1` (CIFAR10) is safe
+  today. If anyone uncomments an augmentation transform, `dalmax/models/base.py`'s (was
+  `core/deep_learning.py`) `DataLoader(...)` calls have no `worker_init_fn` — worker processes are
+  not independently reseeded for any
   `random`/`numpy`-global-state-based augmentation, which `dalmax/seeding.py::seed_everything` does
   not cover (it seeds the main process only). See `.specs/quality/known-issues.md` KI-31. Do not
   re-enable augmentation on the lab machine without adding a `worker_init_fn` first, or determinism
@@ -43,7 +44,7 @@ Read this before the first lab-machine run after pulling Phase 2 (`refactor/phas
 
 | Environment | Hardware | Role | Allowed operations |
 |---|---|---|---|
-| **Local dev notebook** (this machine) | 16 GB RAM, **no GPU**, Python 3.12, Poetry 2.2.1 | Coding, code review, spec/doc authoring, smoke tests on tiny subsets, report generation from results already copied back | `poetry` commands, `ruff`, `pytest` (fast tests only), `python -c` import checks, `utils/report/*.py` against already-present `results/` data, `make smoke` (see below). **Never** a real training run — no GPU, and a full `daninhas_full` epoch would be impractically slow on CPU. |
+| **Local dev notebook** (this machine) | 16 GB RAM, **no GPU**, Python 3.12, Poetry 2.2.1 | Coding, code review, spec/doc authoring, smoke tests on tiny subsets, report generation from results already copied back | `poetry` commands, `ruff`, `pytest` (fast tests only), `python -c` import checks, `dalmax/reporting/*.py` against already-present `results/` data, `make smoke` (see below). **Never** a real training run — no GPU, and a full `daninhas_full` epoch would be impractically slow on CPU. |
 | **Lab machine** (primary training) | 2× NVIDIA GPUs, **10 GB VRAM each** | All real experiment execution: baseline sweeps, RNHAL reference runs, and (once implemented) the ablation study runs | `run_pipe_gpu_0.sh` (GPU 0, `params_df_gpu_0.json` → `results/dalmax1/`), `run_pipe_gpu_1.sh` (GPU 1, `params_df_gpu_1.json` → `results/dalmax2/`), long-lived via `tmux`/`nohup`; `ExperimentNotifier/main.py` sends an email after each script's full battery completes. |
 | **Google Colab Pro** | Single GPU, session-limited, burst/secondary | One-off runs, retries of a specific config, work overflow when the lab machine is busy | Upload dataset as a zip and extract into the Colab runtime's local disk — **never** read the ~10,000 individual `daninhas_full` files directly from a mounted Google Drive (slow, one-file-at-a-time I/O over Drive's virtual filesystem). `pip install -r requirements.txt` (exported from Poetry, see `environment-setup.md`), pin the torch/torchvision/CUDA versions Colab actually ships, checkpoint intermediate results defensively (session can be reclaimed), copy the finished `results/<run>/` folder back out (e.g. to Drive or via `git`) before the session ends. |
 

@@ -8,9 +8,10 @@ DalMax is a PhD research lab (UFMS) for **Deep Active Learning applied to UAV
 weed recognition**. The main contribution is **RNHAL**: a randomized-network
 spatio-spectral representation (SSRAE) plus hierarchical k-means batch selection.
 Entry point: `demo.py` (a thin shim calling `dalmax.cli.main()`, since Phase 2 —
-see below). `utils/orchestrator.py` is now dead code, unreachable from `demo.py`
-(kept in place per ADR 0002/0005 until Phase 4's cleanup — see
-`.specs/architecture/current-state.md` §0).
+see below). All Python source lives in one package, `dalmax/` — `core/` and
+`utils/` (the old two-package split) no longer exist, having been fully
+consolidated in Phase 4 (see `.specs/architecture/current-state.md` and ADR
+0002's final amendment).
 
 ## Source of truth
 
@@ -85,21 +86,22 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   (`dalmax/selection/`), strategy/dataset/model registries (`dalmax/{query_strategies,
   data,models}/registry.py`), seed-propagation audit (`dalmax/seeding.py`), macro-F1
   metrics, `run_metadata.json`. `demo.py` now routes through `dalmax.cli.main()`.
-  `core/`/`utils/` are unchanged (except `utils/data.py`) and still do the actual
-  work underneath — see [`.specs/architecture/current-state.md`](.specs/architecture/current-state.md)
-  §0 for exactly what moved vs. what is wrapped.
-- **Phase 3 — Ablations** (current): implement the three studies in
-  [`.specs/experiments/ablation-study.md`](.specs/experiments/ablation-study.md)
-  as configs (**all code prerequisites met** — see that file's exact params-JSON/CLI
-  snippets and [`.specs/use-cases/run-ablation.md`](.specs/use-cases/run-ablation.md)),
-  run on the lab machine, generate the paper's ablation tables.
-- **Phase 4 — Polish**: package rename/move of the remaining `core/`/`utils/`
-  modules into `dalmax/`, delete the code Phase 2 made dead but did not remove
-  (`utils/orchestrator.py`, the four superseded strategy files — see
-  `refactor-plan.md` Phase 4 for the itemized list), docs refresh.
+- **Phase 3 — Ablations**: config/code prerequisites all met and materialized
+  (`.specs/experiments/ablation-study.md`); **still outstanding**: run the three
+  sub-studies on the lab machine and record macro-F1 numbers in
+  `ablation-study.md`/`baseline-results.md`.
+- **Phase 4 — Polish** (done, 2026-08-23, branch `refactor/phase-4-package`):
+  `core/`/`utils/` physically moved into `dalmax/` (models, query strategies, data
+  loaders, vendored tools, reporting scripts), and the code Phase 2 had made dead
+  but not removed was deleted (`utils/orchestrator.py`, the four superseded
+  strategy files, `utils/data.py`, dead scratch files) — see
+  [`.specs/architecture/current-state.md`](.specs/architecture/current-state.md)
+  and `refactor-plan.md` Phase 4 for the itemized move/delete list. Still
+  outstanding: a real lab-machine smoke run post-move.
 
 Next milestone: run the three Phase 3 ablation sub-studies on the lab machine and
-record their macro-F1 numbers in `ablation-study.md`/`baseline-results.md`.
+record their macro-F1 numbers in `ablation-study.md`/`baseline-results.md`, and do
+a lab-machine smoke run confirming Phase 4's move didn't break anything there.
 
 ## Never do
 
@@ -114,19 +116,22 @@ record their macro-F1 numbers in `ablation-study.md`/`baseline-results.md`.
 ## Key facts cheat-sheet
 
 - SSRAE hidden-layer size `Q = 13` (config-driven since Phase 2:
-  `EmbeddingConfig.q`, defaulted per-extractor in `dalmax/config/loader.py`; legacy
-  literal still at `utils/data.py::create_feature_maps_ssrae`, now dead code);
-  VCTex uses `Q ∈ {5, 17}` (i.e. `Q = (5, 17)` as a tuple, not two runs).
-- Results dir (unchanged by Phase 2): `{dir_results}/{dataset_folder}/SEED_{seed}/NQ_{n_query}_NIL_{n_init_labeled}_NR_{n_round}_NE_{n_epoch}/{strategy_name}/`
+  `EmbeddingConfig.q`, defaulted per-extractor in `dalmax/config/loader.py`; the
+  legacy hardcoded literal was in `utils/data.py::create_feature_maps_ssrae`,
+  deleted entirely in Phase 4); VCTex uses `Q ∈ {5, 17}` (i.e. `Q = (5, 17)` as a
+  tuple, not two runs).
+- Results dir (unchanged by Phase 2/4): `{dir_results}/{dataset_folder}/SEED_{seed}/NQ_{n_query}_NIL_{n_init_labeled}_NR_{n_round}_NE_{n_epoch}/{strategy_name}/`
   — now also contains `run_metadata.json` (config snapshot + git commit), and
   `results.json` gained `all_precision_macro`/`all_recall_macro`/`all_f1_macro`.
 - **New CLI flags (Phase 2)**: `--device {auto,cuda,cpu}` (default `auto`; pass
   `--device cuda` explicitly on the lab machine, don't rely on `auto` — see
   `.specs/infrastructure/execution-environments.md`), `--embedding_variant
   {full,spatial,spectral}` (SSRAE only, overrides the params JSON's `embedding.variant`).
-- **New embedding cache path (Phase 2)**: `results/cache/embeddings/{dataset}__{extractor}__Q{q}__{variant}__{split}__pool{hash}.pkl`
-  (`dalmax/embeddings/cache.py`) — not `results/cache/{name}_{dataset_folder}...` (Phase 1,
-  now dead code) or `results/features_dict_*.pkl` (original, orphaned).
+- **Embedding cache path (Phase 2)**: `results/cache/embeddings/{dataset}__{extractor}__Q{q}__{variant}__{split}__pool{hash}.pkl`
+  (`dalmax/embeddings/cache.py`) — the Phase 1 `results/cache/{name}_{dataset_folder}...`
+  path was deleted along with `utils/data.py` in Phase 4;
+  `results/features_dict_*.pkl` (original, orphaned) files may still be on disk
+  but are read by nothing.
 - `demo.py --strategy_name` choices (unchanged plus one new generic name):
   `RandomSampling`, `LeastConfidence`,
   `MarginSampling`, `EntropySampling`, `LeastConfidenceDropout`,

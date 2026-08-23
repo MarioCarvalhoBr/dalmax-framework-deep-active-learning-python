@@ -13,11 +13,12 @@ Steps:
    that instead of the last 5 commits.
 2. For each changed file, map it to the spec(s) it should have updated, using
    the table in `.claude/rules/spec-sync.md`:
-   - `demo.py`, `utils/orchestrator.py`, `core/query_strategies/__init__.py` →
+   - `demo.py`, `dalmax/cli.py`, `dalmax/query_strategies/registry.py`,
+     `dalmax/query_strategies/__init__.py` →
      `.specs/use-cases/add-new-strategy.md`, `.specs/architecture/current-state.md`.
-   - `params_df_gpu_*.json`, results directory naming in `demo.py` →
+   - `params_df_gpu_*.json`, results directory naming in `dalmax/experiment/runner.py` →
      `.specs/experiments/experimental-protocol.md`.
-   - `utils/data.py` (embedding cache, `Q` values) →
+   - `dalmax/embeddings/cache.py` (embedding cache, `Q` values) →
      `.specs/experiments/ablation-study.md`, `.specs/quality/known-issues.md`.
    - New module/provider/registry → check `.specs/adr/` for a matching or
      missing ADR.

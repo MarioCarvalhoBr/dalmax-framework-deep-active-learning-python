@@ -22,7 +22,7 @@ request) on the held-out `test/` split of `daninhas_full`, using seeds and
 budgets consistent with `experimental-protocol.md`.
 
 > **Metrics discrepancy — resolved 2026-08-23 (Phase 2).** Option (a) below was implemented:
-> `utils/data.py::Data.calc_metrics` (new method) computes **both** weighted and macro
+> `dalmax/data/datasets.py::Data.calc_metrics` (was `utils/data.py`, moved in Phase 4; new method) computes **both** weighted and macro
 > precision/recall/F1 in one pass, and `dalmax/experiment/reporter.py` writes all of them into
 > `results.json` (`all_precision_macro`/`all_recall_macro`/`all_f1_macro`, additive — the legacy
 > weighted keys are unchanged). Any run through `dalmax.cli`/`demo.py` from this commit onward
@@ -34,7 +34,8 @@ budgets consistent with `experimental-protocol.md`.
 > them. See `research-rules/metrics.md` for the exact `calc_metrics` field names to use.
 >
 > Original text, kept for context: the codebase's metric function,
-> `Data.calc_metrics_sklearn` in `utils/data.py` (`:281-295`), computes precision/recall/F1 with
+> `Data.calc_metrics_sklearn` (was in `utils/data.py:281-295`, now `dalmax/data/datasets.py` since
+> Phase 4's move), computes precision/recall/F1 with
 > `average='weighted'`, not `average='macro'` — every existing `results.json` in `results/dalmax1/`,
 > `results/dalmax2/`, etc. was produced with weighted F1 only, since `calc_metrics_sklearn` itself
 > was left unmodified (only a new sibling method, `calc_metrics`, was added).
@@ -42,9 +43,11 @@ budgets consistent with `experimental-protocol.md`.
 ## 6.1 Representation ablation
 
 - Fix **Q** at the value used in the SSRAE reference article / current
-  experiments. **Verified current value: `Q = 13`**, hardcoded in
+  experiments. **Verified value: `Q = 13`**, originally hardcoded in
   `utils/data.py:139` (`create_feature_maps_ssrae`, comment: "The number of
-  hidden neurons"). **TBD**: the advisor has separately asked to "fix Q per
+  hidden neurons"; that file was deleted in Phase 4). `Q` is now config-driven
+  (`EmbeddingConfig.q`, `dalmax/config/loader.py`), still defaulting to `13` for
+  SSRAE. **TBD**: the advisor has separately asked to "fix Q per
   the SSRAE article" (`phd_files/artigo-original-tecnica-ssrae-manuscript.pdf`)
   — confirm whether the article's recommended Q matches 13 or whether the
   ablation (and the main RNHAL results) should be re-run at a different Q.
@@ -52,7 +55,8 @@ budgets consistent with `experimental-protocol.md`.
   (`results/features_dict_ssrae.pkl`) becomes stale (see
   `research-rules/reproducibility.md`) and every downstream RNHAL result
   depends on it.
-- SSRAE embedding layout (verified in `core/tools/SSRAE/extractor.py:99`):
+- SSRAE embedding layout (verified in `dalmax/tools/SSRAE/extractor.py`, was
+  `core/tools/SSRAE/extractor.py:99` before Phase 4's move):
   `emb = hstack[β_R, β_G, β_B, β_S_RG, β_S_GB, β_S_BR]` — code variable names are
   `beta_R, beta_G, beta_B, beta_S_R, beta_S_G, beta_S_B` in that exact
   order; `beta_S_R` is the R→G spectral fit, `beta_S_G` is G→B, `beta_S_B`
@@ -174,22 +178,22 @@ config (`config_kmh` in the params JSON):
 | 1            | [50]                 | |
 | 2            | [300, 100]           | alternative: [100, 50] — record both, run per advisor's choice |
 | 3            | [300, 100, 50]       | |
-| 4            | [300, 100, 50, 25]   | matches the hardcoded fallback config in `ssl_ssrae_sampling.py:64` (dead docstring, but shows a prior value in use) |
+| 4            | [300, 100, 50, 25]   | matches the hardcoded fallback config in `ssl_ssrae_sampling.py:64` (was in `core/query_strategies/`, deleted in Phase 4; dead docstring, but shows a prior value in use) |
 
 Implementation requirement: hierarchy depth/cluster counts must come
 **entirely from config** (no hardcoded `'DANINHAS'` key lookup).
 **Resolved (Phase 2)**: `dalmax/selection/hierarchical_kmeans.py::HierarchicalKMeansSelection`
 takes `hierarchy` (n_clusters/n_levels/sample_sizes) via its constructor, injected from
 `config.dataset.selection.hierarchy` — no hardcoded dataset-name key anywhere in this path. The
-legacy `core/query_strategies/ssl_ssrae_sampling.py:66` hardcode is unchanged but unreachable from
-`demo.py`/`dalmax.cli` (see `.specs/architecture/current-state.md` §0); it still blocks the
-`SSRAEKmeansHCSampling` **preset name specifically if invoked through the legacy path**, which this
-ablation does not use (see the exact-config note below — use `RepresentationStrategy`, not the
-preset name, or the preset works too since it also resolves through the new config path, just with
-`extractor`/`q` pinned to the legacy SSRAE `Q=13` value — either name is safe for this ablation).
+legacy `core/query_strategies/ssl_ssrae_sampling.py:66` hardcode existed only in a file that is now
+**deleted (Phase 4)** — there is no legacy path left for it to block; the `SSRAEKmeansHCSampling`
+CLI name (preset or generic `RepresentationStrategy`) always resolves through the new config path
+today, with `extractor`/`q` pinned to the legacy SSRAE `Q=13` value for the preset — either name is
+safe for this ablation.
 
 **`sample_sizes` semantics — resolved (2026-08-23, Phase 2), replaces the earlier TBD.** Verified by
-reading `core/tools/SSL/src/hierarchical_kmeans_gpu.py`/`hierarchical_sampling.py` while
+reading `dalmax/tools/SSL/src/hierarchical_kmeans_gpu.py`/`hierarchical_sampling.py` (was
+`core/tools/SSL/src/...` before Phase 4's move) while
 implementing `dalmax/selection/hierarchical_kmeans.py` (full derivation in that module's
 docstring):
 
@@ -411,9 +415,10 @@ results_dir_for`) — the ablation axis is encoded as two extra leading path seg
 `results/smoke_ablations/` for CPU smoke runs. Aggregation:
 `python -m dalmax.reporting.ablation_report --root results/ablations --out paper_drafts/ablation_tables`
 (see "Materialized files" below) walks exactly this layout and writes seed-averaged macro-F1 tables
-directly — `utils/report/2_report_build_chunk_results.py`/`4_report_build_average_results.py`
-remain the tool for the main `results/dalmax{1,2}/` sweeps (`use-cases/generate-report.md`), not for
-this ablation-specific tree.
+directly — `dalmax/reporting/chunk_results.py`/`average_results.py` (was
+`utils/report/2_report_build_chunk_results.py`/`4_report_build_average_results.py` before Phase 4's
+move/rename) remain the tool for the main `results/dalmax{1,2}/` sweeps
+(`use-cases/generate-report.md`), not for this ablation-specific tree.
 
 ## Materialized files (Phase 3, 2026-08-23)
 
@@ -468,7 +473,8 @@ Unit-tested against a synthetic tree in `tests/test_ablation_report.py`; also ru
   from this document's snippets, not an oversight; `256` is the batch size every other DANINHAS run
   in this repo uses.
 - **`hier_L2b.json`'s micro mirror**: the naive halving of `hier_L2a`'s micro `[8,4]` — `[4,2]` —
-  triggers a pre-existing vendored `dtype=object` bug (`core/tools/SSL/src/utils.py:28`, documented
+  triggers a pre-existing vendored `dtype=object` bug (`dalmax/tools/SSL/src/utils.py:28`, was
+  `core/tools/SSL/src/utils.py:28` before Phase 4's move, documented
   in `dalmax/selection/hierarchical_kmeans.py`) when the real `DATA/daninhas_micro` embedding
   happens to split evenly at `--seed 1`; `[5,2]` was substituted after empirically probing several
   candidates against the actual derived selection RNG and embeddings (see

@@ -41,6 +41,8 @@ decisions** (ADRs) about the codebase supporting that research. Hence:
 │   ├── 0001-adopt-poetry.md              # [owned elsewhere]
 │   ├── 0002-keep-dalmax-name-and-package-consolidation.md  # [owned elsewhere]
 │   ├── 0003-embedding-provider-abstraction.md              # [owned elsewhere]
+│   ├── 0004-micro-dataset-and-golden-run.md                # [owned elsewhere]
+│   ├── 0005-representation-strategy-and-registries.md      # [owned elsewhere]
 │   └── template.md                       # [owned elsewhere]
 ├── experiments/
 │   ├── experimental-protocol.md          # datasets, splits, seeds, budgets, metrics, results layout
@@ -64,7 +66,7 @@ decisions** (ADRs) about the codebase supporting that research. Hence:
 │   ├── add-new-strategy.md               # every file that must change to add a query strategy
 │   ├── run-full-benchmark.md             # all strategies × seeds × budgets on the lab machine
 │   ├── run-ablation.md                   # how to execute the three ablation studies
-│   └── generate-report.md                # utils/report/ pipeline, raw results → averaged tables
+│   └── generate-report.md                # dalmax/reporting/ pipeline, raw results → averaged tables
 └── future/
     └── ideas.md                          # backlog (package rename, config layer, tracking, DVC, ...)
 ```
@@ -81,15 +83,17 @@ link as forward-looking, not broken.
 ## Spec-sync contract — when to update what
 
 - **Any change to CLI flags, params-JSON schema, the strategy registry, or
-  results directory naming** (in `demo.py`, `utils/orchestrator.py`, any
-  `core/query_strategies/*`) → update `experiments/experimental-protocol.md`
-  and, if a new strategy was added, `use-cases/add-new-strategy.md` in the
-  **same task**.
-- **Any change to how metrics are computed** (`utils/dataset.py
-  calc_metrics_sklearn` or equivalent) → update `research-rules/metrics.md`
-  in the same task; this affects every number that ends up in the paper.
-- **Any change to caching** (`utils/data.py` pickle caches) → update
-  `research-rules/reproducibility.md` (cache-key policy) in the same task.
+  results directory naming** (in `demo.py`, `dalmax/cli.py`,
+  `dalmax/query_strategies/registry.py`, any `dalmax/query_strategies/*`) →
+  update `experiments/experimental-protocol.md` and, if a new strategy was
+  added, `use-cases/add-new-strategy.md` in the **same task**.
+- **Any change to how metrics are computed** (`dalmax/data/datasets.py`'s
+  `Data.calc_metrics`/`calc_metrics_sklearn` or equivalent) → update
+  `research-rules/metrics.md` in the same task; this affects every number
+  that ends up in the paper.
+- **Any change to caching** (`dalmax/embeddings/cache.py`'s `EmbeddingCache`)
+  → update `research-rules/reproducibility.md` (cache-key policy) in the
+  same task.
 - **Any new architectural decision** (e.g., adopting an embedding-provider
   abstraction, a config layer) → add an ADR under `adr/` (owned by the other
   batch — flag it there) and cross-reference it from the relevant file here.

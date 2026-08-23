@@ -7,7 +7,10 @@ owned by a different batch): every experiment must be fully determined by
 **Phase 2 status (2026-08-23)**: every gap this file originally documented is now resolved for the
 live `dalmax.cli`/`demo.py` path — see the "Resolved" notes inline below and
 `.specs/architecture/current-state.md` §5 for the full coupling-point-by-coupling-point account.
-The original violation text is kept for the historical record in each subsection.
+The original violation text is kept for the historical record in each subsection. **Phase 4
+(2026-08-23)** then physically deleted the legacy files these subsections cite as "unchanged, now
+dead code" — `core/` and `utils/` no longer exist; see the inline notes below and ADR 0002's final
+amendment.
 
 ## Seed policy
 
@@ -20,19 +23,19 @@ The original violation text is kept for the historical record in each subsection
   `Data.initialize_labels`'s `np.random.shuffle` for the initial labeled pool is unchanged and still
   correctly seed-derived.
 - **Violation found, now resolved**: `core/query_strategies/ssrae_kmeans_sampling.py:23`
-  and `core/query_strategies/vctex_kmeans_sampling.py:26` both call
+  and `core/query_strategies/vctex_kmeans_sampling.py:26` both called
   `KMeans(n_clusters=n, random_state=3, n_init=10)` — a **literal hardcoded
-  seed**, independent of `--seed`. These two files are unchanged (still exhibit this bug) but are
-  now dead code, unreachable from `demo.py`/`dalmax.cli` (`current-state.md` §0). Their replacement,
+  seed**, independent of `--seed`. These two files exhibited this bug until they were unreachable
+  (Phase 2) and then **deleted outright (Phase 4)** — they no longer exist on disk. Their replacement,
   `dalmax/selection/flat_kmeans_closest.py::FlatKMeansClosest`, derives `KMeans(random_state=...)`
   from `np.random.default_rng(dalmax.seeding.derive_seed(config.seed, "selection"))` — verified by
   the regenerated `tests/golden/ssrae_kmeans_micro_seed1.json` fixture, whose `round_1_query_idxs_sorted`
   changed once seed-derivation replaced the literal `3` (old value kept in that fixture's
   `legacy_phase1_values` block).
 - `SSRAEKmeansHCSampling`/`VCTexKmeansHCSampling`
-  (`core/query_strategies/ssl_ssrae_sampling.py`) delegate clustering to
-  `core/tools/SSL/src/hierarchical_kmeans_gpu.py` — **resolved (Phase 2)**: this file is unchanged
-  and now dead code; its replacement, `dalmax/selection/hierarchical_kmeans.py::HierarchicalKMeansSelection`,
+  (was `core/query_strategies/ssl_ssrae_sampling.py`, deleted in Phase 4) delegated clustering to
+  what is now `dalmax/tools/SSL/src/hierarchical_kmeans_gpu.py` (moved, not deleted, in Phase 4) —
+  **resolved (Phase 2)**: its replacement, `dalmax/selection/hierarchical_kmeans.py::HierarchicalKMeansSelection`,
   documents exactly how the vendored pipeline's randomness works (module docstring, "RNG isolation"
   section): `hierarchical_sampling`'s core randomness and `kmeans_gpu.kmeans`'s `random_state=None`
   resolution both consult **global** NumPy legacy random state (not an injectable generator), so
@@ -63,13 +66,13 @@ construction (a different combination is a different filename), but always sanit
 filename actually used before trusting an ablation's cached embeddings.
 
 The original (pre-Phase-2) description below is kept for historical context — it describes
-`utils/data.py`'s caches, which are now dead code from the `dalmax.cli` path's point of view (only
-reached when `Data.initialize_labels(..., compute_legacy_features=True)`, which
-`dalmax.experiment.runner.ExperimentRunner` never passes — see `current-state.md` §0). The original
+`utils/data.py`'s caches (that file was deleted in Phase 4, along with the
+`compute_legacy_features=True` code path that could still reach them; see
+`.specs/architecture/current-state.md` §5 and ADR 0002's final amendment). The original
 fixed-path files (`results/features_dict_ssrae.pkl`, `results/features_dict_vctex.pkl`,
 `results/Y_train.pkl`) remain on disk, orphaned, not deleted.
 
-`utils/data.py` maintains three pickle caches, all under `results/`, with
+`utils/data.py` (deleted in Phase 4) maintained three pickle caches, all under `results/`, with
 **no cache key** encoding what was used to produce them:
 
 | Cache file | Written by | Keys it should have but doesn't |

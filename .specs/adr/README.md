@@ -11,10 +11,10 @@ session must be captured here in the same task, not deferred.
 | ADR | Title | Status |
 |---|---|---|
 | [0001](0001-adopt-poetry.md) | Adopt Poetry for dependency management | Accepted |
-| [0002](0002-keep-dalmax-name-and-package-consolidation.md) | Keep the DalMax name; consolidate `core/` + `utils/` into `dalmax/` later | Accepted (amended 2026-08-23: `dalmax/` package created in Phase 2, legacy kept until Phase 4) |
+| [0002](0002-keep-dalmax-name-and-package-consolidation.md) | Keep the DalMax name; consolidate `core/` + `utils/` into `dalmax/` later | Accepted; **fully executed** (amended 2026-08-23 twice — Phase 2 `dalmax/` creation, then the Phase 4 physical move/delete that closes the ADR) |
 | [0003](0003-embedding-provider-abstraction.md) | Introduce an `EmbeddingProvider` abstraction with a keyed cache | Accepted |
 | [0004](0004-micro-dataset-and-golden-run.md) | Deterministic micro-dataset + golden-run fixtures for local smoke testing | Accepted |
-| [0005](0005-representation-strategy-and-registries.md) | One generic `RepresentationStrategy` + dict registries replacing the four fixed embedding-based strategy classes and `utils/orchestrator.py`'s if/elif chains | Accepted |
+| [0005](0005-representation-strategy-and-registries.md) | One generic `RepresentationStrategy` + dict registries replacing the four fixed embedding-based strategy classes and the (now-deleted) `utils/orchestrator.py`'s if/elif chains | Accepted |
 
 ## When to add a new ADR
 

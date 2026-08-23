@@ -89,3 +89,13 @@ We will:
   or import-time signal that they are unreachable — a future contributor could accidentally import
   and use them directly (they still work standalone). Tracked for deletion in
   `.specs/architecture/refactor-plan.md` Phase 4.
+
+## Amendment (2026-08-23, Phase 4 executed)
+
+Item 4 of the Decision is now moot: Phase 4 (branch `refactor/phase-4-package`) deleted
+`utils/orchestrator.py` and the four superseded strategy files (`ssrae_kmeans_sampling.py`,
+`vctex_kmeans_sampling.py`, `ssl_ssrae_sampling.py`) rather than leaving them in place — the
+"future contributor could accidentally import them" negative consequence above no longer applies,
+since the files no longer exist. `core/query_strategies/__init__.py`'s corresponding import lines
+went with them. See ADR 0002's final amendment for the full move/delete inventory and
+`.specs/quality/known-issues.md` KI-4/KI-5/KI-9 for the per-issue closure record.

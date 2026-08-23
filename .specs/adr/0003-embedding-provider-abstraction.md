@@ -45,3 +45,11 @@ mapping.
 - Negative: the `Data`/`PoolDataset` class loses direct ownership of feature extraction, which is a
   behavior change to `Data.initialize_labels` — must be covered by the golden-run regression test
   from `.specs/quality/testing-strategy.md` before merging.
+
+## Amendment (2026-08-23, Phase 4)
+
+The Context section above describes `utils/data.py` as it existed when this ADR was written; that
+file (and `core/`/`utils/` generally) was deleted/moved in Phase 4's package consolidation (see ADR
+0002's final amendment) and no longer exists on disk. This does not change the Decision — the
+`EmbeddingProvider`/`EmbeddingCache` abstraction it describes was already live under `dalmax/` since
+Phase 2, unaffected by the later physical move of the legacy files it replaced.

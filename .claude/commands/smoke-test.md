@@ -13,18 +13,20 @@ Steps:
    documented stub in the current state of the repo.
 2. If `make smoke` is not yet a real end-to-end run (check the Makefile
    target body), fall back to:
-   - `poetry run pytest -m "not gpu and not dataset"` (the fast unit tests:
-     `tests/test_imports.py`, `tests/test_registry.py`,
+   - `poetry run pytest -m "not gpu and not dataset and not slow"` (the fast unit tests:
+     `tests/test_imports.py`, `tests/test_strategy_registry.py`,
      `tests/test_ssrae_embedding_layout.py`), and
    - `poetry run python -c "import demo"` plus `poetry run python -c "from
-     utils.orchestrator import get_strategy, get_dataset,
-     get_network_deep_learning"` as a minimal import sanity check.
+     dalmax.query_strategies.registry import build_strategy; from
+     dalmax.data.registry import get_dataset; from dalmax.models.registry import
+     get_network"` as a minimal import sanity check.
 3. On failure, read the traceback and classify it:
    - Import error → likely a missing dependency (check `pyproject.toml` against
      `requirements.txt`, remembering `pandas` was historically missing — see
      `.specs/quality/known-issues.md`).
-   - Registry error (`NotImplementedError` from `utils/orchestrator.py`) →
-     likely a strategy/dataset name mismatch between `demo.py` choices and the
+   - Registry error (`KeyError`/`dalmax.config.schema.ConfigError` from
+     `dalmax/query_strategies/registry.py` or another `dalmax/*/registry.py`) →
+     likely a strategy/dataset name mismatch between `dalmax/cli.py` choices and the
      registry — see `.claude/skills/adding-query-strategy/SKILL.md`.
    - Anything touching `DATA/` or `results/` unexpectedly → stop and flag,
      per `.claude/rules/data-safety.md`; do not let the smoke test write into

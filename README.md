@@ -23,18 +23,18 @@ Hierarchical Active Learning)**. RNHAL combines two stages:
 1. A **randomized-network spatio-spectral representation module**, instantiated
    through the **SSRAE** formulation (see
    [`phd_files/artigo-original-tecnica-ssrae-manuscript.pdf`](phd_files/artigo-original-tecnica-ssrae-manuscript.pdf)
-   and `core/tools/SSRAE/`). For an image `x`, closed-form randomized autoencoders
+   and `dalmax/tools/SSRAE/`). For an image `x`, closed-form randomized autoencoders
    produce a spatial signature per channel (`Θ_R`, `Θ_G`, `Θ_B`) and a spectral
    signature per adjacent channel pair (`Ω_RG`, `Ω_GB`, `Ω_BR`); the final embedding
    is conceptually their concatenation `Φ(x) = [Θ_R, Θ_G, Θ_B, Ω_RG, Ω_GB, Ω_BR]`,
    encoding intra-channel spatial structure (`Θ_R, Θ_G, Θ_B`) and inter-channel
    spectral dependency (`Ω_RG, Ω_GB, Ω_BR`). **Implementation note (verified
-   2026-08-23)**: the actual vector produced by `core/tools/SSRAE/extractor.py` is
+   2026-08-23)**: the actual vector produced by `dalmax/tools/SSRAE/extractor.py` is
    row-interleaved, not laid out as two contiguous halves — naive slicing such as
    `emb[:len(emb)//2]` does **not** recover the spatial-only signatures. See
    `.specs/experiments/ablation-study.md` §6.1 for the corrected slicing used by the
    representation ablation.
-2. A **hierarchical k-means batch selection mechanism** (`core/tools/SSL/`) that
+2. A **hierarchical k-means batch selection mechanism** (`dalmax/tools/SSL/`) that
    recursively partitions the embedding space of the unlabeled pool and samples the
    query batch across the induced hierarchy, aiming for batches that are both
    informative and structurally diverse rather than redundant in visually dense
@@ -348,24 +348,29 @@ make export-reqs   # regenerate requirements.txt from pyproject.toml
 ```
 dalmax-deep-active-learning-python/
 ├── demo.py                    # CLI entry point — thin shim, calls dalmax.cli.main()
-├── dalmax/                    # Phase 2 core refactor package (config, embeddings,
-│   │                          #   selection, query_strategies, experiment orchestration)
+├── dalmax/                    # the ONE package — all Python source lives here (Phase 4 complete)
 │   ├── cli.py                 # argparse -> ExperimentConfig -> ExperimentRunner.run()
 │   ├── config/                # schema.py (typed dataclasses), loader.py (params JSON -> config)
 │   ├── seeding.py             # single place that seeds random/numpy/torch
+│   ├── logging_utils.py       # module-level singleton logger
+│   ├── data/                  # datasets.py (Data), handlers.py (torch Dataset wrappers),
+│   │                          #   loaders.py (get_DANINHAS/get_CIFAR10), registry.py
+│   ├── models/                # base.py (DeepLearning), daninhas_resnet50.py, cifar10_cnn.py, registry.py
+│   ├── query_strategies/      # base.py (Strategy) + 12 baseline modules (random_sampling.py,
+│   │                          #   least_confidence.py, margin_sampling.py, entropy_sampling.py,
+│   │                          #   *_dropout variants, kmeans_sampling.py, kcenter_greedy.py,
+│   │                          #   bayesian_active_learning_disagreement_dropout.py, adversarial_bim.py,
+│   │                          #   adversarial_deepfool.py) + representation.py + STRATEGY_REGISTRY
 │   ├── embeddings/            # EmbeddingProvider: ssrae, vctex, resnet_imagenet + keyed cache
 │   ├── selection/             # SelectionStrategy: flat_closest, flat_proportional, hierarchical
-│   ├── query_strategies/      # RepresentationStrategy + STRATEGY_REGISTRY (legacy + presets)
-│   ├── data/, models/         # DATASET_REGISTRY / MODEL_REGISTRY (wrap core/ + utils/ as-is)
-│   └── experiment/            # runner.py (round loop), reporter.py (plots/JSON/CSV), run_metadata.py
-├── core/                      # models, query strategies, RNHAL tools (SSRAE, SSL) — vendored,
-│   │                          #   wrapped by dalmax/ rather than moved (Phase 4 will relocate this)
-│   ├── query_strategies/      # one module per acquisition strategy; 4 SSRAE/VCTex-kmeans
-│   │                          #   files here are dead code as of Phase 2 (see current-state.md §0)
-│   └── tools/
+│   ├── experiment/            # runner.py (round loop), reporter.py (plots/JSON/CSV), run_metadata.py
+│   ├── reporting/              # cross-run aggregation: extract_confusion_matrices.py, chunk_results.py,
+│   │                          #   average_confusion_matrices.py, average_results.py,
+│   │                          #   build_method_metrics.py, plot_results_dir.py, ablation_report.py
+│   └── tools/                 # vendored third-party code (unchanged contents, Meta-licensed for SSL/)
 │       ├── SSRAE/             # randomized-network spatio-spectral extractor
-│       └── SSL/               # hierarchical k-means selection
-├── utils/                     # dataset handlers, orchestrator (dead code as of Phase 2), report/
+│       ├── VCTex/              # alternative color-texture representation
+│       └── SSL/                # hierarchical k-means selection
 ├── params_df_gpu_0.json       # hyperparameters for lab GPU 0
 ├── params_df_gpu_1.json       # hyperparameters for lab GPU 1
 ├── run_pipe_gpu_0.sh          # experiment batch runner, GPU 0
@@ -382,18 +387,18 @@ dalmax-deep-active-learning-python/
 └── Makefile
 ```
 
-See [`.specs/architecture/current-state.md`](.specs/architecture/current-state.md) §0 for exactly
-which `core/`/`utils/` files `dalmax/` wraps vs. leaves dead, and
-[`.specs/architecture/target-architecture.md`](.specs/architecture/target-architecture.md) for what
-still moves to `dalmax/` in Phase 4.
+`core/` and `utils/` — the pre-Phase-4 two-package split — no longer exist; everything moved into
+`dalmax/` in Phase 4 (`.specs/architecture/refactor-plan.md`, ADR 0002's final amendment). See
+[`.specs/architecture/current-state.md`](.specs/architecture/current-state.md) for the full,
+per-module current-state map.
 
 ## Roadmap
 
-The codebase is being refactored in phases to make the ablation study
+The codebase was refactored in phases to make the ablation study
 (representation ablation, hierarchy ablation, RNHAL-stage-contribution ablation)
 a matter of configuration rather than new code:
 
-**Phase 1 — Safety net (done) → Phase 2 — Core refactor (done) → Phase 3 — Ablations (current) → Phase 4 — Polish.**
+**Phase 1 — Safety net (done) → Phase 2 — Core refactor (done) → Phase 3 — Ablations (config/code done; lab-machine runs outstanding) → Phase 4 — Polish (done: package consolidated into `dalmax/`, dead code deleted).**
 
 Full phase plan and acceptance criteria:
 [`.specs/architecture/refactor-plan.md`](.specs/architecture/refactor-plan.md).

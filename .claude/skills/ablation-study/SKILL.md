@@ -26,7 +26,7 @@ below is kept as the conceptual/background reference (embedding layout, what eac
 
 ## Background: SSRAE embedding layout
 
-Verified in `core/tools/SSRAE/extractor.py`:
+Verified in `dalmax/tools/SSRAE/extractor.py` (was `core/tools/SSRAE/extractor.py`):
 `emb = hstack[β_R, β_G, β_B, β_S_RG, β_S_GB, β_S_BR]` — six blocks of equal
 shape `(9, Q+1)`. **This is NOT a contiguous-halves layout** — see the Layout
 caveat below before implementing `embedding_variant` slicing.
@@ -56,12 +56,13 @@ holds; only the naive `emb[:len(emb)//2]` implementation was wrong. See
 block-contiguous embeddings, or expose explicit block/column-group indices,
 so naive halving cannot silently be wrong again.
 
-Current `Q` value: **`Q = 13`**, hardcoded in `utils/data.py`
-(`create_feature_maps_ssrae`, around line 139) as
-`extractor = ColorFeatureExtractor(Q=Q)` with `Q = 13`. (VCTex uses a different
-`Q = [5, 17]` at `utils/data.py` around line 70 — not the same hyperparameter,
-do not conflate the two when writing the representation ablation.) Use `Q=13`
-for the representation ablation below unless the advisor specifies otherwise.
+Current `Q` value: **`Q = 13`**, the SSRAE default in `dalmax/config/loader.py`
+(threaded into `dalmax/embeddings/ssrae_provider.py`), historically hardcoded in the now-deleted
+`utils/data.py::create_feature_maps_ssrae` as `extractor = ColorFeatureExtractor(Q=Q)` with `Q = 13`.
+(VCTex uses a different `Q = [5, 17]` default, historically hardcoded at `utils/data.py` around
+line 70, now `dalmax/config/loader.py`'s VCTex default — not the same hyperparameter, do not
+conflate the two when writing the representation ablation.) Use `Q=13` for the representation
+ablation below unless the advisor specifies otherwise.
 
 ## 6.1 Representation ablation
 
@@ -95,14 +96,14 @@ Fix `n_query = 100`, SSRAE full embeddings (`emb_full`). Vary `config_kmh`
 | 1 | `[50]` | |
 | 2 | `[300, 100]` (alternative: `[100, 50]` — record both, run per advisor's choice) | |
 | 3 | `[300, 100, 50]` | Close to current `params_df_gpu_*.json` shape (`[600,200,100]`, 3 levels) but not identical — this ablation cell uses the exact `[300,100,50]` triple |
-| 4 | `[300, 100, 50, 25]` | Matches the `config_kmh` example seen in `core/query_strategies/ssl_ssrae_sampling.py`'s inline docstring comment |
+| 4 | `[300, 100, 50, 25]` | Matches the `config_kmh` example that was in the now-deleted `ssl_ssrae_sampling.py`'s inline docstring comment |
 
 **Implementation requirement — done (2026-08-23, Phase 2)**: hierarchy depth/cluster counts come
 **entirely from config** — no hardcoded `'DANINHAS'` key lookup.
 `dalmax/selection/hierarchical_kmeans.py::HierarchicalKMeansSelection` takes `hierarchy` via
 constructor injection (resolved per the actual `dataset_name`, not a literal string). The old
-`core/query_strategies/ssl_ssrae_sampling.py:66` hardcode is unchanged but unreachable from
-`demo.py`/`dalmax.cli` (dead code, see `.specs/architecture/current-state.md` §0). `sample_sizes`
+`ssl_ssrae_sampling.py:66` hardcode was deleted in Phase 4, having been dead code since Phase 2 (see
+`.specs/architecture/current-state.md`). `sample_sizes`
 semantics are now verified and documented (not a TBD any more): `sample_sizes[level]` only affects
 *centroid-refinement resampling quality* at that level; the number of ids returned is controlled
 entirely by `n_query` (independent of `sample_sizes`). Exact `sample_sizes` values for every `L`
@@ -121,7 +122,8 @@ Three conditions, all macro F1 on `daninhas_full`:
    specific runs, do not re-run them.
 2. **Without representation module** — keep hierarchical selection, replace
    SSRAE embeddings with **ImageNet-pretrained ResNet embeddings** (penultimate
-   layer of the existing ResNet50, `core/daninhas_model.py`). **Implemented (Phase 2)**:
+   layer of the existing ResNet50, `dalmax/models/daninhas_resnet50.py`, was
+   `core/daninhas_model.py`). **Implemented (Phase 2)**:
    `dalmax/embeddings/resnet_imagenet_provider.py::ResNetImageNetProvider` — a provider swap fed
    into `RepresentationStrategy`, no new strategy class needed.
 3. **Without hierarchical module** — SSRAE embeddings + **flat k-means**,
@@ -169,6 +171,6 @@ Aggregate with `poetry run python -m dalmax.reporting.ablation_report --root res
 paper_drafts/ablation_tables` — writes `ablation_summary.csv` (mean ± std across seeds, final-round
 and across-rounds-mean, both macro and weighted F1) plus one booktabs `ablation_6_{1,2,3}.tex` /
 `.md` table per sub-study (missing configs render as `TBD`, never silently omitted). This
-supersedes `.claude/skills/results-reporting/SKILL.md`'s `utils/report/*.py` scripts for the
+supersedes `.claude/skills/results-reporting/SKILL.md`'s `dalmax/reporting/*.py` scripts for the
 ablation sweep specifically (those remain the tool for the main `results/dalmax{1,2}/` sweeps).
 Track progress with `.claude/commands/ablation-status.md`.

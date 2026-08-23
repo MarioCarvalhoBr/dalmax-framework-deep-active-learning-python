@@ -107,3 +107,15 @@ were regenerated against the corrected micro dataset (same recorded CLI, git com
 because the actual files selected into the micro dataset changed — not a regression in SSRAE/KMeans
 behavior. See `.specs/quality/known-issues.md` KI-3 and the fixtures' own `notes` for detail.
 `tests/test_cache_paths.py` was extended with `pool_hash` collision/idempotency/omission tests.
+
+## Amendment (2026-08-23, Phase 4)
+
+Every `utils/data.py`/`demo.py` reference above (`get_DANINHAS`, `cache_file_path`,
+`create_feature_maps_ssrae`/`_vctex`, the `logger.warning` lines) describes the codebase as it
+existed at the time this ADR was written. Phase 4's package consolidation later deleted
+`utils/data.py` outright (its live logic had already moved to `dalmax/data/`/`dalmax/embeddings/` in
+Phase 2/3, so nothing from the file itself needed to carry forward) and reduced `demo.py` to a
+12-line shim; see ADR 0002's final amendment. This does not change this ADR's Decision or the
+golden-run fixtures/tooling it describes (`scripts/make_micro_dataset.py`,
+`tests/golden/*.json`, `tests/test_golden_run.py`), which are unaffected by the later move and still
+work exactly as decided here.

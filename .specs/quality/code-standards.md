@@ -7,7 +7,7 @@ onward; existing code is not retroactively rewritten outside that plan.
 
 ## 1. Registry pattern over `if/elif` chains
 
-**Before** (`utils/orchestrator.py:45-80`, confirmed as-is):
+**Before** (`utils/orchestrator.py:45-80`, confirmed as-is at the time; file deleted in Phase 4):
 ```python
 def get_strategy(name):
     if name == "RandomSampling":
@@ -18,8 +18,11 @@ def get_strategy(name):
     else:
         raise NotImplementedError
 ```
-Every new strategy requires editing this function, `core/query_strategies/__init__.py`, and
-`demo.py`'s `choices=[...]` list by hand, with nothing enforcing they stay consistent.
+Every new strategy required editing this function, `core/query_strategies/__init__.py`, and
+`demo.py`'s `choices=[...]` list by hand, with nothing enforcing they stay consistent. (Both
+`utils/orchestrator.py` and the old `core/query_strategies/__init__.py` no longer exist — see the
+`dalmax/query_strategies/__init__.py`/`registry.py` implementation below, landed for real, not just
+sketched.)
 
 **After** (target, `dalmax/query_strategies/registry.py`):
 ```python
@@ -48,8 +51,9 @@ A new strategy self-registers with `@register("MyStrategy")` at definition time;
 strategy = get_strategy(args.strategy_name)(dataset, net, logger)
 setattr(strategy, "params", params)  # strategy.params only exists after this line
 ```
-`SSLStrategy.__init__` (`core/query_strategies/ssl_ssrae_sampling.py:29`) has to defend against this
-with `self.params = self.params if hasattr(self, 'params') else None`, which only works because of
+`SSLStrategy.__init__` (`core/query_strategies/ssl_ssrae_sampling.py:29`, file deleted in Phase 4)
+had to defend against this
+with `self.params = self.params if hasattr(self, 'params') else None`, which only worked because of
 call-order luck, not a guarantee.
 
 **After:**
@@ -62,11 +66,12 @@ for which "was `params` already attached?" is even a question.
 
 ## 3. No hardcoded dataset names inside logic
 
-**Before** (`core/query_strategies/ssl_ssrae_sampling.py:66`, confirmed as-is):
+**Before** (`core/query_strategies/ssl_ssrae_sampling.py:66`, confirmed as-is at the time; file
+deleted in Phase 4):
 ```python
 config_kmh = self.params['DANINHAS']['config_kmh']
 ```
-This raises `KeyError` for any dataset other than DANINHAS, including `CIFAR10`, which is a
+This raised `KeyError` for any dataset other than DANINHAS, including `CIFAR10`, which is a
 documented CLI choice in `demo.py`.
 
 **After:**
@@ -78,7 +83,7 @@ re-derived from a literal string inside strategy logic.
 
 ## 4. Caches must have explicit keys and invalidation
 
-**Before** (`utils/data.py:117-121`, confirmed as-is):
+**Before** (`utils/data.py:117-121`, confirmed as-is at the time; file deleted in Phase 4):
 ```python
 path_pkl = 'results/features_dict_ssrae.pkl'
 if os.path.exists(path_pkl):
@@ -100,11 +105,12 @@ else:
 
 ## 5. All randomness derives from the experiment seed
 
-**Before** (`core/query_strategies/ssrae_kmeans_sampling.py:23`, confirmed as-is):
+**Before** (`core/query_strategies/ssrae_kmeans_sampling.py:23`, confirmed as-is at the time; file
+deleted in Phase 4):
 ```python
 kmeans = KMeans(n_clusters=n, random_state=3, n_init=10)
 ```
-Literal `3`, independent of `--seed`; every seed in `SEEDS=(1 2 3)` (`run_pipe_gpu_0.sh`) clusters
+Literal `3`, independent of `--seed`; every seed in `SEEDS=(1 2 3)` (`run_pipe_gpu_0.sh`) clustered
 identically for this strategy.
 
 **After:**
@@ -126,9 +132,12 @@ it should be added to.
 
 ## 7. English-only code and comments; type hints on new/edited code
 
-**Before**: `utils/data.py` mixes Portuguese docstrings/comments (`"""Carrega o dataset..."""`,
+**Before**: `utils/data.py` mixed Portuguese docstrings/comments (`"""Carrega o dataset..."""`,
 `# Salva em um arquivo indices.txt...`) with English ones throughout the same file; no type hints
-anywhere in `utils/data.py`, `utils/orchestrator.py`, or `core/query_strategies/*.py`.
+anywhere in `utils/data.py`, `utils/orchestrator.py`, or `core/query_strategies/*.py`. **Status
+(Phase 4)**: `utils/orchestrator.py` and the legacy `core/query_strategies/*.py` files with this
+issue were deleted; the Portuguese comment quoted above is still present, unchanged, in its Phase 4
+destination, `dalmax/data/datasets.py` (KI-12, still open).
 
 **After:** new/edited functions get English docstrings/comments and full type hints, e.g.:
 ```python
@@ -140,7 +149,9 @@ def slice_embedding(vector: np.ndarray, variant: Literal["full", "spatial", "spe
 
 **Before**: `utils/data.py` module-level code has no import-time side effects itself, but
 `Data.__init__` unconditionally writes `results/Y_train.pkl` and `results/original_indices.txt` to
-disk as a side effect of *object construction* (`utils/data.py:22-27,44,187-195`), which means even
+disk as a side effect of *object construction* (`utils/data.py:22-27,44,187-195` at the time). **Status
+(Phase 4)**: the file moved (not deleted) to `dalmax/data/datasets.py`, unchanged — the same
+side effect is still present there (KI-21, still open), which means even
 building a `Data` instance for a unit test touches the filesystem.
 
 **After:** persistence (writing indices/labels to disk) is a method the caller invokes explicitly
@@ -148,9 +159,9 @@ building a `Data` instance for a unit test touches the filesystem.
 
 ## 9. No duplicated strategy boilerplate
 
-**Before:** `SSRAEKmeansSampling` (`ssrae_kmeans_sampling.py`) and `VCTexKmeansSampling`
-(`vctex_kmeans_sampling.py`) are near-identical copy-pasted `query()` methods differing only in
-which `features_dict` populated them; likewise `SSRAEKmeansHCSampling`/`VCTexKmeansHCSampling` share
+**Before** (all three files below deleted in Phase 4): `SSRAEKmeansSampling` (`ssrae_kmeans_sampling.py`) and `VCTexKmeansSampling`
+(`vctex_kmeans_sampling.py`) were near-identical copy-pasted `query()` methods differing only in
+which `features_dict` populated them; likewise `SSRAEKmeansHCSampling`/`VCTexKmeansHCSampling` shared
 100% of `SSLStrategy.query()`.
 
 **After:** one `RepresentationStrategy(embedding_provider, selection_strategy)` class
@@ -158,18 +169,23 @@ which `features_dict` populated them; likewise `SSRAEKmeansHCSampling`/`VCTexKme
 
 ## 10. Duplicate/unused imports (mechanical, but part of "organized")
 
-Confirmed duplicate imports (same symbol imported twice in one file):
+Originally confirmed duplicate imports (same symbol imported twice in one file), **all resolved by
+Phase 4's move — see `known-issues.md` KI-15 through KI-20**: the destination files
+(`dalmax/models/daninhas_resnet50.py`, `dalmax/models/cifar10_cnn.py`) were cleaned during the move
+and have no duplicate imports; the three `core/query_strategies/*.py` files below were deleted
+outright, taking their duplicate/unused imports with them:
 - `core/daninhas_model.py:1-8` — `torch`, `torch.nn as nn`, and `ViT_B_16_Weights` each imported twice.
 - `core/cifar10_model.py:1-9` — `torch`, `torch.nn as nn` each imported twice.
 - `core/query_strategies/ssl_ssrae_sampling.py:1-14` — `numpy as np` (lines 2, 8) and
   `matplotlib.pyplot as plt` (lines 3, 13) each imported twice.
 
-Confirmed unused imports:
+Originally confirmed unused imports, likewise resolved by deletion (Phase 4):
 - `core/query_strategies/ssl_ssrae_sampling.py:1` (`abstractmethod`), `:12` (`TSNE`), `:14`
-  (`matplotlib.colors as mcolors`) — none of the three are referenced anywhere in the file.
+  (`matplotlib.colors as mcolors`) — none of the three were referenced anywhere in the file.
 - `core/query_strategies/ssrae_kmeans_sampling.py:2,5` (`matplotlib.pyplot as plt`, `time`) — neither
-  is used in the file's body.
+  was used in the file's body.
 - `core/query_strategies/vctex_kmeans_sampling.py:2,5` (`matplotlib.pyplot as plt`, `time`) — same.
 
-These are tracked as KI items in `known-issues.md` and are exactly the kind of change the
-`mechanic` agent should make (mechanical, low-risk, English-only rule already satisfied).
+These were tracked as KI items in `known-issues.md` and were exactly the kind of change the
+`mechanic` agent would have made (mechanical, low-risk, English-only rule already satisfied) — moot
+now that the files are gone.

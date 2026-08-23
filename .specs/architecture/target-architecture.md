@@ -1,43 +1,43 @@
 # Architecture — Target State
 
-Status: design target for the refactor described in `refactor-plan.md` (Phases 2-4). This is
-the end state after Phase 4 (package consolidation, ADR 0002); intermediate phases may keep
-the new modules under `core/`/`utils/` before the physical rename. Every module below is
-mapped to the current file(s) it replaces so the move is traceable.
+Status: design target for the refactor described in `refactor-plan.md` (Phases 2-4). **Phase 4
+landed 2026-08-23 (branch `refactor/phase-4-package`) — the package consolidation described here is
+now complete**; `core/` and `utils/` no longer exist. The tree in §2 is, with the deviations
+itemized below, what is actually on disk today; every "was `core/...`/`utils/...`" comment in it
+is now a historical pointer to a deleted file, not a currently-wrapped one. See `current-state.md`
+for the live module map and ADR 0002's final amendment for the executed move/delete list.
 
-## What landed vs. what remains (updated 2026-08-23, Phase 2 landed)
+## What landed vs. residual deltas (updated 2026-08-23, Phase 4 complete)
 
-Phase 2 chose to create the `dalmax/` package immediately (ADR 0002 amendment) rather than staging
-new modules under `core/`/`utils/` first, but it did **not** perform the full package-layout move
-below — only the modules that needed genuinely new abstractions (config, embeddings, selection,
-representation strategy, registries, experiment orchestration, seeding) moved into `dalmax/`.
-Everything else stays where §2 shows it today (`core/`, `utils/`), wrapped rather than moved, per
-`current-state.md` §0. Concretely, against the `dalmax/` tree in §2 below:
+Phase 2 created the `dalmax/` package immediately (ADR 0002 amendment) and moved in the modules that
+needed genuinely new abstractions; Phase 4 then physically moved everything else out of `core/`/
+`utils/` into `dalmax/` and deleted what had already been superseded. Every row below is now "Yes",
+with three documented layout deviations from this file's original sketch (kept as chosen-final,
+not fixed later):
 
-| §2 path | Landed in Phase 2? | Actual location today |
+| §2 path | Landed? | Actual location / deviation |
 |---|---|---|
 | `cli.py` | Yes | `dalmax/cli.py` |
 | `config/schema.py`, `config/loader.py` | Yes | as shown |
 | `seeding.py` | Yes | as shown |
-| `data/registry.py` | Yes (registry only) | `dalmax/data/registry.py`; `datasets.py`/`handlers.py`/`loaders.py` **not created** — `utils/data.py::Data`/`get_DANINHAS`/`get_CIFAR10` and `utils/dataset.py`'s handlers are called as-is from the registry, deferred to Phase 4 |
-| `embeddings/{base,ssrae_provider,vctex_provider,resnet_imagenet_provider,variants,cache,registry}.py` | Yes, all of it, including the ablation-6.3 `resnet_imagenet_provider.py` | as shown |
-| `selection/{base,flat_kmeans_closest,flat_kmeans_proportional,hierarchical_kmeans,registry}.py` | Yes, all of it, including the ablation-6.3 `flat_kmeans_proportional.py` | as shown (filenames match exactly) |
+| `data/registry.py`, `datasets.py`, `handlers.py`, `loaders.py` | Yes | `dalmax/data/{registry,datasets,handlers,loaders}.py` — `datasets.py`'s class is still named `Data` (not renamed to `PoolDataset` as this file originally sketched; **deviation, kept as chosen-final** — no code or test currently references the name `PoolDataset`) |
+| `embeddings/{base,ssrae_provider,vctex_provider,resnet_imagenet_provider,variants,cache,registry}.py` | Yes | as shown |
+| `selection/{base,flat_kmeans_closest,flat_kmeans_proportional,hierarchical_kmeans,registry}.py` | Yes | as shown (filenames match exactly) |
 | `query_strategies/representation.py`, `query_strategies/registry.py` | Yes | as shown |
-| `query_strategies/base.py`, `uncertainty.py`, `diversity.py`, `bayesian.py`, `adversarial.py` | **No** | the 12 legacy strategy classes stay in `core/query_strategies/*.py`, unmodified, imported directly into `dalmax/query_strategies/registry.py::LEGACY_STRATEGY_REGISTRY` — deferred to Phase 4 |
-| `models/base.py`, `daninhas_resnet50.py`, `cifar10_cnn.py`, `models/registry.py` | Registry only | `dalmax/models/registry.py` wraps `core/deep_learning.py::DeepLearning` and `core/daninhas_model.py`/`core/cifar10_model.py` as-is (`_legacy_params_dict` rebuilds the dict shape `DeepLearning` expects) — the move/rename itself is deferred to Phase 4 |
+| `query_strategies/base.py`, `uncertainty.py`, `diversity.py`, `bayesian.py`, `adversarial.py` | **Deviation, kept as chosen-final** | the 12 legacy strategy classes moved unchanged into `dalmax/query_strategies/*.py` **keeping their original 1:1 module names** (`random_sampling.py`, `least_confidence.py`, `least_confidence_dropout.py`, `margin_sampling.py`, `margin_sampling_dropout.py`, `entropy_sampling.py`, `entropy_sampling_dropout.py`, `bayesian_active_learning_disagreement_dropout.py`, `kcenter_greedy.py`, `kmeans_sampling.py`, `adversarial_bim.py`, `adversarial_deepfool.py`) rather than being regrouped into the four family files sketched here (`uncertainty.py`/`diversity.py`/`bayesian.py`/`adversarial.py`). `strategy.py` did get renamed to `base.py` as sketched. This grouping-by-family idea was **not adopted** — the 1:1 layout is the documented final choice, not a residual gap |
+| `models/base.py`, `daninhas_resnet50.py`, `cifar10_cnn.py`, `models/registry.py` | Yes | `dalmax/models/base.py` (was `core/deep_learning.py`), `daninhas_resnet50.py` (was `core/daninhas_model.py`, `DaninhasModelVitB16` dropped, not moved — KI-25), `cifar10_cnn.py` (was `core/cifar10_model.py`), `registry.py` as shown |
 | `experiment/{runner,reporter,run_metadata}.py` | Yes | as shown |
-| `reporting/` (cross-run aggregation) | **No** | `utils/report/*.py` unchanged, not renumbered — deferred to Phase 4 |
-| `tools/{ssrae,vctex,ssl}/` | **No** | `core/tools/{SSRAE,VCTex,SSL}/` unchanged, wrapped by the new `embeddings`/`selection` modules — deferred to Phase 4 per its Meta-license note |
+| `reporting/` (cross-run aggregation) | **Deviation, kept as chosen-final** | `dalmax/reporting/{extract_confusion_matrices,chunk_results,average_confusion_matrices,average_results,build_method_metrics,plot_results_dir,ablation_report}.py` — descriptive names as sketched, but this file's tree only listed the first four; `build_method_metrics.py` and `plot_results_dir.py` (both pre-existing at the repo root, moved in) and `ablation_report.py` (new, Phase 3) are additional real modules not in the original sketch |
+| `tools/{ssrae,vctex,ssl}/` | Yes (capitalization deviation) | `dalmax/tools/{SSRAE,VCTex,SSL}/` — kept the original mixed-case directory names from `core/tools/` rather than the lowercase `ssrae/vctex/ssl` sketched here; contents otherwise unchanged, `SSL/` still Meta-licensed |
 
-Additionally landed but **not** in §2's original sketch: `dalmax/embeddings/cache.py`'s cache key
-gained a `pool_hash` component beyond `(dataset, extractor, Q, variant, split)` (§4 below is updated
-to reflect this); `dalmax/query_strategies/registry.py::REPRESENTATION_PRESETS` (the 4 legacy CLI
-name → `(extractor, selection_method)` mapping, with pinned legacy `Q` values) is the mechanism that
-makes old `--strategy_name` values keep working, not explicitly sketched in §2's tree.
+`dalmax/embeddings/cache.py`'s cache key has a `pool_hash` component beyond `(dataset, extractor, Q,
+variant, split)` (§4 below reflects this — landed in Phase 2, not a Phase 4 change).
+`dalmax/query_strategies/registry.py::REPRESENTATION_PRESETS` (the 4 legacy CLI name →
+`(extractor, selection_method)` mapping, with pinned legacy `Q` values) is the mechanism that makes
+old `--strategy_name` values keep working, not explicitly sketched in §2's original tree.
 
-See `current-state.md` §0 for why the un-migrated `core/`/`utils/` files are dead code from
-`dalmax.cli`'s point of view even though they still exist on disk, and `refactor-plan.md` Phase 4
-for the itemized move/delete list.
+See `current-state.md` for the live module map and `refactor-plan.md` Phase 4 for the executed
+move/delete list.
 
 ## 1. Goals (traced to `prompt-master.md` §4.3 / `.claude/rules/code-quality.md`)
 
@@ -65,15 +65,16 @@ dalmax/
 │                                  #   validates presence of keys instead of raising KeyError deep in query()
 ├── seeding.py                    # seed_everything(seed): np, torch, python random, deterministic cudnn flags
 ├── data/
-│   ├── datasets.py                # PoolDataset (was utils/data.py: Data), dataset-agnostic
+│   ├── datasets.py                # Data (was utils/data.py: Data — kept name, not renamed to
+│   │                              #   PoolDataset as originally sketched here; see landed-vs-residual table)
 │   ├── handlers.py                # torch Dataset wrappers (was utils/dataset.py)
-│   ├── loaders.py                 # load_daninhas(), load_cifar10(), load_cifar10_download()
+│   ├── loaders.py                 # get_DANINHAS(), get_CIFAR10(), get_CIFAR10_Download()
 │   │                              #   (was utils/data.py: get_DANINHAS/get_CIFAR10/get_CIFAR10_Download)
 │   └── registry.py                # DATASET_REGISTRY: name -> (loader, handler)
 ├── embeddings/
 │   ├── base.py                    # EmbeddingProvider(ABC): compute(images) -> np.ndarray; cache_key()
-│   ├── ssrae_provider.py           # wraps core/tools/SSRAE/{extractor,rnn,splitter}.py, Q from config
-│   ├── vctex_provider.py           # wraps core/tools/VCTex/VCTexMethod.py, Q from config
+│   ├── ssrae_provider.py           # wraps dalmax/tools/SSRAE/{extractor,rnn,splitter}.py, Q from config
+│   ├── vctex_provider.py           # wraps dalmax/tools/VCTex/VCTexMethod.py, Q from config
 │   ├── resnet_imagenet_provider.py # NEW (ablation 6.3): penultimate-layer features from the
 │   │                              #   ImageNet-pretrained ResNet50 already used in daninhas_resnet50.py
 │   ├── variants.py                 # slice_embedding(vector, variant, Q): "full"|"spatial"|"spectral"
@@ -91,28 +92,38 @@ dalmax/
 │   │                              #   k = budget, pick RANDOM samples per cluster, proportional to
 │   │                              #   cluster size relative to the budget — explicitly distinct from
 │   │                              #   flat_kmeans_closest.py (see ablation-study.md §6.3 note)
-│   ├── hierarchical_kmeans.py       # wraps core/tools/SSL/src/{hierarchical_kmeans_gpu,hierarchical_sampling,
+│   ├── hierarchical_kmeans.py       # wraps dalmax/tools/SSL/src/{hierarchical_kmeans_gpu,hierarchical_sampling,
 │   │                              #   clusters}.py; device resolved from ExperimentConfig.device, no hardcoded
 │   │                              #   "cuda"; n_clusters/n_levels/sample_sizes entirely from HierarchyConfig
 │   └── registry.py                  # SELECTION_REGISTRY: name -> SelectionStrategy class
 ├── query_strategies/
-│   ├── base.py                      # QueryStrategy(ABC), constructor takes (dataset, net, config, logger)
-│   │                              #   — config passed explicitly, no post-hoc setattr
-│   ├── uncertainty.py                # LeastConfidence, MarginSampling, EntropySampling (+ Dropout variants)
-│   ├── diversity.py                   # KMeansSampling, KCenterGreedy (operate on net embeddings, unchanged)
-│   ├── bayesian.py                     # BALDDropout
-│   ├── adversarial.py                   # AdversarialBIM, AdversarialDeepFool
+│   ├── base.py                      # Strategy(ABC) (was core/query_strategies/strategy.py), constructor
+│   │                              #   takes (dataset, net, config, logger) — no post-hoc setattr
+│   ├── random_sampling.py            # 12 legacy baseline classes, moved 1:1 from core/query_strategies/*.py
+│   ├── least_confidence.py            # (module names KEPT, not regrouped into uncertainty.py/diversity.py/
+│   ├── least_confidence_dropout.py     #  bayesian.py/adversarial.py as this file originally sketched —
+│   ├── margin_sampling.py               #  see the landed-vs-residual table above for why)
+│   ├── margin_sampling_dropout.py
+│   ├── entropy_sampling.py
+│   ├── entropy_sampling_dropout.py
+│   ├── bayesian_active_learning_disagreement_dropout.py
+│   ├── kcenter_greedy.py
+│   ├── kmeans_sampling.py
+│   ├── adversarial_bim.py
+│   ├── adversarial_deepfool.py
 │   ├── representation.py                 # ONE generic RepresentationStrategy(embedding_provider, selection_strategy)
-│   │                              #   replaces SSRAEKmeansSampling, VCTexKmeansSampling, SSRAEKmeansHCSampling,
-│   │                              #   VCTexKmeansHCSampling, and SSLStrategy as 4 fixed subclasses; the 4
-│   │                              #   existing CLI strategy names become config presets (embedding=ssrae|vctex,
-│   │                              #   selection=flat_closest|hierarchical) resolved through the two registries above
+│   │                              #   replaces (deleted) SSRAEKmeansSampling, VCTexKmeansSampling,
+│   │                              #   SSRAEKmeansHCSampling, VCTexKmeansHCSampling, and SSLStrategy as 4 fixed
+│   │                              #   subclasses; the 4 existing CLI strategy names become config presets
+│   │                              #   (embedding=ssrae|vctex, selection=flat_closest|hierarchical) resolved
+│   │                              #   through the two registries above
 │   └── registry.py                      # STRATEGY_REGISTRY: name -> factory(dataset, net, config, logger)
-│                                        #   replaces utils/orchestrator.py:get_strategy's if/elif
+│                                        #   replaces (deleted) utils/orchestrator.py:get_strategy's if/elif
 ├── models/
 │   ├── base.py                        # DeepLearning (was core/deep_learning.py), takes seeded rng,
-│   │                              #   no global cudnn side effect, load_model TODO resolved
-│   ├── daninhas_resnet50.py            # was core/daninhas_model.py, duplicate imports removed
+│   │                              #   no global cudnn side effect, load_model TODO still open (KI-22)
+│   ├── daninhas_resnet50.py            # was core/daninhas_model.py, duplicate imports removed,
+│   │                              #   unused DaninhasModelVitB16 dropped (not moved)
 │   ├── cifar10_cnn.py                   # was core/cifar10_model.py, duplicate imports removed
 │   └── registry.py                       # MODEL_REGISTRY: dataset name -> model class
 ├── experiment/
@@ -125,11 +136,14 @@ dalmax/
 │   ├── extract_confusion_matrices.py       #   descriptive names; CLI behavior preserved)
 │   ├── chunk_results.py
 │   ├── average_confusion_matrices.py
-│   └── average_results.py
-└── tools/                                 # vendored/adapted third-party code, unchanged in Phase 2-3
-    ├── ssrae/                              # was core/tools/SSRAE/
-    ├── vctex/                               # was core/tools/VCTex/
-    └── ssl/                                  # was core/tools/SSL/ (hierarchical_kmeans_gpu, hierarchical_sampling,
+│   ├── average_results.py
+│   ├── build_method_metrics.py             # (moved in from repo root; not in the original sketch)
+│   ├── plot_results_dir.py                  # (moved in from repo root; not in the original sketch)
+│   └── ablation_report.py                    # NEW (Phase 3): ablation-specific aggregation
+└── tools/                                 # vendored/adapted third-party code, contents unchanged since Phase 2-3
+    ├── SSRAE/                              # was core/tools/SSRAE/ — mixed-case dir name kept, not lowercased
+    ├── VCTex/                               # was core/tools/VCTex/ — mixed-case dir name kept, not lowercased
+    └── SSL/                                  # was core/tools/SSL/ (hierarchical_kmeans_gpu, hierarchical_sampling,
                                               #   clusters, kmeans_gpu — Meta-licensed code kept as-is per its LICENSE)
 ```
 
@@ -275,7 +289,8 @@ implemented-shape note above), replacing the two fixed paths `results/features_d
 ## 5. `embedding_variant` slicing (ablation 6.1 enabler)
 
 **Layout caveat (verified 2026-08-23)**: the SSRAE embedding `emb =
-hstack[β_R, β_G, β_B, β_S_RG, β_S_GB, β_S_BR]` (`core/tools/SSRAE/extractor.py:99`) is
+hstack[β_R, β_G, β_B, β_S_RG, β_S_GB, β_S_BR]` (`dalmax/tools/SSRAE/extractor.py`, was
+`core/tools/SSRAE/extractor.py:99`) is
 **row-interleaved, not six contiguous blocks**. Each `beta` block has shape `(9, Q+1)`;
 `torch.hstack` concatenates along columns (axis=1) into a `(9, 6*(Q+1))` matrix, and the
 subsequent row-major `.reshape((1, -1))` interleaves all six blocks per row. So
@@ -336,11 +351,12 @@ verifiable after the fact.
 
 ## 9. Registries replacing `if/elif`
 
-`DATASET_REGISTRY`, `MODEL_REGISTRY`, `STRATEGY_REGISTRY`, `SELECTION_REGISTRY` are plain
-`dict[str, Callable]` populated via a `@register("name")` decorator at import time in each module
-(no metaclass magic — keeps `code-quality.md`'s "every module importable without side effects").
-`utils/orchestrator.py`'s four functions collapse into thin `registry.get(name)` lookups that raise
-a clear `KeyError` listing valid names, instead of a bare `NotImplementedError`.
+`DATASET_REGISTRY`, `MODEL_REGISTRY`, `STRATEGY_REGISTRY`, `SELECTION_REGISTRY`,
+`EMBEDDING_REGISTRY` are plain `dict[str, ...]` with a `get_*` lookup function in each module (no
+metaclass/decorator magic — keeps `code-quality.md`'s "every module importable without side
+effects"). They replace the deleted `utils/orchestrator.py`'s four `if/elif` functions with thin
+`registry.get(name)` lookups that raise a clear `KeyError`/`ConfigError` listing valid names,
+instead of a bare `NotImplementedError`.
 
 ## 10. `ExperimentRunner` + `Reporter` + thin CLI
 

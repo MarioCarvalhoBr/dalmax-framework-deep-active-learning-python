@@ -72,8 +72,8 @@ re-run and now succeeded) for the batch being reported on.
 ## Aggregation and paper hand-off
 
 `dalmax.reporting.ablation_report` (step 4 above) is the current tool for this sweep specifically —
-it supersedes `utils/report/2_report_build_chunk_results.py` /
-`4_report_build_average_results.py` for the ablation family (those remain the tool for the main
+it supersedes `dalmax/reporting/chunk_results.py` /
+`average_results.py` for the ablation family (those remain the tool for the main
 `results/dalmax{1,2}/` sweeps, per `use-cases/generate-report.md`). Map the resulting
 `ablation_6_{1,2,3}.tex` tables to the correct paper location per
 `experiments/ablation-study.md`'s "Mapping to the paper's `\subsubsection`s" table.

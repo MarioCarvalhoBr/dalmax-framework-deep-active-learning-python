@@ -1,10 +1,11 @@
 # Use case: add a new query strategy
 
-**Status: rewritten 2026-08-23 for Phase 2.** The if/elif registry pattern this file originally
-described (`utils/orchestrator.py::get_strategy`) is now dead code, unreachable from
-`demo.py`/`dalmax.cli` (`.specs/architecture/current-state.md` §0) — `demo.py` routes through
-`dalmax/query_strategies/registry.py::build_strategy` instead. There are now **two** distinct ways
-to add a strategy, depending on what it actually needs; pick the right one before writing code.
+**Status: rewritten 2026-08-23 for Phase 2; paths updated 2026-08-23 for Phase 4's package move.**
+The if/elif registry pattern this file originally described (`utils/orchestrator.py::get_strategy`)
+was deleted entirely in Phase 4 (`core/` and `utils/` no longer exist on disk) — `demo.py` routes
+through `dalmax/query_strategies/registry.py::build_strategy` instead. There are now **two**
+distinct ways to add a strategy, depending on what it actually needs; pick the right one before
+writing code.
 
 ## Which path do you need?
 
@@ -75,18 +76,20 @@ identity (the way the four legacy names must keep reproducing their exact histor
 
 ## Path B — new legacy-style `Strategy` subclass (uncertainty/adversarial/etc.)
 
-Unchanged from before Phase 2, except step 3:
+Unchanged in spirit since Phase 2, with paths updated for the Phase 4 package move (`core/` and
+`utils/` no longer exist — everything is under `dalmax/` now):
 
-1. Create `core/query_strategies/<new_strategy_file>.py`, subclassing
-   `Strategy` (`core/query_strategies/strategy.py`). Constructor signature:
+1. Create `dalmax/query_strategies/<new_strategy_file>.py`, subclassing
+   `Strategy` (`dalmax/query_strategies/base.py`, was `core/query_strategies/strategy.py` pre-Phase-4).
+   Constructor signature:
    `def __init__(self, dataset, net, logger): super().__init__(dataset, net, logger)`. Implement
    `query(self, n)` returning an array of `n` unlabeled sample indices.
 2. Add `from .<new_strategy_file> import <NewStrategyClass>` to
-   `core/query_strategies/__init__.py`.
+   `dalmax/query_strategies/__init__.py`.
 3. **Register in `dalmax/query_strategies/registry.py::LEGACY_STRATEGY_REGISTRY`** (a plain dict
-   entry, `"<NewStrategyClass>": <NewStrategyClass>`) — **not** `utils/orchestrator.py::get_strategy`,
-   which is dead code as of Phase 2 (still present, still works if called directly, but unreachable
-   from `demo.py`/`dalmax.cli`; do not add new entries to it).
+   entry, `"<NewStrategyClass>": <NewStrategyClass>`) — the old if/elif alternative,
+   `utils/orchestrator.py::get_strategy`, was deleted entirely in Phase 4; there is no other place
+   to register a strategy any more.
 4. Add `"<NewStrategyClass>"` to `dalmax/cli.py`'s `--strategy_name` `choices=[...]` list.
 5. If the strategy needs new hyperparameters, add a typed field to
    `dalmax/config/schema.py::DatasetConfig` (or a nested config dataclass) and read it via
@@ -105,11 +108,11 @@ Unchanged from before Phase 2, except step 3:
 ## Do not use the pre-Phase-2 flow
 
 The previous version of this checklist described editing `utils/orchestrator.py`'s if/elif chain and
-`demo.py`'s `choices=[...]` list directly. `utils/orchestrator.py` is now dead code (unreachable) and
-`demo.py` is a 12-line shim with no `choices=[...]` of its own — edit `dalmax/cli.py` instead. Do not
-"fix" a strategy by making it reachable only through the legacy path; it must be reachable through
-`dalmax.cli.build_arg_parser()`'s `choices=[...]`, since that is what `demo.py`/`run_pipe_gpu_*.sh`
-actually invoke.
+`demo.py`'s `choices=[...]` list directly. `utils/orchestrator.py` was deleted entirely in Phase 4
+(it had been dead/unreachable since Phase 2), and `demo.py` is a 12-line shim with no
+`choices=[...]` of its own — edit `dalmax/cli.py` instead. Do not "fix" a strategy by making it
+reachable only through some other path; it must be reachable through `dalmax.cli.build_arg_parser()`'s
+`choices=[...]`, since that is what `demo.py`/`run_pipe_gpu_*.sh` actually invoke.
 
 ## Reference: current full strategy list (for cross-checking Path B step 4 / Path A step 3)
 

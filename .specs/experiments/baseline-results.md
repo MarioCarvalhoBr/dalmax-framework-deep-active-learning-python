@@ -44,7 +44,8 @@ results/dalmax1/daninhas_full/
 │   └── NQ_{10,50,100}_NIL_100_NR_8_NE_10/
 │       └── {strategy}/            # results.json, predictions.csv, plots, log, model
 ├── data_results.json              # aggregated per-seed/per-NQ/per-method summary (all_acc/precision/recall/f1_score)
-└── results/                       # output of utils/report pipeline
+└── results/                       # output of the reporting pipeline (utils/report/ at the time
+                                    # these results were generated; moved to dalmax/reporting/ in Phase 4)
     ├── AVERAGES/{NQ_10,NQ_50,NQ_100}_.../   # seed-averaged tables/plots
     └── SEED_{1,2,3}/
 ```
@@ -68,9 +69,10 @@ AdversarialBIM`): `all_acc=0.8295`, `all_precision=0.8935`,
 `all_recall=0.8295`, `all_f1_score=0.8442` — these look like **single scalar
 final-round values** (not per-round lists as in the raw `results.json`),
 i.e. this file is a post-processed summary, likely produced by
-`utils/report/2_report_build_chunk_results.py` or a similar script — TBD
+`utils/report/2_report_build_chunk_results.py` (now `dalmax/reporting/chunk_results.py`,
+renamed/moved in Phase 4) or a similar script — TBD
 confirm exactly which script writes `data_results.json` (not one of the
-numbered `utils/report/*.py` scripts inspected directly in this batch).
+`dalmax/reporting/*.py` scripts inspected directly in this batch).
 
 **This is the RNHAL reference source for ablation §6.3** ("RNHAL (full)"
 row) — use the `SSRAEKmeansHCSampling` entries at `n_query=100` across the

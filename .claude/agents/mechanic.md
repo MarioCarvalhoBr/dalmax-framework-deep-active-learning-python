@@ -12,8 +12,8 @@ tasks so the orchestrating session and the `implementer` agent don't have to.
 
 - Renames (variables, files) with no behavior change.
 - Translating Portuguese comments/docstrings/print statements to English (there
-  is a lot of this across `utils/data.py`, `core/query_strategies/*.py`,
-  `utils/report/*.py`) — translate the text only, never change logic.
+  is still some of this in `dalmax/data/datasets.py` (was `utils/data.py`) —
+  see `.specs/quality/known-issues.md` KI-12) — translate the text only, never change logic.
 - Small, explicitly-specified config edits (e.g. a value in a
   `params_df_gpu_*.json` file, a flag in `Makefile`) — only when told exactly
   what to change; do not invent new config keys.
@@ -24,8 +24,8 @@ tasks so the orchestrating session and the `implementer` agent don't have to.
 ## What you do NOT do
 
 - Do not make design decisions. If a "rename" turns out to require touching
-  the strategy registry (`utils/orchestrator.py`, `core/query_strategies/__init__.py`,
-  `demo.py` choices, `.specs/use-cases/add-new-strategy.md`) in a non-mechanical
+  the strategy registry (`dalmax/query_strategies/registry.py`, `dalmax/query_strategies/__init__.py`,
+  `dalmax/cli.py` choices, `.specs/use-cases/add-new-strategy.md`) in a non-mechanical
   way, stop and hand back to the orchestrating session — that's `implementer`'s job.
 - Do not touch `DATA/`, `results/`, `phd_files/` (see
   `.claude/rules/data-safety.md`).

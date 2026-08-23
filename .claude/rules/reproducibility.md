@@ -21,10 +21,10 @@ locations.
   from the `--seed` CLI argument (see `run_pipe_gpu_0.sh` / `run_pipe_gpu_1.sh`,
   which sweep `SEEDS=(1 2 3)`, still valid — the CLI flag and sweep are unchanged, only where the
   seeding happens moved to `dalmax/seeding.py`).
-- **Known violation, now fixed**: `core/query_strategies/ssrae_kmeans_sampling.py`
-  instantiates `KMeans(n_clusters=n, random_state=3, n_init=10)` — the `3` is a
-  literal, completely ignoring `--seed`. This file is unchanged and still has the bug, but is now
-  dead code, unreachable from `demo.py`/`dalmax.cli` (`.specs/architecture/current-state.md` §0).
+- **Known violation, now fixed**: the now-deleted `core/query_strategies/ssrae_kmeans_sampling.py`
+  used to instantiate `KMeans(n_clusters=n, random_state=3, n_init=10)` — the `3` was a
+  literal, completely ignoring `--seed`. That file (and its bug) was deleted in Phase 4, having been
+  dead code/unreachable from `dalmax.cli` since Phase 2 (`.specs/architecture/current-state.md`).
   Its replacement, `dalmax/selection/flat_kmeans_closest.py::FlatKMeansClosest`, derives
   `KMeans(random_state=...)` from `np.random.default_rng(dalmax.seeding.derive_seed(config.seed,
   "selection"))` — verified by the regenerated `tests/golden/ssrae_kmeans_micro_seed1.json` fixture.
@@ -63,12 +63,12 @@ keying above makes this impossible by construction as long as the key components
 correctly; still sanity-check the actual filename before trusting an ablation's cached embeddings.
 
 The `utils/data.py::cache_file_path(name, dataset_folder, q=None, pool_hash=None)` helper described
-below (Phase 1 fix) still exists verbatim but is now **dead code** — only reached when
-`Data.initialize_labels(..., compute_legacy_features=True)`, which `dalmax.experiment.runner.ExperimentRunner`
-never passes (`current-state.md` §0). Kept for the historical record:
+below (Phase 1 fix) was **deleted in Phase 4** along with the rest of `utils/data.py` — it had been
+dead code since Phase 2, only reached when `Data.initialize_labels(..., compute_legacy_features=True)`,
+which `dalmax.experiment.runner.ExperimentRunner` never passed. Kept for the historical record:
 
-- `utils/data.py`'s `cache_file_path(name, dataset_folder, q=None, pool_hash=None)`
-  keys SSRAE/VCTex feature caches and `Y_train` under `results/cache/` as
+- `utils/data.py`'s (deleted) `cache_file_path(name, dataset_folder, q=None, pool_hash=None)`
+  keyed SSRAE/VCTex feature caches and `Y_train` under `results/cache/` as
   `{name}_{dataset_folder}[_Q{q}[_pool{pool_hash}]].pkl` (e.g.
   `results/cache/features_ssrae_daninhas_micro_Q13_pool<12-hex>.pkl`). SSRAE/VCTex
   feature extraction runs only over the **unlabeled pool** at the moment

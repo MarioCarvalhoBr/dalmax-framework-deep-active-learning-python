@@ -4,7 +4,10 @@ Status: Phase 1 is complete as of 2026-08-23 — `test_imports.py`, `test_regist
 `test_ssrae_embedding_layout.py`, `test_cache_paths.py` (85 tests total under
 `pytest -m "not gpu and not dataset and not slow"`) plus the golden-run fixtures and
 `test_golden_run.py` described in item 4 below. Runs on the no-GPU local dev notebook unless marked
-otherwise.
+otherwise. **Phase 4 (2026-08-23) moved `core/`/`utils/` into `dalmax/` and deleted the superseded
+files** — 277 tests now pass under the same fast-marker selection; `test_imports.py`/`test_registry.py`
+were updated in that batch to target `dalmax/` instead of the deleted legacy packages (see items 1-2
+below for what changed).
 
 ## Markers
 
@@ -22,19 +25,27 @@ tests before a batch (this is part of what the `experiment-auditor` agent checks
 
 ## Now (Phase 1) — the safety net
 
-1. **`tests/test_imports.py`** — every module under `core/` and `utils/` imports cleanly
-   (`import core.query_strategies`, `import core.tools.SSRAE.extractor`, etc.), with GPU-only
-   modules (anything importing `core.tools.SSL.src.kmeans_gpu` at module scope, if it turns out to
-   require CUDA at import time — verify before marking) skipped or marked `gpu` as needed.
-2. **`tests/test_registry.py`** — every `strategy_name` in `demo.py`'s `argparse` `choices=[...]`
-   list resolves via `utils/orchestrator.get_strategy(name)` without raising, and returns a subclass
-   of `core.query_strategies.strategy.Strategy`. This is the regression test for the
-   `if/elif` chains staying in sync with the CLI, called out explicitly in
-   `.claude/agents/code-reviewer.md`'s responsibilities.
+1. **`tests/test_imports.py`** — **updated in Phase 4**: dynamically walks every module under
+   `dalmax/` (`pkgutil.walk_packages`, not a hardcoded list) and asserts each imports cleanly, with
+   a small `SKIP_MODULES` dict for standalone vendored scripts that are only meant to run directly
+   (`dalmax.tools.SSRAE.classification`, `dalmax.tools.VCTex.classification` — non-relative imports
+   + module-level side effects). Before Phase 4 this test walked the legacy `core`/`utils` packages
+   (`import core.query_strategies`, `import core.tools.SSRAE.extractor`, etc.); those packages no
+   longer exist.
+2. **`tests/test_registry.py`** — **updated in Phase 4**: every `--strategy_name` choice parsed out
+   of `dalmax/cli.py`'s source (via `ast`, never importing `dalmax.cli` directly — see that test's
+   module docstring) matches `dalmax.query_strategies.registry.STRATEGY_REGISTRY`'s keys exactly.
+   This file previously also tested the legacy `utils.orchestrator.get_strategy` `if/elif` registry
+   directly against `core.query_strategies.strategy.Strategy` — both `utils/orchestrator.py` and
+   `core/query_strategies/` were deleted in Phase 4 once the `dalmax` registries fully replaced them
+   (see `current-state.md` §0). `build_strategy`'s own behavior (presets, `ConfigError`s, seed
+   derivation, constructing every legacy class) is now covered by `tests/test_strategy_registry.py`.
+   This is the regression test for the strategy registry staying in sync with the CLI, called out
+   explicitly in `.claude/agents/code-reviewer.md`'s responsibilities.
 3. **`tests/test_ssrae_embedding_layout.py`** — on a tiny random RGB array (e.g. `16x16x3`) and a
    small `Q` (e.g. `Q=4`), assert `ColorFeatureExtractor(Q).extract(image)`:
    - has length divisible by 6 (six blocks: `β_R, β_G, β_B, β_S_R, β_S_G, β_S_B`, confirmed at
-     `core/tools/SSRAE/extractor.py:99`),
+     `dalmax/tools/SSRAE/extractor.py` (was `core/tools/SSRAE/extractor.py:99`, moved in Phase 4)),
    - **Layout caveat (verified 2026-08-23)**: the layout is **row-interleaved**, not six
      contiguous blocks — `emb.reshape(9, 6*(Q+1))` gives column-groups `[R, G, B, RG, GB, BR]`
      (each width `Q+1`); `emb[:len(emb)//2]` is NOT spatial-only and `emb[len(emb)//2:]` is NOT
@@ -56,11 +67,13 @@ tests before a batch (this is part of what the `experiment-auditor` agent checks
    for both strategies** — no CPU-training nondeterminism was found in this configuration. Recorded
    as `tests/golden/random_sampling_micro_seed1.json` and `tests/golden/ssrae_kmeans_micro_seed1.json`
    (indices + metrics + exact CLI/params + git commit + notes). The SSRAE golden run required a
-   minimal, explicitly-scoped Phase 1 exception: `utils/data.py`'s `cache_file_path()` helper keys the
-   SSRAE/VCTex/`Y_train` pickle caches on dataset folder name (+ `Q`) instead of a fixed path, so the
-   micro-dataset run computes/reads `results/cache/features_ssrae_daninhas_micro_Q13.pkl` and never
-   touches the pre-existing full-dataset `results/features_dict_ssrae.pkl` (left on disk, untouched;
-   partial fix of KI-3, see `known-issues.md`). Note the SSRAE query indices are a function of
+   minimal, explicitly-scoped Phase 1 exception: `utils/data.py`'s `cache_file_path()` helper (this
+   whole file was deleted in Phase 4, superseded by `dalmax/embeddings/cache.py::EmbeddingCache` —
+   see KI-3 in `known-issues.md`) keyed the SSRAE/VCTex/`Y_train` pickle caches on dataset folder
+   name (+ `Q`) instead of a fixed path, so the micro-dataset run computed/read
+   `results/cache/features_ssrae_daninhas_micro_Q13.pkl` and never touched the pre-existing
+   full-dataset `results/features_dict_ssrae.pkl` (left on disk, untouched; partial fix of KI-3, see
+   `known-issues.md`). Note the SSRAE query indices are a function of
    `SSRAEKmeansSampling`'s hardcoded `KMeans(random_state=3)` (KI-5), not of `--seed` — expected to
    change (and the fixture to be regenerated) once Phase 2's seed-propagation audit lands.
    `tests/test_golden_run.py` (marked `dataset`+`slow`) regenerates the micro dataset if needed, runs
@@ -81,7 +94,8 @@ tests before a batch (this is part of what the `experiment-auditor` agent checks
    using a mock/spy).
 7. **Hierarchy config validation**: `config/schema.py`'s `HierarchyConfig` rejects
    `len(n_clusters) != n_levels` or `len(sample_sizes) != n_levels` at load time (mirrors the
-   `assert` in `core/tools/SSL/src/hierarchical_kmeans_gpu.py:134-135`, but surfaced as a clear
+   `assert` in `dalmax/tools/SSL/src/hierarchical_kmeans_gpu.py` (was `core/tools/SSL/src/
+   hierarchical_kmeans_gpu.py:134-135`, moved in Phase 4), but surfaced as a clear
    validation error instead of a bare `AssertionError` deep in `query()`).
 8. **Registry completeness**: `STRATEGY_REGISTRY`, `DATASET_REGISTRY`, `MODEL_REGISTRY`,
    `SELECTION_REGISTRY` each have at least the entries the current CLI/`config_kmh` schema requires;

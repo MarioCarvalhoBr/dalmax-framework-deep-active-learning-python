@@ -29,7 +29,7 @@ DATA/daninhas_full/
 └── arquivos.txt          # pre-computed per-class file counts (see below)
 ```
 
-Loaded by `utils.data.get_DANINHAS`: classes are discovered as
+Loaded by `dalmax.data.loaders.get_DANINHAS` (was `utils.data.get_DANINHAS`, moved in Phase 4): classes are discovered as
 `sorted(os.listdir(train_dir))` (i.e. the 5 `DATASET_*` folder names, sorted
 alphabetically — this sort order fixes the integer class index mapping used
 everywhere downstream, e.g. in confusion matrices). Images are opened,
@@ -67,9 +67,10 @@ rounding/an off-by-one, not investigated further.)
   (`MAMONA` vs `BRACHIARIA`). Test-set imbalance ratio:
   `970/155 ≈ 6.26×` (`GRAMINEA` vs `OUTRAS_FOLHAS_LARGAS`).
 - No class-balancing (oversampling, class weights, stratified sampling) was
-  observed in `utils/data.py`, `core/daninhas_model.py` (not read in this
+  observed in `dalmax/data/datasets.py` (was `utils/data.py`),
+  `dalmax/models/daninhas_resnet50.py` (was `core/daninhas_model.py`; not read in this
   batch — TBD confirm no `class_weight`/`WeightedRandomSampler` there), or
-  `demo.py`. The active-learning initial pool
+  `demo.py`/`dalmax/cli.py`. The active-learning initial pool
   (`Data.initialize_labels`) is a uniform random draw of `n_init_labeled`
   images from the **full, imbalanced** train pool
   (`np.random.shuffle(tmp_idxs); labeled_idxs[tmp_idxs[:n_init_labeled]] = True`)
@@ -78,9 +79,15 @@ rounding/an off-by-one, not investigated further.)
 ## Secondary dataset — CIFAR10
 
 `DATA/DATA_CIFAR10/` is used as a secondary benchmark
-(`utils.data.get_CIFAR10`, same folder-per-class loading pattern, images
+(`dalmax.data.loaders.get_CIFAR10`, was `utils.data.get_CIFAR10`, moved in Phase 4;
+same folder-per-class loading pattern, images
 resized to 32×32, 10 balanced classes by construction). Not affected by the
 daninhas-specific hardcodes noted in `known-issues.md` (owned by another
-batch) except for the `SSLStrategy` hardcoded `'DANINHAS'` params key, which
-prevents `SSRAEKmeansHCSampling`/`VCTexKmeansHCSampling` from running
-against CIFAR10 at all today (see `experiments/ablation-study.md` §6.2).
+batch). The `SSLStrategy` hardcoded `'DANINHAS'` params key that used to block
+`SSRAEKmeansHCSampling`/`VCTexKmeansHCSampling` from running against CIFAR10 at
+all (KI-4) was resolved in Phase 2 and the file itself deleted in Phase 4; what
+remains is a content gap, not a code gap — `params_df_gpu_*.json`'s `CIFAR10`
+block still has no `config_kmh`/`selection.hierarchy` entry, so those two
+strategies raise a `dalmax.config.schema.ConfigError` (not a `KeyError`) against
+CIFAR10 until one is added (KI-23, still open — see
+`experiments/ablation-study.md` §6.2).

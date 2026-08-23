@@ -12,13 +12,14 @@ session: silent misconfiguration that only shows up after hours of training.
 ## What to verify, every time
 
 1. **Seeds propagated everywhere.** Grep for `random_state=` and any other
-   seeding call across `core/query_strategies/*.py`, `core/deep_learning.py`,
-   `utils/*.py`. Flag any **hardcoded** seed that ignores the experiment's
-   `--seed` CLI argument — the known offender is
+   seeding call across `dalmax/query_strategies/*.py`, `dalmax/models/base.py`,
+   `dalmax/selection/*.py`, `dalmax/seeding.py`. Flag any **hardcoded** seed that ignores the
+   experiment's `--seed` CLI argument. The historical offender,
    `core/query_strategies/ssrae_kmeans_sampling.py`'s
-   `KMeans(n_clusters=n, random_state=3, n_init=10)`. If it is still present and
-   the run being audited uses `SSRAEKmeansSampling`/`SSRAEKmeansHCSampling`,
-   flag that every seed in `SEEDS=(1 2 3)` will produce identical clustering.
+   `KMeans(n_clusters=n, random_state=3, n_init=10)`, was deleted in Phase 4; its replacement,
+   `dalmax/selection/flat_kmeans_closest.py::FlatKMeansClosest`, derives its `random_state` from
+   `dalmax.seeding.derive_seed(config.seed, "selection")` — confirm any *new* selection/strategy
+   code follows the same pattern rather than reintroducing a literal.
 
 2. **Params JSON consistent with the spec.** Compare the params file about to
    be used (e.g. `params_df_gpu_0.json`, `params_df_gpu_1.json`) against
@@ -26,26 +27,31 @@ session: silent misconfiguration that only shows up after hours of training.
    run, `.specs/experiments/ablation-study.md`: `n_epoch`, `batch_size`, `lr`,
    `momentum`, `n_classes`, and `config_kmh` (`n_clusters`, `n_levels`,
    `sample_sizes`) must match what the spec says should be run. Also check
-   `config_kmh` is actually reachable — `core/query_strategies/ssl_ssrae_sampling.py`
-   currently reads it via the hardcoded `self.params['DANINHAS']['config_kmh']`,
-   so this only works for `--dataset_name DANINHAS`; flag if the audited run
-   targets any other dataset with a hierarchical strategy.
+   the hierarchy config is actually reachable —
+   `dalmax/selection/hierarchical_kmeans.py::HierarchicalKMeansSelection` reads it via
+   `config.dataset.selection.hierarchy` (resolved per the actual `dataset_name`, no hardcoded
+   key), but `params_df_gpu_*.json`'s `CIFAR10` block still has no `config_kmh`/`selection.hierarchy`
+   entry (`.specs/quality/known-issues.md` KI-23, open); flag if the audited run targets `CIFAR10`
+   (or any dataset without that block) with a hierarchical strategy — it will raise a
+   `dalmax.config.schema.ConfigError`, not silently misbehave, but the run still won't start.
 
 3. **Results directory naming.** Confirm the expected output path matches
-   `demo.py`'s convention:
+   `dalmax/experiment/runner.py`'s convention:
    `{dir_results}/{dataset_folder}/SEED_{seed}/NQ_{n_query}_NIL_{n_init_labeled}_NR_{n_round}_NE_{n_epoch}/{strategy_name}/`
    and that `--dir_results` in the run script (e.g. `results/dalmax1/` in
    `run_pipe_gpu_0.sh`, `results/dalmax2/` in `run_pipe_gpu_1.sh`) does not
    collide with an existing run whose results must not be overwritten
    (`.claude/rules/data-safety.md`: `results/` is append-only).
 
-4. **Embedding cache validity.** Check whether `results/features_dict_ssrae.pkl`,
-   `results/features_dict_vctex.pkl`, `results/Y_train.pkl` already exist on
-   disk. Because `utils/data.py` has no cache key for `(dataset, Q, variant)`,
-   an existing cache from a prior run (different `Q`, different dataset,
-   different ablation `embedding_variant`) will be silently reused. If the
-   audited run needs a specific `Q`/variant, flag that these files must be
-   verified or deleted/regenerated first — never let the auditor delete them
+4. **Embedding cache validity.** Check `results/cache/embeddings/` for existing
+   `{dataset}__{extractor}__Q{q}__{variant}__{split}__pool{pool_hash}.pkl` files
+   (`dalmax/embeddings/cache.py::EmbeddingCache`). The key already includes `(dataset, extractor, Q,
+   variant, split, pool_hash)`, so a stale cache from a different `Q`/dataset/variant cannot be
+   silently reused by construction — but still sanity-check the actual filename against the run's
+   config before trusting it. Also note that the pre-Phase-2 unkeyed
+   `results/features_dict_ssrae.pkl`/`results/features_dict_vctex.pkl`/`results/Y_train.pkl` files
+   may still be sitting on the lab machine's disk, orphaned and unread by any current code path
+   (`.specs/quality/known-issues.md` KI-3) — never let the auditor delete them
    itself (that would violate the append-only/no-destructive-ops posture);
    report the risk and recommend the action to a human or to a task explicitly
    authorized to do it.

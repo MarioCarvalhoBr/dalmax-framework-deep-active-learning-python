@@ -45,17 +45,15 @@ torchvision==0.20.0
 tqdm==4.67.1
 ```
 
-**Missing `pandas`** — imported by `demo.py` (`import pandas as pd`, used
-for `predictions.csv` export) and by every script in `utils/report/`
-(`import pandas as pd`), but absent from this list. This is a real bug: a
-fresh `pip install -r requirements.txt` followed by `python demo.py ...`
-would raise `ModuleNotFoundError: pandas` the first time `predictions_df =
-pd.DataFrame(...)` executes (end of a full run, after training — i.e. the
-failure surfaces late, wasting a full training run's compute). The
-Poetry `pyproject.toml` (owned by the other batch) is expected to add
-`pandas` as a fix; once `export-reqs` is run for real, the exported
-`requirements.txt` will include it and should replace the hand-maintained
-one above as the canonical file for lab/Colab installs.
+**Missing `pandas` (historical, resolved in Phase 1 — KI-2)** — imported by `demo.py`
+(`import pandas as pd`, used for `predictions.csv` export) and by every script in
+`dalmax/reporting/` (was `utils/report/`) (`import pandas as pd`); was absent from the
+hand-maintained `requirements.txt` snapshot shown above. This was a real bug at the time: a fresh
+`pip install -r requirements.txt` followed by `python demo.py ...` would raise
+`ModuleNotFoundError: pandas` the first time `predictions_df = pd.DataFrame(...)` executes (end of
+a full run, after training — i.e. the failure surfaces late, wasting a full training run's
+compute). **Status: resolved** — `pyproject.toml` declares `pandas==2.2.3` and `requirements.txt`
+has since been re-exported to include it; see `.specs/quality/known-issues.md` KI-2.
 
 Lab machine / Colab install procedure:
 ```

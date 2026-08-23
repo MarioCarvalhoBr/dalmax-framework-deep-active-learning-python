@@ -1,24 +1,38 @@
 # Use case: generate a report from a results directory
 
-The `utils/report/` pipeline turns raw per-run `results.json`/
-`predictions.csv` output into seed-averaged tables and plots. Scripts are
-numbered `1_` through `4_` suggesting an intended order, plus two
-standalone helpers (`build_method_metrics.py`, `plot_results_dir.py`).
-Only script **headers/signatures** (first ~40 lines each) were read for
-this batch — bodies beyond that were not fully traced; treat the ordering
-and I/O below as verified only to that depth, and confirm exact CSV/plot
-schemas before depending on them for the paper.
+The `dalmax/reporting/` pipeline (moved and renamed from `utils/report/`'s numbered `1_` through
+`4_` scripts in Phase 4) turns raw per-run `results.json`/`predictions.csv` output into
+seed-averaged tables and plots, plus two standalone helpers (`build_method_metrics.py`,
+`plot_results_dir.py`) and the Phase 3 `ablation_report.py`. Only script **headers/signatures**
+(first ~40 lines each) were read for this batch — bodies beyond that were not fully traced; treat
+the ordering and I/O below as verified only to that depth, and confirm exact CSV/plot schemas
+before depending on them for the paper.
+
+## File renaming (Phase 4)
+
+| Old name (`utils/report/`) | New name (`dalmax/reporting/`) |
+|---|---|
+| `1_cm_extract_from_pdf.py` | `extract_confusion_matrices.py` |
+| `2_report_build_chunk_results.py` | `chunk_results.py` |
+| `3_cm_build_average.py` | `average_confusion_matrices.py` |
+| `4_report_build_average_results.py` | `average_results.py` |
+| `build_method_metrics.py` (was at repo root) | `build_method_metrics.py` |
+| `plot_results_dir.py` (was at repo root) | `plot_results_dir.py` |
+
+Each script is runnable either as a file path (`python dalmax/reporting/<name>.py ...`) or as a
+module (`python -m dalmax.reporting.<name> ...`) — both forms are documented in the script's own
+header comment. CLI flags/behavior are otherwise unchanged by the move.
 
 ## Pipeline order (as suggested by filenames and doc-comments)
 
-1. **`1_cm_extract_from_pdf.py`** — extracts the confusion-matrix numbers
+1. **`extract_confusion_matrices.py`** (was `1_cm_extract_from_pdf.py`) — extracts the confusion-matrix numbers
    back out of the `confusion_matrix.pdf` a run produced, by regex-matching
    the text between `"True"` and `"Confusion Matrix"` in the PDF's
    extracted text (via `PyPDF2`). Useful when only the PDF survived and the
    underlying array wasn't otherwise persisted. Not needed for runs where
    the raw prediction data (`predictions.csv`) is available, since a
    confusion matrix can be recomputed directly from it.
-2. **`2_report_build_chunk_results.py`** — example usage in its header:
+2. **`chunk_results.py`** (was `2_report_build_chunk_results.py`) — example usage in its header:
    `python 2_report_build_chunk_results.py --input_dir results/dalmax1/daninhas_full/ --pattern SEED*`.
    Reads per-seed `results.json` files, groups by `n_query` config
    (`NQ_*` folder) and by method (strategy), and builds CSV tables per the
@@ -26,14 +40,14 @@ schemas before depending on them for the paper.
    to `all_acc`/`all_precision`/`all_recall`/`all_f1_score`). This is the
    likely source of `results/dalmax1/daninhas_full/data_results.json` (not
    confirmed by reading the full body — TBD).
-3. **`3_cm_build_average.py`** — example usage:
+3. **`average_confusion_matrices.py`** (was `3_cm_build_average.py`) — example usage:
    `python3 3_cm_build_average.py --input_dir results/dalmax1/daninhas_full/results/ --pattern SEED*`.
    Same `MetricsType`/`create_csv_tables` structure as script 2; averages
    confusion-matrix-derived data across seeds. Note its default `--input_dir`
    points at `.../results/` (the report-pipeline's own output subfolder),
    i.e. it consumes script 2's output, not the raw `SEED_*` run
    directories directly.
-4. **`4_report_build_average_results.py`** — example usage:
+4. **`average_results.py`** (was `4_report_build_average_results.py`) — example usage:
    `python 4_report_build_average_results.py --input_dir results/dalmax1/daninhas_full/results/ --pattern SEED*`.
    Same structure again; produces the final seed-averaged results — this is
    almost certainly what populates
@@ -66,7 +80,7 @@ table, or consider consolidating them (candidate refactor-plan item, see
   observed protocol default (`n_init_labeled=100`, `n_epoch=10`) but will
   silently mismatch if either changes.
 - **`plot_results_dir.py`** — example usage:
-  `python utils/plot_results_dir.py --dir_input results/new_dalmax_balanceado_train_10_epochs_10_n_query`
+  `python dalmax/reporting/plot_results_dir.py --dir_input results/new_dalmax_balanceado_train_10_epochs_10_n_query`
   (a directory name pattern not otherwise seen in this batch's observed
   `results/` listing — likely from an earlier project iteration). Reads
   every subfolder's `results.json` directly (one level, not `SEED_*`
@@ -77,9 +91,9 @@ table, or consider consolidating them (candidate refactor-plan item, see
 ## Recommended invocation for a finished sweep
 
 ```
-python utils/report/2_report_build_chunk_results.py --input_dir results/<run>/daninhas_full/ --pattern "SEED*"
-python utils/report/3_cm_build_average.py           --input_dir results/<run>/daninhas_full/results/ --pattern "SEED*"
-python utils/report/4_report_build_average_results.py --input_dir results/<run>/daninhas_full/results/ --pattern "SEED*"
+python dalmax/reporting/chunk_results.py               --input_dir results/<run>/daninhas_full/ --pattern "SEED*"
+python dalmax/reporting/average_confusion_matrices.py   --input_dir results/<run>/daninhas_full/results/ --pattern "SEED*"
+python dalmax/reporting/average_results.py              --input_dir results/<run>/daninhas_full/results/ --pattern "SEED*"
 ```
 
 then inspect `results/<run>/daninhas_full/results/AVERAGES/` for the final

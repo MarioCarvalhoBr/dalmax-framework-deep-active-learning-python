@@ -9,18 +9,18 @@ not decoration. Specs and rules must never drift from what the code actually doe
    protocol MUST update the corresponding `.specs/` file in the same task.**
    Examples of triggers and their target spec files:
    - Adding/removing a `demo.py --strategy_name` choice, or editing
-     `utils/orchestrator.get_strategy` / `core/query_strategies/__init__.py` →
+     `dalmax/query_strategies/registry.py` / `dalmax/query_strategies/__init__.py` →
      update `.specs/use-cases/add-new-strategy.md` and
      `.specs/architecture/current-state.md`.
    - Changing `params_df_gpu_*.json` schema (e.g. `config_kmh`, `n_classes`) →
      update `.specs/experiments/experimental-protocol.md`.
-   - Changing results directory naming in `demo.py`
+   - Changing results directory naming in `dalmax/experiment/runner.py`
      (`{dir_results}/{dataset}/SEED_{seed}/NQ_{n_query}_NIL_{n_init}_NR_{n_round}_NE_{n_epoch}/{strategy}/`) →
      update `.specs/experiments/experimental-protocol.md` and
      `.specs/research-rules/reproducibility.md`.
-   - Changing the embedding cache (`results/features_dict_ssrae.pkl`,
-     `results/features_dict_vctex.pkl`, `results/Y_train.pkl`) or the SSRAE `Q`
-     value in `utils/data.py` → update `.specs/experiments/ablation-study.md`
+   - Changing the embedding cache (`dalmax/embeddings/cache.py::EmbeddingCache`,
+     `results/cache/embeddings/*.pkl`) or the SSRAE `Q`
+     value (`dalmax/config/loader.py`) → update `.specs/experiments/ablation-study.md`
      (representation ablation section) and `.specs/quality/known-issues.md`.
 
 2. **New architectural decisions get an ADR** in `.specs/adr/`, following
@@ -36,8 +36,8 @@ not decoration. Specs and rules must never drift from what the code actually doe
 
 ## Practical checklist before closing a task
 
-- [ ] Did this change touch `demo.py` CLI args, `utils/orchestrator.py`, or
-      `core/query_strategies/__init__.py`? → update `.specs/use-cases/add-new-strategy.md`.
+- [ ] Did this change touch `demo.py`/`dalmax/cli.py` CLI args, `dalmax/query_strategies/registry.py`, or
+      `dalmax/query_strategies/__init__.py`? → update `.specs/use-cases/add-new-strategy.md`.
 - [ ] Did this change touch a params JSON schema or the results directory layout?
       → update `.specs/experiments/experimental-protocol.md`.
 - [ ] Did this change introduce a new module, provider, or registry?
