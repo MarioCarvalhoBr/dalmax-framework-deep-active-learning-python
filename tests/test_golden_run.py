@@ -152,3 +152,20 @@ def test_golden_run_reproduces_indices_and_metrics(fixture_path: Path, tmp_path:
         assert len(actual_values) == len(expected_values)
         for actual_v, expected_v in zip(actual_values, expected_values, strict=True):
             assert actual_v == pytest.approx(expected_v, abs=1e-6)
+
+    # New in Phase 2 (dalmax.experiment.run_metadata, see
+    # .claude/rules/reproducibility.md "Config snapshot"): every run must
+    # write enough to reconstruct it (config + git commit) into its own
+    # results directory, alongside results.json/predictions.csv/plots.
+    for macro_key in ("all_precision_macro", "all_recall_macro", "all_f1_macro"):
+        assert macro_key in actual_results, f"missing macro metrics key {macro_key!r} in results.json"
+        assert len(actual_results[macro_key]) == len(actual_results["all_acc"])
+
+    run_metadata_path = leaf_dir / "run_metadata.json"
+    assert run_metadata_path.exists(), f"expected run_metadata.json at {run_metadata_path}"
+    with open(run_metadata_path) as f:
+        run_metadata = json.load(f)
+    assert "git_commit" in run_metadata
+    assert "config" in run_metadata
+    assert run_metadata["config"]["strategy_name"] == strategy_name
+    assert run_metadata["config"]["seed"] == seed
