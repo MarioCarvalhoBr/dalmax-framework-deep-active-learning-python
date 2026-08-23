@@ -13,14 +13,36 @@ from core.tools.VCTex.VCTexMethod import VCTexMethod
 
 import time
 
+
+def cache_file_path(name: str, dataset_folder: str, q: int | list[int] | None = None) -> str:
+    """Build a cache file path keyed by dataset folder name (and Q, if given).
+
+    Prevents the hazard described in `.claude/rules/reproducibility.md` and
+    `.specs/quality/known-issues.md` KI-3: a cache file computed for one
+    dataset/Q silently being reused for another. Files live under
+    `results/cache/` (created if missing) so they never collide with the
+    legacy fixed-path caches (`results/features_dict_ssrae.pkl`,
+    `results/features_dict_vctex.pkl`, `results/Y_train.pkl`), which are left
+    in place untouched for backward compatibility.
+    """
+    cache_dir = "results/cache/"
+    os.makedirs(cache_dir, exist_ok=True)
+    if q is None:
+        return f"{cache_dir}{name}_{dataset_folder}.pkl"
+    q_str = "-".join(str(v) for v in q) if isinstance(q, (list, tuple)) else str(q)
+    return f"{cache_dir}{name}_{dataset_folder}_Q{q_str}.pkl"
+
+
 class Data:
-    def __init__(self, X_train, Y_train,Z_train_paths, X_test, Y_test,Z_test_paths, handler, classes, class_to_idx):
+    def __init__(self, X_train, Y_train,Z_train_paths, X_test, Y_test,Z_test_paths, handler, classes, class_to_idx, dataset_folder: str = "unknown"):
         self.classes = classes
         self.class_to_idx = class_to_idx
+        self.dataset_folder = dataset_folder
         self.X_train = X_train
         self.Y_train = Y_train
-        # Save Y_train with picke in results/Y_train.pkl
-        path_pkl = 'results/Y_train.pkl'
+        # Save Y_train with pickle, keyed by dataset folder name so different
+        # datasets never share this cache file (see cache_file_path above).
+        path_pkl = cache_file_path("Y_train", self.dataset_folder)
         if not os.path.exists(path_pkl):
             with open(path_pkl, 'wb') as f:
                 pickle.dump(self.Y_train, f)
@@ -44,8 +66,12 @@ class Data:
         self.create_indexes_path()
         
     def create_feature_maps_vctex(self):
-        # Verifica se o arquivo results/features_dict_vctex.pkl existe. Se sim, carrega e adiciona a features_dict
-        path_pkl = 'results/features_dict_vctex.pkl'
+        # Method's hyperparameters.
+        Q = [5, 17]  # best parameters of the paper. You can test different values
+
+        # Cache is keyed by dataset folder name and Q so different datasets or
+        # Q values never silently share a cache file (see cache_file_path).
+        path_pkl = cache_file_path("features_vctex", self.dataset_folder, Q)
         if os.path.exists(path_pkl):
             with open(path_pkl, 'rb') as f:
                 self.features_dict = pickle.load(f)
@@ -65,9 +91,6 @@ class Data:
             
             # Device.
             device = torch.device("cuda:0")
-
-            # Method's hyperparameters.
-            Q = [5,17] #best parameters of the paper. You can test different vales 
 
             # Instantiate the color feature extractor.
             extractor = VCTexMethod(Q=Q, device=device)
@@ -115,9 +138,12 @@ class Data:
         
 
     def create_feature_maps_ssrae(self):
+        # Method's hyperparameters.
+        Q = 13  # The number of hidden neurons.
 
-        # Verifica se o arquivo results/features_dict_ssrae.pkl existe. Se sim, carrega e adiciona a features_dict
-        path_pkl = 'results/features_dict_ssrae.pkl'
+        # Cache is keyed by dataset folder name and Q so different datasets or
+        # Q values never silently share a cache file (see cache_file_path).
+        path_pkl = cache_file_path("features_ssrae", self.dataset_folder, Q)
         if os.path.exists(path_pkl):
             with open(path_pkl, 'rb') as f:
                 self.features_dict = pickle.load(f)
@@ -134,9 +160,6 @@ class Data:
             print(f"---->Unlabeled IDs length: {len(unlabeled_ids)}")
             print(f"---->Labeled IDs: {labeled_ids}")
             print(f"---->Unlabeled IDs: {unlabeled_ids}")
-
-            # Method's hyperparameters.
-            Q = 13  # The number of hidden neurons.
 
             # Instantiate the color feature extractor.
             extractor = ColorFeatureExtractor(Q=Q)
@@ -518,7 +541,8 @@ def get_DANINHAS(handler, data_dir, img_size=128):
     X_test, Y_test, Z_test_paths = load_images_and_labels(test_dir, classes, class_to_idx)
 
     # Criar instância da classe `Data`
-    return Data(X_train, Y_train,Z_train_paths, X_test, Y_test,Z_test_paths, handler, classes, class_to_idx)
+    dataset_folder = os.path.basename(data_dir.rstrip("/"))
+    return Data(X_train, Y_train,Z_train_paths, X_test, Y_test,Z_test_paths, handler, classes, class_to_idx, dataset_folder=dataset_folder)
 
 def get_CIFAR10(handler, data_dir, img_size=32):
     """
@@ -568,7 +592,8 @@ def get_CIFAR10(handler, data_dir, img_size=32):
     X_test, Y_test, Z_test_paths = load_images_and_labels(test_dir, classes, class_to_idx)
 
     # Criar instância da classe `Data`
-    return Data(X_train, Y_train, Z_train_paths, X_test, Y_test, Z_test_paths, handler, classes, class_to_idx)
+    dataset_folder = os.path.basename(data_dir.rstrip("/"))
+    return Data(X_train, Y_train, Z_train_paths, X_test, Y_test, Z_test_paths, handler, classes, class_to_idx, dataset_folder=dataset_folder)
 
 def get_CIFAR10_Download(handler):
     data_train = datasets.CIFAR10('./DATA/NEW_CIFAR10', train=True, download=True)
