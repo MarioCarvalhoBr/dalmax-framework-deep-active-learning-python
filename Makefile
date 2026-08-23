@@ -1,4 +1,4 @@
-.PHONY: setup lint format test test-all smoke export-reqs clean
+.PHONY: setup lint format test test-all smoke smoke-ablations export-reqs clean
 
 # Install the Poetry-managed environment (./.venv, see poetry.toml).
 setup:
@@ -56,6 +56,17 @@ smoke:
 		echo "NOTE: DATA/daninhas_full not present, skipping the demo.py smoke run."; \
 	fi
 	poetry run pytest -q -m "not gpu and not dataset and not slow"
+
+# `smoke-ablations`: CPU end-to-end smoke test for all 11 Phase 3 ablation
+# configs (files_config/ablations/micro/*.json — see
+# .specs/experiments/ablation-study.md and that folder's README.md), against
+# the same tiny DATA/daninhas_micro dataset as `make smoke`. Each config runs
+# with a tiny budget (--n_init_labeled 10 --n_query 5 --n_round 1, seed 1,
+# --device cpu) into its own results/smoke_ablations/<config>/ subfolder.
+# Fails on the first broken config (see scripts/ablations/smoke_ablations.sh's
+# own header for why this is set -e, unlike the lab run scripts).
+smoke-ablations:
+	bash scripts/ablations/smoke_ablations.sh
 
 # Regenerate requirements.txt from the Poetry lock file, for the lab machine
 # and Colab (which install via `pip install -r requirements.txt`, not

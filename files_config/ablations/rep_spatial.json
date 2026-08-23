@@ -1,0 +1,41 @@
+{
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_full/",
+        "n_epoch": 10,
+        "n_drop": 10,
+        "n_classes": 5,
+        "train_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "test_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "optimizer_args": {
+            "lr": 0.05,
+            "momentum": 0.3
+        },
+        "embedding": {
+            "extractor": "ssrae",
+            "q": 13,
+            "variant": "spatial"
+        },
+        "selection": {
+            "method": "hierarchical",
+            "hierarchy": {
+                "n_clusters": [
+                    600,
+                    200,
+                    100
+                ],
+                "n_levels": 3,
+                "sample_sizes": [
+                    30,
+                    15,
+                    2
+                ]
+            }
+        }
+    }
+}
