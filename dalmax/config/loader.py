@@ -85,14 +85,31 @@ def _build_hierarchy_config(d: dict[str, Any], context: str) -> HierarchyConfig:
     )
 
 
+# Legacy `Q` per extractor, applied only when the "embedding" block (or the
+# whole "embedding" key) omits "q" explicitly. Mirrors the historical
+# literals `utils/data.py` always used: `Q=13` for SSRAE,
+# `Q=[5, 17]` for VCTex; ResNet-ImageNet has no `Q` (fixed 2048-d penultimate
+# layer). A flat `d.get("q", 13)` here would silently force VCTex's Q down
+# to SSRAE's 13 whenever "q" is absent — this table is the fix (see
+# `.claude/rules/reproducibility.md`).
+_EXTRACTOR_DEFAULT_Q: dict[str, Any] = {
+    "ssrae": 13,
+    "vctex": (5, 17),
+    "resnet_imagenet": None,
+}
+
+
 def _build_embedding_config(d: dict[str, Any] | None) -> EmbeddingConfig:
-    if d is None:
-        return EmbeddingConfig()
-    q = d.get("q", 13)
-    if isinstance(q, list):
-        q = tuple(int(v) for v in q)
+    d = d or {}
+    extractor = d.get("extractor", "ssrae")
+    if "q" in d:
+        q = d["q"]
+        if isinstance(q, list):
+            q = tuple(int(v) for v in q)
+    else:
+        q = _EXTRACTOR_DEFAULT_Q.get(extractor)
     return EmbeddingConfig(
-        extractor=d.get("extractor", "ssrae"),
+        extractor=extractor,
         q=q,
         variant=d.get("variant", "full"),
     )

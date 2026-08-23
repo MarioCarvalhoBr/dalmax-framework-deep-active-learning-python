@@ -18,6 +18,11 @@ Two kinds of names are registered:
   `dalmax.query_strategies.representation.RepresentationStrategy`. This is
   the fixed-behavior compatibility path — see
   `.specs/architecture/target-architecture.md` §6 for the mapping table.
+  Presets also pin their embedding provider's `q` to the legacy value in
+  `REPRESENTATION_PRESET_Q` (`ssrae` → `13`, `vctex` → `(5, 17)`) and
+  **ignore** `config.dataset.embedding.q` entirely — a preset name means
+  "reproduce the exact legacy behavior", so it must not silently pick up
+  whatever `q` a params JSON's generic `"embedding"` block happens to set.
 - The generic `"RepresentationStrategy"` name uses `config.dataset.embedding`/
   `selection` verbatim, with no preset override — this is what Phase 3's
   ablations (`.specs/experiments/ablation-study.md`) drive via the params
@@ -83,10 +88,21 @@ REPRESENTATION_PRESETS: dict[str, tuple[str, str]] = {
 
 GENERIC_REPRESENTATION_NAME = "RepresentationStrategy"
 
-# Fallback `q` for a preset/generic build when `config.dataset.embedding.q`
-# is `None` (mirrors the historical literals `Q=13`/`Q=(5, 17)` this refactor
-# is threading through config instead of hardcoding at the call site).
-_DEFAULT_Q: dict[str, Any] = {"ssrae": 13, "vctex": (5, 17)}
+# Legacy `Q` per extractor for the 4 compatibility presets in
+# `REPRESENTATION_PRESETS`, above. A preset name (e.g. `VCTexKmeansSampling`)
+# means "reproduce the exact legacy SSRAE/VCTex behavior" — so its `q` is
+# always this pinned legacy value, **never** `config.dataset.embedding.q`,
+# even if the params JSON's "embedding" block sets a different `q` for the
+# generic `RepresentationStrategy` path. This is deliberate and documented:
+# using `config.dataset.embedding.q` here was the HIGH-severity bug where
+# `VCTexKmeansSampling`/`VCTexKmeansHCSampling` silently built
+# `VCTexProvider(q=13)` (SSRAE's default) instead of the legacy `Q=(5, 17)`
+# whenever the params JSON had no "embedding" key (see
+# `.claude/rules/reproducibility.md`). `dalmax.config.loader` also now
+# defaults `config.dataset.embedding.q` per-extractor for the *generic*
+# `RepresentationStrategy` path, but presets intentionally bypass that value
+# entirely rather than depend on it staying correct.
+REPRESENTATION_PRESET_Q: dict[str, Any] = {"ssrae": 13, "vctex": (5, 17)}
 
 STRATEGY_REGISTRY: dict[str, Any] = {
     **LEGACY_STRATEGY_REGISTRY,
@@ -96,8 +112,15 @@ STRATEGY_REGISTRY: dict[str, Any] = {
 
 
 def _resolve_q(extractor: str, q: Any) -> Any:
-    if q is None and extractor in _DEFAULT_Q:
-        return _DEFAULT_Q[extractor]
+    # Defensive fallback for the generic `RepresentationStrategy` path only:
+    # `dalmax.config.loader` already defaults `config.dataset.embedding.q`
+    # per-extractor, but a hand-built `ExperimentConfig` (e.g. in a test, or
+    # a future caller that skips the loader) could still pass `q=None` for
+    # an extractor that needs one. Presets never reach this fallback — they
+    # pass their pinned `REPRESENTATION_PRESET_Q` value directly, see
+    # `build_strategy`.
+    if q is None and extractor in REPRESENTATION_PRESET_Q:
+        return REPRESENTATION_PRESET_Q[extractor]
     return q
 
 
@@ -175,7 +198,10 @@ def build_strategy(
             config,
             logger,
             extractor=extractor,
-            q=config.dataset.embedding.q,
+            # Presets pin the legacy Q for `extractor` and deliberately
+            # ignore `config.dataset.embedding.q` — see
+            # `REPRESENTATION_PRESET_Q`'s docstring, above, for why.
+            q=REPRESENTATION_PRESET_Q[extractor],
             selection_method=selection_method,
             hierarchy=hierarchy,
         )

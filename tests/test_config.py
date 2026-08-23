@@ -261,6 +261,88 @@ def test_explicit_selection_flat_proportional_is_read(tmp_path):
     )
 
 
+# --- per-extractor `q` defaults (HIGH finding: a flat `d.get("q", 13)` -------
+# --- silently forced VCTex's legacy Q=(5, 17) down to SSRAE's Q=13) ----------
+
+
+def _payload_with_embedding(embedding: dict) -> dict:
+    return {
+        "DANINHAS": {
+            "data_dir": "DATA/daninhas_full/",
+            "n_epoch": 10,
+            "n_drop": 10,
+            "n_classes": 5,
+            "train_args": {"batch_size": 256, "num_workers": 4},
+            "test_args": {"batch_size": 256, "num_workers": 4},
+            "optimizer_args": {"lr": 0.05, "momentum": 0.3},
+            "embedding": embedding,
+        }
+    }
+
+
+def test_embedding_q_defaults_to_13_for_ssrae_when_q_key_absent(tmp_path):
+    payload = _payload_with_embedding({"extractor": "ssrae"})
+    params_path = tmp_path / "params.json"
+    params_path.write_text(json.dumps(payload))
+
+    config = _load(params_path, "DANINHAS")
+
+    assert config.dataset.embedding.extractor == "ssrae"
+    assert config.dataset.embedding.q == 13
+
+
+def test_embedding_q_defaults_to_5_17_for_vctex_when_q_key_absent(tmp_path):
+    payload = _payload_with_embedding({"extractor": "vctex"})
+    params_path = tmp_path / "params.json"
+    params_path.write_text(json.dumps(payload))
+
+    config = _load(params_path, "DANINHAS")
+
+    assert config.dataset.embedding.extractor == "vctex"
+    assert config.dataset.embedding.q == (5, 17)
+
+
+def test_embedding_q_defaults_to_none_for_resnet_imagenet_when_q_key_absent(tmp_path):
+    payload = _payload_with_embedding({"extractor": "resnet_imagenet"})
+    params_path = tmp_path / "params.json"
+    params_path.write_text(json.dumps(payload))
+
+    config = _load(params_path, "DANINHAS")
+
+    assert config.dataset.embedding.extractor == "resnet_imagenet"
+    assert config.dataset.embedding.q is None
+
+
+def test_embedding_q_explicit_value_overrides_the_per_extractor_default(tmp_path):
+    payload = _payload_with_embedding({"extractor": "vctex", "q": [3, 9]})
+    params_path = tmp_path / "params.json"
+    params_path.write_text(json.dumps(payload))
+
+    config = _load(params_path, "DANINHAS")
+
+    assert config.dataset.embedding.q == (3, 9)
+
+
+def test_embedding_defaults_to_ssrae_q_13_when_embedding_key_entirely_absent(tmp_path):
+    payload = {
+        "DANINHAS": {
+            "data_dir": "DATA/daninhas_full/",
+            "n_epoch": 10,
+            "n_drop": 10,
+            "n_classes": 5,
+            "train_args": {"batch_size": 256, "num_workers": 4},
+            "test_args": {"batch_size": 256, "num_workers": 4},
+            "optimizer_args": {"lr": 0.05, "momentum": 0.3},
+        }
+    }
+    params_path = tmp_path / "params.json"
+    params_path.write_text(json.dumps(payload))
+
+    config = _load(params_path, "DANINHAS")
+
+    assert config.dataset.embedding == EmbeddingConfig(extractor="ssrae", q=13, variant="full")
+
+
 # --- to_dict is JSON round-trippable ------------------------------------------
 
 

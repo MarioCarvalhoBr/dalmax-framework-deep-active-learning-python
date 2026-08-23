@@ -101,6 +101,61 @@ def test_build_strategy_flat_presets_use_flat_closest_selection():
         assert isinstance(strategy.selection, FlatKMeansClosest)
 
 
+def test_build_strategy_flat_presets_pin_legacy_q_ignoring_config_embedding():
+    # params_micro.json's DANINHAS entry has no "embedding" key at all, so
+    # config.dataset.embedding defaults to EmbeddingConfig(extractor="ssrae",
+    # q=13, ...) via dalmax.config.loader (per-extractor default). The
+    # VCTex presets must still build a VCTexProvider with the legacy
+    # Q=(5, 17), never SSRAE's default Q=13 -- this is exactly the HIGH
+    # finding this test guards against.
+    dataset, net = _dataset_and_net()
+    config = _config("VCTexKmeansSampling")
+    assert "embedding" not in _raw_daninhas_entry()  # no "embedding" key present at all
+    rng = np.random.default_rng(0)
+    strategy = build_strategy(
+        "VCTexKmeansSampling", dataset, net, config, logger=None, rng=rng
+    )
+    assert strategy.embedding_provider.name == "vctex"
+    assert strategy.embedding_provider.q == (5, 17)
+
+    dataset, net = _dataset_and_net()
+    config = _config("SSRAEKmeansSampling")
+    rng = np.random.default_rng(0)
+    strategy = build_strategy(
+        "SSRAEKmeansSampling", dataset, net, config, logger=None, rng=rng
+    )
+    assert strategy.embedding_provider.name == "ssrae"
+    assert strategy.embedding_provider.q == 13
+
+
+def test_build_strategy_hc_presets_pin_legacy_q_ignoring_config_embedding():
+    dataset, net = _dataset_and_net()
+    config = _config("VCTexKmeansHCSampling")
+    rng = np.random.default_rng(0)
+    strategy = build_strategy(
+        "VCTexKmeansHCSampling", dataset, net, config, logger=None, rng=rng
+    )
+    assert strategy.embedding_provider.name == "vctex"
+    assert strategy.embedding_provider.q == (5, 17)
+
+    dataset, net = _dataset_and_net()
+    config = _config("SSRAEKmeansHCSampling")
+    rng = np.random.default_rng(0)
+    strategy = build_strategy(
+        "SSRAEKmeansHCSampling", dataset, net, config, logger=None, rng=rng
+    )
+    assert strategy.embedding_provider.name == "ssrae"
+    assert strategy.embedding_provider.q == 13
+
+
+def _raw_daninhas_entry() -> dict:
+    import json
+
+    with open(PARAMS_MICRO) as f:
+        raw = json.load(f)
+    return raw["DANINHAS"]
+
+
 def test_build_strategy_hc_presets_use_hierarchical_selection():
     for name, extractor in (
         ("SSRAEKmeansHCSampling", "ssrae"),
