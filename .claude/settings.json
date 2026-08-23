@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(poetry *)",
+      "Bash(ruff *)",
+      "Bash(pytest *)",
+      "Bash(make *)",
+      "Bash(python -c *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git add*)",
+      "Bash(git commit*)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Edit(DATA/**)",
+      "Write(DATA/**)",
+      "Edit(phd_files/**)",
+      "Write(phd_files/**)",
+      "Edit(results/**)",
+      "Write(results/**)"
+    ]
+  }
+}
