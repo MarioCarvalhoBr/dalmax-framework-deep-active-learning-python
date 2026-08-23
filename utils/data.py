@@ -262,7 +262,22 @@ class Data:
     def get_classes_to_idx(self):
         return self.class_to_idx
         
-    def initialize_labels(self, n_init_labeled, strategy_name):
+    def initialize_labels(self, n_init_labeled, strategy_name, compute_legacy_features: bool = True):
+        """Shuffle the pool and mark the first `n_init_labeled` ids as labeled.
+
+        `compute_legacy_features` (default `True`, unchanged legacy
+        behavior) controls whether the SSRAE/VCTex feature-map extraction
+        below runs for `strategy_name in {"SSRAEKmeansSampling",
+        "SSRAEKmeansHCSampling", "VCTexKmeansSampling", "VCTexKmeansHCSampling"}`.
+        `dalmax.experiment.runner.ExperimentRunner` calls this with `False`:
+        it computes embeddings itself, on demand, via
+        `dalmax.query_strategies.representation.RepresentationStrategy` +
+        `dalmax.embeddings.EmbeddingProvider`/`EmbeddingCache` (a different
+        cache path than `create_feature_maps_ssrae`/`_vctex` below), so
+        running this legacy extraction too would be redundant. The shuffle
+        itself (the only randomness consumed here) is unaffected by this
+        flag either way — see `.claude/rules/reproducibility.md`.
+        """
         print(f"Initializing with {n_init_labeled} labeled samples using strategy: {strategy_name}")
         self.strategy_name = strategy_name
 
@@ -270,6 +285,9 @@ class Data:
         tmp_idxs = np.arange(self.n_pool)
         np.random.shuffle(tmp_idxs)
         self.labeled_idxs[tmp_idxs[:n_init_labeled]] = True
+
+        if not compute_legacy_features:
+            return
 
         if self.strategy_name == "SSRAEKmeansSampling" or self.strategy_name == "SSRAEKmeansHCSampling":
             print(f"Creating SSRAE feature maps...")

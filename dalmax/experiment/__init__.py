@@ -1,6 +1,7 @@
 """Experiment orchestration helpers.
 
-Currently only `run_metadata.py` (config + git-commit snapshotting). The
-round-loop runner (`runner.py`) and reporter (`reporter.py`) described in
-`.specs/architecture/target-architecture.md` §10 land in a later Phase 2 batch.
+`run_metadata.py` (config + git-commit snapshotting), `runner.py`
+(`ExperimentRunner`: the round-loop) and `reporter.py` (`write_report`:
+plots, `results.json`, `predictions.csv`, model save, log move) — see
+`.specs/architecture/target-architecture.md` §10.
 """
