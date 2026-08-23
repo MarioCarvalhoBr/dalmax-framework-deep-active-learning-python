@@ -264,7 +264,7 @@ make setup         # poetry install
 make lint          # ruff check
 make format        # ruff format
 make test          # pytest (fast tests only)
-make smoke         # proxy smoke check (fast tests); true micro-run is a Phase 1 deliverable
+make smoke         # true end-to-end micro-dataset run (demo.py, CPU) + fast tests
 make export-reqs   # regenerate requirements.txt from pyproject.toml
 ```
 

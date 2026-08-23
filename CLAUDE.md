@@ -26,7 +26,7 @@ poetry install       # or: make setup
 make lint             # ruff check
 make format           # ruff format
 make test             # pytest, fast tests only
-make smoke            # import checks + fast tests (true micro-dataset run = Phase 1 deliverable)
+make smoke            # true end-to-end micro-dataset run (demo.py, CPU) + fast tests
 make export-reqs      # regenerate requirements.txt from pyproject.toml
 
 # Example run:

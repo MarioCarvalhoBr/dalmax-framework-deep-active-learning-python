@@ -27,36 +27,34 @@ test:
 test-all:
 	poetry run pytest -q
 
-# `smoke` is meant to be a true end-to-end run of demo.py on a tiny CPU
-# subset (e.g. a generated 2-class/50-image micro-dataset) to catch
-# integration breakage that unit tests miss. That is not feasible without
-# touching demo.py/utils/data.py today:
-#   - demo.py hardcodes the SSRAE/VCTex feature-extraction path to run over
-#     the *entire* unlabeled pool before the first query (utils/data.py
-#     Data.initialize_labels -> create_feature_maps_ssrae/vctex), so even a
-#     "tiny" DANINHAS-shaped dataset still pays a full SSRAE pass; more
-#     importantly there is no CLI/programmatic way to point it at a
-#     micro-dataset without a real DATA/<name>/{train,test}/<class>/ tree.
-#   - Feature-map pickle caches (results/features_dict_*.pkl) have no cache
-#     key (dataset/Q/variant), so repeated smoke runs risk reading stale
-#     features from a previous real experiment.
-#   - Building the config layer / embedding provider abstraction needed to
-#     wire in a synthetic tiny dataset cleanly is exactly the Phase 1/2 work
-#     described in .specs/architecture/refactor-plan.md, not something to
-#     bolt on ad hoc in this session (we were asked not to modify source).
-#
-# So, for now, `smoke` is a *documented stub*: it verifies the modules that
-# demo.py depends on all import cleanly (via the test suite) and that
-# `demo.py` itself is syntactically importable-as-a-script sanity check is
-# left out on purpose (importing demo.py directly has side effects, see
-# tests/test_registry.py's module docstring). A real micro-dataset smoke
-# run is tracked as a Phase 1 deliverable, see
-# .specs/architecture/refactor-plan.md and .specs/quality/known-issues.md.
+# `smoke` is a true end-to-end run of demo.py on a tiny CPU 2-class subset,
+# landed in refactor Phase 1 (see .specs/architecture/refactor-plan.md and
+# .specs/quality/testing-strategy.md):
+#   1. scripts/make_micro_dataset.py deterministically samples 25 train + 10
+#      test images per class from DATA/daninhas_full/ (2 classes) into
+#      DATA/daninhas_micro/, without ever writing into daninhas_full/ itself.
+#      If daninhas_full/ isn't present (e.g. a fresh clone with no dataset
+#      copied in), it prints a message and exits 0 instead of failing.
+#   2. demo.py runs against files_config/params_micro.json (n_epoch=1,
+#      n_classes=2, batch_size=16) with RandomSampling, into results/smoke/
+#      (gitignored, never committed) — a few seconds on CPU, no GPU needed.
+#   3. The fast test suite runs on top, including tests/test_cache_paths.py.
+# The full golden-run regression (tests/test_golden_run.py, comparing exact
+# selected indices + metrics against tests/golden/*.json for both
+# RandomSampling and SSRAEKmeansSampling) is `dataset`+`slow`-marked and runs
+# via `make test-all`, not here, to keep `make smoke` fast.
 smoke:
-	@echo "NOTE: a true end-to-end micro-dataset smoke run of demo.py is not"
-	@echo "feasible without source changes (see comment in this Makefile and"
-	@echo ".specs/architecture/refactor-plan.md, Phase 1). Running the fast"
-	@echo "import/registry/unit test suite as a proxy smoke check instead."
+	poetry run python scripts/make_micro_dataset.py
+	@if [ -d DATA/daninhas_micro/train ]; then \
+		poetry run python demo.py \
+			--params_json files_config/params_micro.json \
+			--dataset_name DANINHAS \
+			--strategy_name RandomSampling \
+			--n_init_labeled 10 --n_query 5 --n_round 1 --seed 1 \
+			--dir_results results/smoke/; \
+	else \
+		echo "NOTE: DATA/daninhas_full not present, skipping the demo.py smoke run."; \
+	fi
 	poetry run pytest -q -m "not gpu and not dataset and not slow"
 
 # Regenerate requirements.txt from the Poetry lock file, for the lab machine
