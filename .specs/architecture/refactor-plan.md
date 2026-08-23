@@ -1,0 +1,181 @@
+# Refactor Plan
+
+Status: proposed (not started as of 2026-08-23). Phases are sequential; each phase's acceptance
+criteria must hold before starting the next. See `.specs/architecture/current-state.md` for what
+exists today, `.specs/architecture/target-architecture.md` for the end state, and
+`.specs/experiments/ablation-study.md` for the experiments Phase 3 must unlock.
+
+Driver agents referenced below are defined in `.claude/agents/*.md`
+(`implementer`, `mechanic`, `code-reviewer`, `experiment-auditor`, `spec-keeper`, `paper-liaison`).
+
+## Phase 1 — Safety net
+
+**Goal:** make it possible to refactor without silently breaking the experimental protocol.
+
+Work:
+- Add the tests in `.specs/quality/testing-strategy.md` §"Now (Phase 1)": `test_imports.py`,
+  `test_registry.py`, `test_ssrae_embedding_layout.py`.
+- Capture a golden run: tiny subset (2 classes, ~50 images, `n_init_labeled` small, `n_round=1`,
+  fixed seed), record the exact selected indices from `RandomSampling` and, if runnable on CPU,
+  `SSRAEKmeansSampling` (flat, no GPU dependency) plus final metrics — stored as a fixture for the
+  regression test described in `testing-strategy.md`.
+- Get CI green: `.github/workflows/ci.yml` running `ruff check` and
+  `pytest -m "not gpu and not dataset"` on every push/PR.
+- Fix the `pandas` dependency gap in `requirements.txt` by re-running
+  `poetry export -f requirements.txt --output requirements.txt --without-hashes` (pyproject.toml
+  already declares `pandas==2.2.3`; only the exported file is stale).
+
+**Acceptance criteria:**
+- [ ] `pytest -m "not gpu and not dataset"` passes locally on the no-GPU dev notebook.
+- [ ] CI is green on a pushed branch.
+- [ ] Golden-run fixture committed (small enough to check in: indices + metrics as JSON, not model
+      weights).
+- [ ] `requirements.txt` contains `pandas`.
+
+**Driver agent:** `implementer` (writes tests/fixtures), `mechanic` (runs `ruff`/`pytest`, wires CI
+YAML), `code-reviewer` (reviews before merge).
+
+**Risks:** the hierarchical strategies (`SSRAEKmeansHCSampling`, `VCTexKmeansHCSampling`) hardcode
+`device="cuda"` (`current-state.md` §4) — no golden run is possible for them without lab-machine
+access or first landing the device-from-config fix from Phase 2. Mitigate by golden-run-testing only
+the CPU-safe strategies in Phase 1, and add the hierarchical golden run as a Phase 2 exit task once
+the device is configurable.
+
+## Phase 2 — Core refactor (enables ablations)
+
+**Goal:** land the abstractions in `target-architecture.md` so that Phase 3's three ablations become
+config changes, not new code.
+
+Work (mapped to `target-architecture.md` §2):
+1. **Config layer**: `config/schema.py` + `config/loader.py` replacing raw `params[dataset_name]`
+   dict indexing everywhere (`demo.py:38-44`, `ssl_ssrae_sampling.py:66`). Validation must reject a
+   missing `config_kmh` with a clear error instead of a `KeyError` three calls deep.
+2. **`EmbeddingProvider` abstraction** (`embeddings/base.py`, `ssrae_provider.py`, `vctex_provider.py`,
+   `resnet_imagenet_provider.py`) + **keyed cache** (`embeddings/cache.py`) replacing
+   `utils/data.py:create_feature_maps_ssrae/vctex` and the two fixed pickle paths.
+3. **`embedding_variant` slicing** (`embeddings/variants.py`) — `full | spatial | spectral`.
+4. **`SelectionStrategy` abstraction** (`selection/base.py` + 3 implementations) replacing the
+   4 fixed strategy subclasses' clustering logic; `FlatKMeansClosest` seeded from the experiment
+   seed (fixes the `random_state=3` literal); `HierarchicalKMeansSelection` takes device from config
+   (fixes the hardcoded `"cuda"`).
+5. **Registries** (`data/registry.py`, `models/registry.py`, `query_strategies/registry.py`,
+   `selection/registry.py`) replacing `utils/orchestrator.py`'s four `if/elif` chains.
+6. **Seed propagation audit**: introduce `dalmax/seeding.py:seed_everything`, remove every literal
+   `random_state=N`, confirm every source of randomness (numpy, torch, Python `random`, sklearn
+   `KMeans`) derives from the CLI `--seed`.
+7. **Split `demo.py`**: `experiment/runner.py` (round loop) + `experiment/reporter.py` (plots/JSON/CSV)
+   + thin `cli.py`. Remove the `setattr(strategy, "params", params)` pattern — strategies receive
+   config through their constructor.
+8. **Run metadata**: `experiment/run_metadata.py` writing `run_metadata.json` (config snapshot + git
+   commit hash) into every results directory.
+9. Fix `calc_metrics_sklearn`'s `average='weighted'` → add a macro-F1 path (needed by every ablation
+   in §6, which are all specified as macro F1).
+
+**Acceptance criteria:**
+- [ ] Old CLI strategy names (`SSRAEKmeansSampling`, `VCTexKmeansSampling`, `SSRAEKmeansHCSampling`,
+      `VCTexKmeansHCSampling`, plus all baselines) still resolve via the CLI, now backed by
+      `RepresentationStrategy(embedding_provider, selection_strategy)` presets — `demo.py --strategy_name`
+      choices are unchanged from a user's point of view.
+- [ ] Golden-run fixture from Phase 1 reproduces bit-identical selected indices and metrics after
+      the refactor (proves the refactor is behavior-preserving where it should be).
+- [ ] A unit test proves `SSRAEKmeansSampling`-equivalent runs with two different seeds now produce
+      different cluster assignments (proves the `random_state=3` fix).
+- [ ] Running `SSRAEKmeansHCSampling` against `CIFAR10` (or any second dataset with a `config_kmh`
+      block added) no longer raises `KeyError: 'DANINHAS'`.
+- [ ] `.specs/architecture/current-state.md` coupling points #1-#9 are each either resolved or have
+      an explicit "deferred to Phase N" note added by `spec-keeper`.
+- [ ] `results/<run>/run_metadata.json` exists after any `ExperimentRunner.run()` call.
+
+**Driver agent:** `implementer` (primary, follows this plan), `code-reviewer` (checks
+`demo.py --strategy_name` choices / registries / `.specs/` stay in sync per its role definition),
+`experiment-auditor` (verifies seed propagation and cache-key correctness before sign-off),
+`spec-keeper` (updates `.specs/architecture/current-state.md` and ADRs as things land).
+
+**Risks:**
+- Behavior drift in the flat k-means strategies once seeding changes (expected and desired, but
+  must be called out to the advisor since it changes historical result reproducibility for seeds
+  that previously always clustered as if `random_state=3`).
+- The vendored `core/tools/SSL/` code is Meta-licensed; keep its internals untouched and only wrap
+  it, per `target-architecture.md` §2's `tools/` note.
+- Physically moving files into `dalmax/` is **out of scope** for Phase 2 per ADR 0002 (the package
+  rename is Phase 4) — Phase 2 should introduce the new modules under the current `core/`/`utils/`
+  tree (or a provisional `dalmax/` package if the team prefers to front-load the move; record
+  whichever choice is made as an ADR update) to avoid a second big-bang rename before ablations ship.
+
+## Phase 3 — Ablation implementation
+
+**Goal:** run the three ablation studies in `.specs/experiments/ablation-study.md` using only
+config changes plus the small amount of genuinely new code identified there.
+
+Work:
+- **6.1 Representation ablation**: run `embedding_variant = full | spatial | spectral` with the
+  SSRAE provider, `Q=13`, all three sharing one cached full embedding.
+- **6.2 Hierarchy ablation**: run `HierarchicalKMeansSelection` at `L=1..4` with the four
+  `n_clusters` configurations in `ablation-study.md` §6.2, `n_query=100`, SSRAE full embeddings.
+- **6.3 Contribution of the two RNHAL stages**: (a) reference RNHAL-full results already executed;
+  (b) `ResNetImageNetProvider` + `HierarchicalKMeansSelection` ("without representation module");
+  (c) SSRAE full + `FlatKMeansProportionalRandom` ("without hierarchical module").
+- Add one run script per GPU for the ablation sweep (mirrors `run_pipe_gpu_0.sh`/`run_pipe_gpu_1.sh`
+  structure), and wire report generation (`dalmax/reporting/`) to produce the macro-F1 tables the
+  paper's `\subsection{Ablation study}` needs.
+
+**Acceptance criteria:**
+- [ ] All items in the "ablation enablers" checklist below are checked off before any run starts.
+- [ ] Each of the three sub-studies runs end-to-end on the lab machine for at least one seed without
+      code changes (config/CLI-args only).
+- [ ] `.specs/experiments/ablation-study.md` and `.specs/experiments/baseline-results.md` are updated
+      by `spec-keeper` with actual F1 numbers as runs complete (replacing `TBD`).
+- [ ] `paper-liaison` drafts the LaTeX table skeleton for `\subsection{Ablation study}` from the
+      resulting `results/*/results.json` files into `paper_drafts/`.
+
+**Driver agent:** `implementer` (new `ResNetImageNetProvider` and `FlatKMeansProportionalRandom`),
+`experiment-auditor` (pre-flight check before each batch, per its role: seeds, params JSON vs spec,
+results dir naming, cache validity), `paper-liaison` (LaTeX drafts), `spec-keeper` (spec updates).
+
+**Risks:** lab machine has 2×10 GB GPUs — hierarchical k-means over the full unlabeled pool at
+`n_clusters=[600,200,100]` may be memory-tight for larger pools; batch/chunk sizes in
+`hierarchical_kmeans_gpu.py` (`MEMORY_LIMIT`) may need per-ablation tuning, which is a config change,
+not a code change, if Phase 2 landed the config layer correctly.
+
+## Phase 4 — Polish
+
+**Goal:** finish the professionalization pass now that behavior is stable and tested.
+
+Work:
+- Physically rename/move `core/` + `utils/` into the single `dalmax/` package per ADR 0002.
+- Remove dead files identified in `known-issues.md`: `temp_teste.py`, `test.py` (root, not pytest),
+  `TRASH_TEXT.md`, `sampled_data.pdf`, `core/query_strategies/old_functions.py`, `demo_ssl.py` (if
+  still unused after Phase 3).
+- Docs refresh: update `README.md`, `CLAUDE.md`, `.specs/` cross-links to the new `dalmax/` paths.
+- Sweep remaining known-issues items that were deferred (duplicate imports, unused imports, logging
+  levels) via `mechanic`.
+
+**Acceptance criteria:**
+- [ ] `import dalmax` works; no references to `core.` / `utils.` remain outside historical docs.
+- [ ] `known-issues.md` has zero remaining "Open" items rated Medium or higher.
+- [ ] Full test suite + a real lab-machine smoke run both pass post-rename.
+
+**Driver agent:** `implementer` (the move itself, likely scripted rename + import-path fixes),
+`mechanic` (mechanical cleanup, dead file removal), `code-reviewer` (final review),
+`spec-keeper` (final `.specs/` sync).
+
+**Risks:** a rename this large is easy to get subtly wrong (missed import, stale `.pyc`, a lab-machine
+`git pull` mid-experiment). Do it in its own branch, merge only after Phase 3's ablation runs are
+safely archived, and re-run the golden-run regression test immediately after.
+
+## Ablation enablers checklist
+
+Cross-referenced with `.specs/experiments/ablation-study.md`. All must be true before Phase 3 starts:
+
+- [ ] `EmbeddingProvider` abstraction exists with `SSRAE`, `VCTex`, and `ResNetImageNet` implementations.
+- [ ] Embedding cache is keyed by `(dataset, extractor, Q, variant, split)` — no more fixed
+      `results/features_dict_*.pkl` paths.
+- [ ] `embedding_variant` (`full | spatial | spectral`) slices the cached full SSRAE embedding
+      without recomputation.
+- [ ] `HierarchicalKMeansSelection` reads `n_clusters`/`n_levels`/`sample_sizes` entirely from config
+      (no hardcoded `'DANINHAS'` key lookup).
+- [ ] `FlatKMeansProportionalRandom` exists and is documented as distinct from `FlatKMeansClosest`.
+- [ ] Macro F1 is computed and reported (not just weighted F1).
+- [ ] Every strategy's clustering randomness derives from the experiment seed.
+- [ ] `run_metadata.json` (config snapshot + git hash) is written per run, so every ablation result
+      is traceable back to the exact config that produced it.
