@@ -1,10 +1,11 @@
 """`STRATEGY_REGISTRY` / `build_strategy`: the single place that maps a
 `--strategy_name` string to a constructed `Strategy` instance.
 
-Replaces `utils/orchestrator.py::get_strategy`'s 16-branch `if/elif` chain
-(`.claude/rules/code-quality.md`, "registry pattern over if/elif chains") for
-the `dalmax`-routed CLI (`dalmax.cli`); `utils/orchestrator.py` itself is
-left untouched and keeps working for any legacy caller.
+Replaces the deleted `utils/orchestrator.py::get_strategy`'s 16-branch
+`if/elif` chain (`.claude/rules/code-quality.md`, "registry pattern over
+if/elif chains") for the `dalmax`-routed CLI (`dalmax.cli`) — that module was
+removed as dead code in refactor Phase 4
+(`.specs/architecture/refactor-plan.md`).
 
 Two kinds of names are registered:
 
@@ -42,23 +43,21 @@ from typing import Any
 
 import numpy as np
 
-from core.query_strategies import (
-    AdversarialBIM,
-    AdversarialDeepFool,
-    BALDDropout,
-    EntropySampling,
-    EntropySamplingDropout,
-    KCenterGreedy,
-    KMeansSampling,
-    LeastConfidence,
-    LeastConfidenceDropout,
-    MarginSampling,
-    MarginSamplingDropout,
-    RandomSampling,
-)
-from core.query_strategies.strategy import Strategy
 from dalmax.config.schema import ConfigError, ExperimentConfig
 from dalmax.embeddings.registry import get_embedding_provider
+from dalmax.query_strategies.adversarial_bim import AdversarialBIM
+from dalmax.query_strategies.adversarial_deepfool import AdversarialDeepFool
+from dalmax.query_strategies.base import Strategy
+from dalmax.query_strategies.bayesian_active_learning_disagreement_dropout import BALDDropout
+from dalmax.query_strategies.entropy_sampling import EntropySampling
+from dalmax.query_strategies.entropy_sampling_dropout import EntropySamplingDropout
+from dalmax.query_strategies.kcenter_greedy import KCenterGreedy
+from dalmax.query_strategies.kmeans_sampling import KMeansSampling
+from dalmax.query_strategies.least_confidence import LeastConfidence
+from dalmax.query_strategies.least_confidence_dropout import LeastConfidenceDropout
+from dalmax.query_strategies.margin_sampling import MarginSampling
+from dalmax.query_strategies.margin_sampling_dropout import MarginSamplingDropout
+from dalmax.query_strategies.random_sampling import RandomSampling
 from dalmax.query_strategies.representation import RepresentationStrategy
 from dalmax.seeding import derive_seed
 from dalmax.selection.registry import get_selection_strategy

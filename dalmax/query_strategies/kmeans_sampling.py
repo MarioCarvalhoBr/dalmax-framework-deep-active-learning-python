@@ -1,10 +1,12 @@
 import numpy as np
-from .strategy import Strategy
 from sklearn.cluster import KMeans
+
+from .base import Strategy
+
 
 class KMeansSampling(Strategy):
     def __init__(self, dataset, net, logger):
-        super(KMeansSampling, self).__init__(dataset, net, logger)
+        super().__init__(dataset, net, logger)
 
     def query(self, n):
         unlabeled_idxs, unlabeled_data = self.dataset.get_unlabeled_data()
@@ -12,7 +14,7 @@ class KMeansSampling(Strategy):
         embeddings = embeddings.numpy()
         cluster_learner = KMeans(n_clusters=n)
         cluster_learner.fit(embeddings)
-        
+
         cluster_idxs = cluster_learner.predict(embeddings)
         centers = cluster_learner.cluster_centers_[cluster_idxs]
         dis = (embeddings - centers)**2

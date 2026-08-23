@@ -3,16 +3,18 @@ query strategy (`SSRAEKmeansSampling`, `VCTexKmeansSampling`,
 `SSRAEKmeansHCSampling`, `VCTexKmeansHCSampling`, and the new generic
 `RepresentationStrategy` CLI choice used by the Phase 3 ablations).
 
-It factors out what used to be duplicated across
-`core/query_strategies/ssrae_kmeans_sampling.py` (flat k-means, closest to
-centroid) and `core/query_strategies/ssl_ssrae_sampling.py` (`SSLStrategy`:
-hierarchical k-means) into "compute/cache embeddings for the current pool"
+It factors out what used to be duplicated across the deleted
+`ssrae_kmeans_sampling.py` (flat k-means, closest to centroid) and
+`ssl_ssrae_sampling.py` (`SSLStrategy`: hierarchical k-means) — both removed
+in refactor Phase 4 as dead code, see `.specs/architecture/current-state.md`
+§0 — into "compute/cache embeddings for the current pool"
 (`dalmax.embeddings`) + "select a batch given embeddings" (`dalmax.selection`),
 composed via dependency injection (`.claude/rules/code-quality.md`: "no
 `setattr` magic ... pass dependencies through constructors").
 
-Subclasses `core.query_strategies.strategy.Strategy` (unmodified, vendored)
-so `train`/`predict`/`update`/`info`/`save_model` keep working exactly as for
+Subclasses `dalmax.query_strategies.base.Strategy` (the legacy strategy base
+class, moved unmodified into `dalmax/` in Phase 4) so
+`train`/`predict`/`update`/`info`/`save_model` keep working exactly as for
 every other strategy; only `query` is overridden here.
 
 ## Embedding lifecycle (replicates legacy semantics, cleaner)
@@ -46,10 +48,10 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from core.query_strategies.strategy import Strategy
 from dalmax.embeddings.base import EmbeddingProvider
 from dalmax.embeddings.cache import EmbeddingCache, compute_pool_embeddings, pool_hash
 from dalmax.embeddings.variants import slice_embedding
+from dalmax.query_strategies.base import Strategy
 from dalmax.selection.base import SelectionStrategy
 
 if TYPE_CHECKING:
@@ -151,7 +153,7 @@ class RepresentationStrategy(Strategy):
         # getattr's default argument is evaluated eagerly regardless of
         # whether the attribute is found, so that form would require every
         # caller's `config` to have a `dataset.name` even when `dataset`
-        # already has `dataset_folder` (as `utils.data.Data` always does).
+        # already has `dataset_folder` (as `dalmax.data.datasets.Data` always does).
         if hasattr(self.dataset, "dataset_folder"):
             dataset_name = self.dataset.dataset_folder
         else:

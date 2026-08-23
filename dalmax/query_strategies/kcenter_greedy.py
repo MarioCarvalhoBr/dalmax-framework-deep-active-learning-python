@@ -1,11 +1,12 @@
 import numpy as np
-from .strategy import Strategy
-from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
+
+from .base import Strategy
+
 
 class KCenterGreedy(Strategy):
     def __init__(self, dataset, net, logger):
-        super(KCenterGreedy, self).__init__(dataset, net, logger)
+        super().__init__(dataset, net, logger)
 
     def query(self, n):
         labeled_idxs, train_data = self.dataset.get_train_data()
@@ -21,12 +22,12 @@ class KCenterGreedy(Strategy):
 
         mat = dist_mat[~labeled_idxs, :][:, labeled_idxs]
 
-        for i in tqdm(range(n), ncols=100):
+        for _i in tqdm(range(n), ncols=100):
             mat_min = mat.min(axis=1)
             q_idx_ = mat_min.argmax()
             q_idx = np.arange(self.dataset.n_pool)[~labeled_idxs][q_idx_]
             labeled_idxs[q_idx] = True
             mat = np.delete(mat, q_idx_, 0)
             mat = np.append(mat, dist_mat[~labeled_idxs, q_idx][:, None], axis=1)
-            
+
         return np.arange(self.dataset.n_pool)[(self.dataset.labeled_idxs ^ labeled_idxs)]

@@ -32,7 +32,7 @@ N_LABELED_INITIALLY = 5
 
 
 class _FakeDataset:
-    """Duck-typed stand-in for `utils.data.Data`: only the attributes
+    """Duck-typed stand-in for `dalmax.data.datasets.Data`: only the attributes
     `RepresentationStrategy.query` actually reads."""
 
     def __init__(self, n_pool: int, seed: int = 0) -> None:

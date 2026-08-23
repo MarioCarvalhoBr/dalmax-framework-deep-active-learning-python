@@ -23,11 +23,11 @@ from typing import Any
 
 import numpy as np
 
-from core.query_strategies.strategy import Strategy
 from dalmax.config.schema import ExperimentConfig
 from dalmax.data.registry import get_dataset
 from dalmax.experiment.run_metadata import snapshot, write_run_metadata
 from dalmax.models.registry import get_network
+from dalmax.query_strategies.base import Strategy
 from dalmax.query_strategies.registry import build_strategy
 from dalmax.seeding import seed_everything
 
@@ -39,7 +39,7 @@ class RunResult:
 
     config: ExperimentConfig
     dir_results: str
-    dataset: Any  # utils.data.Data — not type-hinted to avoid importing it here
+    dataset: Any  # dalmax.data.datasets.Data — not type-hinted to avoid importing it here
     strategy: Strategy
     class_names: list[str]
     final_preds: Any  # last round's predictions (torch.Tensor), for the confusion matrix/CSV
@@ -110,13 +110,13 @@ class ExperimentRunner:
 
         start_time = time.time()
 
-        # Same shuffle logic as `Data.initialize_labels`, but skip the
-        # legacy SSRAE/VCTex feature-map extraction: `RepresentationStrategy`
-        # computes/caches its own embeddings on demand (see
-        # `utils/data.py::initialize_labels`'s docstring).
-        dataset.initialize_labels(
-            config.n_init_labeled, config.strategy_name, compute_legacy_features=False
-        )
+        # `Data.initialize_labels` only shuffles the pool and marks the
+        # initial labeled ids; `RepresentationStrategy` computes/caches its
+        # own embeddings on demand (see `dalmax/data/datasets.py::
+        # Data.initialize_labels`'s docstring — the legacy SSRAE/VCTex
+        # feature-map extraction this used to also trigger was dead code,
+        # removed in refactor Phase 4).
+        dataset.initialize_labels(config.n_init_labeled, config.strategy_name)
         logger.warning(
             "Initial labeled idxs (sorted): "
             f"{sorted(int(i) for i in np.where(dataset.labeled_idxs)[0])}"

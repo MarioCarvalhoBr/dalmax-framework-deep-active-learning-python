@@ -47,7 +47,7 @@ class _FakeLogger:
 
 
 class _FakeNet:
-    """Minimal stand-in for `core.deep_learning.DeepLearning`."""
+    """Minimal stand-in for `dalmax.models.base.DeepLearning`."""
 
     def train(self, data) -> None:
         pass
@@ -61,7 +61,7 @@ class _FakeNet:
 
 
 class _FakeStrategy:
-    """Minimal stand-in for `core.query_strategies.strategy.Strategy`.
+    """Minimal stand-in for `dalmax.query_strategies.base.Strategy`.
 
     `query`/`update` raise if ever called: with `n_round=0` the round loop
     body must never execute, so calling either is a test failure, not just
@@ -93,18 +93,16 @@ class _FakeStrategy:
 
 
 class _FakeDataset:
-    """Minimal stand-in for `utils.data.Data`: only the attributes/methods
-    `ExperimentRunner.run` and `dalmax.experiment.reporter.write_report`
-    actually read/call."""
+    """Minimal stand-in for `dalmax.data.datasets.Data`: only the
+    attributes/methods `ExperimentRunner.run` and
+    `dalmax.experiment.reporter.write_report` actually read/call."""
 
     def __init__(self) -> None:
         self.labeled_idxs = np.zeros(20, dtype=bool)
         self.Y_test = torch.tensor([0, 1, 0, 1, 0])
         self.Z_test_paths = [f"p{i}.png" for i in range(5)]
 
-    def initialize_labels(
-        self, n_init_labeled: int, strategy_name: str, compute_legacy_features: bool = True
-    ) -> None:
+    def initialize_labels(self, n_init_labeled: int, strategy_name: str) -> None:
         self.labeled_idxs[:n_init_labeled] = True
 
     def get_classes_names(self) -> list[str]:

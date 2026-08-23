@@ -1,9 +1,11 @@
 import numpy as np
-from .strategy import Strategy
+
+from .base import Strategy
+
 
 class RandomSampling(Strategy):
     def __init__(self, dataset, net, logger):
-        super(RandomSampling, self).__init__(dataset, net, logger)
+        super().__init__(dataset, net, logger)
 
     def query(self, n):
         print(f"Initializing the DAL strategy with RandomSampling query {n} samples")

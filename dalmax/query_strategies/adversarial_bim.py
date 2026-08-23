@@ -4,12 +4,12 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from .strategy import Strategy
+from .base import Strategy
 
 
 class AdversarialBIM(Strategy):
     def __init__(self, dataset, net, logger, eps=0.05, max_iter=10, batch_size=64, device=None):
-        super(AdversarialBIM, self).__init__(dataset, net, logger)
+        super().__init__(dataset, net, logger)
         self.eps = eps
         self.max_iter = max_iter
         self.batch_size = batch_size

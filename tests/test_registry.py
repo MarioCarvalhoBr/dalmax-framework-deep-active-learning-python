@@ -1,18 +1,23 @@
-"""Every `--strategy_name` choice in `dalmax.cli` must resolve to a
-`core.query_strategies.strategy.Strategy` subclass, through either the
-legacy `utils.orchestrator.get_strategy` (for the 12 legacy names it has
-always supported) or the new `dalmax.query_strategies.registry.build_strategy`
-(for all 17 CLI choices, including the four `*Kmeans*Sampling` presets and
-the new generic `RepresentationStrategy`).
+"""`dalmax.cli`'s `--strategy_name` `choices=[...]` must exactly match
+`dalmax.query_strategies.registry.STRATEGY_REGISTRY`'s keys.
 
 `dalmax.cli` (formerly `demo.py`, see `.specs/architecture/refactor-plan.md`
 Phase 2) is the single source of truth for which query strategies the CLI
 accepts. We parse its `--strategy_name` `choices=[...]` out of the source via
 `ast` (never importing `dalmax.cli`, since importing it has side effects: it
-eagerly calls `utils.LOGGER.get_logger()`, which creates a log file handler
-and a `results/logs/` directory as an import-time side effect — same
+eagerly calls `dalmax.logging_utils.get_logger()`, which creates a log file
+handler and a `results/logs/` directory as an import-time side effect — same
 reasoning that previously applied to `demo.py` before it became this thin
 shim).
+
+Historically this file also tested the legacy `utils.orchestrator.get_strategy`
+`if/elif` registry directly, against `core.query_strategies.strategy.Strategy`.
+Both `utils/orchestrator.py` and `core/query_strategies/` were deleted in
+refactor Phase 4 (`.specs/architecture/refactor-plan.md`) once the `dalmax`
+registries fully replaced them (see `.specs/architecture/current-state.md`
+§0/§11) — `build_strategy`'s own behavior (presets, `ConfigError`s, seed
+derivation, constructing every legacy class) is covered by
+`tests/test_strategy_registry.py`.
 """
 
 from __future__ import annotations
@@ -20,26 +25,10 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import numpy as np
-import pytest
-
-from core.query_strategies.strategy import Strategy
-from dalmax.query_strategies.registry import (
-    GENERIC_REPRESENTATION_NAME,
-    STRATEGY_REGISTRY,
-    build_strategy,
-)
-from utils.orchestrator import get_strategy
+from dalmax.query_strategies.registry import STRATEGY_REGISTRY
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CLI_PY = REPO_ROOT / "dalmax" / "cli.py"
-
-# `utils.orchestrator.get_strategy` never learned about the new generic
-# `RepresentationStrategy` CLI choice (it is a `dalmax`-only concept, built
-# via `dalmax.query_strategies.registry.build_strategy` with a config/rng
-# `utils.orchestrator.get_strategy(name)` does not accept) — it is covered
-# separately by `tests/test_strategy_registry.py`.
-LEGACY_UNSUPPORTED_NAMES = {GENERIC_REPRESENTATION_NAME}
 
 
 def _extract_strategy_choices() -> list[str]:
@@ -77,29 +66,3 @@ def test_strategy_choices_found_at_least_one():
 
 def test_strategy_choices_match_new_registry():
     assert set(STRATEGY_CHOICES) == set(STRATEGY_REGISTRY)
-
-
-@pytest.mark.parametrize(
-    "strategy_name",
-    [name for name in STRATEGY_CHOICES if name not in LEGACY_UNSUPPORTED_NAMES],
-)
-def test_strategy_name_resolves_to_strategy_subclass_via_legacy_orchestrator(strategy_name):
-    strategy_cls = get_strategy(strategy_name)
-    assert isinstance(strategy_cls, type), (
-        f"get_strategy({strategy_name!r}) did not return a class: {strategy_cls!r}"
-    )
-    assert issubclass(strategy_cls, Strategy), (
-        f"get_strategy({strategy_name!r}) returned {strategy_cls!r}, "
-        f"which is not a subclass of core.query_strategies.strategy.Strategy"
-    )
-
-
-def test_get_strategy_rejects_unknown_name():
-    with pytest.raises(NotImplementedError):
-        get_strategy("__not_a_real_strategy__")
-
-
-def test_build_strategy_rejects_unknown_name():
-    rng = np.random.default_rng(0)
-    with pytest.raises(KeyError):
-        build_strategy("__not_a_real_strategy__", None, None, None, None, rng)

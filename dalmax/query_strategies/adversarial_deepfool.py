@@ -1,15 +1,14 @@
 import numpy as np
 import torch
-import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from .strategy import Strategy
+from .base import Strategy
 
 
 class AdversarialDeepFool(Strategy):
     def __init__(self, dataset, net, logger, max_iter=10, batch_size=16, device=None, eps=1e-12):
-        super(AdversarialDeepFool, self).__init__(dataset, net, logger)
+        super().__init__(dataset, net, logger)
         self.max_iter = max_iter
         self.batch_size = batch_size
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")

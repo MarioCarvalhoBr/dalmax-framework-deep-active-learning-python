@@ -1,10 +1,11 @@
-import numpy as np
 import torch
-from .strategy import Strategy
+
+from .base import Strategy
+
 
 class BALDDropout(Strategy):
     def __init__(self, dataset, net, logger):
-        super(BALDDropout, self).__init__(dataset, net, logger)
+        super().__init__(dataset, net, logger)
         self.n_drop = net.params['n_drop']
 
     def query(self, n):
