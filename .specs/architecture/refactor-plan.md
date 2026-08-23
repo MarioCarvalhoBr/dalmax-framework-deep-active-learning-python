@@ -109,6 +109,14 @@ Work (mapped to `target-architecture.md` §2):
 - Behavior drift in the flat k-means strategies once seeding changes (expected and desired, but
   must be called out to the advisor since it changes historical result reproducibility for seeds
   that previously always clustered as if `random_state=3`).
+- `dalmax.seeding.seed_everything` sets `torch.backends.cudnn.deterministic = True` /
+  `torch.backends.cudnn.benchmark = False` instead of `demo.py`'s old `cudnn.enabled = False`
+  determinism shortcut. This is a deliberate, desired change (cuDNN stays enabled, so GPU runs are
+  faster), but it means post-refactor GPU runs are **not** bit-identical to historical GPU runs
+  recorded before this refactor, even with the same seed — cuDNN's deterministic algorithms are not
+  guaranteed to match the non-deterministic ones used previously. The CPU golden-run fixture
+  (`tests/golden/*.json`, `tests/test_golden_run.py`) is unaffected (cuDNN never applies on CPU).
+  Any GPU-based reproducibility claim against pre-refactor results must account for this.
 - The vendored `core/tools/SSL/` code is Meta-licensed; keep its internals untouched and only wrap
   it, per `target-architecture.md` §2's `tools/` note.
 - Physically moving files into `dalmax/` is **out of scope** for Phase 2 per ADR 0002 (the package

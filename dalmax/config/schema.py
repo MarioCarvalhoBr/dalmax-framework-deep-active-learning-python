@@ -211,7 +211,7 @@ class ExperimentConfig:
             )
         if self.n_query <= 0:
             raise ConfigError(f"ExperimentConfig.n_query must be > 0, got {self.n_query}")
-        if self.n_round <= 0:
-            raise ConfigError(f"ExperimentConfig.n_round must be > 0, got {self.n_round}")
+        if self.n_round < 0:
+            raise ConfigError(f"ExperimentConfig.n_round must be >= 0, got {self.n_round}")
         if not self.dir_results:
             raise ConfigError("ExperimentConfig.dir_results must be non-empty")

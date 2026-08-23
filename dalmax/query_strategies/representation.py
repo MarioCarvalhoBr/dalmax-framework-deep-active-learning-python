@@ -119,6 +119,25 @@ class RepresentationStrategy(Strategy):
                 embeddings, self.config.dataset.embedding.variant, self.embedding_provider.q
             )
 
+        # Observability: the embedding matrix shape actually handed to
+        # selection depends on extractor/q/variant in ways that are easy to
+        # get wrong (see the HIGH finding in `dalmax.config.loader`/
+        # `dalmax.query_strategies.registry` about `q` defaulting silently);
+        # logging it every query makes a wrong shape visible in the run log
+        # instead of only surfacing as a downstream metric anomaly. `logger`
+        # may be `None` in lightweight tests that construct
+        # `RepresentationStrategy` directly (see `tests/test_representation_
+        # strategy.py`), so this is best-effort, matching `Strategy`'s own
+        # `logger.warning(...)` style elsewhere.
+        if self.logger is not None:
+            self.logger.warning(
+                "Embedding matrix shape after slicing: "
+                f"extractor={self.embedding_provider.name!r}, "
+                f"q={self.embedding_provider.q!r}, "
+                f"variant={self.config.dataset.embedding.variant!r}, "
+                f"shape={embeddings.shape}"
+            )
+
         selected_ids = self.selection.select(
             embeddings, current_unlabeled_ids, n, self.rng
         )

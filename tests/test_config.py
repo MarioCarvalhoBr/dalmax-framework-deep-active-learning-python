@@ -413,3 +413,73 @@ def test_experiment_config_rejects_unresolved_auto_device():
             device="auto",
             params_json_path="params.json",
         )
+
+
+# --- n_round >= 0 is allowed (legacy demo.py allowed `--n_round 0`: train/ ---
+# --- evaluate once, no query rounds); n_round < 0 still rejected; n_query ---
+# --- must still be > 0 ---------------------------------------------------
+
+
+def _minimal_dataset_config() -> DatasetConfig:
+    return DatasetConfig(
+        name="X",
+        data_dir="DATA/x/",
+        n_classes=2,
+        n_epoch=1,
+        n_drop=1,
+        train_args=TrainArgs(batch_size=1, num_workers=0),
+        test_args=TrainArgs(batch_size=1, num_workers=0),
+        optimizer_args=OptimizerArgs(lr=0.1, momentum=0.1),
+        embedding=EmbeddingConfig(),
+        selection=SelectionConfig(method="flat_closest", hierarchy=None),
+    )
+
+
+def test_experiment_config_allows_n_round_zero():
+    config = ExperimentConfig(
+        dataset=_minimal_dataset_config(),
+        strategy_name="RandomSampling",
+        seed=1,
+        n_init_labeled=10,
+        n_query=10,
+        n_round=0,
+        dir_results="results/x/",
+        device="cpu",
+        params_json_path="params.json",
+    )
+    assert config.n_round == 0
+
+
+def test_experiment_config_rejects_negative_n_round():
+    with pytest.raises(ConfigError, match="n_round"):
+        ExperimentConfig(
+            dataset=_minimal_dataset_config(),
+            strategy_name="RandomSampling",
+            seed=1,
+            n_init_labeled=10,
+            n_query=10,
+            n_round=-1,
+            dir_results="results/x/",
+            device="cpu",
+            params_json_path="params.json",
+        )
+
+
+def test_experiment_config_still_rejects_non_positive_n_query():
+    with pytest.raises(ConfigError, match="n_query"):
+        ExperimentConfig(
+            dataset=_minimal_dataset_config(),
+            strategy_name="RandomSampling",
+            seed=1,
+            n_init_labeled=10,
+            n_query=0,
+            n_round=0,
+            dir_results="results/x/",
+            device="cpu",
+            params_json_path="params.json",
+        )
+
+
+def test_load_experiment_config_allows_n_round_zero():
+    config = _load(PARAMS_GPU_0, "CIFAR10", n_round=0)
+    assert config.n_round == 0
