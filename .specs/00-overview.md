@@ -84,8 +84,9 @@ distinct from "hierarchical" and matters for the ablation in
   It is not yet implemented in code; the current codebase can only reproduce
   the reference RNHAL runs already executed (see
   `.specs/experiments/baseline-results.md`).
-- A **refactor is pending** (not started) to make the ablations
-  one-config-line runs instead of requiring new hardcoded strategy classes.
+- Refactor **Phase 2 (core) is complete**: the `dalmax/` package makes the ablations
+  one-config-line runs (`RepresentationStrategy` + `embedding`/`selection` params blocks).
+  Phase 3 (ablation execution) is next.
   See `.specs/architecture/refactor-plan.md` (owned by a different work
   batch) for the phased plan; the target design is in
   `.specs/architecture/target-architecture.md`.
@@ -96,8 +97,8 @@ distinct from "hierarchical" and matters for the ablation in
 ## Pointers
 
 - Method definition (LaTeX, source of truth for notation): `phd_files/Active_Learning_Mario/method_full.tex`
-- Entry point: `demo.py`
-- Strategy registry (if/elif — known issue): `utils/orchestrator.py`
+- Entry point: `demo.py` (thin shim) → `dalmax/cli.py` → `dalmax/experiment/runner.py`
+- Strategy registry: `dalmax/query_strategies/registry.py` (legacy `utils/orchestrator.py` is dead code, Phase 4 removal)
 - Dataset loading / feature caching: `utils/data.py`, `utils/dataset.py`
 - Experimental protocol: `.specs/experiments/experimental-protocol.md`
 - Ablation spec: `.specs/experiments/ablation-study.md`

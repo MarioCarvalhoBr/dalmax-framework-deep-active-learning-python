@@ -135,7 +135,7 @@ One params JSON per variant, differing only in `embedding.variant` (`spatial` sh
         "data_dir": "DATA/daninhas_full/",
         "n_epoch": 10,
         "n_drop": 10,
-        "n_classes": 6,
+        "n_classes": 5,
         "train_args": {"batch_size": 64, "num_workers": 4},
         "test_args": {"batch_size": 64, "num_workers": 4},
         "optimizer_args": {"lr": 0.05, "momentum": 0.3},
@@ -155,11 +155,9 @@ CUDA_VISIBLE_DEVICES=<gpu> python demo.py \
     --n_round 8 --dir_results results/ablation_representation/ --device cuda
 ```
 
-**Note on `n_classes`**: the params snippet above uses `n_classes: 6`, matching
-`DATA/daninhas_full/`'s 5 weed classes as currently laid out on disk plus one class-count
-discrepancy carried over from the audit batch that produced this snippet — **TBD verify against
-the live `DATA/daninhas_full/` class count** (`research-rules/dataset-protocol.md` says 5 classes)
-before running; do not copy `n_classes: 6` blindly if the dataset directory has 5 subdirectories.
+**Note on `n_classes`**: `5`, matching `params_df_gpu_0.json` and the five class
+subdirectories under `DATA/daninhas_full/` (verified 2026-08-23; an earlier audit snippet
+mistakenly carried `6`).
 
 ## 6.2 Hierarchy ablation
 
@@ -229,7 +227,7 @@ docstring):
         "data_dir": "DATA/daninhas_full/",
         "n_epoch": 10,
         "n_drop": 10,
-        "n_classes": 6,
+        "n_classes": 5,
         "train_args": {"batch_size": 64, "num_workers": 4},
         "test_args": {"batch_size": 64, "num_workers": 4},
         "optimizer_args": {"lr": 0.05, "momentum": 0.3},
@@ -250,8 +248,7 @@ CUDA_VISIBLE_DEVICES=<gpu> python demo.py \
 ```
 
 Swap `embedding.variant`/`selection.hierarchy` per row for the other four configs (L=1, L=2a, L=2b,
-L=4) — one params JSON per row, same CLI shape. Same `n_classes` caveat as §6.1's exact config
-(verify against the live dataset before running).
+L=4) — one params JSON per row, same CLI shape. (verify against the live dataset before running).
 
 ## 6.3 Contribution of the two RNHAL stages
 
@@ -305,7 +302,7 @@ as §6.1/§6.2's provisional fixed point):
 {
     "DANINHAS": {
         "data_dir": "DATA/daninhas_full/",
-        "n_epoch": 10, "n_drop": 10, "n_classes": 6,
+        "n_epoch": 10, "n_drop": 10, "n_classes": 5,
         "train_args": {"batch_size": 64, "num_workers": 4},
         "test_args": {"batch_size": 64, "num_workers": 4},
         "optimizer_args": {"lr": 0.05, "momentum": 0.3},
@@ -331,7 +328,7 @@ CUDA_VISIBLE_DEVICES=<gpu> python demo.py \
 {
     "DANINHAS": {
         "data_dir": "DATA/daninhas_full/",
-        "n_epoch": 10, "n_drop": 10, "n_classes": 6,
+        "n_epoch": 10, "n_drop": 10, "n_classes": 5,
         "train_args": {"batch_size": 64, "num_workers": 4},
         "test_args": {"batch_size": 64, "num_workers": 4},
         "optimizer_args": {"lr": 0.05, "momentum": 0.3},
@@ -358,9 +355,7 @@ chosen from the budget. **TBD**: confirm with the advisor whether this satisfies
 "genuinely separate cluster count from `n_query`" intent (see the "Without hierarchical module"
 bullet above), or whether a `selection.n_clusters` config key should be added to
 `dalmax/config/schema.py::SelectionConfig`/`loader.py` before this row is run on the lab machine —
-flag before running, this is a small, well-scoped addition if needed. Same `n_classes` caveat as
-§6.1/§6.2 applies.
-
+flag before running, this is a small, well-scoped addition if needed. 
 ## Code capabilities the refactor must provide
 
 **Status: all five capabilities below are implemented as of Phase 2 (2026-08-23)** — see
