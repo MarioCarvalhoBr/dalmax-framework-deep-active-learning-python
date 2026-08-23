@@ -11,6 +11,20 @@ strategy run takes several seconds of real CPU training + prediction). Not run
 by `make test` / CI's fast job; run explicitly via `make test-all` or
 `pytest -m dataset` on a machine with the dataset present.
 
+Test isolation note
+--------------------
+This test passes `--dir_results` pointed at `tmp_path`, so only the per-run
+result artifacts under that directory (`results.json`, `predictions.csv`,
+`saved_model.pth`, plots) are isolated to the test's temp directory and
+cleaned up automatically. `demo.py` and `utils/data.py` still write to fixed,
+non-isolated repository paths as a side effect of every invocation of this
+test: `results/logs/` (the run's `log-dalmax.log`, via `utils.LOGGER`),
+`results/original_indices.txt` (written unconditionally by `Data.__init__` /
+`create_indexes_path`), and `results/cache/` (the SSRAE feature cache and
+`Y_train` pickle, via `cache_file_path` — see `.specs/quality/known-issues.md`
+KI-3 and KI-21). None of these are cleaned up by this test; they accumulate in
+the real `results/` tree exactly as a real `demo.py` run would.
+
 Determinism note
 -----------------
 Both fixtures were captured after manually re-running the exact same CLI 3
