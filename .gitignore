@@ -178,3 +178,4 @@ cython_debug/
 *.pth
 paper_drafts/
 .ruff_cache/
+.DS_Store
