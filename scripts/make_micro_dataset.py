@@ -26,6 +26,7 @@ copied in yet), this script prints a message and exits 0 rather than failing
 
 from __future__ import annotations
 
+import hashlib
 import random
 import shutil
 from pathlib import Path
@@ -72,8 +73,13 @@ def _populate_split(split: str, count_per_class: int) -> None:
         dst_dir.mkdir(parents=True, exist_ok=True)
 
         # Deterministic per-(split, class) seed so train/test selections don't
-        # collide with each other.
-        seed = SAMPLING_SEED + hash((split, class_name)) % 10_000
+        # collide with each other. Built-in `hash()` on a tuple is salted
+        # per-process (PYTHONHASHSEED randomization) and must never be used
+        # here: two processes running this exact script would silently select
+        # different files. `hashlib.sha256` is stable across processes and
+        # machines.
+        digest = hashlib.sha256(f"{split}:{class_name}".encode()).hexdigest()
+        seed = SAMPLING_SEED + int(digest, 16) % 10_000
         selected = _select_files(src_dir, count_per_class, seed)
         selected_names = {p.name for p in selected}
 
