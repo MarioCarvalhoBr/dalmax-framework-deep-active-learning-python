@@ -11,7 +11,7 @@ debt, works today but limits scalability), **Low** (cosmetic/mechanical).
 |---|---|---|---|---|---|
 | KI-1 | `demo.py` is a monolith mixing CLI, training loop, plotting, and persistence | **Confirmed** | `demo.py` is 289 lines; `main()` (lines 24-255) does argparse handling, seeding, dataset/net/strategy construction, the round loop, `matplotlib`/`seaborn` plotting (`plot_confusion_matrix`, `plot_metrics`), and JSON/CSV persistence, all in one function | Medium | Phase 2 (`experiment/runner.py` + `experiment/reporter.py` + thin `cli.py`) |
 | KI-2 | `pandas` imported in `demo.py`/`utils/report/` but absent from `requirements.txt` | **Confirmed** | `demo.py:7` (`import pandas as pd`), used at `demo.py:249`; `requirements.txt` (8 lines: matplotlib, numpy, Pillow, scikit_learn, seaborn, torch, torchvision, tqdm) has no `pandas` entry. **Partially already fixed**: `pyproject.toml:22` already declares `pandas==2.2.3`, but the exported `requirements.txt` (used by the lab machine/Colab per ADR 0001) has not been re-exported yet | High (until requirements.txt is regenerated — lab machine installs from it, not pyproject.toml) | Phase 1 (`make export-reqs`) |
-| KI-3 | Pickle caches hardcoded in `utils/data.py` with no cache key for dataset/Q/variant | **Confirmed** | `utils/data.py:23` (`results/Y_train.pkl`), `:48` (`results/features_dict_vctex.pkl`), `:120` (`results/features_dict_ssrae.pkl`) — all fixed paths, `if not os.path.exists(path_pkl)` is the only "invalidation" (i.e., none); `Q=13` hardcoded at `:139`, `Q=[5,17]` hardcoded at `:70` | High — direct blocker for ablation 6.1/6.3 | Phase 2 (`EmbeddingProvider` + `EmbeddingCache`, ADR 0003) |
+| KI-3 | Pickle caches hardcoded in `utils/data.py` with no cache key for dataset/Q/variant | **Partially fixed (2026-08-23, Phase 1 golden-run batch)** | `utils/data.py` now has a `cache_file_path(name, dataset_folder, q=None)` helper: `Data.__init__` takes a `dataset_folder` parameter (populated by `get_DANINHAS`/`get_CIFAR10` from `os.path.basename(data_dir.rstrip("/"))`), and `Y_train`/SSRAE/VCTex caches are keyed as `results/cache/{name}_{dataset_folder}[_Q{q}].pkl` (e.g. `results/cache/features_ssrae_daninhas_micro_Q13.pkl`) instead of the old fixed `results/Y_train.pkl`/`results/features_dict_vctex.pkl`/`results/features_dict_ssrae.pkl` paths. The pre-existing full-dataset pkl files at those old fixed paths were **not deleted** and are no longer read/written by this code path — they are orphaned, not migrated. Still missing: an `embedding_variant` (`full`/`spatial`/`spectral`) key component, and `Q` itself is still a hardcoded literal (`13` for SSRAE, `[5,17]` for VCTex) rather than config-driven — both remain Phase 2 work (`EmbeddingProvider` + `EmbeddingCache`, ADR 0003). Unit-tested in `tests/test_cache_paths.py`. | High — direct blocker for ablation 6.1/6.3; now unblocked for the golden-run use case, still blocking for the variant/Q-sweep ablations | Phase 1 (cache-path keying only); Phase 2 (`EmbeddingProvider` + `EmbeddingCache`, ADR 0003, for `embedding_variant` + config-driven `Q`) |
 | KI-4 | `ssl_ssrae_sampling.py` hardcodes `self.params['DANINHAS']` | **Confirmed** | `core/query_strategies/ssl_ssrae_sampling.py:66`: `config_kmh = self.params['DANINHAS']['config_kmh']` — breaks `SSRAEKmeansHCSampling`/`VCTexKmeansHCSampling` for `CIFAR10` (also confirmed: `params_df_gpu_0.json`'s `"CIFAR10"` block has no `config_kmh` key at all, lines 25-42) | High | Phase 2 (config layer) |
 | KI-5 | `SSRAEKmeansSampling` hardcodes `KMeans(random_state=3)` | **Confirmed**, and also in the sibling class | `core/query_strategies/ssrae_kmeans_sampling.py:23` and `core/query_strategies/vctex_kmeans_sampling.py:26` — both literal `random_state=3`, ignoring `--seed` | High — undermines the seed-sweep design (`SEEDS=(1 2 3)` in `run_pipe_gpu_0.sh`) | Phase 2 (seed propagation audit) |
 | KI-6 | Strategies mutate `dataset.features_dict` (deleting selected ids) as a side effect | **Confirmed**, in three places | `ssrae_kmeans_sampling.py:48-50`, `vctex_kmeans_sampling.py:51-53`, `ssl_ssrae_sampling.py:100-102` — all `del features_dict[img_id]` after selection | Medium | Phase 2 (`SelectionStrategy` returns ids; caller owns pool bookkeeping, not the strategy) |
@@ -53,11 +53,31 @@ debt, works today but limits scalability), **Low** (cosmetic/mechanical).
   (line 22) as of this session's Poetry deliverable; only the generated `requirements.txt` export is
   still stale (see KI-2).
 
+| KI-29 | `SSRAEKmeansSampling`'s selected indices are a function of the hardcoded `KMeans(random_state=3)`, not `--seed` — golden-run fixture is pinned to that literal | `tests/golden/ssrae_kmeans_micro_seed1.json` (2026-08-23): confirms KI-5 empirically — the micro-dataset golden run's `round_1_query_idxs_sorted` depends on the literal `3`, not `--seed 1`. Not a new defect (already tracked as KI-5), but explicitly called out here so a future Phase 2 seed-propagation fix that legitimately changes these indices is not mistaken for a regression when `tests/test_golden_run.py` starts failing | High (duplicate severity of KI-5) | Phase 2 (seed propagation audit); when KI-5 is fixed, regenerate `tests/golden/ssrae_kmeans_micro_seed1.json` in the same change |
+
+## Determinism verification (2026-08-23, Phase 1 golden-run batch)
+
+No CPU-training nondeterminism was found for the golden-run configuration (1 epoch, CPU-only
+ResNet50, `batch_size=16`, `num_workers=0`, micro 2-class/70-image DANINHAS subset). Both
+`RandomSampling` and `SSRAEKmeansSampling` were run 3 times each with identical CLI args
+(`--seed 1`); every run produced bit-identical initial labeled indices, queried indices, and
+`results.json` metrics (including exact float repr, e.g. `0.3333333333333333`). The
+`SSRAEKmeansSampling` check additionally covered both a cold (recompute) and warm (cached) SSRAE
+feature cache path, with identical results either way. `tests/test_golden_run.py` therefore compares
+metrics with an `abs=1e-6` tolerance (not because nondeterminism was observed, but as a documented
+safety margin — see that test's module docstring) rather than falling back to the
+indices-only comparison `.specs/quality/testing-strategy.md` allows for. If a future environment
+(different CPU architecture, BLAS backend, or thread count) does observe metric drift here, add a
+new known-issue row and loosen `test_golden_run.py` to compare indices only, per the original test
+plan.
+
 ## Open item count
 
-28 tracked items total: KI-1 through KI-12 (12 items, from the `prompt-master.md` §8.5 seed list,
-all confirmed by direct inspection) plus KI-13 through KI-28 (16 net-new items found while reading
+29 tracked items total: KI-1 through KI-12 (12 items, from the `prompt-master.md` §8.5 seed list,
+all confirmed by direct inspection) plus KI-13 through KI-29 (17 net-new items found while reading
 the code for this document, including KI-26/27/28 added 2026-08-23: the SSRAE row-interleaved
 embedding layout, the `core/tools/SSL/code_kmh.py` exploratory-script hazard, and the undeclared
-`PyPDF2` dependency). Treat the per-row tables above as the source of truth over this count
-if they ever disagree after future edits.
+`PyPDF2` dependency; and KI-29 added 2026-08-23 during the golden-run batch: the
+`SSRAEKmeansSampling` golden fixture's query indices are pinned to the hardcoded
+`KMeans(random_state=3)`, not `--seed`). Treat the per-row tables above as the source of truth over
+this count if they ever disagree after future edits.

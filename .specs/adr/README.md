@@ -13,6 +13,7 @@ session must be captured here in the same task, not deferred.
 | [0001](0001-adopt-poetry.md) | Adopt Poetry for dependency management | Accepted |
 | [0002](0002-keep-dalmax-name-and-package-consolidation.md) | Keep the DalMax name; consolidate `core/` + `utils/` into `dalmax/` later | Accepted |
 | [0003](0003-embedding-provider-abstraction.md) | Introduce an `EmbeddingProvider` abstraction with a keyed cache | Accepted |
+| [0004](0004-micro-dataset-and-golden-run.md) | Deterministic micro-dataset + golden-run fixtures for local smoke testing | Accepted |
 
 ## When to add a new ADR
 

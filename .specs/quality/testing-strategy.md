@@ -1,7 +1,10 @@
 # Testing Strategy
 
-Status: Phase 1 tests are TBD-implementation (not yet written as of 2026-08-23); this document
-specifies what they must cover. Runs on the no-GPU local dev notebook unless marked otherwise.
+Status: Phase 1 is complete as of 2026-08-23 — `test_imports.py`, `test_registry.py`,
+`test_ssrae_embedding_layout.py`, `test_cache_paths.py` (85 tests total under
+`pytest -m "not gpu and not dataset and not slow"`) plus the golden-run fixtures and
+`test_golden_run.py` described in item 4 below. Runs on the no-GPU local dev notebook unless marked
+otherwise.
 
 ## Markers
 
@@ -40,13 +43,30 @@ tests before a batch (this is part of what the `experiment-auditor` agent checks
      (columns for RG,GB,BR) — see `.specs/experiments/ablation-study.md` §6.1 and
      `.specs/quality/known-issues.md`,
    - runs in well under a second on CPU (no GPU, no dataset — safe for CI).
-4. **Golden-run regression fixture**: a tiny subset (2 classes, ~50 images sampled from
-   `DATA/daninhas_full/`, or a synthetic tiny image set if avoiding real data in the fixture is
-   preferred), fixed seed, `n_init_labeled` small, `n_round=1`, `RandomSampling` (and
-   `SSRAEKmeansSampling` once it no longer hardcodes `device="cuda"` anywhere in its path — it
-   doesn't today, only the *hierarchical* variant does) — record the exact selected indices and
-   final metrics as a committed JSON fixture. Marked `dataset` if it needs real images, otherwise
-   runs in CI.
+4. **Golden-run regression fixture** — **done**. `scripts/make_micro_dataset.py` deterministically
+   samples 25 train + 10 test images from each of 2 real classes (`DATASET_BRACHIARIA`,
+   `DATASET_GRAMINEA`) in `DATA/daninhas_full/` into `DATA/daninhas_micro/` (sorted filenames, fixed
+   sampling seed, idempotent, never writes into `daninhas_full/`, exits 0 with a message if
+   `daninhas_full/` isn't present). `files_config/params_micro.json` points DANINHAS at that
+   micro-dataset with `n_epoch=1`, `n_classes=2`, `batch_size=16`.
+   `demo.py --strategy_name RandomSampling --n_init_labeled 10 --n_query 5 --n_round 1 --seed 1` and
+   the same CLI with `--strategy_name SSRAEKmeansSampling` were each run 3 times; the initial labeled
+   indices, per-round query indices (both logged via two new `logger.warning` lines in `demo.py`, the
+   only way to observe them), and every `results.json` metric were **bit-identical across all 3 runs
+   for both strategies** — no CPU-training nondeterminism was found in this configuration. Recorded
+   as `tests/golden/random_sampling_micro_seed1.json` and `tests/golden/ssrae_kmeans_micro_seed1.json`
+   (indices + metrics + exact CLI/params + git commit + notes). The SSRAE golden run required a
+   minimal, explicitly-scoped Phase 1 exception: `utils/data.py`'s `cache_file_path()` helper keys the
+   SSRAE/VCTex/`Y_train` pickle caches on dataset folder name (+ `Q`) instead of a fixed path, so the
+   micro-dataset run computes/reads `results/cache/features_ssrae_daninhas_micro_Q13.pkl` and never
+   touches the pre-existing full-dataset `results/features_dict_ssrae.pkl` (left on disk, untouched;
+   partial fix of KI-3, see `known-issues.md`). Note the SSRAE query indices are a function of
+   `SSRAEKmeansSampling`'s hardcoded `KMeans(random_state=3)` (KI-5), not of `--seed` — expected to
+   change (and the fixture to be regenerated) once Phase 2's seed-propagation audit lands.
+   `tests/test_golden_run.py` (marked `dataset`+`slow`) regenerates the micro dataset if needed, runs
+   both strategies via `subprocess` into a `tmp_path` (never `results/`), and asserts indices match
+   exactly and metrics match within `1e-6`. Not run by CI's fast job; run via `make test-all` or
+   `pytest -m dataset` on a machine with `DATA/daninhas_full/` present.
 
 ## After Phase 2 — abstraction-level unit tests
 
@@ -86,9 +106,11 @@ tests before a batch (this is part of what the `experiment-auditor` agent checks
 - Full multi-seed, multi-strategy sweeps (`run_pipe_gpu_*.sh`) are experiments, not tests — they are
   covered by `.specs/experiments/experimental-protocol.md` and the `experiment-auditor` agent's
   pre-flight checklist, not by `pytest`.
-- `make smoke` (see `.specs/architecture/refactor-plan.md` Phase 1 and the root `Makefile`) is the
-  closest thing to an end-to-end check runnable without a real GPU; if a true smoke run of
-  `demo.py`/`cli.py` on a 2-class/50-image subset is not feasible without first landing Phase 2's
-  device-agnostic hierarchical selection, the `smoke` Makefile target should be a **documented stub**
-  (prints what it would do and why it's blocked) rather than silently no-op — tracked as a
-  known-issue until Phase 2 unblocks it.
+- `make smoke` (see `.specs/architecture/refactor-plan.md` Phase 1 and the root `Makefile`) is a real
+  end-to-end check as of Phase 1's closeout: it generates `DATA/daninhas_micro/` (or skips with a
+  message if `DATA/daninhas_full/` isn't present), runs `demo.py --strategy_name RandomSampling` on
+  it (a few CPU seconds), then runs the fast test suite. This only covers `RandomSampling`
+  end-to-end; the fuller golden-run regression (both `RandomSampling` and `SSRAEKmeansSampling`,
+  exact index/metric comparison) is `tests/test_golden_run.py`, `dataset`+`slow`-marked and run via
+  `make test-all`, not `make smoke`, to keep the latter fast. The hierarchical strategies
+  (`*HCSampling`) remain untestable locally (hardcoded `device="cuda"`, KI-13) until Phase 2.
