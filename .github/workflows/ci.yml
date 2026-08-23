@@ -1,0 +1,66 @@
+# DalMax CI
+#
+# Runs the fast test suite (no GPU, no DATA/ dataset, no full training) and a
+# report-only lint pass on every push and pull request.
+#
+# Torch/CUDA tradeoff (read before changing this file):
+#   `poetry.lock` pins `torch==2.5.0` / `torchvision==0.20.0` as resolved from
+#   PyPI, which on Linux defaults to the CUDA-enabled wheels (~2 GB combined
+#   download) even though this CI job never touches a GPU and none of the
+#   fast/unit tests need CUDA. Re-locking the project against the PyTorch CPU
+#   index would make local (`poetry install`) and CI environments diverge in
+#   ways that are easy to forget about, so instead of forking the lockfile we
+#   do a normal `poetry install` and then *reinstall* just torch/torchvision
+#   from the official CPU-only wheel index, pinned to the exact same
+#   versions already in the lock file. This keeps `poetry.lock` as the single
+#   source of truth for versions while avoiding the multi-GB CUDA download in
+#   CI. If a future session adds a real GPU-requiring CI job (marked `gpu`),
+#   it should install the regular (CUDA) wheels instead of doing this swap.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: "2.2.1"
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Cache Poetry virtualenv
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-py3.12-${{ hashFiles('poetry.lock') }}
+
+      - name: Install dependencies
+        run: poetry install --no-root --only main,dev
+
+      - name: Swap in CPU-only torch/torchvision wheels
+        run: |
+          poetry run pip install \
+            torch==2.5.0 torchvision==0.20.0 \
+            --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Lint (report-only)
+        # Existing code predates this quality harness and has known ruff
+        # violations (see .specs/quality/known-issues.md). This step is
+        # informational until refactor Phase 1 lands; it will become
+        # blocking (continue-on-error removed) once that work is done.
+        continue-on-error: true
+        run: poetry run ruff check .
+
+      - name: Test (fast markers only)
+        run: poetry run pytest -q -m "not gpu and not dataset and not slow"
