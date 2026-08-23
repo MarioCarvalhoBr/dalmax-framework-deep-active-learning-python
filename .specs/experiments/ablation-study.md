@@ -1,6 +1,11 @@
 # Ablation study specification
 
-Status: **implementable via config as of 2026-08-23 (Phase 2 landed) — not yet run.** This is the
+Status: **materialized as of 2026-08-23 (Phase 3 landed) — configs, scripts, and report tooling
+all exist on disk and are CPU-smoke-tested (11/11); not yet run on the lab machine.** See the
+"Materialized files" section near the end of this document for the exact mapping from every run
+table row below to its `files_config/ablations/*.json` file and GPU run script.
+
+Previous status: **implementable via config as of 2026-08-23 (Phase 2 landed) — not yet run.** This is the
 advisor-requested ablation section for the paper's `\subsection{Ablation study}`. It was originally
 copied faithfully from `prompt-master.md` §6; the "Code capabilities" section's requirements are now
 all implemented (`dalmax/embeddings/`, `dalmax/selection/`, `dalmax.query_strategies.
@@ -392,20 +397,91 @@ Kept here as the original requirements list for traceability.
 
 ## Output artifacts
 
-Per run: the same artifacts `demo.py` already produces
-(`results.json`, `predictions.csv`, `confusion_matrix.pdf`, per-metric
-plots, `log-dalmax.log`, saved model) under a results path that encodes the
-ablation variant, e.g.
-`results/ablation_representation/daninhas_full/SEED_{seed}/NQ_100_NIL_100_NR_8_NE_10/{embedding_variant}/`
-and analogously for `results/ablation_hierarchy/.../{L}_{cluster_config_id}/`
-and `results/ablation_stage_contribution/.../{variant_name}/` (exact naming
-TBD — should extend, not replace, the naming convention in
-`experimental-protocol.md`, adding one path segment for the ablation axis).
-Aggregation: run `utils/report/2_report_build_chunk_results.py` and
-`4_report_build_average_results.py` (see `use-cases/generate-report.md`)
-per ablation family to get seed-averaged macro-F1 tables, then hand-author
-the LaTeX table (or delegate to the `paper-liaison` agent, owned by another
-batch).
+**Resolved (2026-08-23, Phase 3) — replaces the earlier TBD naming.** Per run: the same artifacts
+`demo.py` already produces (`results.json`, `predictions.csv`, `confusion_matrix.pdf`, per-metric
+plots, `log-dalmax.log`, saved model, `run_metadata.json`) under
+`results/ablations/{study}/{config}/{dataset_folder}/SEED_{seed}/NQ_{n_query}_NIL_{n_init_labeled}_NR_{n_round}_NE_{n_epoch}/RepresentationStrategy/`
+— `{study}` is `6_1`/`6_2`/`6_3`, `{config}` is the `files_config/ablations/{config}.json` basename
+(e.g. `rep_spatial`, `hier_L3`, `stage_no_hierarchy`), and everything from `{dataset_folder}`
+onward is the unmodified `experimental-protocol.md` naming convention (`dalmax/experiment/runner.py::
+results_dir_for`) — the ablation axis is encoded as two extra leading path segments
+(`{study}/{config}`), not by changing the existing convention. `scripts/ablations/run_ablation_gpu_0.sh`
+/ `run_ablation_gpu_1.sh` pass `--dir_results results/ablations/{study}/{config}/` per config, and
+`scripts/ablations/smoke_ablations.sh` mirrors the same `{study}/{config}` nesting under
+`results/smoke_ablations/` for CPU smoke runs. Aggregation:
+`python -m dalmax.reporting.ablation_report --root results/ablations --out paper_drafts/ablation_tables`
+(see "Materialized files" below) walks exactly this layout and writes seed-averaged macro-F1 tables
+directly — `utils/report/2_report_build_chunk_results.py`/`4_report_build_average_results.py`
+remain the tool for the main `results/dalmax{1,2}/` sweeps (`use-cases/generate-report.md`), not for
+this ablation-specific tree.
+
+## Materialized files (Phase 3, 2026-08-23)
+
+Every run-table row above is now a real file, not just a JSON snippet in this document. Full-scale
+configs live in `files_config/ablations/`; `files_config/ablations/micro/` mirrors each one for
+local CPU smoke-testing (`make smoke-ablations`, 11/11 passing against `DATA/daninhas_micro/`) —
+see that folder's own `README.md` for every config's exact `embedding`/`selection` values and the
+`sample_sizes`/micro-hierarchy derivation rules. `tests/test_ablation_configs.py` loads all 22
+files (11 full-scale + 11 micro) through `dalmax.config.loader.load_experiment_config` and asserts
+each resolves to the extractor/variant/method/hierarchy its filename implies.
+
+| §  | Row | Params JSON | GPU script |
+|----|-----|--------------|------------|
+| 6.1 | Full | `files_config/ablations/rep_full.json` | `run_ablation_gpu_1.sh` |
+| 6.1 | Spatial-only | `files_config/ablations/rep_spatial.json` | `run_ablation_gpu_0.sh` |
+| 6.1 | Spectral-only | `files_config/ablations/rep_spectral.json` | `run_ablation_gpu_1.sh` |
+| 6.2 | L=1, k=[50] | `files_config/ablations/hier_L1.json` | `run_ablation_gpu_0.sh` |
+| 6.2 | L=2, k=[300,100] | `files_config/ablations/hier_L2a.json` | `run_ablation_gpu_1.sh` |
+| 6.2 | L=2, k=[100,50] | `files_config/ablations/hier_L2b.json` | `run_ablation_gpu_0.sh` |
+| 6.2 | L=3, k=[300,100,50] | `files_config/ablations/hier_L3.json` | `run_ablation_gpu_1.sh` |
+| 6.2 | L=4, k=[300,100,50,25] | `files_config/ablations/hier_L4.json` | `run_ablation_gpu_1.sh` |
+| 6.3 | RNHAL (full) | `files_config/ablations/stage_full.json` | `run_ablation_gpu_1.sh` |
+| 6.3 | w/o representation module | `files_config/ablations/stage_no_representation.json` | `run_ablation_gpu_0.sh` |
+| 6.3 | w/o hierarchical module | `files_config/ablations/stage_no_hierarchy.json` | `run_ablation_gpu_1.sh` |
+
+(`scripts/ablations/run_ablation_gpu_0.sh` = 5 configs, `run_ablation_gpu_1.sh` = 6 configs, split
+by expected relative cost — hierarchical selection over a large/multi-level hierarchy dominates
+runtime, not training; see `run_ablation_gpu_0.sh`'s header comment for the full rationale.) Both
+scripts sweep `SEEDS=(1 2 3)`, `n_query=100`, `n_round=8`, `n_init_labeled` left at the CLI default
+(100), `--device cuda`, `--strategy_name RepresentationStrategy`, and log any failing
+`(config, seed)` to `results/ablations/gpu{0,1}_failures.log` instead of aborting the batch.
+
+Aggregation: `dalmax/reporting/ablation_report.py` (`python -m dalmax.reporting.ablation_report
+--root results/ablations --out paper_drafts/ablation_tables`) walks
+`{root}/{study}/{config}/{dataset}/SEED_*/NQ_*/RepresentationStrategy/results.json`, computes
+per-config mean ± std across seeds of both the final-round value and the across-rounds mean (for
+`all_f1_macro` and `all_f1_score`), and writes `ablation_summary.csv` plus one booktabs
+`ablation_6_{1,2,3}.md`/`.tex` per sub-study (a config with zero discovered runs renders `TBD`).
+Unit-tested against a synthetic tree in `tests/test_ablation_report.py`; also run once against real
+(smoke) output — `results/smoke_ablations/` — to confirm the walk pattern matches actual
+`demo.py`/`ExperimentRunner` output byte-for-byte, not just the synthetic fixture's assumptions.
+
+**Ambiguities resolved while materializing these files** (none required a code change):
+
+- **§6.1's reference hierarchy**: used the `run_pipe_gpu_0.sh`/`params_df_gpu_0.json` reference
+  (`n_clusters=[600,200,100]`, `sample_sizes=[30,15,2]`) exactly as this document's own §6.1 exact-config
+  note already specifies, rather than waiting on a §6.2 "winning config" (§6.2 itself hasn't been run
+  yet, so there is no winner to pick).
+- **`train_args`/`test_args` batch size**: this document's exact-config JSON snippets show
+  `batch_size: 64`, but the materialized files use `256` (matching `params_df_gpu_0.json` and the
+  refactor-plan Phase 3 task's explicit instruction to mirror that file) — a deliberate deviation
+  from this document's snippets, not an oversight; `256` is the batch size every other DANINHAS run
+  in this repo uses.
+- **`hier_L2b.json`'s micro mirror**: the naive halving of `hier_L2a`'s micro `[8,4]` — `[4,2]` —
+  triggers a pre-existing vendored `dtype=object` bug (`core/tools/SSL/src/utils.py:28`, documented
+  in `dalmax/selection/hierarchical_kmeans.py`) when the real `DATA/daninhas_micro` embedding
+  happens to split evenly at `--seed 1`; `[5,2]` was substituted after empirically probing several
+  candidates against the actual derived selection RNG and embeddings (see
+  `files_config/ablations/README.md` for the full account). Full-scale `hier_L2b.json` is unaffected
+  (unchanged `[100,50]`) — an exact-even split is not a practical risk at the ~10k-image full pool.
+- **`hier_L4.json`'s micro mirror**: used `[12,6,3,2]` rather than the naive `[8,4,2,1]` (bottoming
+  out at a cluster of size 1), since the vendored pipeline's behavior at `n_clusters=1` is untested;
+  this was verified empirically to run cleanly at `--seed 1` (see `files_config/ablations/README.md`).
+- **`stage_full.json`**: materialized for pipeline consistency (so all three §6.3 rows share one
+  code path through `RepresentationStrategy`), even though this document's own §6.3 says the "RNHAL
+  (full)" row's *reported* number should come from the pre-Phase-2 `results/dalmax{1,2}/` reference
+  runs, not a new run — both are valid sources; `run_ablation_gpu_1.sh` runs `stage_full.json` so a
+  cross-check is available, but does not obsolete the reference-run recomputation path.
 
 ## Mapping to the paper's `\subsubsection`s
 

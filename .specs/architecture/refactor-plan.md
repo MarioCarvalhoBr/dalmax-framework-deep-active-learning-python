@@ -164,24 +164,42 @@ implemented in Phase 2** (`dalmax/embeddings/resnet_imagenet_provider.py`,
 `dalmax/selection/flat_kmeans_proportional.py`) since they shared registries/tests with the rest of
 the embedding/selection abstraction work — so Phase 3 is now genuinely config-only: exact params
 JSON snippets and CLI invocations for 6.1/6.2/6.3 are in
-`.specs/experiments/ablation-study.md`'s run tables. What remains for Phase 3 is executing these
-configs on the lab machine (this repo's local dev environment has no GPU and must not run them) and
-recording the resulting F1 numbers.
+`.specs/experiments/ablation-study.md`'s run tables.
+
+**Config files + scripts + report: done (2026-08-23, this Phase 3 batch).** All 11 run-table rows
+are materialized as `files_config/ablations/*.json` (+ `files_config/ablations/micro/*.json` CPU
+mirrors), validated by `tests/test_ablation_configs.py`, and CPU-smoke-tested end-to-end (11/11
+passing, `make smoke-ablations` / `scripts/ablations/smoke_ablations.sh`, against
+`DATA/daninhas_micro/`). `scripts/ablations/run_ablation_gpu_0.sh` / `run_ablation_gpu_1.sh` are the
+lab-machine entry points (mirroring `run_pipe_gpu_0.sh`/`run_pipe_gpu_1.sh`'s style; 5/6 config
+split by expected cost, logging failures instead of aborting the batch).
+`dalmax/reporting/ablation_report.py` aggregates `results/ablations/` into `ablation_summary.csv` +
+booktabs `ablation_6_{1,2,3}.tex`/`.md`, unit-tested (`tests/test_ablation_report.py`) and verified
+against real smoke output. See `.specs/experiments/ablation-study.md`'s "Materialized files"
+section for the exact row-to-file mapping and the ambiguities resolved while doing this (reference
+hierarchy choice, batch size, two vendored-bug workarounds in the micro hierarchies). **What remains
+for Phase 3 to close out is executing these scripts on the lab machine** (this repo's local dev
+environment has no GPU and must not run them) and recording the resulting F1 numbers.
 
 Work:
 - **6.1 Representation ablation**: run `embedding_variant = full | spatial | spectral` with the
-  SSRAE provider, `Q=13`, all three sharing one cached full embedding.
+  SSRAE provider, `Q=13`, all three sharing one cached full embedding. Configs: `rep_full.json`,
+  `rep_spatial.json`, `rep_spectral.json`.
 - **6.2 Hierarchy ablation**: run `HierarchicalKMeansSelection` at `L=1..4` with the four
   `n_clusters` configurations in `ablation-study.md` §6.2, `n_query=100`, SSRAE full embeddings.
-- **6.3 Contribution of the two RNHAL stages**: (a) reference RNHAL-full results already executed;
-  (b) `ResNetImageNetProvider` + `HierarchicalKMeansSelection` ("without representation module");
-  (c) SSRAE full + `FlatKMeansProportionalRandom` ("without hierarchical module").
+  Configs: `hier_L1.json` .. `hier_L4.json`.
+- **6.3 Contribution of the two RNHAL stages**: (a) reference RNHAL-full results already executed
+  (`stage_full.json` also materialized, for a cross-check re-run through the new pipeline); (b)
+  `ResNetImageNetProvider` + `HierarchicalKMeansSelection` ("without representation module",
+  `stage_no_representation.json`); (c) SSRAE full + `FlatKMeansProportionalRandom` ("without
+  hierarchical module", `stage_no_hierarchy.json`).
 - Add one run script per GPU for the ablation sweep (mirrors `run_pipe_gpu_0.sh`/`run_pipe_gpu_1.sh`
-  structure), and wire report generation (`dalmax/reporting/`) to produce the macro-F1 tables the
-  paper's `\subsection{Ablation study}` needs.
+  structure) — **done**: `scripts/ablations/run_ablation_gpu_{0,1}.sh` — and wire report generation
+  (`dalmax/reporting/`) to produce the macro-F1 tables the paper's `\subsection{Ablation study}`
+  needs — **done**: `dalmax/reporting/ablation_report.py`.
 
 **Acceptance criteria:**
-- [ ] All items in the "ablation enablers" checklist below are checked off before any run starts.
+- [x] All items in the "ablation enablers" checklist below are checked off before any run starts.
 - [ ] Each of the three sub-studies runs end-to-end on the lab machine for at least one seed without
       code changes (config/CLI-args only).
 - [ ] `.specs/experiments/ablation-study.md` and `.specs/experiments/baseline-results.md` are updated
@@ -189,9 +207,10 @@ Work:
 - [ ] `paper-liaison` drafts the LaTeX table skeleton for `\subsection{Ablation study}` from the
       resulting `results/*/results.json` files into `paper_drafts/`.
 
-**Driver agent:** `implementer` (new `ResNetImageNetProvider` and `FlatKMeansProportionalRandom`),
-`experiment-auditor` (pre-flight check before each batch, per its role: seeds, params JSON vs spec,
-results dir naming, cache validity), `paper-liaison` (LaTeX drafts), `spec-keeper` (spec updates).
+**Driver agent:** `implementer` (new `ResNetImageNetProvider` and `FlatKMeansProportionalRandom`;
+this batch's config files, run scripts, and `dalmax/reporting/` module), `experiment-auditor`
+(pre-flight check before each batch, per its role: seeds, params JSON vs spec, results dir naming,
+cache validity), `paper-liaison` (LaTeX drafts), `spec-keeper` (spec updates).
 
 **Risks:** lab machine has 2×10 GB GPUs — hierarchical k-means over the full unlabeled pool at
 `n_clusters=[600,200,100]` may be memory-tight for larger pools; batch/chunk sizes in

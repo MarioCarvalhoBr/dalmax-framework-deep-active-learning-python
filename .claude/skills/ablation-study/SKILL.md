@@ -12,11 +12,15 @@ sub-studies are evaluated with **macro F1** on the held-out split, dataset
 `.specs/experiments/experimental-protocol.md` (seeds 1-3, matching
 `run_pipe_gpu_0.sh` / `run_pipe_gpu_1.sh`).
 
-**Status (2026-08-23, Phase 2 landed): runnable via config today, not yet run.** Every "Not
-implemented" note below is now implemented — `dalmax/embeddings/`, `dalmax/selection/`, the generic
-`RepresentationStrategy` CLI name, and macro-F1 in `results.json` all exist and are tested. See
-`.specs/experiments/ablation-study.md` for the exact params-JSON snippets and CLI invocations for
-every row, and `.specs/use-cases/run-ablation.md` for the operational run order. This file's content
+**Status (2026-08-23, Phase 3 landed): configs and lab scripts materialized, CPU smoke-tested
+11/11, not yet run on the lab machine.** All 11 run-table rows are now real files, not just JSON
+snippets in this spec: `files_config/ablations/*.json` (+ `files_config/ablations/micro/*.json` CPU
+mirrors, validated by `tests/test_ablation_configs.py`, smoke-tested by
+`scripts/ablations/smoke_ablations.sh` / `make smoke-ablations`), and
+`scripts/ablations/run_ablation_gpu_0.sh` / `run_ablation_gpu_1.sh` (mirroring `run_pipe_gpu_*.sh`,
+splitting the 11 configs across the two lab GPUs by expected hierarchical-clustering cost). See
+`.specs/experiments/ablation-study.md`'s "Materialized files" section for the exact mapping and
+`.specs/use-cases/run-ablation.md` for the operational run order. This file's content
 below is kept as the conceptual/background reference (embedding layout, what each ablation isolates)
 — for "what to actually type," use those two files instead.
 
@@ -151,8 +155,20 @@ machine and recording the resulting macro-F1 numbers.
 
 ## Running and reporting
 
-Use `.claude/skills/running-experiments/SKILL.md` (lab machine, one
-`config_kmh`/`embedding_variant` combination per run) and
-`.claude/skills/results-reporting/SKILL.md` to turn the resulting `results/`
-trees into the macro-F1 tables that feed the paper's ablation subsection. Track
-progress with `.claude/commands/ablation-status.md`.
+On the lab machine (never locally, no GPU here): `bash scripts/ablations/run_ablation_gpu_0.sh` and
+`bash scripts/ablations/run_ablation_gpu_1.sh` (one per GPU, `SEEDS=(1 2 3)`, `n_query=100`,
+`n_round=8`, `--device cuda`) run all 11 configs into
+`results/ablations/<study>/<config>/daninhas_full/SEED_<seed>/NQ_.../RepresentationStrategy/`.
+Both scripts keep going past a failing config (logging it to
+`results/ablations/gpu{0,1}_failures.log`) rather than aborting the whole batch — check that file
+before trusting a "done" run. Locally, `make smoke-ablations`
+(`scripts/ablations/smoke_ablations.sh`) CPU-smoke-tests all 11 configs against
+`DATA/daninhas_micro/` first — always green this before a lab-machine run.
+
+Aggregate with `poetry run python -m dalmax.reporting.ablation_report --root results/ablations --out
+paper_drafts/ablation_tables` — writes `ablation_summary.csv` (mean ± std across seeds, final-round
+and across-rounds-mean, both macro and weighted F1) plus one booktabs `ablation_6_{1,2,3}.tex` /
+`.md` table per sub-study (missing configs render as `TBD`, never silently omitted). This
+supersedes `.claude/skills/results-reporting/SKILL.md`'s `utils/report/*.py` scripts for the
+ablation sweep specifically (those remain the tool for the main `results/dalmax{1,2}/` sweeps).
+Track progress with `.claude/commands/ablation-status.md`.

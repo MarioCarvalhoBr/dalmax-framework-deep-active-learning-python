@@ -1,82 +1,58 @@
 # Use case: run the ablation study
 
-Full specification: `experiments/ablation-study.md` — read it first, including its exact
-params-JSON snippets and CLI invocations for every row of all three sub-studies.
+Full specification: `experiments/ablation-study.md` — read it first, including its "Materialized
+files" section mapping every run-table row to its actual params JSON and GPU script.
 
-**Status update (2026-08-23, Phase 2 landed): all required code now exists.** Every capability this
-file originally described as missing — embedding-variant slicing, configurable hierarchy without
-the hardcoded `'DANINHAS'` key, the proportional-random flat k-means strategy, the ImageNet-ResNet
-embedding provider — is implemented and tested (`dalmax/embeddings/`, `dalmax/selection/`,
-`dalmax.query_strategies.RepresentationStrategy`; see
-`.specs/architecture/refactor-plan.md`'s "ablation enablers checklist", fully checked off). This use
-case is now the **actual** workflow, not a target one: every sub-study is runnable today via
-config/CLI-only changes, on the lab machine (never locally — no GPU here, per
-`.specs/infrastructure/execution-environments.md`). What is not yet done is the runs themselves.
+**Status update (2026-08-23, Phase 3 landed): every config and script is materialized, not just
+JSON snippets in a spec file.** `files_config/ablations/*.json` (11 files, one per run-table row)
+plus `files_config/ablations/micro/*.json` (CPU smoke mirrors) exist on disk, validated by
+`tests/test_ablation_configs.py` and smoke-tested end-to-end by `make smoke-ablations` (11/11
+passing on the local CPU-only dev notebook against `DATA/daninhas_micro/`).
+`scripts/ablations/run_ablation_gpu_0.sh` / `run_ablation_gpu_1.sh` are the actual lab-machine
+entry points (mirroring `run_pipe_gpu_0.sh`/`run_pipe_gpu_1.sh`'s style), splitting the 11 configs
+across the two GPUs by expected cost. This use case is now purely operational: what remains is
+running these two scripts on the lab machine (never locally — no GPU here, per
+`.specs/infrastructure/execution-environments.md`) and aggregating with
+`dalmax.reporting.ablation_report`.
 
 ## Order of operations
 
-1. **Metrics fix first — done.** `research-rules/metrics.md`: macro-F1 is computed and persisted in
-   `results.json` (`all_precision_macro`/`all_recall_macro`/`all_f1_macro`) for every run through
-   `dalmax.cli`/`demo.py` from this commit onward. The one remaining action: **pre-Phase-2 reference
-   runs** (`results/dalmax{1,2}/`, used by §6.3's "RNHAL (full)" row) predate this fix and only have
-   weighted F1 in their `results.json` — recompute macro F1 for those specific runs offline from
-   their `predictions.csv`, do not re-run them.
-2. **§6.1 Representation ablation** — requires only the `embedding_variant` slicing capability
-   (**done**: `dalmax/embeddings/variants.py`), no new strategy class, no new provider.
+1. **Pre-flight: smoke-test locally first.** `make smoke-ablations` (or `bash
+   scripts/ablations/smoke_ablations.sh`) runs all 11 configs against `DATA/daninhas_micro/` in
+   under two minutes on CPU. Always green this before touching the lab machine — it exercises the
+   exact same `RepresentationStrategy` code path (embedding provider, selection strategy, hierarchy
+   depth) each full-scale config uses, just at micro scale.
+2. **Metrics — already correct.** Every run through `dalmax.cli`/`demo.py` writes both weighted and
+   macro F1 into `results.json` (`all_f1_score`/`all_f1_macro`) — see `research-rules/metrics.md`.
+   The one remaining offline step: **pre-Phase-2 reference runs** (`results/dalmax{1,2}/`, an
+   alternative source for §6.3's "RNHAL (full)" row if `stage_full.json`'s own re-run is not used)
+   predate this fix and only have weighted F1 — recompute macro F1 for those specific runs offline
+   from their `predictions.csv`, do not re-run them.
+3. **Run the two lab scripts** (one per GPU, both survive an individual config's failure and log it
+   instead of aborting the batch — check `results/ablations/gpu{0,1}_failures.log` afterward):
    ```bash
-   CUDA_VISIBLE_DEVICES=<gpu> python demo.py \
-     --params_json params_ablation_6_1_spatial.json --dataset_name DANINHAS \
-     --strategy_name RepresentationStrategy --n_query 100 --seed <1|2|3> \
-     --n_round 8 --dir_results results/ablation_representation/ --device cuda
-   ```
-   with the params JSON's `DANINHAS.embedding.variant` set to `spatial`, `spectral`, or `full` (one
-   JSON file per variant — see `ablation-study.md` §6.1's exact config for the full JSON). 3
-   variants × 3 seeds = 9 runs. Reuses the existing `Q=13` SSRAE cache automatically — slicing is a
-   post-hoc operation on the cached full embedding (`dalmax/embeddings/cache.py`), so **no new
-   feature-extraction pass happens** across the three variants for the same seed/pool.
-3. **§6.2 Hierarchy ablation** — requires the config-driven hierarchy (**done**:
-   `dalmax/selection/hierarchical_kmeans.py` takes `hierarchy` via constructor injection, no
-   hardcoded dataset key) plus the `sample_sizes` derivation (**resolved**: see
-   `ablation-study.md` §6.2's "sample_sizes semantics" note — `sample_sizes` only affects
-   centroid-refinement resampling quality, `n_query` alone controls how many ids come out; exact
-   values for all 5 rows are in that section's run table, TBD-flagged for advisor confirmation but
-   safe to run as-is). 5 configs (`L=1,2a,2b,3,4`) × 3 seeds = 15 runs, `n_query=100` fixed, SSRAE
-   full embedding.
-   ```bash
-   CUDA_VISIBLE_DEVICES=<gpu> python demo.py \
-     --params_json params_ablation_6_2_L3.json --dataset_name DANINHAS \
-     --strategy_name RepresentationStrategy --n_query 100 --seed <1|2|3> \
-     --n_round 8 --dir_results results/ablation_hierarchy/ --device cuda
-   ```
-   one params JSON per row (`ablation-study.md` §6.2 has the exact `L=3` JSON to copy/adapt for the
-   other four rows).
-4. **§6.3 Stage-contribution ablation** — requires the ImageNet-ResNet embedding provider (**done**:
-   `dalmax/embeddings/resnet_imagenet_provider.py::ResNetImageNetProvider`) and the
-   proportional-random flat k-means strategy (**done**:
-   `dalmax/selection/flat_kmeans_proportional.py::FlatKMeansProportionalRandom`, a genuinely new
-   class, not a config-driven variant of `SSRAEKmeansSampling` — see ADR 0005). "RNHAL (full)" row
-   needs **no new runs** — reuse `results/dalmax{1,2}/.../SSRAEKmeansHCSampling/` at `n_query=100`
-   (recompute macro F1 offline, per step 1). The other two rows need new runs, all 3 seeds, at
-   `n_query=100` (matching §6.1/§6.2 for consistency, since the source runs for "RNHAL (full)" are
-   at that budget):
-   ```bash
-   # without representation module
-   CUDA_VISIBLE_DEVICES=<gpu> python demo.py \
-     --params_json params_ablation_6_3_resnet_hier.json --dataset_name DANINHAS \
-     --strategy_name RepresentationStrategy --n_query 100 --seed <1|2|3> \
-     --n_round 8 --dir_results results/ablation_stage_contribution/ --device cuda
+   # GPU 0: rep_full, rep_spatial, stage_no_representation, hier_L1, hier_L2b (5 configs)
+   bash scripts/ablations/run_ablation_gpu_0.sh
 
-   # without hierarchical module
-   CUDA_VISIBLE_DEVICES=<gpu> python demo.py \
-     --params_json params_ablation_6_3_ssrae_flat.json --dataset_name DANINHAS \
-     --strategy_name RepresentationStrategy --n_query 100 --seed <1|2|3> \
-     --n_round 8 --dir_results results/ablation_stage_contribution/ --device cuda
+   # GPU 1: rep_spectral, stage_full, stage_no_hierarchy, hier_L2a, hier_L3, hier_L4 (6 configs)
+   bash scripts/ablations/run_ablation_gpu_1.sh
    ```
-   See `ablation-study.md` §6.3's exact configs for the full JSON of both, and its one remaining
-   TBD: whether `FlatKMeansProportionalRandom`'s cluster count (currently defaults to `n_query`,
-   since `build_strategy` does not yet thread a separate `selection.n_clusters` params-JSON key to
-   it) needs to be made independently configurable before this row is run — a small, well-scoped
-   addition if the advisor confirms it is needed.
+   Both sweep `SEEDS=(1 2 3)`, `n_query=100`, `n_round=8`, `n_init_labeled` left at the CLI default
+   (100, per `experimental-protocol.md`), `--device cuda`, `--strategy_name RepresentationStrategy`.
+   Each config writes to its own `results/ablations/<study>/<config>/` subtree (11 × 3 = 33 total
+   runs), so `dalmax.reporting.ablation_report` can walk it directly — see
+   `run_ablation_gpu_0.sh`'s header comment for the full GPU-split cost rationale (hierarchical
+   selection with large/multi-level hierarchies dominates runtime, not training).
+4. **Aggregate**:
+   ```bash
+   poetry run python -m dalmax.reporting.ablation_report \
+     --root results/ablations --out paper_drafts/ablation_tables
+   ```
+   Writes `ablation_summary.csv` (final-round and across-rounds-mean macro/weighted F1, mean ± std
+   across seeds, per config) and one booktabs `ablation_6_{1,2,3}.tex` / `.md` per sub-study — a
+   config with zero discovered runs renders `TBD` rather than being silently dropped, so partial
+   lab-machine progress is always visible in the table shape. `paper_drafts/` is gitignored, so
+   re-running this after each lab-machine batch is safe and idempotent.
 
 ## Verification before trusting results
 
@@ -88,11 +64,16 @@ the cache file actually used (`results/cache/embeddings/{dataset}__{extractor}__
 visible in the run log via `RepresentationStrategy`'s "Embedding matrix shape" log line) matches the
 intended `Q`/`embedding_variant`/dataset combination, (c) the `hierarchy` used matches the intended
 row of the §6.2 table exactly (`n_levels`, `n_clusters`, `sample_sizes` — also visible in
-`run_metadata.json`'s `config.dataset.selection.hierarchy`), and (d) `all_f1_macro` (not
-`all_f1_score`, which stays weighted) is what gets reported — see `research-rules/metrics.md`.
+`run_metadata.json`'s `config.dataset.selection.hierarchy`), (d) `all_f1_macro` (not
+`all_f1_score`, which stays weighted) is what gets reported — see `research-rules/metrics.md`, and
+(e) `results/ablations/gpu{0,1}_failures.log` is empty (or every failure logged there has been
+re-run and now succeeded) for the batch being reported on.
 
 ## Aggregation and paper hand-off
 
-Once the runs for a given sub-study are complete, follow `use-cases/generate-report.md` to aggregate
-across seeds, then map the resulting table to the correct paper location per
+`dalmax.reporting.ablation_report` (step 4 above) is the current tool for this sweep specifically —
+it supersedes `utils/report/2_report_build_chunk_results.py` /
+`4_report_build_average_results.py` for the ablation family (those remain the tool for the main
+`results/dalmax{1,2}/` sweeps, per `use-cases/generate-report.md`). Map the resulting
+`ablation_6_{1,2,3}.tex` tables to the correct paper location per
 `experiments/ablation-study.md`'s "Mapping to the paper's `\subsubsection`s" table.
