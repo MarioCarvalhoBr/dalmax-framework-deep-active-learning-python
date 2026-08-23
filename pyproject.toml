@@ -1,0 +1,74 @@
+[project]
+name = "dalmax"
+version = "1.0.0"
+description = "DalMax — Deep Active Learning Laboratory for UAV Weed Recognition (RNHAL)"
+authors = [
+    { name = "Mário de Araújo Carvalho", email = "mariodearaujocarvalho@gmail.com" },
+]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "matplotlib==3.9.2",
+    "numpy==2.1.3",
+    "Pillow==11.0.0",
+    "scikit-learn==1.5.2",
+    "seaborn==0.13.2",
+    "torch==2.5.0",
+    "torchvision==0.20.0",
+    "tqdm==4.67.1",
+    # Missing from the original requirements.txt but imported by demo.py and
+    # utils/report/*. 2.2.3 is the latest 2.x release compatible with numpy 2.1.3.
+    "pandas==2.2.3",
+    # Missing from requirements.txt/pyproject.toml but imported by
+    # utils/report/1_cm_extract_from_pdf.py (see known-issues.md KI-28).
+    "PyPDF2==3.0.1",
+]
+
+[project.urls]
+Repository = "https://github.com/MarioCarvalhoBr/dalmax-deep-active-learning-python"
+
+[tool.poetry]
+# This repo is a research application (demo.py CLI + run_*.sh experiment scripts),
+# not a distributable library: `core/` and `utils/` are top-level packages used only
+# in-place via PYTHONPATH/relative imports, there is no console entry point, and
+# nothing downstream is meant to `pip install dalmax`. package-mode = false tells
+# Poetry to manage the dependency environment without trying to build/install a
+# `dalmax` distribution, so no [tool.poetry.packages]/include list is needed.
+package-mode = false
+
+[tool.poetry.group.dev.dependencies]
+ruff = "*"
+pytest = "*"
+pytest-cov = "*"
+pre-commit = "*"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = [
+    "results",
+    "DATA",
+    "phd_files",
+    "ExperimentNotifier",
+    "local_assets",
+    ".venv",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+ignore = [
+    "E501", # line-too-long: not enforced yet on existing code
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "gpu: marks tests that require a CUDA GPU",
+    "dataset: marks tests that require the DATA/ dataset to be present",
+    "slow: marks slow-running tests (full pipeline / training)",
+]
+
+[build-system]
+requires = ["poetry-core>=2.0.0"]
+build-backend = "poetry.core.masonry.api"
