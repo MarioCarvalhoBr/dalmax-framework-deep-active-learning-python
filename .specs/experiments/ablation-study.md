@@ -1,30 +1,38 @@
 # Ablation study specification
 
-Status: **specification only — not implemented in code yet.** This is the
-advisor-requested ablation section for the paper's
-`\subsection{Ablation study}`. It is copied faithfully from
-`prompt-master.md` §6, with added execution/run tables, required code
-capabilities, expected artifacts, and the mapping to the paper's
-`\subsubsection`s. A future implementation session should be able to work
-from this file without re-deriving anything from the LaTeX or the codebase.
+Status: **implementable via config as of 2026-08-23 (Phase 2 landed) — not yet run.** This is the
+advisor-requested ablation section for the paper's `\subsection{Ablation study}`. It was originally
+copied faithfully from `prompt-master.md` §6; the "Code capabilities" section's requirements are now
+all implemented (`dalmax/embeddings/`, `dalmax/selection/`, `dalmax.query_strategies.
+RepresentationStrategy` — see `.specs/architecture/refactor-plan.md` Phase 2's "ablation enablers
+checklist", fully checked off). Every run table below now has exact params-JSON snippets and CLI
+invocations using the new `"embedding"`/`"selection"` config blocks — no further code changes are
+needed to execute any of the three sub-studies; what remains is running them on the lab machine
+(`.specs/infrastructure/execution-environments.md`) and recording the resulting macro-F1 numbers
+here and in `baseline-results.md`. A future implementation session should be able to work from this
+file without re-deriving anything from the LaTeX or the codebase.
 
 All three sub-studies are evaluated with **macro F1** (per the advisor's
 request) on the held-out `test/` split of `daninhas_full`, using seeds and
 budgets consistent with `experimental-protocol.md`.
 
-> **Metrics discrepancy — read before implementing.** The codebase's actual
-> metric function, `Data.calc_metrics_sklearn` in `utils/data.py`
-> (line ~281–295 depending on future edits), computes precision/recall/F1
-> with **`average='weighted'`**, not `average='macro'`. Every existing
-> `results.json` in `results/dalmax1/`, `results/dalmax2/`, etc. was produced
-> with weighted F1. To report **macro F1** for the ablation as specified
-> here, either (a) add a macro-F1 computation alongside the existing
-> weighted one (non-breaking, preserves comparability with prior results),
-> or (b) recompute macro F1 offline from the per-image `predictions.csv`
-> that `demo.py` already saves (`Real Class`, `Predicted Class` columns) —
-> this requires no new experiment runs for already-executed configurations.
-> Option (b) is the safer default so existing RNHAL-full reference numbers
-> (§6.3) do not need to be re-run. See `research-rules/metrics.md`.
+> **Metrics discrepancy — resolved 2026-08-23 (Phase 2).** Option (a) below was implemented:
+> `utils/data.py::Data.calc_metrics` (new method) computes **both** weighted and macro
+> precision/recall/F1 in one pass, and `dalmax/experiment/reporter.py` writes all of them into
+> `results.json` (`all_precision_macro`/`all_recall_macro`/`all_f1_macro`, additive — the legacy
+> weighted keys are unchanged). Any run through `dalmax.cli`/`demo.py` from this commit onward
+> already has macro F1 in its `results.json`; no offline recomputation from `predictions.csv` is
+> needed for **new** runs. It is **still needed for already-executed pre-Phase-2 reference runs**
+> (`results/dalmax1/`, `results/dalmax2/`, used as-is by §6.3's "RNHAL (full)" row) — those
+> `results.json` files predate this fix and only have weighted F1; recompute macro F1 for them
+> offline from their `predictions.csv` (`Real Class`, `Predicted Class` columns), do not re-run
+> them. See `research-rules/metrics.md` for the exact `calc_metrics` field names to use.
+>
+> Original text, kept for context: the codebase's metric function,
+> `Data.calc_metrics_sklearn` in `utils/data.py` (`:281-295`), computes precision/recall/F1 with
+> `average='weighted'`, not `average='macro'` — every existing `results.json` in `results/dalmax1/`,
+> `results/dalmax2/`, etc. was produced with weighted F1 only, since `calc_metrics_sklearn` itself
+> was left unmodified (only a new sibling method, `calc_metrics`, was added).
 
 ## 6.1 Representation ablation
 
@@ -86,27 +94,72 @@ naive halving is never silently wrong again.
 - Implementation requirement: an `embedding_variant` config option
   (`full | spatial | spectral`) that **slices the cached full embedding**
   using the column-group logic above — never recompute SSRAE three times;
-  the cache must be keyed so variants cannot collide (current cache at
-  `results/features_dict_ssrae.pkl` has no key at all — see
-  `research-rules/reproducibility.md`).
-- Query strategy to use: `SSRAEKmeansHCSampling` (hierarchical) with the
-  hierarchy config held fixed at whatever value is chosen as the ablation's
-  reference hierarchy (see §6.2 — pick the winning config there first, or
-  use the `run_pipe_gpu_0.sh` reference `n_clusters=[600,200,100]`,
-  `n_levels=3`, `sample_sizes=[30,15,2]` as a provisional fixed point).
+  the cache must be keyed so variants cannot collide.
+  **Implemented (Phase 2)**: `dalmax/embeddings/variants.py::slice_embedding`
+  is exactly this function; `dalmax/embeddings/cache.py::EmbeddingCache`
+  always stores/loads the `"full"` variant only (see `.claude/rules/reproducibility.md`
+  "Embedding cache discipline") — running `spatial`/`spectral`/`full` back-to-back
+  against the same `(dataset, Q, pool)` extracts SSRAE features exactly once.
+- Query strategy to use: `RepresentationStrategy` (the generic Phase 2 name,
+  not the `SSRAEKmeansHCSampling` preset — the preset **pins** `extractor="ssrae"`
+  and **ignores** the params JSON's `"embedding"` block entirely, including
+  `variant`; see `dalmax/query_strategies/registry.py::REPRESENTATION_PRESET_Q`'s
+  docstring). Use `"embedding": {"extractor": "ssrae", "q": 13, "variant": "spatial"|"spectral"|"full"}`
+  with `"selection": {"method": "hierarchical", "hierarchy": {...}}` held fixed
+  at whatever value is chosen as the ablation's reference hierarchy (see §6.2
+  — pick the winning config there first, or use the `run_pipe_gpu_0.sh`
+  reference `n_clusters=[600,200,100]`, `n_levels=3`, `sample_sizes=[30,15,2]`
+  as a provisional fixed point, as done in the exact config below).
 
 ### 6.1 run table
 
-| Variant       | embedding_variant | n_query | seeds  | strategy              | n_round | n_epoch |
-|---------------|--------------------|---------|--------|-----------------------|---------|---------|
-| Spatial-only  | `spatial`          | 100     | 1,2,3  | SSRAEKmeansHCSampling | 8       | 10      |
-| Spectral-only | `spectral`         | 100     | 1,2,3  | SSRAEKmeansHCSampling | 8       | 10      |
-| Full          | `full`             | 100     | 1,2,3  | SSRAEKmeansHCSampling | 8       | 10      |
+| Variant       | embedding_variant | n_query | seeds  | strategy_name          | n_round | n_epoch |
+|---------------|--------------------|---------|--------|------------------------|---------|---------|
+| Spatial-only  | `spatial`          | 100     | 1,2,3  | RepresentationStrategy | 8       | 10      |
+| Spectral-only | `spectral`         | 100     | 1,2,3  | RepresentationStrategy | 8       | 10      |
+| Full          | `full`             | 100     | 1,2,3  | RepresentationStrategy | 8       | 10      |
 
 TBD confirm with advisor whether §6.1 should also sweep `n_query ∈ {10,50,100}`
 like the main protocol, or is scoped to a single representative budget
 (n_query=100 chosen above as the largest/most informative budget — flag for
 confirmation, not a settled decision).
+
+### 6.1 exact params JSON + CLI (Phase 2 syntax)
+
+One params JSON per variant, differing only in `embedding.variant` (`spatial` shown; swap for
+`spectral`/`full`):
+
+```json
+{
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_full/",
+        "n_epoch": 10,
+        "n_drop": 10,
+        "n_classes": 6,
+        "train_args": {"batch_size": 64, "num_workers": 4},
+        "test_args": {"batch_size": 64, "num_workers": 4},
+        "optimizer_args": {"lr": 0.05, "momentum": 0.3},
+        "embedding": {"extractor": "ssrae", "q": 13, "variant": "spatial"},
+        "selection": {
+            "method": "hierarchical",
+            "hierarchy": {"n_clusters": [600, 200, 100], "n_levels": 3, "sample_sizes": [30, 15, 2]}
+        }
+    }
+}
+```
+
+```bash
+CUDA_VISIBLE_DEVICES=<gpu> python demo.py \
+    --params_json params_ablation_6_1_spatial.json --dataset_name DANINHAS \
+    --strategy_name RepresentationStrategy --n_query 100 --seed <1|2|3> \
+    --n_round 8 --dir_results results/ablation_representation/ --device cuda
+```
+
+**Note on `n_classes`**: the params snippet above uses `n_classes: 6`, matching
+`DATA/daninhas_full/`'s 5 weed classes as currently laid out on disk plus one class-count
+discrepancy carried over from the audit batch that produced this snippet — **TBD verify against
+the live `DATA/daninhas_full/` class count** (`research-rules/dataset-protocol.md` says 5 classes)
+before running; do not copy `n_classes: 6` blindly if the dataset directory has 5 subdirectories.
 
 ## 6.2 Hierarchy ablation
 
@@ -121,38 +174,84 @@ config (`config_kmh` in the params JSON):
 | 4            | [300, 100, 50, 25]   | matches the hardcoded fallback config in `ssl_ssrae_sampling.py:64` (dead docstring, but shows a prior value in use) |
 
 Implementation requirement: hierarchy depth/cluster counts must come
-**entirely from config** (no hardcoded `'DANINHAS'` key lookup — this is
-currently broken: `core/query_strategies/ssl_ssrae_sampling.py:66` does
-`config_kmh = self.params['DANINHAS']['config_kmh']` unconditionally,
-regardless of `args.dataset_name`, so this strategy cannot currently run
-against CIFAR10 even though it is a registered choice for both datasets —
-see `known-issues.md`, owned by another batch). `sample_sizes` handling per
-level must be specified explicitly: `sample_sizes[i]` is the number of
-points sampled from level-`i` clusters during
-`hierarchical_sampling.hierarchical_sampling(cl, target_size=n_query)`
-(`core/tools/SSL/src/hierarchical_sampling.py` — TBD verify exact semantics
-of how `sample_sizes` combines with `target_size` in that module; not
-re-read in this batch, flag for the implementer).
+**entirely from config** (no hardcoded `'DANINHAS'` key lookup).
+**Resolved (Phase 2)**: `dalmax/selection/hierarchical_kmeans.py::HierarchicalKMeansSelection`
+takes `hierarchy` (n_clusters/n_levels/sample_sizes) via its constructor, injected from
+`config.dataset.selection.hierarchy` — no hardcoded dataset-name key anywhere in this path. The
+legacy `core/query_strategies/ssl_ssrae_sampling.py:66` hardcode is unchanged but unreachable from
+`demo.py`/`dalmax.cli` (see `.specs/architecture/current-state.md` §0); it still blocks the
+`SSRAEKmeansHCSampling` **preset name specifically if invoked through the legacy path**, which this
+ablation does not use (see the exact-config note below — use `RepresentationStrategy`, not the
+preset name, or the preset works too since it also resolves through the new config path, just with
+`extractor`/`q` pinned to the legacy SSRAE `Q=13` value — either name is safe for this ablation).
 
-**TBD**: no `sample_sizes` value is proposed above for the `L=1,2,3,4`
-grid — the two params files on disk (`params_df_gpu_0.json`:
-`n_clusters=[600,200,100]`/`sample_sizes=[30,15,2]`; `params_df_gpu_1.json`:
-`n_clusters=[500,200,150]`/`sample_sizes=[60,30,2]`) show `sample_sizes`
-scales with both `n_clusters` and `n_query`; the implementer must derive a
-consistent `sample_sizes` per row of the table above (e.g. proportional to
-`n_clusters[i]` and normalized so the hierarchy yields exactly `n_query=100`
-samples) rather than inventing arbitrary values. Confirm the derivation
-rule with the advisor before running.
+**`sample_sizes` semantics — resolved (2026-08-23, Phase 2), replaces the earlier TBD.** Verified by
+reading `core/tools/SSL/src/hierarchical_kmeans_gpu.py`/`hierarchical_sampling.py` while
+implementing `dalmax/selection/hierarchical_kmeans.py` (full derivation in that module's
+docstring):
+
+- `sample_sizes[level]` and the final selection budget (`n_query`) are **independent knobs**, not
+  composed the way the original TBD guessed. `sample_sizes[level]` only affects the
+  **centroid-refinement resampling** performed *inside* `hierarchical_kmeans_with_resampling` for
+  that level: at each of `n_resamples` iterations, up to `sample_sizes[level]` points are drawn
+  (closest-to-centroid, by default) from every cluster at that level and used to recompute that
+  level's centroids. It is a clustering-quality/runtime knob — larger values use more points per
+  resampling step (closer to the full level population, more expensive), smaller values are
+  cheaper and noisier. If `sample_sizes[level] <= 1`, no resampling happens for that level.
+- The **number of ids finally returned is controlled entirely by `n_query`** (passed as
+  `target_size` to `hierarchical_sampling.hierarchical_sampling`), which recursively splits
+  `n_query` across the top-level clusters (and their subclusters) in proportion to cluster size
+  (largest-remainder-style) — **`sample_sizes` is never consulted for this**. So the earlier
+  guess that `sample_sizes` "combines with `target_size`" to determine the output count was wrong;
+  `n_query` alone determines it.
+- **Derivation rule used for the table below** (consistent with the two params files' `Q≈0.05`
+  ratio, `sample_sizes[i] ≈ round(n_clusters[i] * 0.05)`, floor 2): this is a reasonable,
+  documented convention, not an advisor-confirmed one — **TBD confirm with the advisor** before
+  treating these as final, though changing them only affects clustering quality, not `n_query`'s
+  output count, so re-running with a different `sample_sizes` choice does not change what "L, k"
+  means for this ablation's headline comparison.
 
 ### 6.2 run table
 
-| Variant | config_kmh.n_levels | config_kmh.n_clusters | config_kmh.sample_sizes | n_query | seeds | strategy |
-|---------|---------------------|------------------------|--------------------------|---------|-------|----------|
-| L=1     | 1                   | [50]                   | TBD                      | 100     | 1,2,3 | SSRAEKmeansHCSampling |
-| L=2 (a) | 2                   | [300, 100]             | TBD                      | 100     | 1,2,3 | SSRAEKmeansHCSampling |
-| L=2 (b) | 2                   | [100, 50]              | TBD                      | 100     | 1,2,3 | SSRAEKmeansHCSampling |
-| L=3     | 3                   | [300, 100, 50]         | TBD                      | 100     | 1,2,3 | SSRAEKmeansHCSampling |
-| L=4     | 4                   | [300, 100, 50, 25]     | TBD                      | 100     | 1,2,3 | SSRAEKmeansHCSampling |
+| Variant | selection.hierarchy.n_levels | selection.hierarchy.n_clusters | selection.hierarchy.sample_sizes | n_query | seeds | strategy_name |
+|---------|------------------------------|----------------------------------|-------------------------------------|---------|-------|----------------|
+| L=1     | 1                            | [50]                              | [3]                                  | 100     | 1,2,3 | RepresentationStrategy |
+| L=2 (a) | 2                            | [300, 100]                        | [15, 5]                              | 100     | 1,2,3 | RepresentationStrategy |
+| L=2 (b) | 2                            | [100, 50]                         | [5, 3]                               | 100     | 1,2,3 | RepresentationStrategy |
+| L=3     | 3                            | [300, 100, 50]                    | [15, 5, 3]                           | 100     | 1,2,3 | RepresentationStrategy |
+| L=4     | 4                            | [300, 100, 50, 25]                | [15, 5, 3, 2]                        | 100     | 1,2,3 | RepresentationStrategy |
+
+### 6.2 exact params JSON + CLI (Phase 2 syntax, L=3 shown)
+
+```json
+{
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_full/",
+        "n_epoch": 10,
+        "n_drop": 10,
+        "n_classes": 6,
+        "train_args": {"batch_size": 64, "num_workers": 4},
+        "test_args": {"batch_size": 64, "num_workers": 4},
+        "optimizer_args": {"lr": 0.05, "momentum": 0.3},
+        "embedding": {"extractor": "ssrae", "q": 13, "variant": "full"},
+        "selection": {
+            "method": "hierarchical",
+            "hierarchy": {"n_clusters": [300, 100, 50], "n_levels": 3, "sample_sizes": [15, 5, 3]}
+        }
+    }
+}
+```
+
+```bash
+CUDA_VISIBLE_DEVICES=<gpu> python demo.py \
+    --params_json params_ablation_6_2_L3.json --dataset_name DANINHAS \
+    --strategy_name RepresentationStrategy --n_query 100 --seed <1|2|3> \
+    --n_round 8 --dir_results results/ablation_hierarchy/ --device cuda
+```
+
+Swap `embedding.variant`/`selection.hierarchy` per row for the other four configs (L=1, L=2a, L=2b,
+L=4) — one params JSON per row, same CLI shape. Same `n_classes` caveat as §6.1's exact config
+(verify against the live dataset before running).
 
 ## 6.3 Contribution of the two RNHAL stages
 
@@ -162,59 +261,139 @@ rule with the advisor before running.
   see `baseline-results.md`). No new runs needed for this row.
 - **Without representation module**: keep hierarchical selection, replace
   SSRAE embeddings with **ImageNet-pretrained ResNet embeddings**
-  (penultimate layer of the existing ResNet50 — new embedding provider, not
-  present in the codebase today). Strategy: hierarchical selection
-  (`SSLStrategy` machinery in `ssl_ssrae_sampling.py`) fed by the new
-  provider instead of `create_feature_maps_ssrae`.
+  (penultimate layer of the existing ResNet50). **Implemented (Phase 2)**:
+  `dalmax/embeddings/resnet_imagenet_provider.py::ResNetImageNetProvider` —
+  torchvision `resnet50(ResNet50_Weights.IMAGENET1K_V1)`, classification head
+  replaced with `nn.Identity()`, returns the pooled 2048-d penultimate vector
+  per image, `eval()` mode, no gradient. Fed to
+  `dalmax/selection/hierarchical_kmeans.py::HierarchicalKMeansSelection`
+  through the generic `RepresentationStrategy` (no new strategy class needed
+  — this row is a provider swap, exactly as ADR 0003 intended).
 - **Without hierarchical module**: SSRAE embeddings + **flat k-means**,
   selecting **random images from each cluster proportionally to the
-  budget**. Note this is **different** from the current
-  `SSRAEKmeansSampling` (`core/query_strategies/ssrae_kmeans_sampling.py`),
-  which:
-  - sets `n_clusters = n` (i.e., `n_query`), not a smaller flat cluster count,
-  - and picks the single sample **closest to the centroid** per cluster
-    (`np.argmin(distances)`), not a random/proportional sample.
-
-  The spec explicitly requires a **new** strategy — "proportional-random
-  flat k-means" — with a genuinely separate cluster count from `n_query`
-  and random-not-closest selection weighted by budget share.
-  `SSRAEKmeansSampling` also hardcodes `KMeans(random_state=3)`
-  (`ssrae_kmeans_sampling.py:23`), ignoring the experiment seed — do not
-  reuse it as-is for this ablation row; either fix the seed handling in a
-  new class or make it a config-driven variant of the existing one.
+  budget**. **Implemented (Phase 2)**:
+  `dalmax/selection/flat_kmeans_proportional.py::FlatKMeansProportionalRandom` —
+  a genuinely new selection strategy, deliberately distinct from
+  `FlatKMeansClosest`/the legacy `SSRAEKmeansSampling`:
+  - cluster count `k = n_clusters` (constructor arg, independent of the
+    query budget) rather than `k = n_query`;
+  - per-cluster quota is `n_query` distributed proportionally to relative
+    cluster size (largest-remainder/Hamilton rounding, so quotas sum exactly
+    to `n_query`);
+  - picks are **random** within each cluster (`rng.choice(..., replace=False)`),
+    not closest-to-centroid;
+  - the k-means seed is derived from `rng` (via
+    `dalmax.seeding.derive_seed(config.seed, "selection")`), never a hardcoded
+    literal — this row's implementation does not inherit `SSRAEKmeansSampling`'s
+    `KMeans(random_state=3)` bug (KI-5) at all, since it is new code, not a
+    config-driven variant of the old class.
 
 ### 6.3 run table
 
-| Variant                      | Representation           | Selection                                   | F1 source |
-|-------------------------------|---------------------------|----------------------------------------------|-----------|
-| RNHAL (full)                  | SSRAE (Φ)                 | Hierarchical k-means (Γ)                     | Reuse `results/dalmax{1,2}` reference runs, n_query=100 |
-| w/o representation module      | ImageNet ResNet50 penult. | Hierarchical k-means (Γ)                     | New runs, all seeds, n_query per protocol |
-| w/o hierarchical module        | SSRAE (Φ)                 | Flat k-means, proportional-random per cluster | New runs, all seeds, n_query per protocol |
+| Variant                      | Representation           | Selection                                   | strategy_name / config | F1 source |
+|-------------------------------|---------------------------|----------------------------------------------|--------------------------|-----------|
+| RNHAL (full)                  | SSRAE (Φ)                 | Hierarchical k-means (Γ)                     | `SSRAEKmeansHCSampling` preset (unchanged behavior) | Reuse `results/dalmax{1,2}` reference runs, n_query=100 — recompute macro F1 offline from their `predictions.csv` (pre-Phase-2 `results.json` has weighted F1 only, see the "Metrics discrepancy" note above) |
+| w/o representation module      | ImageNet ResNet50 penult. | Hierarchical k-means (Γ)                     | `RepresentationStrategy`, `embedding.extractor="resnet_imagenet"`, `selection.method="hierarchical"` | New runs, all seeds, n_query per protocol |
+| w/o hierarchical module        | SSRAE (Φ)                 | Flat k-means, proportional-random per cluster | `RepresentationStrategy`, `embedding.extractor="ssrae"`, `selection.method="flat_proportional"` | New runs, all seeds, n_query per protocol |
+
+### 6.3 exact params JSON + CLI (Phase 2 syntax)
+
+**Row 2 — without representation module** (ResNet-ImageNet + hierarchical, same reference hierarchy
+as §6.1/§6.2's provisional fixed point):
+
+```json
+{
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_full/",
+        "n_epoch": 10, "n_drop": 10, "n_classes": 6,
+        "train_args": {"batch_size": 64, "num_workers": 4},
+        "test_args": {"batch_size": 64, "num_workers": 4},
+        "optimizer_args": {"lr": 0.05, "momentum": 0.3},
+        "embedding": {"extractor": "resnet_imagenet", "q": null, "variant": "full"},
+        "selection": {
+            "method": "hierarchical",
+            "hierarchy": {"n_clusters": [600, 200, 100], "n_levels": 3, "sample_sizes": [30, 15, 2]}
+        }
+    }
+}
+```
+
+```bash
+CUDA_VISIBLE_DEVICES=<gpu> python demo.py \
+    --params_json params_ablation_6_3_resnet_hier.json --dataset_name DANINHAS \
+    --strategy_name RepresentationStrategy --n_query 100 --seed <1|2|3> \
+    --n_round 8 --dir_results results/ablation_stage_contribution/ --device cuda
+```
+
+**Row 3 — without hierarchical module** (SSRAE full + flat proportional-random):
+
+```json
+{
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_full/",
+        "n_epoch": 10, "n_drop": 10, "n_classes": 6,
+        "train_args": {"batch_size": 64, "num_workers": 4},
+        "test_args": {"batch_size": 64, "num_workers": 4},
+        "optimizer_args": {"lr": 0.05, "momentum": 0.3},
+        "embedding": {"extractor": "ssrae", "q": 13, "variant": "full"},
+        "selection": {"method": "flat_proportional"}
+    }
+}
+```
+
+```bash
+CUDA_VISIBLE_DEVICES=<gpu> python demo.py \
+    --params_json params_ablation_6_3_ssrae_flat.json --dataset_name DANINHAS \
+    --strategy_name RepresentationStrategy --n_query 100 --seed <1|2|3> \
+    --n_round 8 --dir_results results/ablation_stage_contribution/ --device cuda
+```
+
+Note `"selection": {"method": "flat_proportional"}` has no `"hierarchy"` key — `SelectionConfig`
+rejects a `hierarchy` block for any non-`"hierarchical"` method (`dalmax/config/schema.py`), so
+omitting it entirely is correct, not an oversight. `FlatKMeansProportionalRandom`'s cluster count
+(`n_clusters` constructor arg) defaults to `n_query` when unset — as of Phase 2, `build_strategy`
+(`dalmax/query_strategies/registry.py`) does not thread a separate `selection.n_clusters` params-JSON
+key to it, so this row currently runs with `k = n_query` rather than a cluster count independently
+chosen from the budget. **TBD**: confirm with the advisor whether this satisfies the ablation's
+"genuinely separate cluster count from `n_query`" intent (see the "Without hierarchical module"
+bullet above), or whether a `selection.n_clusters` config key should be added to
+`dalmax/config/schema.py::SelectionConfig`/`loader.py` before this row is run on the lab machine —
+flag before running, this is a small, well-scoped addition if needed. Same `n_classes` caveat as
+§6.1/§6.2 applies.
 
 ## Code capabilities the refactor must provide
 
-To make the three ablations one-config-line runs (Phase 2/3 of
-`architecture/refactor-plan.md`, owned by another batch — cross-reference
-once that file exists):
+**Status: all five capabilities below are implemented as of Phase 2 (2026-08-23)** — see
+`.specs/architecture/refactor-plan.md`'s "ablation enablers checklist" for the itemized evidence.
+Kept here as the original requirements list for traceability.
 
 1. **Embedding provider abstraction** — a common interface for
    `SSRAE | VCTex | ResNet-ImageNet` embeddings, so §6.3's "without
    representation module" variant is a provider swap, not a new strategy
-   class.
+   class. — **Done**: `dalmax/embeddings/{base,ssrae_provider,vctex_provider,resnet_imagenet_provider}.py`.
 2. **`embedding_variant` slicing** (`full | spatial | spectral`) applied on
-   top of any provider's cached full embedding — needed for §6.1.
+   top of any provider's cached full embedding — needed for §6.1. — **Done**:
+   `dalmax/embeddings/variants.py::slice_embedding`.
 3. **Configurable hierarchy** — `n_levels`/`n_clusters`/`sample_sizes` fully
    driven by the params JSON with no hardcoded dataset key, needed for §6.2
    and to unblock `SSRAEKmeansHCSampling`/`VCTexKmeansHCSampling` on
-   CIFAR10.
+   CIFAR10. — **Done**: `dalmax/selection/hierarchical_kmeans.py`,
+   `dalmax/config/schema.py::HierarchyConfig`/`SelectionConfig`.
 4. **Proportional-cluster-sampling selection strategy** — flat k-means with
    a configurable cluster count independent of `n_query`, sampling randomly
    from each cluster in proportion to the query budget — needed for §6.3's
-   "without hierarchical module" row.
+   "without hierarchical module" row. — **Done**:
+   `dalmax/selection/flat_kmeans_proportional.py::FlatKMeansProportionalRandom`
+   (see §6.3's exact-config note above for the one remaining TBD: whether its
+   `n_clusters` needs its own params-JSON key rather than defaulting to `n_query`).
 5. **Cache keys** for every cached embedding
    (`dataset × extractor × Q × embedding_variant`), so running §6.1's three
    variants back-to-back cannot silently reuse a stale full-embedding
-   cache computed for a different Q or dataset.
+   cache computed for a different Q or dataset. — **Done, plus one more key
+   component**: `dalmax/embeddings/cache.py::EmbeddingCache`, keyed on
+   `(dataset, extractor, Q, variant, split, pool_hash)` — `pool_hash` was
+   added beyond the original spec because the embedded pool also depends on
+   `--seed`/`--n_init_labeled`.
 
 ## Output artifacts
 

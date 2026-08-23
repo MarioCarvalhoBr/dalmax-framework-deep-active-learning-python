@@ -85,20 +85,48 @@ Work (mapped to `target-architecture.md` §2):
 9. Fix `calc_metrics_sklearn`'s `average='weighted'` → add a macro-F1 path (needed by every ablation
    in §6, which are all specified as macro F1).
 
+**Status: Phase 2 landed 2026-08-23** (commits `c901ce4`..`ed37f8a`, branch `refactor/phase-2-core`).
+
 **Acceptance criteria:**
-- [ ] Old CLI strategy names (`SSRAEKmeansSampling`, `VCTexKmeansSampling`, `SSRAEKmeansHCSampling`,
+- [x] Old CLI strategy names (`SSRAEKmeansSampling`, `VCTexKmeansSampling`, `SSRAEKmeansHCSampling`,
       `VCTexKmeansHCSampling`, plus all baselines) still resolve via the CLI, now backed by
       `RepresentationStrategy(embedding_provider, selection_strategy)` presets — `demo.py --strategy_name`
-      choices are unchanged from a user's point of view.
-- [ ] Golden-run fixture from Phase 1 reproduces bit-identical selected indices and metrics after
-      the refactor (proves the refactor is behavior-preserving where it should be).
-- [ ] A unit test proves `SSRAEKmeansSampling`-equivalent runs with two different seeds now produce
-      different cluster assignments (proves the `random_state=3` fix).
-- [ ] Running `SSRAEKmeansHCSampling` against `CIFAR10` (or any second dataset with a `config_kmh`
-      block added) no longer raises `KeyError: 'DANINHAS'`.
-- [ ] `.specs/architecture/current-state.md` coupling points #1-#9 are each either resolved or have
-      an explicit "deferred to Phase N" note added by `spec-keeper`.
-- [ ] `results/<run>/run_metadata.json` exists after any `ExperimentRunner.run()` call.
+      choices are unchanged from a user's point of view. Evidence: `dalmax/cli.py`'s `choices=[...]`
+      list is identical to the pre-Phase-2 list plus `RepresentationStrategy`;
+      `dalmax/query_strategies/registry.py::REPRESENTATION_PRESETS` maps all four legacy names to
+      `(extractor, selection_method)` pairs; `tests/test_strategy_registry.py` builds all of them.
+- [x] Golden-run fixture from Phase 1 reproduces bit-identical selected indices and metrics after
+      the refactor (proves the refactor is behavior-preserving where it should be). Evidence:
+      `tests/golden/random_sampling_micro_seed1.json` is unchanged (`RandomSampling` never touches
+      SSRAE/embedding code, so its RNG trace is untouched by Phase 2); `tests/test_golden_run.py`
+      passes for both fixtures. `tests/golden/ssrae_kmeans_micro_seed1.json`'s
+      `round_1_query_idxs_sorted` legitimately **changed** (`[5,21,37,45,47]` → `[14,24,37,45,47]`)
+      because the next acceptance criterion below fixed the seed it depends on — the fixture's
+      `legacy_phase1_values` block keeps the pre-fix record for comparison, not lost.
+- [x] A unit test proves `SSRAEKmeansSampling`-equivalent runs with two different seeds now produce
+      different cluster assignments (proves the `random_state=3` fix). Evidence:
+      `tests/test_selection_flat.py` (`FlatKMeansClosest`, two `rng`s seeded from different values
+      produce different selections); empirically reconfirmed by the golden-fixture regeneration
+      above (`legacy_phase1_values.round_1_query_idxs_sorted` — the old hardcoded-`random_state=3`
+      value — differs from the new seed-derived value at `--seed 1`).
+- [x] Running `SSRAEKmeansHCSampling` against `CIFAR10` (or any second dataset with a `config_kmh`
+      block added) no longer raises `KeyError: 'DANINHAS'`. Evidence:
+      `dalmax/selection/hierarchical_kmeans.py::HierarchicalKMeansSelection` takes `hierarchy` via
+      its constructor (injected from `config.dataset.selection.hierarchy`, resolved per
+      `config.dataset.name` by `dalmax/config/loader.py`, never a literal `'DANINHAS'` string); a
+      missing hierarchy for a given dataset now raises `dalmax.config.schema.ConfigError` (naming
+      the missing key), not a bare `KeyError`. `params_df_gpu_{0,1}.json`'s `CIFAR10` block still
+      has no `config_kmh`/`selection.hierarchy` (KI-23 unchanged — this is a params-file content
+      gap, not a code gap; adding the block is all that is needed now).
+- [x] `.specs/architecture/current-state.md` coupling points #1-#9 are each either resolved or have
+      an explicit "deferred to Phase N" note added by `spec-keeper`. Evidence: see that file's §5
+      table (Status column, added 2026-08-23) — all of #1-#9 are marked **Resolved** for the
+      `dalmax`-routed CLI path; #10/#11 (out of Phase 2's numbered list, found while reading the
+      code) are marked "unchanged/not in scope" and "bypassed, not resolved" respectively.
+- [x] `results/<run>/run_metadata.json` exists after any `ExperimentRunner.run()` call. Evidence:
+      `dalmax/experiment/run_metadata.py::write_run_metadata`, called from
+      `ExperimentRunner.run()` before the round loop; asserted by `tests/test_golden_run.py` and
+      `tests/test_run_metadata.py`.
 
 **Driver agent:** `implementer` (primary, follows this plan), `code-reviewer` (checks
 `demo.py --strategy_name` choices / registries / `.specs/` stay in sync per its role definition),
@@ -128,6 +156,17 @@ Work (mapped to `target-architecture.md` §2):
 
 **Goal:** run the three ablation studies in `.specs/experiments/ablation-study.md` using only
 config changes plus the small amount of genuinely new code identified there.
+
+**Prerequisites status: all met as of Phase 2 (2026-08-23)** — see the "Ablation enablers
+checklist" at the end of this file, now fully checked off. `ResNetImageNetProvider` and
+`FlatKMeansProportionalRandom` (originally scoped as "new code" for this phase) were **already
+implemented in Phase 2** (`dalmax/embeddings/resnet_imagenet_provider.py`,
+`dalmax/selection/flat_kmeans_proportional.py`) since they shared registries/tests with the rest of
+the embedding/selection abstraction work — so Phase 3 is now genuinely config-only: exact params
+JSON snippets and CLI invocations for 6.1/6.2/6.3 are in
+`.specs/experiments/ablation-study.md`'s run tables. What remains for Phase 3 is executing these
+configs on the lab machine (this repo's local dev environment has no GPU and must not run them) and
+recording the resulting F1 numbers.
 
 Work:
 - **6.1 Representation ablation**: run `embedding_variant = full | spatial | spectral` with the
@@ -164,10 +203,39 @@ not a code change, if Phase 2 landed the config layer correctly.
 **Goal:** finish the professionalization pass now that behavior is stable and tested.
 
 Work:
-- Physically rename/move `core/` + `utils/` into the single `dalmax/` package per ADR 0002.
-- Remove dead files identified in `known-issues.md`: `temp_teste.py`, `test.py` (root, not pytest),
-  `TRASH_TEXT.md`, `sampled_data.pdf`, `core/query_strategies/old_functions.py`, `demo_ssl.py` (if
-  still unused after Phase 3).
+- Physically rename/move the remaining `core/` + `utils/` modules into the single `dalmax/` package
+  per ADR 0002 — Phase 2 already created `dalmax/` and populated it with new modules, but left
+  `core/`/`utils/` in place as the implementation those modules wrap (see `current-state.md` §0);
+  Phase 4 finishes the consolidation `target-architecture.md` describes (moving
+  `core/daninhas_model.py`/`cifar10_model.py` → `dalmax/models/`, `utils/data.py`/`dataset.py` →
+  `dalmax/data/`, the legacy uncertainty/diversity/adversarial/bayesian strategy files →
+  `dalmax/query_strategies/`, `core/tools/` → `dalmax/tools/`, and `utils/report/` →
+  `dalmax/reporting/`).
+- **Delete the dead code Phase 2 identified but did not remove** (kept per ADR 0002's "wrap, don't
+  delete, until Phase 4" policy — see `current-state.md` §0 for why each is unreachable):
+  - `utils/orchestrator.py` (superseded by `dalmax/{data,models,query_strategies}/registry.py`;
+    only remaining reference is `tests/test_registry.py`'s own coverage of it — delete or repurpose
+    that test alongside this file).
+  - `core/query_strategies/ssrae_kmeans_sampling.py` (`SSRAEKmeansSampling` class; superseded by
+    the `RepresentationStrategy` preset `("ssrae", "flat_closest")`).
+  - `core/query_strategies/vctex_kmeans_sampling.py` (`VCTexKmeansSampling`; superseded by
+    `("vctex", "flat_closest")`).
+  - `core/query_strategies/ssl_ssrae_sampling.py` (`SSLStrategy`, `SSRAEKmeansHCSampling`,
+    `VCTexKmeansHCSampling`; superseded by the `("ssrae"|"vctex", "hierarchical")` presets).
+  - `Data.create_feature_maps_ssrae`/`create_feature_maps_vctex` and the
+    `initialize_labels(..., compute_legacy_features)` flag in `utils/data.py` (only reached when
+    `compute_legacy_features=True`, which `dalmax.experiment.runner.ExperimentRunner` never passes)
+    — remove the flag and the `if self.strategy_name == "SSRAE..."` branch entirely once the four
+    classes above are gone.
+  - The three corresponding `from .<module> import <Class>` lines in
+    `core/query_strategies/__init__.py`.
+  - The orphaned unkeyed pickle caches on disk: `results/features_dict_ssrae.pkl`,
+    `results/features_dict_vctex.pkl` (superseded twice over — first by Phase 1's
+    `cache_file_path`, then by Phase 2's `EmbeddingCache` — never read or written by any live code
+    path; safe to delete once confirmed unused on the lab machine's `results/` tree too).
+- Remove the other dead files identified in `known-issues.md`: `temp_teste.py`, `test.py` (root, not
+  pytest), `TRASH_TEXT.md`, `sampled_data.pdf`, `core/query_strategies/old_functions.py`,
+  `demo_ssl.py` (if still unused after Phase 3).
 - Docs refresh: update `README.md`, `CLAUDE.md`, `.specs/` cross-links to the new `dalmax/` paths.
 - Sweep remaining known-issues items that were deferred (duplicate imports, unused imports, logging
   levels) via `mechanic`.
@@ -187,17 +255,34 @@ safely archived, and re-run the golden-run regression test immediately after.
 
 ## Ablation enablers checklist
 
-Cross-referenced with `.specs/experiments/ablation-study.md`. All must be true before Phase 3 starts:
+Cross-referenced with `.specs/experiments/ablation-study.md`. All must be true before Phase 3
+starts. **Status: all met, 2026-08-23 (Phase 2 landed).**
 
-- [ ] `EmbeddingProvider` abstraction exists with `SSRAE`, `VCTex`, and `ResNetImageNet` implementations.
-- [ ] Embedding cache is keyed by `(dataset, extractor, Q, variant, split)` — no more fixed
-      `results/features_dict_*.pkl` paths.
-- [ ] `embedding_variant` (`full | spatial | spectral`) slices the cached full SSRAE embedding
-      without recomputation.
-- [ ] `HierarchicalKMeansSelection` reads `n_clusters`/`n_levels`/`sample_sizes` entirely from config
-      (no hardcoded `'DANINHAS'` key lookup).
-- [ ] `FlatKMeansProportionalRandom` exists and is documented as distinct from `FlatKMeansClosest`.
-- [ ] Macro F1 is computed and reported (not just weighted F1).
-- [ ] Every strategy's clustering randomness derives from the experiment seed.
-- [ ] `run_metadata.json` (config snapshot + git hash) is written per run, so every ablation result
-      is traceable back to the exact config that produced it.
+- [x] `EmbeddingProvider` abstraction exists with `SSRAE`, `VCTex`, and `ResNetImageNet`
+      implementations. — `dalmax/embeddings/{base,ssrae_provider,vctex_provider,
+      resnet_imagenet_provider}.py`, registered in `dalmax/embeddings/registry.py`.
+- [x] Embedding cache is keyed by `(dataset, extractor, Q, variant, split)` — no more fixed
+      `results/features_dict_*.pkl` paths. — `dalmax/embeddings/cache.py::EmbeddingCache`, keyed on
+      `(dataset, extractor, q, variant, split, pool_hash)` (one extra component beyond the spec's
+      minimum: `pool_hash`, needed because the pool embedded depends on `--seed`/`--n_init_labeled`,
+      not just the dataset/extractor/Q/variant/split tuple).
+- [x] `embedding_variant` (`full | spatial | spectral`) slices the cached full SSRAE embedding
+      without recomputation. — `dalmax/embeddings/variants.py::slice_embedding`, applied by
+      `RepresentationStrategy.query` on the loaded `"full"` cache entry.
+- [x] `HierarchicalKMeansSelection` reads `n_clusters`/`n_levels`/`sample_sizes` entirely from config
+      (no hardcoded `'DANINHAS'` key lookup). — `dalmax/selection/hierarchical_kmeans.py`, hierarchy
+      injected via constructor.
+- [x] `FlatKMeansProportionalRandom` exists and is documented as distinct from `FlatKMeansClosest`.
+      — `dalmax/selection/flat_kmeans_proportional.py`; see `target-architecture.md` §6's comparison
+      table.
+- [x] Macro F1 is computed and reported (not just weighted F1). — `utils/data.py::Data.calc_metrics`,
+      `results.json`'s `all_precision_macro`/`all_recall_macro`/`all_f1_macro`.
+- [x] Every strategy's clustering randomness derives from the experiment seed. —
+      `dalmax/seeding.py::seed_everything`/`derive_seed`; no literal `random_state=N` anywhere in
+      `dalmax/selection/`.
+- [x] `run_metadata.json` (config snapshot + git hash) is written per run, so every ablation result
+      is traceable back to the exact config that produced it. — `dalmax/experiment/run_metadata.py`.
+
+Remaining before Phase 3 can close out: the ablations must actually be **run** (lab machine, no code
+changes) and their F1 numbers recorded in `.specs/experiments/ablation-study.md` and
+`.specs/experiments/baseline-results.md`, per that phase's acceptance criteria above.

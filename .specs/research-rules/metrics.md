@@ -18,7 +18,13 @@ Plain elementwise-equality accuracy over the full test set (both tensors
 cast to `int64` first). This is the value stored as `all_acc` in
 `results.json` for every round — **not** `acc_skl` (see below).
 
-## `Data.calc_metrics_sklearn` (utils/data.py:281-295)
+## `Data.calc_metrics_sklearn` (utils/data.py:281-295) — legacy, unused by `dalmax`
+
+**Phase 2 note**: this method is unchanged and still present, but
+`dalmax/experiment/runner.py` calls the new `Data.calc_metrics` (below)
+instead, not this one. Kept for backward compatibility with any direct
+caller; described here for the historical record of what pre-Phase-2
+`results.json` files were computed with.
 
 ```python
 accuracy  = accuracy_score(self.Y_test, preds)
@@ -44,28 +50,45 @@ f1        = f1_score(self.Y_test, preds, average='weighted', zero_division=0)
   — it is not stored in `results.json`; only `Data.cal_test_acc`'s value
   populates the `all_acc` list that is persisted.
 
-## Ablation study requires macro F1 — action required
+## Macro F1 is now computed (resolved 2026-08-23, Phase 2) — which metric to report
 
 `experiments/ablation-study.md` (per the advisor's request, and per
 `prompt-master.md` §6) specifies **macro F1** as the ablation metric. Since
-`calc_metrics_sklearn` uses `average='weighted'`, this is a real
+`calc_metrics_sklearn` uses `average='weighted'`, this was a real
 discrepancy, not a naming nuance: macro F1 weights every class equally
 regardless of support, so on this imbalanced test set (`BRACHIARIA`,
 `COLONIAO` especially, see `dataset-protocol.md`) macro and weighted F1 can
-diverge materially. Two implementation paths, both viable, described in
-`ablation-study.md`:
+diverge materially. Implementation path (1) below was chosen and landed:
 
-1. Add a macro-F1 computation (`f1_score(..., average='macro')`) alongside
-   the existing weighted one in `Data.calc_metrics_sklearn`, and persist
-   both in `results.json` going forward (non-breaking addition).
-2. Recompute macro F1 offline from `predictions.csv` (`Real Class`,
-   `Predicted Class` columns, already saved by `demo.py` for every run) —
-   requires no new training runs for the existing RNHAL reference numbers
-   used in ablation §6.3.
+1. **Done.** `utils/data.py::Data.calc_metrics` (new method, added alongside
+   the untouched `calc_metrics_sklearn`) computes accuracy plus weighted
+   *and* macro-averaged precision/recall/F1 in one call:
+   ```python
+   {
+       "acc": accuracy_score(...),
+       "precision_weighted": ..., "recall_weighted": ..., "f1_weighted": ...,
+       "precision_macro": ..., "recall_macro": ..., "f1_macro": ...,
+   }
+   ```
+   `dalmax/experiment/runner.py::ExperimentRunner._record_round` calls this
+   for every round; `dalmax/experiment/reporter.py::_write_results_json`
+   persists the macro values as `all_precision_macro`/`all_recall_macro`/
+   `all_f1_macro` in `results.json`, additive to the unchanged legacy keys
+   (`all_precision`/`all_recall`/`all_f1_score`, still weighted). Every run
+   through `dalmax.cli`/`demo.py` from this commit onward has both.
+2. **Still needed for pre-Phase-2 `results.json` files** (e.g.
+   `results/dalmax1/`, `results/dalmax2/`, used as-is by ablation §6.3's
+   "RNHAL (full)" row): recompute macro F1 offline from `predictions.csv`
+   (`Real Class`, `Predicted Class` columns, already saved by `demo.py` for
+   every run) — no re-training needed, since those runs predate the
+   `calc_metrics` addition and only have weighted F1 in their `results.json`.
 
-**Do not report the existing `all_f1_score` values from `results.json` as
-"macro F1" in the paper** — they are weighted F1. Any table mixing the two
-without labeling them explicitly would misrepresent the ablation.
+**Reporting rule going forward**: for the ablation study and any paper table
+claiming "macro F1", use `results.json`'s `all_f1_macro` (Phase 2+ runs) or
+an offline `predictions.csv` recomputation (pre-Phase-2 runs) —
+**never `all_f1_score`**, which remains weighted F1 for both old and new
+runs (unchanged key, unchanged meaning). Any table mixing weighted and macro
+values without labeling them explicitly would misrepresent the ablation.
 
 ## `Data.calc_metrics_manual` (utils/data.py:259-279, unused fallback)
 

@@ -7,7 +7,10 @@ Operational guide for Claude Code sessions in this repository.
 DalMax is a PhD research lab (UFMS) for **Deep Active Learning applied to UAV
 weed recognition**. The main contribution is **RNHAL**: a randomized-network
 spatio-spectral representation (SSRAE) plus hierarchical k-means batch selection.
-Entry point: `demo.py`, orchestrated via `utils/orchestrator.py`.
+Entry point: `demo.py` (a thin shim calling `dalmax.cli.main()`, since Phase 2 —
+see below). `utils/orchestrator.py` is now dead code, unreachable from `demo.py`
+(kept in place per ADR 0002/0005 until Phase 4's cleanup — see
+`.specs/architecture/current-state.md` §0).
 
 ## Source of truth
 
@@ -29,10 +32,16 @@ make test             # pytest, fast tests only
 make smoke            # true end-to-end micro-dataset run (demo.py, CPU) + fast tests
 make export-reqs      # regenerate requirements.txt from pyproject.toml
 
-# Example run:
+# Example run (unchanged CLI, now routed through dalmax.cli):
 python demo.py --dir_results results/dalmax1/ --params_json params_df_gpu_0.json \
     --dataset_name DANINHAS --strategy_name SSRAEKmeansHCSampling \
-    --n_query 100 --n_init_labeled 100 --n_round 8 --seed 1
+    --n_query 100 --n_init_labeled 100 --n_round 8 --seed 1 --device cuda
+
+# Example run using the new generic RepresentationStrategy + embedding/selection config
+# (see .specs/experiments/ablation-study.md for the exact params JSON syntax):
+python demo.py --dir_results results/ablation/ --params_json params_ablation_6_1_spatial.json \
+    --dataset_name DANINHAS --strategy_name RepresentationStrategy \
+    --n_query 100 --n_init_labeled 100 --n_round 8 --seed 1 --device cuda
 ```
 
 ## Working mode: multi-agent with model delegation (standing policy)
@@ -69,16 +78,28 @@ the same task, and new architectural decisions get an ADR in `.specs/adr/`. See
 
 Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refactor-plan.md).
 
-- **Phase 1 — Safety net** (current): tests, golden-run capture, CI green.
-- **Phase 2 — Core refactor**: config layer, embedding provider abstraction
-  (SSRAE/VCTex/ResNet-ImageNet) with keyed cache, selection module abstraction,
-  strategy/dataset/model registries, seed-propagation audit.
-- **Phase 3 — Ablations**: implement the three studies in
+- **Phase 1 — Safety net** (done): tests, golden-run capture, CI green.
+- **Phase 2 — Core refactor** (done, 2026-08-23): config layer
+  (`dalmax/config/`), embedding provider abstraction (SSRAE/VCTex/ResNet-ImageNet)
+  with keyed cache (`dalmax/embeddings/`), selection module abstraction
+  (`dalmax/selection/`), strategy/dataset/model registries (`dalmax/{query_strategies,
+  data,models}/registry.py`), seed-propagation audit (`dalmax/seeding.py`), macro-F1
+  metrics, `run_metadata.json`. `demo.py` now routes through `dalmax.cli.main()`.
+  `core/`/`utils/` are unchanged (except `utils/data.py`) and still do the actual
+  work underneath — see [`.specs/architecture/current-state.md`](.specs/architecture/current-state.md)
+  §0 for exactly what moved vs. what is wrapped.
+- **Phase 3 — Ablations** (current): implement the three studies in
   [`.specs/experiments/ablation-study.md`](.specs/experiments/ablation-study.md)
-  as configs, run on the lab machine, generate the paper's ablation tables.
-- **Phase 4 — Polish**: package rename to `dalmax/`, docs refresh, dead-code removal.
+  as configs (**all code prerequisites met** — see that file's exact params-JSON/CLI
+  snippets and [`.specs/use-cases/run-ablation.md`](.specs/use-cases/run-ablation.md)),
+  run on the lab machine, generate the paper's ablation tables.
+- **Phase 4 — Polish**: package rename/move of the remaining `core/`/`utils/`
+  modules into `dalmax/`, delete the code Phase 2 made dead but did not remove
+  (`utils/orchestrator.py`, the four superseded strategy files — see
+  `refactor-plan.md` Phase 4 for the itemized list), docs refresh.
 
-Next milestone: close out Phase 1 (tests + CI green), then start Phase 2.
+Next milestone: run the three Phase 3 ablation sub-studies on the lab machine and
+record their macro-F1 numbers in `ablation-study.md`/`baseline-results.md`.
 
 ## Never do
 
@@ -92,15 +113,31 @@ Next milestone: close out Phase 1 (tests + CI green), then start Phase 2.
 
 ## Key facts cheat-sheet
 
-- SSRAE hidden-layer size `Q = 13` (`utils/data.py`, `create_feature_maps_ssrae`);
-  VCTex uses `Q ∈ {5, 17}`.
-- Results dir: `{dir_results}/{dataset_folder}/SEED_{seed}/NQ_{n_query}_NIL_{n_init_labeled}_NR_{n_round}_NE_{n_epoch}/{strategy_name}/`.
-- `demo.py --strategy_name` choices: `RandomSampling`, `LeastConfidence`,
+- SSRAE hidden-layer size `Q = 13` (config-driven since Phase 2:
+  `EmbeddingConfig.q`, defaulted per-extractor in `dalmax/config/loader.py`; legacy
+  literal still at `utils/data.py::create_feature_maps_ssrae`, now dead code);
+  VCTex uses `Q ∈ {5, 17}` (i.e. `Q = (5, 17)` as a tuple, not two runs).
+- Results dir (unchanged by Phase 2): `{dir_results}/{dataset_folder}/SEED_{seed}/NQ_{n_query}_NIL_{n_init_labeled}_NR_{n_round}_NE_{n_epoch}/{strategy_name}/`
+  — now also contains `run_metadata.json` (config snapshot + git commit), and
+  `results.json` gained `all_precision_macro`/`all_recall_macro`/`all_f1_macro`.
+- **New CLI flags (Phase 2)**: `--device {auto,cuda,cpu}` (default `auto`; pass
+  `--device cuda` explicitly on the lab machine, don't rely on `auto` — see
+  `.specs/infrastructure/execution-environments.md`), `--embedding_variant
+  {full,spatial,spectral}` (SSRAE only, overrides the params JSON's `embedding.variant`).
+- **New embedding cache path (Phase 2)**: `results/cache/embeddings/{dataset}__{extractor}__Q{q}__{variant}__{split}__pool{hash}.pkl`
+  (`dalmax/embeddings/cache.py`) — not `results/cache/{name}_{dataset_folder}...` (Phase 1,
+  now dead code) or `results/features_dict_*.pkl` (original, orphaned).
+- `demo.py --strategy_name` choices (unchanged plus one new generic name):
+  `RandomSampling`, `LeastConfidence`,
   `MarginSampling`, `EntropySampling`, `LeastConfidenceDropout`,
   `MarginSamplingDropout`, `EntropySamplingDropout`, `KMeansSampling`,
   `KCenterGreedy`, `BALDDropout`, `AdversarialBIM`, `AdversarialDeepFool`,
   `SSRAEKmeansSampling`, `VCTexKmeansSampling`, `SSRAEKmeansHCSampling`,
-  `VCTexKmeansHCSampling`.
+  `VCTexKmeansHCSampling`, **`RepresentationStrategy`** (NEW — generic, driven
+  by the params JSON's `"embedding"`/`"selection"` blocks; see
+  `.specs/experiments/ablation-study.md` for exact syntax).
 - One params JSON per lab GPU: `params_df_gpu_0.json`, `params_df_gpu_1.json`, run
   via `run_pipe_gpu_0.sh` / `run_pipe_gpu_1.sh` (`QUERIES=(10 50 100)`,
-  `SEEDS=(1 2 3)`, `n_round 8`, results into `results/dalmax1/`).
+  `SEEDS=(1 2 3)`, `n_round 8`, results into `results/dalmax1/`) — unchanged, still
+  works via the legacy `config_kmh` key (Phase 2's loader reads it as
+  `selection = {method: "hierarchical", hierarchy: config_kmh}` automatically).

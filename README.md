@@ -168,7 +168,10 @@ DATA/
 
 ## Usage
 
-Entry point: `demo.py`. Example (RNHAL / SSRAE hierarchical strategy on the weed dataset):
+Entry point: `demo.py` — as of the Phase 2 core refactor, a thin shim that calls
+`dalmax.cli.main()` (see [`.specs/architecture/refactor-plan.md`](.specs/architecture/refactor-plan.md)
+Phase 2); every flag and results-directory convention below is unchanged, plus two additive flags.
+Example (RNHAL / SSRAE hierarchical strategy on the weed dataset):
 
 ```bash
 python demo.py \
@@ -179,17 +182,47 @@ python demo.py \
     --n_query 100 \
     --n_init_labeled 100 \
     --n_round 8 \
-    --seed 1
+    --seed 1 \
+    --device cuda
 ```
 
 CLI arguments: `--dir_results`, `--params_json`, `--seed`, `--n_init_labeled`,
 `--n_query`, `--n_round`, `--dataset_name {CIFAR10,DANINHAS}`, `--strategy_name`
-(one of the strategies listed above).
+(one of the strategies listed above, plus `RepresentationStrategy` — see below),
+and two flags added in the Phase 2 core refactor:
+
+- `--device {auto,cuda,cpu}` (default `auto`, resolving to `cuda` iff available) —
+  which device the network and any embedding/selection computation runs on.
+- `--embedding_variant {full,spatial,spectral}` (default: no override) — overrides
+  the params JSON's `embedding.variant` for the SSRAE extractor, letting one params
+  JSON serve all three representation-ablation variants via the CLI instead of
+  three separate files.
+
+### `RepresentationStrategy`: the generic embedding + selection strategy
+
+`SSRAEKmeansSampling`, `VCTexKmeansSampling`, `SSRAEKmeansHCSampling`, and
+`VCTexKmeansHCSampling` are unchanged from a CLI point of view, but are now all
+served under the hood by one class,
+`dalmax.query_strategies.representation.RepresentationStrategy`, composed from an
+`EmbeddingProvider` (`dalmax/embeddings/`: `ssrae`, `vctex`, or `resnet_imagenet`)
+and a `SelectionStrategy` (`dalmax/selection/`: `flat_closest`, `flat_proportional`,
+or `hierarchical`) — see
+[`.specs/adr/0005-representation-strategy-and-registries.md`](.specs/adr/0005-representation-strategy-and-registries.md).
+`--strategy_name RepresentationStrategy` exposes this composition directly: the
+`(extractor, selection method)` pair is read from the params JSON's per-dataset
+`"embedding"`/`"selection"` blocks (see the params JSON schema below) instead of
+being pinned to one of the four legacy presets. This is what
+[`.specs/experiments/ablation-study.md`](.specs/experiments/ablation-study.md)'s
+three sub-studies drive — e.g. an SSRAE `spatial`/`spectral` embedding variant, a
+`resnet_imagenet` embedding with hierarchical selection, or an SSRAE embedding with
+the new `flat_proportional` selection.
 
 ### Params JSON schema
 
 Hyperparameters are keyed by dataset name (see `params_df_gpu_0.json` /
-`params_df_gpu_1.json`, one file per lab GPU):
+`params_df_gpu_1.json`, one file per lab GPU). The schema below is unchanged from
+before the Phase 2 refactor; `dalmax/config/loader.py` reads it exactly as shown —
+existing params JSON files need no edits.
 
 ```json
 {
@@ -224,6 +257,45 @@ strategies) sets the number of clusters per hierarchy level (`n_clusters`), the
 number of levels (`n_levels`), and how many samples are drawn per level
 (`sample_sizes`).
 
+**New, optional per-dataset keys (Phase 2 core refactor)**, consumed by
+`--strategy_name RepresentationStrategy` (and by the legacy preset names, which
+mostly ignore them — see the `RepresentationStrategy` section above):
+
+```json
+{
+  "DANINHAS": {
+    "...": "... same required keys as above ...",
+    "embedding": {
+      "extractor": "ssrae",
+      "q": 13,
+      "variant": "full"
+    },
+    "selection": {
+      "method": "hierarchical",
+      "hierarchy": { "n_clusters": [600, 200, 100], "n_levels": 3, "sample_sizes": [30, 15, 2] }
+    }
+  }
+}
+```
+
+- `embedding.extractor`: `"ssrae"` (default) | `"vctex"` | `"resnet_imagenet"`.
+- `embedding.q`: the extractor's hyperparameter — `13` for SSRAE, `[5, 17]` for
+  VCTex, `null` for `resnet_imagenet` (fixed 2048-d penultimate layer, no `Q`).
+  Defaults per-extractor if omitted; never falls back to SSRAE's `13` for VCTex.
+- `embedding.variant`: `"full"` (default) | `"spatial"` | `"spectral"` — SSRAE
+  only; slices the cached full embedding, never recomputes it.
+- `selection.method`: `"flat_closest"` (today's `SSRAEKmeansSampling`/
+  `VCTexKmeansSampling` behavior) | `"flat_proportional"` (new: random picks per
+  cluster, proportional to cluster size, cluster count independent of the query
+  budget) | `"hierarchical"` (today's `*HCSampling` behavior; requires
+  `selection.hierarchy`).
+- A dataset entry with a legacy `"config_kmh"` and no `"selection"` key is read
+  as `selection = {"method": "hierarchical", "hierarchy": config_kmh}` —
+  full backward compatibility, no existing file needs to change.
+
+See [`.specs/experiments/ablation-study.md`](.specs/experiments/ablation-study.md)
+for the exact `embedding`/`selection` values used by each ablation run.
+
 ### Results directory convention
 
 `demo.py` writes to:
@@ -233,8 +305,11 @@ number of levels (`n_levels`), and how many samples are drawn per level
 ```
 
 containing `results.json`, `predictions.csv`, `confusion_matrix.pdf`,
-`accuracy.pdf`/`precision.pdf`/`recall.pdf`/`f1_score.pdf`, `log-dalmax.log`, and
-the saved model checkpoint. See
+`accuracy.pdf`/`precision.pdf`/`recall.pdf`/`f1_score.pdf`, `log-dalmax.log`, the
+saved model checkpoint, and (since the Phase 2 core refactor) `run_metadata.json`
+— a full config snapshot plus the git commit hash, so any run is traceable back to
+exactly what produced it. `results.json` also gained `all_precision_macro`/
+`all_recall_macro`/`all_f1_macro` alongside the unchanged weighted metrics. See
 [`.specs/experiments/experimental-protocol.md`](.specs/experiments/experimental-protocol.md).
 
 ## Execution environments
@@ -272,13 +347,25 @@ make export-reqs   # regenerate requirements.txt from pyproject.toml
 
 ```
 dalmax-deep-active-learning-python/
-├── demo.py                    # CLI entry point (training + AL loop)
-├── core/                      # models, query strategies, RNHAL tools (SSRAE, SSL)
-│   ├── query_strategies/      # one module per acquisition strategy
+├── demo.py                    # CLI entry point — thin shim, calls dalmax.cli.main()
+├── dalmax/                    # Phase 2 core refactor package (config, embeddings,
+│   │                          #   selection, query_strategies, experiment orchestration)
+│   ├── cli.py                 # argparse -> ExperimentConfig -> ExperimentRunner.run()
+│   ├── config/                # schema.py (typed dataclasses), loader.py (params JSON -> config)
+│   ├── seeding.py             # single place that seeds random/numpy/torch
+│   ├── embeddings/            # EmbeddingProvider: ssrae, vctex, resnet_imagenet + keyed cache
+│   ├── selection/             # SelectionStrategy: flat_closest, flat_proportional, hierarchical
+│   ├── query_strategies/      # RepresentationStrategy + STRATEGY_REGISTRY (legacy + presets)
+│   ├── data/, models/         # DATASET_REGISTRY / MODEL_REGISTRY (wrap core/ + utils/ as-is)
+│   └── experiment/            # runner.py (round loop), reporter.py (plots/JSON/CSV), run_metadata.py
+├── core/                      # models, query strategies, RNHAL tools (SSRAE, SSL) — vendored,
+│   │                          #   wrapped by dalmax/ rather than moved (Phase 4 will relocate this)
+│   ├── query_strategies/      # one module per acquisition strategy; 4 SSRAE/VCTex-kmeans
+│   │                          #   files here are dead code as of Phase 2 (see current-state.md §0)
 │   └── tools/
 │       ├── SSRAE/             # randomized-network spatio-spectral extractor
 │       └── SSL/               # hierarchical k-means selection
-├── utils/                     # dataset handlers, orchestrator (registries), report/
+├── utils/                     # dataset handlers, orchestrator (dead code as of Phase 2), report/
 ├── params_df_gpu_0.json       # hyperparameters for lab GPU 0
 ├── params_df_gpu_1.json       # hyperparameters for lab GPU 1
 ├── run_pipe_gpu_0.sh          # experiment batch runner, GPU 0
@@ -289,11 +376,16 @@ dalmax-deep-active-learning-python/
 ├── phd_files/                 # PhD documents, paper LaTeX sources, references
 ├── .claude/                   # multi-agent config: agents, commands, rules, skills
 ├── .specs/                    # specifications: architecture, experiments, ADRs
-├── tests/                     # pytest suite (imports, registry, SSRAE layout)
+├── tests/                     # pytest suite (imports, registry, SSRAE layout, dalmax/ modules)
 ├── CLAUDE.md                  # operational guide for Claude Code sessions
 ├── AGENTS.md                  # tool-agnostic mirror of CLAUDE.md
 └── Makefile
 ```
+
+See [`.specs/architecture/current-state.md`](.specs/architecture/current-state.md) §0 for exactly
+which `core/`/`utils/` files `dalmax/` wraps vs. leaves dead, and
+[`.specs/architecture/target-architecture.md`](.specs/architecture/target-architecture.md) for what
+still moves to `dalmax/` in Phase 4.
 
 ## Roadmap
 
@@ -301,7 +393,7 @@ The codebase is being refactored in phases to make the ablation study
 (representation ablation, hierarchy ablation, RNHAL-stage-contribution ablation)
 a matter of configuration rather than new code:
 
-**Phase 1 — Safety net → Phase 2 — Core refactor → Phase 3 — Ablations → Phase 4 — Polish.**
+**Phase 1 — Safety net (done) → Phase 2 — Core refactor (done) → Phase 3 — Ablations (current) → Phase 4 — Polish.**
 
 Full phase plan and acceptance criteria:
 [`.specs/architecture/refactor-plan.md`](.specs/architecture/refactor-plan.md).

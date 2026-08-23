@@ -1,10 +1,20 @@
 # Experimental protocol
 
 This describes the active-learning experiment protocol as it exists in code
-today (`demo.py`, `utils/data.py`, `utils/dataset.py`) and as actually
-invoked by the run scripts. Where the scripts diverge from `demo.py`
-defaults, both are recorded explicitly — do not assume the CLI default is
-what was actually run.
+today (`demo.py` → `dalmax/cli.py`, `utils/data.py`, `utils/dataset.py`) and
+as actually invoked by the run scripts. Where the scripts diverge from
+`demo.py`/`dalmax.cli` defaults, both are recorded explicitly — do not
+assume the CLI default is what was actually run.
+
+**Phase 2 update (2026-08-23)**: `demo.py` is now a thin shim routing to
+`dalmax.cli.main()`; every CLI flag, results-directory path, and
+`results.json` field described below is **unchanged** except two additive
+CLI flags and two additive `results.json` keys, called out explicitly in
+their own sections below (`--device`/`--embedding_variant`,
+`all_precision_macro`/`all_recall_macro`/`all_f1_macro`) and one new
+artifact (`run_metadata.json`). `run_pipe_gpu_0.sh`/`run_pipe_gpu_1.sh` and
+every existing params JSON keep working unchanged. See
+`.specs/architecture/current-state.md` §0 for what changed under the hood.
 
 ## Datasets
 
@@ -85,18 +95,49 @@ pretrained-weights flag — not read in this batch), trained per round via
 size 256, `num_workers=4` for DANINHAS (64 / 1000, `num_workers=1` for
 CIFAR10). `n_classes=5` for DANINHAS, `10` for CIFAR10.
 
-`torch.backends.cudnn.enabled = False` is set globally in `demo.py` — see
-`research-rules/reproducibility.md` and known-issues (owned by another
-batch) for the performance implication on the lab GPUs.
+**Phase 2 update**: the old `torch.backends.cudnn.enabled = False` global
+disable (previously set in `demo.py`) is gone — `dalmax/seeding.py::seed_everything`
+sets `torch.backends.cudnn.deterministic = True` / `benchmark = False`
+instead, preserving cuDNN's faster kernels while staying deterministic. See
+`research-rules/reproducibility.md` and `known-issues.md` KI-8 for the
+performance implication on the lab GPUs, and `.specs/architecture/refactor-plan.md`
+Phase 2 risks for why this means post-refactor GPU runs are not bit-identical
+to historical GPU runs at the same seed (CPU runs are unaffected).
 
 ## Query strategies exercised
 
-Full `--strategy_name` choice list (from `demo.py`): `RandomSampling`,
-`LeastConfidence`, `MarginSampling`, `EntropySampling`,
+Full `--strategy_name` choice list (from `demo.py` → `dalmax/cli.py`, unchanged plus one addition):
+`RandomSampling`, `LeastConfidence`, `MarginSampling`, `EntropySampling`,
 `LeastConfidenceDropout`, `MarginSamplingDropout`, `EntropySamplingDropout`,
 `KMeansSampling`, `KCenterGreedy`, `BALDDropout`, `AdversarialBIM`,
 `AdversarialDeepFool`, `SSRAEKmeansSampling`, `VCTexKmeansSampling`,
-`SSRAEKmeansHCSampling`, `VCTexKmeansHCSampling`.
+`SSRAEKmeansHCSampling`, `VCTexKmeansHCSampling`, **`RepresentationStrategy`
+(NEW, Phase 2)**. The last four legacy names plus the new
+`RepresentationStrategy` are all served by
+`dalmax.query_strategies.representation.RepresentationStrategy` under the
+hood (`.specs/architecture/target-architecture.md` §6,
+`.specs/adr/0005-representation-strategy-and-registries.md`); the four
+legacy names are fixed presets (pinned extractor/`Q`/selection method,
+ignoring the params JSON's `"embedding"` block), while `RepresentationStrategy`
+reads `"embedding"`/`"selection"` from the params JSON verbatim — see
+`.specs/experiments/ablation-study.md` for the exact syntax used by the
+ablations.
+
+## New CLI flags (Phase 2, additive — every other flag/default is unchanged)
+
+- `--device {auto,cuda,cpu}` (default `auto`): compute device for the
+  network and any embedding provider/selection strategy that runs torch
+  ops. `auto` resolves to `cuda` iff `torch.cuda.is_available()`, else
+  `cpu` (`dalmax/config/loader.py::_resolve_device`). Existing lab-machine
+  scripts should pass `--device cuda` explicitly rather than relying on
+  `auto`, per `.specs/infrastructure/execution-environments.md`.
+- `--embedding_variant {full,spatial,spectral}` (default `None` = no
+  override): overrides `dataset.embedding.variant` from the params JSON's
+  `"embedding"` block at the CLI level, for the SSRAE extractor only
+  (`dalmax/cli.py::_apply_embedding_variant_override`). Lets a single params
+  JSON be reused across the three §6.1 ablation runs via a CLI flag instead
+  of three separate JSON files, if preferred over the JSON-per-variant
+  approach `ablation-study.md`'s exact configs use.
 
 - `run_pipe_gpu_0.sh` / `run_pipe_gpu_1.sh` run **only**
   `SSRAEKmeansHCSampling` (the RNHAL strategy) across the `n_query × seed`
@@ -118,14 +159,24 @@ Full `--strategy_name` choice list (from `demo.py`): `RandomSampling`,
 ## Metrics
 
 See `research-rules/metrics.md` for exact definitions. Summary: per round,
-`demo.py` records `all_acc` (custom tensor-equality accuracy,
-`Data.cal_test_acc`), plus `accuracy, precision, recall, f1_score` from
-`Data.calc_metrics_sklearn` — **`average='weighted'`** for precision/recall/
-F1 (sklearn), not macro. `acc_skl` (sklearn accuracy_score) is computed but
-only the manual `cal_test_acc` value is stored in `results.json`'s
-`all_acc` list.
+`demo.py`/`dalmax.experiment.runner.ExperimentRunner` records `all_acc`
+(custom tensor-equality accuracy, `Data.cal_test_acc`), plus
+`accuracy, precision, recall, f1_score` — **`average='weighted'`** for
+precision/recall/F1 (sklearn), not macro, exactly as before. `acc_skl`
+(sklearn accuracy_score) is computed but only the manual `cal_test_acc`
+value is stored in `results.json`'s `all_acc` list.
 
-## Results directory naming convention (from `demo.py`)
+**Phase 2 addition**: `Data.calc_metrics` (new method, `calc_metrics_sklearn`
+unchanged and still present) also computes macro-averaged
+precision/recall/F1 in the same call; `results.json` now additionally
+contains `all_precision_macro`, `all_recall_macro`, `all_f1_macro` (one
+value per round, same indexing as the legacy `all_*` lists) for **every**
+run through `dalmax.cli`/`demo.py` from this commit onward. See
+`research-rules/metrics.md` for which averaging to report where, and the
+"Metrics discrepancy" note in `ablation-study.md` for pre-Phase-2
+`results.json` files (which do not have these keys).
+
+## Results directory naming convention (from `demo.py`, unchanged by Phase 2)
 
 ```
 {dir_results}/{dataset_folder}/SEED_{seed}/NQ_{n_query}_NIL_{n_init_labeled}_NR_{n_round}_NE_{n_epoch}/{strategy_name}/
@@ -133,11 +184,26 @@ only the manual `cal_test_acc` value is stored in `results.json`'s
 
 where `dataset_folder = os.path.basename(params[dataset_name]['data_dir'].rstrip('/'))`
 — i.e. `daninhas_full` or `DATA_CIFAR10`, taken from the params JSON's
-`data_dir`, not from `--dataset_name` directly. Each leaf directory contains:
-`results.json` (config + per-round metric lists), `predictions.csv`
-(per-test-image prediction record), `confusion_matrix.pdf`,
-`accuracy.pdf`/`precision.pdf`/`recall.pdf`/`f1_score.pdf`, `log-dalmax.log`,
-and the saved model (`saved_model.pth`).
+`data_dir`, not from `--dataset_name` directly
+(`dalmax/experiment/runner.py::results_dir_for`, byte-identical logic to the
+pre-Phase-2 `demo.py`). Each leaf directory contains:
+`results.json` (config + per-round metric lists, now including the macro
+keys above), `predictions.csv` (per-test-image prediction record),
+`confusion_matrix.pdf`, `accuracy.pdf`/`precision.pdf`/`recall.pdf`/
+`f1_score.pdf`, `log-dalmax.log`, the saved model (`saved_model.pth`), and
+**`run_metadata.json` (NEW, Phase 2)** — see below.
+
+## Run metadata (NEW, Phase 2)
+
+Every leaf results directory now also contains `run_metadata.json`
+(`dalmax/experiment/run_metadata.py`, written before the round loop starts),
+with: the fully-resolved config as loaded (including the new `embedding`/
+`selection`/`device` fields, and `params_json_path`), `git_commit`
+(best-effort `git rev-parse HEAD`, `None` if unavailable), `python_version`,
+`torch_version`, `cuda_available`, and `started_at` (UTC ISO-8601). This is
+what makes `.claude/rules/reproducibility.md`'s "(params JSON + CLI args +
+seed + git commit) fully determine a run" verifiable after the fact — see
+`research-rules/reproducibility.md`.
 
 ## Params file per GPU / environment
 

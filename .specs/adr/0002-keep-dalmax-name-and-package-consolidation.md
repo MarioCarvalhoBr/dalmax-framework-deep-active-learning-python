@@ -1,6 +1,6 @@
 # ADR 0002: Keep the DalMax name; consolidate `core/` + `utils/` into `dalmax/` later
 
-- **Status:** Accepted
+- **Status:** Accepted (amended 2026-08-23 — see "Amendment" below)
 - **Date:** 2026-08-23
 
 ## Context
@@ -44,3 +44,23 @@ by the ablation study (`.specs/experiments/ablation-study.md`).
 - Negative: two more phases must pass before the codebase matches `target-architecture.md` exactly;
   `known-issues.md` should track this ADR's reference so nobody mistakes the current `core/`/`utils/`
   split for a stale design.
+
+## Amendment (2026-08-23, Phase 2 landed)
+
+The "exact choice ... left to the `implementer` agent executing Phase 2" (Consequences, above) was
+resolved: **the `dalmax/` package was created immediately in Phase 2**, not staged under
+`core/`/`utils/` first. Every genuinely new Phase 2 abstraction (config layer, embedding providers +
+cache, selection strategies, the generic `RepresentationStrategy`, all registries, the experiment
+runner/reporter/run-metadata modules, `seeding.py`) lives under `dalmax/` as of commit `ed37f8a`
+(branch `refactor/phase-2-core`). `core/` and `utils/` were **not** moved or deleted — every legacy
+model class, the training engine (`core/deep_learning.py`), dataset loaders (`utils/data.py`,
+`utils/dataset.py`), and the 12 non-representation strategy classes are called by `dalmax/` code
+(`dalmax/models/registry.py`, `dalmax/data/registry.py`,
+`dalmax/query_strategies/registry.py::LEGACY_STRATEGY_REGISTRY`) exactly as they are, unmodified.
+Four legacy files became **dead code** rather than being deleted (`utils/orchestrator.py`,
+`core/query_strategies/{ssrae_kmeans_sampling,vctex_kmeans_sampling,ssl_ssrae_sampling}.py`) — kept
+in place per this ADR's original "defer the physical move to Phase 4" decision, scheduled for
+deletion there (see `.specs/architecture/refactor-plan.md` Phase 4 and
+`.specs/architecture/current-state.md` §0 for exactly why each is unreachable from `demo.py`/
+`dalmax.cli` today). This amendment does not change the original Decision (DalMax keeps its name;
+full consolidation is still Phase 4) — it only records which of the two staging options was taken.

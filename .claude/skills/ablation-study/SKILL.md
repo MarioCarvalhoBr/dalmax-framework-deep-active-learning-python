@@ -12,6 +12,14 @@ sub-studies are evaluated with **macro F1** on the held-out split, dataset
 `.specs/experiments/experimental-protocol.md` (seeds 1-3, matching
 `run_pipe_gpu_0.sh` / `run_pipe_gpu_1.sh`).
 
+**Status (2026-08-23, Phase 2 landed): runnable via config today, not yet run.** Every "Not
+implemented" note below is now implemented — `dalmax/embeddings/`, `dalmax/selection/`, the generic
+`RepresentationStrategy` CLI name, and macro-F1 in `results.json` all exist and are tested. See
+`.specs/experiments/ablation-study.md` for the exact params-JSON snippets and CLI invocations for
+every row, and `.specs/use-cases/run-ablation.md` for the operational run order. This file's content
+below is kept as the conceptual/background reference (embedding layout, what each ablation isolates)
+— for "what to actually type," use those two files instead.
+
 ## Background: SSRAE embedding layout
 
 Verified in `core/tools/SSRAE/extractor.py`:
@@ -58,17 +66,19 @@ embedding (never recompute SSRAE three times):
 
 | Variant | Definition | Status |
 |---|---|---|
-| `emb_full` | `emb` (all six column-groups) | Already implemented — this is what `SSRAEKmeansSampling`/`SSRAEKmeansHCSampling` use today |
-| `emb_spatial` | `emb.reshape(9, 6*(Q+1))[:, :3*(Q+1)].reshape(-1)` (R, G, B column-groups only — NOT `emb[:len(emb)//2]`, see Layout caveat above) | Not implemented — needs `embedding_variant` config option |
-| `emb_spectral` | `emb.reshape(9, 6*(Q+1))[:, 3*(Q+1):].reshape(-1)` (RG, GB, BR column-groups only — NOT `emb[len(emb)//2:]`, see Layout caveat above) | Not implemented — needs `embedding_variant` config option |
+| `emb_full` | `emb` (all six column-groups) | Implemented — `dalmax/embeddings/variants.py::slice_embedding(v, "full", q)` (identity); this is what `SSRAEKmeansSampling`/`SSRAEKmeansHCSampling`/`RepresentationStrategy` use by default |
+| `emb_spatial` | `emb.reshape(9, 6*(Q+1))[:, :3*(Q+1)].reshape(-1)` (R, G, B column-groups only — NOT `emb[:len(emb)//2]`, see Layout caveat above) | Implemented — `dalmax/embeddings/variants.py::slice_embedding(v, "spatial", q)`, set via the params JSON's `embedding.variant` key or the `--embedding_variant` CLI flag |
+| `emb_spectral` | `emb.reshape(9, 6*(Q+1))[:, 3*(Q+1):].reshape(-1)` (RG, GB, BR column-groups only — NOT `emb[len(emb)//2:]`, see Layout caveat above) | Implemented — `dalmax/embeddings/variants.py::slice_embedding(v, "spectral", q)` |
 
-**Implementation requirement**: an `embedding_variant` config option
-(`full | spatial | spectral`) that **slices the cached full embedding** —
-never recompute SSRAE per variant. The cache must be keyed so variants cannot
-collide (today `results/features_dict_ssrae.pkl` has no such key — see
-`.claude/rules/reproducibility.md`; this is the first thing to fix before
-running this ablation, or the `spatial`/`spectral` run will silently read a
-`full`-embedding cache file left over from a previous run).
+**Implementation requirement — done (2026-08-23, Phase 2)**: `embedding.variant`
+(`full | spatial | spectral`, params JSON, or `--embedding_variant` CLI override) **slices the
+cached full embedding** — never recomputes SSRAE per variant. The cache is keyed on
+`(dataset, extractor, Q, variant, split, pool_hash)`, but only `"full"` is ever written
+(`dalmax/embeddings/cache.py`) — `spatial`/`spectral` are always derived from the loaded `"full"`
+entry, so they cannot collide with each other or read a stale variant. Use the generic
+`RepresentationStrategy` `--strategy_name`, not the `SSRAEKmeansHCSampling` preset, to reach the
+`embedding.variant` config — the preset ignores the `"embedding"` block entirely (see
+`.specs/experiments/ablation-study.md` §6.1's exact config for the full params JSON/CLI).
 
 ## 6.2 Hierarchy ablation
 
@@ -83,15 +93,17 @@ Fix `n_query = 100`, SSRAE full embeddings (`emb_full`). Vary `config_kmh`
 | 3 | `[300, 100, 50]` | Close to current `params_df_gpu_*.json` shape (`[600,200,100]`, 3 levels) but not identical — this ablation cell uses the exact `[300,100,50]` triple |
 | 4 | `[300, 100, 50, 25]` | Matches the `config_kmh` example seen in `core/query_strategies/ssl_ssrae_sampling.py`'s inline docstring comment |
 
-**Implementation requirement**: hierarchy depth/cluster counts must come
-**entirely from config** — no hardcoded `'DANINHAS'` key lookup. This is
-currently broken: `core/query_strategies/ssl_ssrae_sampling.py` reads
-`self.params['DANINHAS']['config_kmh']` literally, so this ablation cannot run
-against any dataset name other than `DANINHAS` without a code fix first (see
-`.specs/quality/known-issues.md`). `sample_sizes` handling per level must also
-be specified explicitly per `L` (do not assume a formula — define the
-`sample_sizes` list for each row above alongside its `n_clusters` when writing
-the run config).
+**Implementation requirement — done (2026-08-23, Phase 2)**: hierarchy depth/cluster counts come
+**entirely from config** — no hardcoded `'DANINHAS'` key lookup.
+`dalmax/selection/hierarchical_kmeans.py::HierarchicalKMeansSelection` takes `hierarchy` via
+constructor injection (resolved per the actual `dataset_name`, not a literal string). The old
+`core/query_strategies/ssl_ssrae_sampling.py:66` hardcode is unchanged but unreachable from
+`demo.py`/`dalmax.cli` (dead code, see `.specs/architecture/current-state.md` §0). `sample_sizes`
+semantics are now verified and documented (not a TBD any more): `sample_sizes[level]` only affects
+*centroid-refinement resampling quality* at that level; the number of ids returned is controlled
+entirely by `n_query` (independent of `sample_sizes`). Exact `sample_sizes` values for every `L`
+row are in `.specs/experiments/ablation-study.md` §6.2's run table (derived proportionally to
+`n_clusters`, flagged TBD for advisor sign-off but safe to run as-is).
 
 ## 6.3 Contribution of the two RNHAL stages
 
@@ -100,37 +112,42 @@ Three conditions, all macro F1 on `daninhas_full`:
 1. **RNHAL (full)** — F1 taken from the already-executed reference experiments
    (`SSRAEKmeansHCSampling`, the current `run_pipe_gpu_*.sh` sweeps). No new
    run needed; pull the number from existing `results/` via
-   `.claude/skills/results-reporting/SKILL.md`.
+   `.claude/skills/results-reporting/SKILL.md`. Their `results.json` predates the Phase 2 macro-F1
+   addition (weighted F1 only) — recompute macro F1 offline from `predictions.csv` for these
+   specific runs, do not re-run them.
 2. **Without representation module** — keep hierarchical selection, replace
    SSRAE embeddings with **ImageNet-pretrained ResNet embeddings** (penultimate
-   layer of the existing ResNet50, `core/daninhas_model.py`). This needs a
-   **new embedding provider** — not implemented today.
+   layer of the existing ResNet50, `core/daninhas_model.py`). **Implemented (Phase 2)**:
+   `dalmax/embeddings/resnet_imagenet_provider.py::ResNetImageNetProvider` — a provider swap fed
+   into `RepresentationStrategy`, no new strategy class needed.
 3. **Without hierarchical module** — SSRAE embeddings + **flat k-means**,
    selecting **random images from each cluster proportionally to the budget**.
-   **This is a different strategy from the current `SSRAEKmeansSampling`**,
+   **This is a different strategy from the legacy `SSRAEKmeansSampling`**,
    which uses `k=n` (one cluster per requested sample) and picks the
-   closest-to-centroid image per cluster — the ablation's "no hierarchical
-   module" condition needs a **new** strategy (flat k-means with a cluster
-   count independent of the query budget, then proportional random sampling
-   within each cluster), not a re-run of the existing one. Do not conflate the
-   two when implementing or when writing up results.
+   closest-to-centroid image per cluster. **Implemented (Phase 2)**:
+   `dalmax/selection/flat_kmeans_proportional.py::FlatKMeansProportionalRandom` — a genuinely new
+   selection strategy (cluster count independent of the query budget, random-not-closest picks,
+   proportional per-cluster quotas), seeded from the experiment seed, not a config-driven variant
+   of the old buggy class.
 
-## Code capabilities the refactor must provide (Phase 2/3, see
-`.specs/architecture/refactor-plan.md`)
+## Code capabilities — all implemented (2026-08-23, Phase 2)
 
 - Embedding provider abstraction: SSRAE | VCTex | ResNet-ImageNet, one
-  interface, swappable via config.
+  interface, swappable via config. — `dalmax/embeddings/{base,ssrae_provider,vctex_provider,
+  resnet_imagenet_provider}.py`.
 - `embedding_variant` slicing (`full | spatial | spectral`) on top of the
-  provider's cached output.
+  provider's cached output. — `dalmax/embeddings/variants.py`.
 - Configurable hierarchy (depth `L`, `n_clusters` per level, `sample_sizes` per
-  level) with no hardcoded dataset key.
+  level) with no hardcoded dataset key. — `dalmax/selection/hierarchical_kmeans.py`,
+  `dalmax/config/schema.py::HierarchyConfig`.
 - A proportional-cluster-sampling strategy (flat k-means + proportional random
   selection per cluster) as a distinct, registered strategy from
-  `SSRAEKmeansSampling`.
+  `SSRAEKmeansSampling`. — `dalmax/selection/flat_kmeans_proportional.py`.
 
-Each of these should become a one-config-line change once Phase 2 of the
-refactor plan is done — that is the acceptance bar for calling the ablations
-"implemented."
+Every ablation cell is now a params-JSON/CLI-only change — see
+`.specs/experiments/ablation-study.md` for the exact configs and
+`.specs/use-cases/run-ablation.md` for the run order. What remains is executing these on the lab
+machine and recording the resulting macro-F1 numbers.
 
 ## Running and reporting
 

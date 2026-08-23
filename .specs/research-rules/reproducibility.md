@@ -4,37 +4,70 @@ Expanded version of the standing rule (mirrored in `.claude/rules/reproducibilit
 owned by a different batch): every experiment must be fully determined by
 **(params JSON + CLI args + seed + git commit)**.
 
+**Phase 2 status (2026-08-23)**: every gap this file originally documented is now resolved for the
+live `dalmax.cli`/`demo.py` path — see the "Resolved" notes inline below and
+`.specs/architecture/current-state.md` §5 for the full coupling-point-by-coupling-point account.
+The original violation text is kept for the historical record in each subsection.
+
 ## Seed policy
 
-- `--seed` (CLI, default 1) is the single source of randomness for a run:
-  `np.random.seed(args.seed)` and `torch.manual_seed(args.seed)` are set at
-  the top of `main()` in `demo.py`, before `dataset.initialize_labels(...)`
-  (which itself uses `np.random.shuffle` to pick the initial labeled pool —
-  correctly seed-derived).
-- **Violation found**: `core/query_strategies/ssrae_kmeans_sampling.py:23`
+- `--seed` (CLI, default 1) is the single source of randomness for a run.
+  **Phase 2**: `np.random.seed`/`torch.manual_seed`/etc. are no longer scattered across `demo.py` —
+  `dalmax/seeding.py::seed_everything(seed)` is the single place that seeds `random`, NumPy's legacy
+  global RNG, and PyTorch (CPU + all CUDA devices), called exactly once by
+  `dalmax.experiment.runner.ExperimentRunner.run()` before any dataset/model/strategy object is
+  constructed — same ordering guarantee the original text described for `demo.py`, now centralized.
+  `Data.initialize_labels`'s `np.random.shuffle` for the initial labeled pool is unchanged and still
+  correctly seed-derived.
+- **Violation found, now resolved**: `core/query_strategies/ssrae_kmeans_sampling.py:23`
   and `core/query_strategies/vctex_kmeans_sampling.py:26` both call
   `KMeans(n_clusters=n, random_state=3, n_init=10)` — a **literal hardcoded
-  seed**, independent of `--seed`. Any experiment using
-  `SSRAEKmeansSampling` or `VCTexKmeansSampling` across "different seeds"
-   1/2/3 is **not actually varying the k-means randomness** between those
-  runs — only the initial labeled pool and network initialization vary.
-  This must be fixed (derive `random_state` from `args.seed`) before these
-  strategies are used in any ablation row that claims seed-independent
-  variance (§6.3 "without hierarchical module" explicitly requires a new/
-  fixed variant of this class — see `experiments/ablation-study.md`).
+  seed**, independent of `--seed`. These two files are unchanged (still exhibit this bug) but are
+  now dead code, unreachable from `demo.py`/`dalmax.cli` (`current-state.md` §0). Their replacement,
+  `dalmax/selection/flat_kmeans_closest.py::FlatKMeansClosest`, derives `KMeans(random_state=...)`
+  from `np.random.default_rng(dalmax.seeding.derive_seed(config.seed, "selection"))` — verified by
+  the regenerated `tests/golden/ssrae_kmeans_micro_seed1.json` fixture, whose `round_1_query_idxs_sorted`
+  changed once seed-derivation replaced the literal `3` (old value kept in that fixture's
+  `legacy_phase1_values` block).
 - `SSRAEKmeansHCSampling`/`VCTexKmeansHCSampling`
   (`core/query_strategies/ssl_ssrae_sampling.py`) delegate clustering to
-  `core/tools/SSL/src/hierarchical_kmeans_gpu.py` — **TBD** whether that
-  module's k-means calls are seeded from `args.seed` or also hardcoded; not
-  verified in this batch, flag for the `experiment-auditor` agent.
+  `core/tools/SSL/src/hierarchical_kmeans_gpu.py` — **resolved (Phase 2)**: this file is unchanged
+  and now dead code; its replacement, `dalmax/selection/hierarchical_kmeans.py::HierarchicalKMeansSelection`,
+  documents exactly how the vendored pipeline's randomness works (module docstring, "RNG isolation"
+  section): `hierarchical_sampling`'s core randomness and `kmeans_gpu.kmeans`'s `random_state=None`
+  resolution both consult **global** NumPy legacy random state (not an injectable generator), so
+  `HierarchicalKMeansSelection.select` reseeds `random.seed`/`np.random.seed` from a value derived
+  from the caller's `rng` immediately before calling into the vendored code — deterministic given the
+  same experiment seed, documented as a deliberate, bounded global-state coupling rather than hidden.
 - `torch.backends.cudnn.enabled = False` (`demo.py`) trades GPU performance
-  for determinism; note it disables cuDNN entirely rather than using
-  `torch.backends.cudnn.deterministic = True` +
-  `torch.backends.cudnn.benchmark = False`, which would keep cuDNN's faster
-  kernels while still being deterministic. Flagged as a known issue
-  (performance, not correctness) elsewhere.
+  for determinism — **resolved (Phase 2)**: `demo.py`'s line no longer exists (12-line shim);
+  `dalmax/seeding.py::seed_everything` sets `torch.backends.cudnn.deterministic = True` +
+  `torch.backends.cudnn.benchmark = False` instead, keeping cuDNN's faster kernels while staying
+  deterministic. Deliberate consequence: post-refactor GPU runs are **not** bit-identical to
+  historical GPU runs at the same seed (cuDNN's deterministic kernels differ from the
+  non-deterministic ones used previously) — the CPU golden-run fixture is unaffected, since cuDNN
+  never applies on CPU. See `.specs/architecture/refactor-plan.md` Phase 2 risks.
 
 ## Cache policy
+
+**Phase 2 resolved this for the live path**: `dalmax/embeddings/cache.py::EmbeddingCache` keys every
+embedding cache file on `(dataset, extractor, Q, variant, split, pool_hash)` —
+`results/cache/embeddings/{dataset}__{extractor}__Q{q}__{variant}__{split}__pool{pool_hash}.pkl`.
+Only the `"full"` variant is ever written; `"spatial"`/`"spectral"` are always derived from a loaded
+`"full"` entry via `dalmax/embeddings/variants.py::slice_embedding`, never recomputed or separately
+cached — so running all three §6.1 ablation variants back-to-back extracts SSRAE features exactly
+once and cannot cross-contaminate. `Q` is config-driven (`EmbeddingConfig.q`), not a hardcoded
+literal, for any run through `dalmax.cli`. **Never reuse an embedding cache across a different
+`(dataset, extractor, Q, pool, variant)` combination** — the keying above makes this impossible by
+construction (a different combination is a different filename), but always sanity-check the
+filename actually used before trusting an ablation's cached embeddings.
+
+The original (pre-Phase-2) description below is kept for historical context — it describes
+`utils/data.py`'s caches, which are now dead code from the `dalmax.cli` path's point of view (only
+reached when `Data.initialize_labels(..., compute_legacy_features=True)`, which
+`dalmax.experiment.runner.ExperimentRunner` never passes — see `current-state.md` §0). The original
+fixed-path files (`results/features_dict_ssrae.pkl`, `results/features_dict_vctex.pkl`,
+`results/Y_train.pkl`) remain on disk, orphaned, not deleted.
 
 `utils/data.py` maintains three pickle caches, all under `results/`, with
 **no cache key** encoding what was used to produce them:
@@ -69,7 +102,17 @@ Each is written **only if the file does not already exist**
 
 ## Config snapshot per run
 
-**Not currently implemented.** `demo.py` logs the full `args` and the
+**Resolved (2026-08-23, Phase 2).** `dalmax/experiment/run_metadata.py::write_run_metadata` now
+writes `run_metadata.json` into every results directory (called from `ExperimentRunner.run()` before
+the round loop starts), containing the fully-resolved config (`to_dict(config)` — every field, not
+just the subset `results.json` records), a best-effort `git_commit` (`git rev-parse HEAD`, `None` if
+unavailable), Python/torch versions, CUDA availability, and the UTC start timestamp. This closes
+every gap the original text below (kept for historical context) described. `results.json` itself is
+also more complete now: it gained `all_precision_macro`/`all_recall_macro`/`all_f1_macro` (additive,
+see `research-rules/metrics.md`), though it still does not duplicate the full params JSON —
+`run_metadata.json` is the file to consult for that, not `results.json`.
+
+Original text (pre-Phase-2): **Not currently implemented.** `demo.py` logs the full `args` and the
 selected dataset's `params` block to `log-dalmax.log` via
 `logger.warning(json.dumps(...))` (visible in `dir_results/log-dalmax.log`
 after the run), and `results.json` records `dataset_name, strategy_name,
@@ -88,11 +131,15 @@ n_init_labeled, n_query, n_round, seed`, but:
 
 ## What "fully determined" means in practice today
 
-To reproduce a given `results.json` leaf directory exactly, you currently
-need: the params JSON file used (identified only by filename convention,
-e.g. `params_df_gpu_0.json` vs `_1.json` — not embedded in the results), the
-exact CLI invocation (seed, n_query, n_round, dataset_name, strategy_name,
-dir_results — n_init_labeled and n_epoch are NOT in `results.json`, must be
-inferred from the directory name / params file), and — until the fix above
-lands — a best-effort guess at which git commit produced it (check file
-timestamps against `git log` as a fallback).
+**For any run through `dalmax.cli`/`demo.py` from Phase 2 onward**: open that run's
+`run_metadata.json` — it has the fully-resolved config (dataset/embedding/selection/device/seed/
+etc.) and the git commit hash directly, no inference needed.
+
+**For pre-Phase-2 runs** (everything under `results/dalmax{1,2}/` and earlier), the original
+limitation still applies: to reproduce a given `results.json` leaf directory exactly, you need the
+params JSON file used (identified only by filename convention, e.g. `params_df_gpu_0.json` vs
+`_1.json` — not embedded in the results), the exact CLI invocation (seed, n_query, n_round,
+dataset_name, strategy_name, dir_results — n_init_labeled and n_epoch are NOT in `results.json`,
+must be inferred from the directory name / params file), and a best-effort guess at which git commit
+produced it (check file timestamps against `git log` as a fallback, since these runs predate
+`run_metadata.json`).

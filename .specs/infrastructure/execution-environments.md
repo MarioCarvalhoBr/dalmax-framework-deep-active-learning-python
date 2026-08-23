@@ -5,6 +5,40 @@ project (Makefile targets, CI, agent/skill definitions owned by other
 batches) must respect this split — never assume GPU or a full dataset copy
 is available locally.
 
+## Phase 2 lab-handoff hazards (2026-08-23)
+
+Read this before the first lab-machine run after pulling Phase 2 (`refactor/phase-2-core` or later):
+
+- **Pass `--device cuda` explicitly.** `dalmax/cli.py`'s new `--device` flag defaults to `"auto"`,
+  which resolves to `"cuda"` iff `torch.cuda.is_available()` — this should always be true on the lab
+  machine, but do not rely on `auto` silently doing the right thing during a batch you cannot watch
+  live (e.g. if CUDA drivers are misconfigured, `auto` would silently fall back to `cpu` and the run
+  would be extremely slow rather than failing loudly). Add `--device cuda` to
+  `run_pipe_gpu_0.sh`/`run_pipe_gpu_1.sh` (and any new ablation run scripts) explicitly.
+- **`num_workers`/`worker_init_fn` landmine if augmentation is re-enabled.** `utils/dataset.py`
+  currently has every stochastic `transforms.Random*` augmentation commented out, so
+  `train_args`/`test_args`' `num_workers=4` (DANINHAS) / `num_workers=1` (CIFAR10) is safe today.
+  If anyone uncomments an augmentation transform, `core/deep_learning.py`'s `DataLoader(...)` calls
+  have no `worker_init_fn` — worker processes are not independently reseeded for any
+  `random`/`numpy`-global-state-based augmentation, which `dalmax/seeding.py::seed_everything` does
+  not cover (it seeds the main process only). See `.specs/quality/known-issues.md` KI-31. Do not
+  re-enable augmentation on the lab machine without adding a `worker_init_fn` first, or determinism
+  claims for that run are unverified.
+- **`--n_round 0` is allowed again** (train/evaluate once, no active-learning query rounds at all)
+  — `dalmax.config.schema.ExperimentConfig` briefly rejected it during Phase 2 development before
+  being corrected to match `demo.py`'s always-permissive behavior (`n_round >= 0`, `n_query > 0`
+  still required). Safe to use for a single-shot baseline run; `ExperimentRunner`/`write_report`
+  handle it correctly (one recorded/plotted point, confusion matrix from round 0's predictions —
+  see `tests/test_runner_n_round_zero.py`).
+- **New embedding cache location**: `results/cache/embeddings/` (not `results/cache/` — that path
+  still exists too, from the Phase 1 fix, but is dead code as of Phase 2, see
+  `.specs/architecture/current-state.md` §0). If copying `results/` back from the lab machine for
+  cache reuse across sessions, include `results/cache/embeddings/`, not just `results/cache/`.
+- **`run_metadata.json` is now the fastest way to confirm what actually ran** — before trusting a
+  batch of results, spot-check a few leaf directories' `run_metadata.json` (`config.dataset.embedding`,
+  `config.dataset.selection`, `config.device`, `git_commit`) against the intended params JSON/CLI
+  args, rather than reverse-engineering it from the directory name alone.
+
 ## Decision matrix
 
 | Environment | Hardware | Role | Allowed operations |

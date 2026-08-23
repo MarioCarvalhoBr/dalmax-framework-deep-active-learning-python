@@ -5,6 +5,40 @@ the end state after Phase 4 (package consolidation, ADR 0002); intermediate phas
 the new modules under `core/`/`utils/` before the physical rename. Every module below is
 mapped to the current file(s) it replaces so the move is traceable.
 
+## What landed vs. what remains (updated 2026-08-23, Phase 2 landed)
+
+Phase 2 chose to create the `dalmax/` package immediately (ADR 0002 amendment) rather than staging
+new modules under `core/`/`utils/` first, but it did **not** perform the full package-layout move
+below — only the modules that needed genuinely new abstractions (config, embeddings, selection,
+representation strategy, registries, experiment orchestration, seeding) moved into `dalmax/`.
+Everything else stays where §2 shows it today (`core/`, `utils/`), wrapped rather than moved, per
+`current-state.md` §0. Concretely, against the `dalmax/` tree in §2 below:
+
+| §2 path | Landed in Phase 2? | Actual location today |
+|---|---|---|
+| `cli.py` | Yes | `dalmax/cli.py` |
+| `config/schema.py`, `config/loader.py` | Yes | as shown |
+| `seeding.py` | Yes | as shown |
+| `data/registry.py` | Yes (registry only) | `dalmax/data/registry.py`; `datasets.py`/`handlers.py`/`loaders.py` **not created** — `utils/data.py::Data`/`get_DANINHAS`/`get_CIFAR10` and `utils/dataset.py`'s handlers are called as-is from the registry, deferred to Phase 4 |
+| `embeddings/{base,ssrae_provider,vctex_provider,resnet_imagenet_provider,variants,cache,registry}.py` | Yes, all of it, including the ablation-6.3 `resnet_imagenet_provider.py` | as shown |
+| `selection/{base,flat_kmeans_closest,flat_kmeans_proportional,hierarchical_kmeans,registry}.py` | Yes, all of it, including the ablation-6.3 `flat_kmeans_proportional.py` | as shown (filenames match exactly) |
+| `query_strategies/representation.py`, `query_strategies/registry.py` | Yes | as shown |
+| `query_strategies/base.py`, `uncertainty.py`, `diversity.py`, `bayesian.py`, `adversarial.py` | **No** | the 12 legacy strategy classes stay in `core/query_strategies/*.py`, unmodified, imported directly into `dalmax/query_strategies/registry.py::LEGACY_STRATEGY_REGISTRY` — deferred to Phase 4 |
+| `models/base.py`, `daninhas_resnet50.py`, `cifar10_cnn.py`, `models/registry.py` | Registry only | `dalmax/models/registry.py` wraps `core/deep_learning.py::DeepLearning` and `core/daninhas_model.py`/`core/cifar10_model.py` as-is (`_legacy_params_dict` rebuilds the dict shape `DeepLearning` expects) — the move/rename itself is deferred to Phase 4 |
+| `experiment/{runner,reporter,run_metadata}.py` | Yes | as shown |
+| `reporting/` (cross-run aggregation) | **No** | `utils/report/*.py` unchanged, not renumbered — deferred to Phase 4 |
+| `tools/{ssrae,vctex,ssl}/` | **No** | `core/tools/{SSRAE,VCTex,SSL}/` unchanged, wrapped by the new `embeddings`/`selection` modules — deferred to Phase 4 per its Meta-license note |
+
+Additionally landed but **not** in §2's original sketch: `dalmax/embeddings/cache.py`'s cache key
+gained a `pool_hash` component beyond `(dataset, extractor, Q, variant, split)` (§4 below is updated
+to reflect this); `dalmax/query_strategies/registry.py::REPRESENTATION_PRESETS` (the 4 legacy CLI
+name → `(extractor, selection_method)` mapping, with pinned legacy `Q` values) is the mechanism that
+makes old `--strategy_name` values keep working, not explicitly sketched in §2's tree.
+
+See `current-state.md` §0 for why the un-migrated `core/`/`utils/` files are dead code from
+`dalmax.cli`'s point of view even though they still exist on disk, and `refactor-plan.md` Phase 4
+for the itemized move/delete list.
+
 ## 1. Goals (traced to `prompt-master.md` §4.3 / `.claude/rules/code-quality.md`)
 
 - Single responsibility per module; no duplicated strategy boilerplate.
@@ -209,7 +243,18 @@ classDiagram
 
 ## 4. Embedding cache contract
 
-Cache key is the tuple `(dataset, extractor, Q, variant, split)`:
+**Implemented shape (2026-08-23) differs slightly from the sketch below in two ways**: the cache
+root is `results/cache/embeddings/` (no leading dot — `dalmax/embeddings/cache.py::DEFAULT_CACHE_ROOT`),
+and the key carries one extra component, `pool_hash` (a 12-hex-char sha256 digest of the sorted
+unlabeled-pool ids), because the pool actually embedded depends on `--seed`/`--n_init_labeled`, not
+only on `(dataset, extractor, Q, variant, split)` — two runs with the same first five components but
+a different seed would otherwise silently share a cache file for a *different* pool. Filename
+actually written: `{dataset}__{extractor}__Q{q}__{variant}__{split}__pool{pool_hash}.pkl`. The rest
+of this section's contract (key components below, "full" always cached, variants sliced not
+recomputed) is otherwise accurate as implemented (`dalmax/embeddings/cache.py`,
+`dalmax/embeddings/base.py::EmbeddingKey`).
+
+Cache key is the tuple `(dataset, extractor, Q, variant, split)` plus `pool_hash` (see above):
 
 - `dataset`: e.g. `"daninhas_full"`, `"cifar10"` — never a strategy name.
 - `extractor`: `"ssrae" | "vctex" | "resnet_imagenet"`.
@@ -222,9 +267,10 @@ Cache key is the tuple `(dataset, extractor, Q, variant, split)`:
 The **full** embedding is always computed and cached once; `spatial`/`spectral` variants are
 **slices of the cached full vector**, never recomputed — this directly satisfies the "never
 recompute SSRAE three times" requirement in `ablation-study.md` §6.1. `EmbeddingCache` stores one
-file per key (JSON- or hash-encoded key in the filename, e.g.
-`results/.cache/embeddings/daninhas_full__ssrae__Q13__full__train.pkl`), replacing the two fixed
-paths `results/features_dict_ssrae.pkl` / `results/features_dict_vctex.pkl`.
+file per key, e.g.
+`results/cache/embeddings/daninhas_full__ssrae__Q13__full__train__pool<12-hex>.pkl` (see the
+implemented-shape note above), replacing the two fixed paths `results/features_dict_ssrae.pkl` /
+`results/features_dict_vctex.pkl` (both now orphaned, not migrated — see `known-issues.md` KI-3).
 
 ## 5. `embedding_variant` slicing (ablation 6.1 enabler)
 
