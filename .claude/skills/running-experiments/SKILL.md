@@ -8,6 +8,12 @@ description: How to run DalMax experiments in each of the 3 execution environmen
 DalMax experiments run in three distinct environments. Pick the right one for
 the task — never attempt a full training sweep on the local notebook.
 
+For the lab machine, **[`LAB_RUNBOOK.md`](../../../LAB_RUNBOOK.md)** (repo
+root) is the step-by-step operator guide (one-time setup, dataset transfer,
+sanity checks, the Phase 3 ablation batch, results collection) built on top
+of the summary in §2 below — follow it directly for an actual lab session
+rather than reconstructing the steps from this skill's prose.
+
 ## 1. Local dev notebook (this machine) — CPU only, smoke tests
 
 - 16 GB RAM, **no GPU**, Python 3.12, Poetry 2.2.1.

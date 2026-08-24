@@ -2,7 +2,11 @@
 description: Pre-flight for the lab machine - run experiment-auditor, ensure the lab-machine Poetry environment is in sync with poetry.lock, ensure no uncommitted changes, and print the exact commands to run on each GPU.
 ---
 
-Prepare a clean handoff to the lab machine (2x NVIDIA GPUs, 10 GB each).
+Prepare a clean handoff to the lab machine (2x NVIDIA GPUs, 10 GB each). See
+[`LAB_RUNBOOK.md`](../../LAB_RUNBOOK.md) for the full step-by-step operator
+guide this pre-flight feeds into (one-time setup, sanity checks, ablation
+batch launch/monitoring, results collection) — this command only produces the
+GO/NO-GO verdict and the commands to paste, not the guide itself.
 
 Steps:
 
@@ -23,14 +27,20 @@ Steps:
    (`.claude/rules/git-workflow.md` — conventional commits, no push without
    confirmation) before proceeding.
 4. Print the exact commands to run on each GPU, based on the current
-   `scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh`:
+   `scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh`
+   (or the `Makefile` targets that wrap them, `make benchmark-gpu0` /
+   `make benchmark-gpu1` — see `LAB_RUNBOOK.md` §5 — for the reference
+   benchmark; `make ablations-gpu0` / `make ablations-gpu1` — `LAB_RUNBOOK.md`
+   §3 — for the Phase 3 ablation batch instead, if that's what `$ARGUMENTS`
+   is asking for):
    ```
    # GPU 0 (results/dalmax1/)
    git pull
-   poetry install
-   poetry run bash scripts/benchmark/run_pipe_gpu_0.sh
+   poetry install     # or: make lab-setup (also prints the torch/CUDA check)
+   make lab-check GPU=0   # one short real-data sanity run before committing to the full sweep
+   poetry run bash scripts/benchmark/run_pipe_gpu_0.sh   # or: make benchmark-gpu0
    # GPU 1 (results/dalmax2/)
-   poetry run bash scripts/benchmark/run_pipe_gpu_1.sh
+   poetry run bash scripts/benchmark/run_pipe_gpu_1.sh   # or: make benchmark-gpu1
    ```
    Adjust the printed commands if `$ARGUMENTS` specifies different scripts,
    queries, or seeds than the current `QUERIES=(10 50 100)` / `SEEDS=(1 2 3)`

@@ -25,6 +25,11 @@ drift (see spec-sync rule below) rather than trusting stale prose here.
 
 ## Setup & commands
 
+For the lab machine specifically (one-time setup, dataset transfer, ablation
+batch launch/monitoring, results collection), see
+[`LAB_RUNBOOK.md`](LAB_RUNBOOK.md) — the commands below are the quick
+reference; that file is the step-by-step operator guide.
+
 ```bash
 poetry install       # or: make setup — Poetry-only; the pip/requirements.txt fallback was retired
 make lint             # ruff check
@@ -51,6 +56,14 @@ poetry run python predict.py --model results/dalmax1/.../saved_model.pth \
 poetry run python predict.py --model results/dalmax1/.../saved_model.pth \
     --image path/to/one_image.jpg                                            # single-image prediction
 poetry run python gui.py                                                     # tkinter mini-app
+
+# Lab-machine targets (see LAB_RUNBOOK.md for the full operator guide):
+make lab-setup                        # poetry install + torch/CUDA visibility check
+make lab-check GPU=0                  # one short real-data GPU run (n_round=1) before a full batch
+make ablations-gpu0                   # this GPU's half of the Phase 3 ablation batch (5 configs)
+make ablations-gpu1                   # this GPU's half of the Phase 3 ablation batch (6 configs)
+make ablation-report                  # aggregate results/ablations/ -> docs/results/ablation_tables/
+make benchmark-gpu0 / benchmark-gpu1  # re-run the reference RNHAL sweep (scripts/benchmark/run_pipe_gpu_*.sh)
 ```
 
 ## Working mode: multi-agent with model delegation (standing policy)

@@ -5,6 +5,14 @@ project (Makefile targets, CI, agent/skill definitions owned by other
 batches) must respect this split — never assume GPU or a full dataset copy
 is available locally.
 
+For the lab machine, this file is the architecture/decision-matrix source of
+truth; **[`LAB_RUNBOOK.md`](../../LAB_RUNBOOK.md)** (repo root) is the
+operator-facing step-by-step guide built on top of it — one-time setup,
+dataset transfer, sanity checks, the Phase 3 ablation batch launch/monitoring,
+and results collection, all via the `make lab-setup`/`lab-check`/
+`ablations-gpu{0,1}`/`ablations-all`/`ablation-report`/`benchmark-gpu{0,1}`/
+`micro-dataset` targets.
+
 ## Phase 2 lab-handoff hazards (2026-08-23)
 
 Read this before the first lab-machine run after pulling Phase 2 (`refactor/phase-2-core` or later):
@@ -174,3 +182,10 @@ Audit facts: expected embedding recomputes = 3 SSRAE + 3 ResNet (one per seed; a
 share one cache per pool); SSRAE extraction ~2 min CPU per pool (measured 12.13 ms/image);
 GPU load split ratio ~1.1x; no VRAM/MEMORY_LIMIT concern at ~10k x 756-d/2048-d scale.
 Non-blocking: ExperimentNotifier email shows a generic message for these runs (no STRATEGY_1 token).
+
+The block above is equivalent to `make lab-setup`, `tmux new -s gpu0` / `make
+ablations-gpu0`, `tmux new -s gpu1` / `make ablations-gpu1`, and `make
+ablation-report` — see `LAB_RUNBOOK.md` §0/§3/§4 for the fuller step-by-step
+version (dataset-arrival verification, a `make lab-check` real-data sanity
+run before committing to the full batch, monitoring, and the single-run
+re-run command pattern for a failed `(study, config, seed)` triple).

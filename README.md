@@ -181,6 +181,14 @@ poetry run bash scripts/ablations/run_ablation_gpu_1.sh
 wrapper above is shown for consistency with "everything through `poetry
 run`".)
 
+For the full step-by-step operator guide (one-time setup, dataset transfer,
+sanity checks, `tmux` launch, monitoring, failure re-runs, and results
+collection), see **[`LAB_RUNBOOK.md`](LAB_RUNBOOK.md)**. It is also wired into
+`make` as a handful of dedicated targets: `make lab-setup`, `make lab-check`,
+`make ablations-gpu0`/`make ablations-gpu1`/`make ablations-all`,
+`make ablation-report`, `make benchmark-gpu0`/`make benchmark-gpu1`, and
+`make micro-dataset`.
+
 ### CUDA
 
 Training on `daninhas_full`/CIFAR10 with `torch==2.5.0` / `torchvision==0.20.0`
@@ -450,6 +458,8 @@ DalMax is developed and run across three environments:
 
 Details, decision matrix, and the Colab checklist:
 [`.specs/infrastructure/execution-environments.md`](.specs/infrastructure/execution-environments.md).
+For the lab machine specifically, see **[`LAB_RUNBOOK.md`](LAB_RUNBOOK.md)**
+for the operator-facing step-by-step guide.
 
 ## Development
 
