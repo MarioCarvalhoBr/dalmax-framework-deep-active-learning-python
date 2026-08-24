@@ -7,7 +7,7 @@ Operational guide for Claude Code sessions in this repository.
 DalMax is a PhD research lab (UFMS) for **Deep Active Learning applied to UAV
 weed recognition**. The main contribution is **RNHAL**: a randomized-network
 spatio-spectral representation (SSRAE) plus hierarchical k-means batch selection.
-Entry point: `demo.py` (a thin shim calling `dalmax.cli.main()`, since Phase 2 —
+Entry point: `trainer.py` (a thin shim calling `dalmax.cli.main()`, renamed from the historical `demo.py` on 2026-08-23; since Phase 2 —
 see below). All Python source lives in one package, `dalmax/` — `core/` and
 `utils/` (the old two-package split) no longer exist, having been fully
 consolidated in Phase 4 (see `.specs/architecture/current-state.md` and ADR
@@ -30,18 +30,27 @@ poetry install       # or: make setup — Poetry-only; the pip/requirements.txt 
 make lint             # ruff check
 make format           # ruff format
 make test             # pytest, fast tests only
-make smoke            # true end-to-end micro-dataset run (demo.py, CPU) + fast tests
+make smoke            # true end-to-end micro-dataset run (trainer.py, CPU) + fast tests
 
 # Example run (unchanged CLI, now routed through dalmax.cli):
-poetry run python demo.py --dir_results results/dalmax1/ --params_json files_config/benchmark/params_df_gpu_0.json \
+poetry run python trainer.py --dir_results results/dalmax1/ --params_json files_config/benchmark/params_df_gpu_0.json \
     --dataset_name DANINHAS --strategy_name SSRAEKmeansHCSampling \
     --n_query 100 --n_init_labeled 100 --n_round 8 --seed 1 --device cuda
 
 # Example run using the new generic RepresentationStrategy + embedding/selection config
 # (see .specs/experiments/ablation-study.md for the exact params JSON syntax):
-poetry run python demo.py --dir_results results/ablation/ --params_json params_ablation_6_1_spatial.json \
+poetry run python trainer.py --dir_results results/ablation/ --params_json params_ablation_6_1_spatial.json \
     --dataset_name DANINHAS --strategy_name RepresentationStrategy \
     --n_query 100 --n_init_labeled 100 --n_round 8 --seed 1 --device cuda
+
+# Inference tools (new 2026-08-23, ADR 0006), consuming a trainer.py-written
+# saved_model.pth (dalmax-checkpoint format, dalmax/models/checkpoint.py):
+poetry run python loader.py --model results/dalmax1/.../saved_model.pth       # inspect a checkpoint
+poetry run python predict.py --model results/dalmax1/.../saved_model.pth \
+    --dir DATA/daninhas_full/test/DATASET_GRAMINEA --out results/predictions/ # batch prediction
+poetry run python predict.py --model results/dalmax1/.../saved_model.pth \
+    --image path/to/one_image.jpg                                            # single-image prediction
+poetry run python gui.py                                                     # tkinter mini-app
 ```
 
 ## Working mode: multi-agent with model delegation (standing policy)
@@ -84,7 +93,7 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   with keyed cache (`dalmax/embeddings/`), selection module abstraction
   (`dalmax/selection/`), strategy/dataset/model registries (`dalmax/{query_strategies,
   data,models}/registry.py`), seed-propagation audit (`dalmax/seeding.py`), macro-F1
-  metrics, `run_metadata.json`. `demo.py` now routes through `dalmax.cli.main()`.
+  metrics, `run_metadata.json`. `trainer.py` (historical `demo.py`) now routes through `dalmax.cli.main()`.
 - **Phase 3 — Ablations**: config/code prerequisites all met and materialized
   (`.specs/experiments/ablation-study.md`); **still outstanding**: run the three
   sub-studies on the lab machine and record macro-F1 numbers in
@@ -97,6 +106,14 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   [`.specs/architecture/current-state.md`](.specs/architecture/current-state.md)
   and `refactor-plan.md` Phase 4 for the itemized move/delete list. Still
   outstanding: a real lab-machine smoke run post-move.
+- **Checkpoint fix + inference tools** (done, 2026-08-23, branch `feat/model-io-tools`, ADR 0006):
+  fixed the confirmed `DeepLearning.save_model`/`load_model` bug (it saved the model *class*, not
+  the trained weights — every `saved_model.pth` from before this fix, including
+  `results/dalmax1/`/`results/dalmax2/`, is unrecoverable, see
+  [`.specs/quality/known-issues.md`](.specs/quality/known-issues.md) KI-22) via a new
+  `dalmax-checkpoint` format (`dalmax/models/checkpoint.py`); added `dalmax/inference/`
+  (`predict.py`/`loader.py`/`gui.py` at the repo root); renamed `demo.py` → `trainer.py`
+  (pure rename, `git mv`, no behavior change).
 
 Next milestone: run the three Phase 3 ablation sub-studies on the lab machine and
 record their macro-F1 numbers in `ablation-study.md`/`baseline-results.md`, and do
@@ -131,7 +148,7 @@ a lab-machine smoke run confirming Phase 4's move didn't break anything there.
   path was deleted along with `utils/data.py` in Phase 4;
   `results/features_dict_*.pkl` (original, orphaned) files may still be on disk
   but are read by nothing.
-- `demo.py --strategy_name` choices (unchanged plus one new generic name):
+- `trainer.py --strategy_name` choices (unchanged plus one new generic name):
   `RandomSampling`, `LeastConfidence`,
   `MarginSampling`, `EntropySampling`, `LeastConfidenceDropout`,
   `MarginSamplingDropout`, `EntropySamplingDropout`, `KMeansSampling`,

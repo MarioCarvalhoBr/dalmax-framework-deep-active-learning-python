@@ -50,7 +50,7 @@ For the project's specifications, architecture, and experiment protocols, see
 
 ## Implemented query strategies
 
-These are the exact `--strategy_name` choices exposed by `demo.py`.
+These are the exact `--strategy_name` choices exposed by `trainer.py`.
 
 **Uncertainty-based**
 - **Random Sampling** — select samples randomly (baseline).
@@ -141,7 +141,7 @@ download (~2.5 GB total). Dependency versions are exact-pinned in
 ### 4. Run
 
 ```bash
-poetry run python demo.py --dir_results results/dalmax1/ \
+poetry run python trainer.py --dir_results results/dalmax1/ \
     --params_json files_config/benchmark/params_df_gpu_0.json \
     --dataset_name DANINHAS --strategy_name SSRAEKmeansHCSampling \
     --n_query 100 --n_init_labeled 100 --n_round 8 --seed 1 --device cuda
@@ -159,7 +159,7 @@ in-project, `source .venv/bin/activate`.
 make setup            # poetry install
 make lint             # ruff check
 make test             # pytest (fast tests only)
-make smoke            # true end-to-end micro-dataset run (demo.py, CPU) + fast tests
+make smoke            # true end-to-end micro-dataset run (trainer.py, CPU) + fast tests
 make smoke-ablations  # CPU smoke test for all 11 Phase 3 ablation configs
 ```
 
@@ -238,13 +238,13 @@ DATA/
 
 ## Usage
 
-Entry point: `demo.py` — as of the Phase 2 core refactor, a thin shim that calls
+Entry point: `trainer.py` (renamed from the historical `demo.py` on 2026-08-23) — as of the Phase 2 core refactor, a thin shim that calls
 `dalmax.cli.main()` (see [`.specs/architecture/refactor-plan.md`](.specs/architecture/refactor-plan.md)
 Phase 2); every flag and results-directory convention below is unchanged, plus two additive flags.
 Example (RNHAL / SSRAE hierarchical strategy on the weed dataset):
 
 ```bash
-poetry run python demo.py \
+poetry run python trainer.py \
     --dir_results results/dalmax1/ \
     --params_json files_config/benchmark/params_df_gpu_0.json \
     --dataset_name DANINHAS \
@@ -286,6 +286,58 @@ being pinned to one of the four legacy presets. This is what
 three sub-studies drive — e.g. an SSRAE `spatial`/`spectral` embedding variant, a
 `resnet_imagenet` embedding with hierarchical selection, or an SSRAE embedding with
 the new `flat_proportional` selection.
+
+## Inference tools
+
+New 2026-08-23 alongside a fix for a confirmed bug: `trainer.py` (via
+`dalmax.query_strategies.base.Strategy.save_model`) used to save the trained model's *class*, not
+its trained weights — every `saved_model.pth` produced before this fix (including every run under
+`results/dalmax1/`/`results/dalmax2/`) is a ~900-byte pickled class reference with **no weights,
+and cannot be recovered**; see [`.specs/quality/known-issues.md`](.specs/quality/known-issues.md)
+KI-22 and [`.specs/adr/0006-checkpoint-format-and-inference-tools.md`](.specs/adr/0006-checkpoint-format-and-inference-tools.md).
+`trainer.py` now writes a self-describing `dalmax-checkpoint` (`dalmax/models/checkpoint.py`:
+weights + `model_name`/`n_classes`/`class_names`/`img_size`/provenance), and three new tools
+consume it — all preprocessing (resize, normalization) is read from the same code training used,
+never re-derived, so predictions here always match what a real run would have recorded.
+
+### `loader.py` — inspect a checkpoint
+
+```bash
+poetry run python loader.py --model results/dalmax1/.../saved_model.pth
+```
+
+Prints format/version, `model_name`/`n_classes`/`class_names`/`img_size`, provenance (strategy,
+seed, dataset, git commit, torch version, save timestamp), total/trainable parameter counts, a
+per-top-level-module parameter breakdown, file size, and a CPU dummy-forward sanity check. On a
+legacy pre-2026-08-23 checkpoint, prints a clear error instead of a raw unpickling traceback.
+
+### `predict.py` — run a checkpoint on image(s)
+
+```bash
+# One image:
+poetry run python predict.py --model results/dalmax1/.../saved_model.pth \
+    --image DATA/daninhas_full/test/DATASET_GRAMINEA/some_image.jpg
+
+# A whole folder (searched recursively):
+poetry run python predict.py --model results/dalmax1/.../saved_model.pth \
+    --dir DATA/daninhas_full/test/DATASET_GRAMINEA --out results/predictions/
+```
+
+Writes `predictions.csv` (`Image Index,Predicted Class,Confidence,Path`, plus one probability
+column per class) and a `<stem>.pred.json` sidecar per image (full per-class probabilities +
+checkpoint metadata) into `--out` (default: alongside the input). `--device {auto,cpu,cuda}`
+mirrors `trainer.py`'s flag.
+
+### `gui.py` — interactive mini-app
+
+```bash
+poetry run python gui.py
+```
+
+A `tkinter` app: load a model, select image(s) or a folder, run prediction into a results table,
+click a row to preview that image with its per-class probabilities, and export the same CSV
+`predict.py` writes. Runs on CPU by default; `dalmax/inference/gui.py`'s `main()` is the only place
+that touches `tkinter`, so `import dalmax.inference.gui` is safe in a headless environment.
 
 ### Params JSON schema
 
@@ -368,7 +420,7 @@ for the exact `embedding`/`selection` values used by each ablation run.
 
 ### Results directory convention
 
-`demo.py` writes to:
+`trainer.py` writes to:
 
 ```
 {dir_results}/{dataset_folder}/SEED_{seed}/NQ_{n_query}_NIL_{n_init_labeled}_NR_{n_round}_NE_{n_epoch}/{strategy_name}/
@@ -376,7 +428,9 @@ for the exact `embedding`/`selection` values used by each ablation run.
 
 containing `results.json`, `predictions.csv`, `confusion_matrix.pdf`,
 `accuracy.pdf`/`precision.pdf`/`recall.pdf`/`f1_score.pdf`, `log-dalmax.log`, the
-saved model checkpoint, and (since the Phase 2 core refactor) `run_metadata.json`
+saved model checkpoint (`saved_model.pth`, a self-describing `dalmax-checkpoint` since
+2026-08-23 — see [Inference tools](#inference-tools); checkpoints from before that fix contain no
+weights and cannot be recovered), and (since the Phase 2 core refactor) `run_metadata.json`
 — a full config snapshot plus the git commit hash, so any run is traceable back to
 exactly what produced it. `results.json` also gained `all_precision_macro`/
 `all_recall_macro`/`all_f1_macro` alongside the unchanged weighted metrics. See
@@ -409,7 +463,7 @@ make setup         # poetry install
 make lint          # ruff check
 make format        # ruff format
 make test          # pytest (fast tests only)
-make smoke         # true end-to-end micro-dataset run (demo.py, CPU) + fast tests
+make smoke         # true end-to-end micro-dataset run (trainer.py, CPU) + fast tests
 make smoke-ablations  # CPU smoke test for all 11 Phase 3 ablation configs
 ```
 
@@ -417,7 +471,10 @@ make smoke-ablations  # CPU smoke test for all 11 Phase 3 ablation configs
 
 ```
 dalmax-deep-active-learning-python/
-├── demo.py                    # CLI entry point — thin shim, calls dalmax.cli.main()
+├── trainer.py                 # training CLI entry point — thin shim, calls dalmax.cli.main()
+├── predict.py                 # inference CLI: run a saved_model.pth on image(s)
+├── loader.py                  # inference CLI: inspect a saved_model.pth checkpoint
+├── gui.py                     # inference tkinter mini-app — thin shim, calls dalmax.inference.gui.main()
 ├── dalmax/                    # the ONE package — all Python source lives here (Phase 4 complete)
 │   ├── cli.py                 # argparse -> ExperimentConfig -> ExperimentRunner.run()
 │   ├── config/                # schema.py (typed dataclasses), loader.py (params JSON -> config)
@@ -425,7 +482,9 @@ dalmax-deep-active-learning-python/
 │   ├── logging_utils.py       # module-level singleton logger
 │   ├── data/                  # datasets.py (Data), handlers.py (torch Dataset wrappers),
 │   │                          #   loaders.py (get_DANINHAS/get_CIFAR10), registry.py
-│   ├── models/                # base.py (DeepLearning), daninhas_resnet50.py, cifar10_cnn.py, registry.py
+│   ├── models/                # base.py (DeepLearning), daninhas_resnet50.py, cifar10_cnn.py,
+│   │                          #   checkpoint.py (save/load/describe_checkpoint), registry.py
+│   ├── inference/             # predictor.py (Predictor), export.py (CSV writer), gui.py (tkinter)
 │   ├── query_strategies/      # base.py (Strategy) + 12 baseline modules (random_sampling.py,
 │   │                          #   least_confidence.py, margin_sampling.py, entropy_sampling.py,
 │   │                          #   *_dropout variants, kmeans_sampling.py, kcenter_greedy.py,

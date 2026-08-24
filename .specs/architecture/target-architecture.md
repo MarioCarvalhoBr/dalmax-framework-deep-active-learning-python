@@ -121,13 +121,27 @@ dalmax/
 │                                        #   replaces (deleted) utils/orchestrator.py:get_strategy's if/elif
 ├── models/
 │   ├── base.py                        # DeepLearning (was core/deep_learning.py), takes seeded rng,
-│   │                              #   no global cudnn side effect, load_model TODO still open (KI-22)
+│   │                              #   no global cudnn side effect; save_model/load_model now go through
+│   │                              #   checkpoint.py (KI-22 fixed 2026-08-23, ADR 0006)
 │   ├── daninhas_resnet50.py            # was core/daninhas_model.py, duplicate imports removed,
 │   │                              #   unused DaninhasModelVitB16 dropped (not moved)
 │   ├── cifar10_cnn.py                   # was core/cifar10_model.py, duplicate imports removed
-│   └── registry.py                       # MODEL_REGISTRY: dataset name -> model class
+│   ├── checkpoint.py                     # NEW (2026-08-23): save_checkpoint/load_checkpoint/
+│   │                              #   describe_checkpoint -- the dalmax-checkpoint format (state_dict +
+│   │                              #   model_name/n_classes/class_names/img_size/extra), CheckpointError
+│   │                              #   with a clear message on a legacy pre-fix class-pickle file
+│   └── registry.py                       # MODEL_REGISTRY: dataset name -> model class;
+│                                        #   get_model_class(name) for checkpoint.py's rebuild step
+├── inference/                             # NEW (2026-08-23, ADR 0006): standalone inference over a
+│   │                              #   trained dalmax-checkpoint, outside the active-learning loop
+│   ├── predictor.py                       # Predictor(checkpoint_path, device): predict_paths(paths) ->
+│   │                              #   list[PredictionRow]; preprocessing replicates training exactly
+│   │                              #   (resize to img_size, then the live dataset handler's .transform)
+│   ├── export.py                          # write_predictions_csv(rows, class_names, path) -- shared by
+│   │                              #   predict.py and gui.py so their CSV schema never drifts apart
+│   └── gui.py                             # tkinter mini-app, main() only (import stays side-effect-free)
 ├── experiment/
-│   ├── runner.py                        # ExperimentRunner.run(config) — the round loop extracted from demo.py main()
+│   ├── runner.py                        # ExperimentRunner.run(config) — the round loop extracted from demo.py (historical) main()
 │   ├── reporter.py                       # per-run reporting: confusion matrix, accuracy/precision/recall/F1 plots,
 │   │                              #   results.json, predictions.csv (was demo.py tail half)
 │   └── run_metadata.py                    # snapshot(config) -> {config_dict, git_commit_hash, timestamp}
@@ -360,12 +374,12 @@ instead of a bare `NotImplementedError`.
 
 ## 10. `ExperimentRunner` + `Reporter` + thin CLI
 
-`demo.py`'s 289-line `main()` splits three ways:
+`demo.py` (historical)'s 289-line `main()` splits three ways:
 - `dalmax/cli.py`: argparse only, then `ExperimentRunner(ConfigLoader.load(...)).run()`.
 - `dalmax/experiment/runner.py`: the round loop (init labels → train → query → update → train →
   metrics), returns a `RunResult` dataclass (metrics per round, final predictions, trained net).
 - `dalmax/experiment/reporter.py`: takes a `RunResult` and a results directory, writes all plots,
   `results.json`, `predictions.csv`, and delegates to `run_metadata.snapshot`.
 
-This mirrors the acceptance criterion in `refactor-plan.md` Phase 2 ("split `demo.py` into
+This mirrors the acceptance criterion in `refactor-plan.md` Phase 2 ("split `demo.py` (historical) into
 `runner` + `reporting` + thin CLI").
