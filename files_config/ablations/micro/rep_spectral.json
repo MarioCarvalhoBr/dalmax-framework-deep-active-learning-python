@@ -3,7 +3,7 @@
         "data_dir": "DATA/daninhas_micro/",
         "n_epoch": 1,
         "n_drop": 10,
-        "n_classes": 2,
+        "n_classes": 5,
         "train_args": {
             "batch_size": 16,
             "num_workers": 0
@@ -24,17 +24,17 @@
         "selection": {
             "method": "hierarchical",
             "hierarchy": {
-                "_comment": "Micro-scaled analog of params_df_gpu_0.json's config_kmh reference hierarchy ([600,200,100]/[30,15,2]), same 3-level shape, sized for the ~40-image daninhas_micro unlabeled pool (50 train - 10 initial labeled).",
+                "_comment": "Micro-scaled analog of params_df_gpu_0.json's config_kmh reference hierarchy ([600,200,100]/[30,15,2]), same 3-level shape, sized for the ~796-image daninhas_micro unlabeled pool (806 train - 10 initial labeled).",
                 "n_clusters": [
-                    8,
-                    4,
-                    2
+                    60,
+                    20,
+                    10
                 ],
                 "n_levels": 3,
                 "sample_sizes": [
+                    3,
                     2,
-                    1,
-                    1
+                    2
                 ]
             }
         }

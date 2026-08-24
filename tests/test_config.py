@@ -110,7 +110,7 @@ def test_loads_daninhas_from_params_micro_without_modifying_the_file():
     assert config.dataset.n_epoch == 1
     assert config.dataset.selection.method == "hierarchical"
     assert config.dataset.selection.hierarchy == HierarchyConfig(
-        n_clusters=(8, 4), n_levels=2, sample_sizes=(4, 2)
+        n_clusters=(40, 10), n_levels=2, sample_sizes=(2, 2)
     )
 
 

@@ -3,7 +3,7 @@
         "data_dir": "DATA/daninhas_micro/",
         "n_epoch": 1,
         "n_drop": 10,
-        "n_classes": 2,
+        "n_classes": 5,
         "train_args": {
             "batch_size": 16,
             "num_workers": 0
@@ -25,13 +25,13 @@
             "method": "hierarchical",
             "hierarchy": {
                 "n_clusters": [
-                    5,
-                    2
+                    10,
+                    5
                 ],
                 "n_levels": 2,
                 "sample_sizes": [
-                    1,
-                    1
+                    2,
+                    2
                 ]
             }
         }

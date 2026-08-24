@@ -65,38 +65,63 @@ key safely; the full-scale files above keep the rule documented here instead, to
 ## `micro/`
 
 Same 11 files, mirrored for `make smoke-ablations` / `scripts/ablations/smoke_ablations.sh`:
-`data_dir` -> `DATA/daninhas_micro/`, `n_classes: 2`, `n_epoch: 1`, batch size 16, `num_workers: 0`.
-Hierarchies are scaled down for the micro dataset's ~40-image unlabeled pool (50 train images - 10
-initial labeled, per the smoke script's `--n_init_labeled 10`):
+`data_dir` -> `DATA/daninhas_micro/`, `n_classes: 5`, `n_epoch: 1`, batch size 16, `num_workers: 0`.
+
+**2026-08-23 redefinition**: `DATA/daninhas_micro/` was redefined from a hand-picked 2-class/70-image
+subset to a genuine **10%-stratified replica of `DATA/daninhas_full/`** — all 5 classes, both splits
+(`scripts/make_micro_dataset.py`, see `.specs/adr/0004-micro-dataset-and-golden-run.md`'s amendment) —
+so the local no-GPU smoke path exercises the same class count/imbalance shape as the real dataset
+before a lab/Colab run, not just a 2-class toy case. That gives an unlabeled pool of **~796 images**
+(806 train - 10 initial labeled, per the smoke script's `--n_init_labeled 10`) instead of the old
+~40-image pool — almost exactly **1/10th** of the full-scale ablation pool (`~7986`, `8086` train -
+`100` initial labeled), since the micro dataset *is* a 10% stratified sample. Hierarchies below are
+therefore derived by dividing each full-scale `n_clusters` entry by 10 (rounding, floor 2), which
+keeps the same relative shape as the full-scale row it mirrors:
 
 | File | n_clusters | n_levels | sample_sizes |
 |---|---|---|---|
-| `hier_L1.json` | `[8]` | 1 | `[2]` |
-| `hier_L2a.json` | `[8, 4]` | 2 | `[2, 1]` |
-| `hier_L2b.json` | `[5, 2]` | 2 | `[1, 1]` |
-| `hier_L3.json` | `[8, 4, 2]` | 3 | `[2, 1, 1]` |
-| `hier_L4.json` | `[12, 6, 3, 2]` | 4 | `[3, 1, 1, 1]` |
-| `rep_*.json` / `stage_full.json` / `stage_no_representation.json` (reference hierarchy) | `[8, 4, 2]` | 3 | `[2, 1, 1]` |
+| `hier_L1.json` | `[5]` | 1 | `[2]` |
+| `hier_L2a.json` | `[30, 10]` | 2 | `[2, 2]` |
+| `hier_L2b.json` | `[10, 5]` | 2 | `[2, 2]` |
+| `hier_L3.json` | `[30, 10, 5]` | 3 | `[2, 2, 2]` |
+| `hier_L4.json` | `[30, 10, 5, 2]` | 4 | `[2, 2, 2, 2]` |
+| `rep_*.json` / `stage_full.json` / `stage_no_representation.json` (reference hierarchy) | `[60, 20, 10]` | 3 | `[3, 2, 2]` |
+
+`sample_sizes` follow the same `~round(n_clusters[i] * 0.05)`, floor 2 rule as the full-scale files
+(§6.2 above); at this small scale the floor dominates every entry except the reference hierarchy's
+first level (`round(60*0.05)=3`).
+
+All 11 configs were re-verified end-to-end against the real, regenerated `DATA/daninhas_micro/`
+(`bash scripts/ablations/smoke_ablations.sh`, `--seed 1 --n_init_labeled 10 --n_query 5 --n_round 1
+--device cpu`) after this redefinition: **11/11 passed**, including `hier_L2a.json`'s `[30, 10]` (each
+of the 10 level-2 super-clusters would receive exactly 3 level-1 sub-clusters on a perfectly even
+split — the same *shape* of risk documented below for the old `hier_L2b.json` — but the real SSRAE
+embedding over the new ~796-image pool did not produce an exactly-even split, so the vendored
+`dtype=object` equal-subcluster-size bug (`dalmax/tools/SSL/src/utils.py:28`, see
+`dalmax/selection/hierarchical_kmeans.py`'s module docstring) was not triggered). Total wall time for
+all 11 configs: **~4m37s** on the local CPU-only dev notebook, under the ~5 min target. This is an
+empirical, seed/dataset-specific result, not a structural guarantee — as with the pre-redefinition
+`hier_L2b.json` note below, an exactly-even k-means split is possible in principle for a different
+seed and would need to be re-probed if the sampling seed or dataset ever changes again.
 
 `hier_L4.json`'s micro hierarchy deliberately avoids ever reaching a final cluster of size 1: the
 vendored `core/tools/SSL/src/hierarchical_kmeans_gpu.py`/`hierarchical_sampling.py` pipeline this
 wraps (`dalmax/selection/hierarchical_kmeans.py`) has no documented/tested behavior for
-`n_clusters=1` at the deepest level, so `[12, 6, 3, 2]` (bottoming out at 2, not 1) is used instead
-of the naive halving-to-1 progression (`[8, 4, 2, 1]`) — a deliberately conservative choice, not a
-verified requirement; `tests/test_ablation_configs.py` only checks that the config *loads*, not
-that a real hierarchical selection run over it succeeds (that is exercised by
-`scripts/ablations/smoke_ablations.sh` instead, over the real micro dataset).
+`n_clusters=1` at the deepest level, so `[30, 10, 5, 2]` (bottoming out at 2, not 1) is used instead
+of a naive halving-to-1 progression — a deliberately conservative choice, not a verified requirement;
+`tests/test_ablation_configs.py` only checks that the config *loads*, not that a real hierarchical
+selection run over it succeeds (that is exercised by `scripts/ablations/smoke_ablations.sh` instead,
+over the real micro dataset).
 
-**`hier_L2b.json`'s `[5, 2]` (not the naive `[4, 2]` halving of `hier_L2a`'s `[8, 4]`)**: `[4, 2]`
-triggers the pre-existing vendored `dtype=object` equal-subcluster-size bug documented in
-`dalmax/selection/hierarchical_kmeans.py`'s module docstring (`core/tools/SSL/src/utils.py:28`) —
-empirically, at `--seed 1` over the real `DATA/daninhas_micro` SSRAE-full embedding, 4 level-1
-clusters split exactly 2-and-2 into the 2 level-2 super-clusters, hitting the bug. `[5, 2]` does not
-split evenly and was verified (by direct probing with the actual derived selection RNG, real
-embeddings, `--seed 1`) to run cleanly; `[6,3]`/`[6,2]`/`[9,3]` were also probed and rejected for the
-same reason, `[5,2]`/`[7,3]`/`[10,3]` all passed — `[5,2]` was chosen as the closest match to
-`hier_L2a`'s `[8,4]` shape. This is a smoke-test-only, dataset/seed-specific workaround — the
-vendored bug itself is not fixed (out of scope, per `.claude/rules/data-safety.md`'s "wrap, don't
-edit, the vendored SSL code" policy) and could in principle resurface for a different seed; the
-full-scale `hier_L2b.json` (`[100, 50]`, ~10k-image pool) is not affected in practice, since an
-exact-even split at that scale is astronomically unlikely.
+**Historical note (pre-2026-08-23-redefinition `hier_L2b.json`'s `[5, 2]`, not the naive `[4, 2]`
+halving of `hier_L2a`'s `[8, 4]`)**: on the old 2-class/70-image micro dataset, `[4, 2]` triggered the
+pre-existing vendored `dtype=object` equal-subcluster-size bug documented above — empirically, at
+`--seed 1` over that dataset's real SSRAE-full embedding, 4 level-1 clusters split exactly 2-and-2
+into the 2 level-2 super-clusters, hitting the bug; `[5, 2]` did not split evenly and was verified to
+run cleanly. This finding is dataset/seed-specific and does not directly carry over to the
+2026-08-23-redefined 5-class/806-train-image dataset (a completely different embedding), which is why
+`hier_L2b.json` was independently re-probed above (`[10, 5]`, passing) rather than reusing the old
+ratio unverified. The vendored bug itself is not fixed (out of scope, per
+`.claude/rules/data-safety.md`'s "wrap, don't edit, the vendored SSL code" policy); the full-scale
+`hier_L2b.json` (`[100, 50]`, ~8k-image pool) is not affected in practice, since an exact-even split
+at that scale is astronomically unlikely.

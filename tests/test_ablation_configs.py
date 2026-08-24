@@ -40,16 +40,16 @@ EXPECTED: dict[str, tuple[str, str, str, tuple[int, ...] | None]] = {
 # Micro mirrors reuse smaller hierarchies (see files_config/ablations/README.md);
 # only n_levels/shape need re-deriving here, not the exact counts.
 EXPECTED_MICRO_N_CLUSTERS: dict[str, tuple[int, ...]] = {
-    "rep_full": (8, 4, 2),
-    "rep_spatial": (8, 4, 2),
-    "rep_spectral": (8, 4, 2),
-    "hier_L1": (8,),
-    "hier_L2a": (8, 4),
-    "hier_L2b": (5, 2),
-    "hier_L3": (8, 4, 2),
-    "hier_L4": (12, 6, 3, 2),
-    "stage_full": (8, 4, 2),
-    "stage_no_representation": (8, 4, 2),
+    "rep_full": (60, 20, 10),
+    "rep_spatial": (60, 20, 10),
+    "rep_spectral": (60, 20, 10),
+    "hier_L1": (5,),
+    "hier_L2a": (30, 10),
+    "hier_L2b": (10, 5),
+    "hier_L3": (30, 10, 5),
+    "hier_L4": (30, 10, 5, 2),
+    "stage_full": (60, 20, 10),
+    "stage_no_representation": (60, 20, 10),
     "stage_no_hierarchy": None,
 }
 
@@ -67,7 +67,7 @@ def _assert_full_scale_dataset_fields(config: ExperimentConfig) -> None:
 
 
 def _assert_micro_dataset_fields(config: ExperimentConfig) -> None:
-    assert config.dataset.n_classes == 2
+    assert config.dataset.n_classes == 5
     assert config.dataset.data_dir == "DATA/daninhas_micro/"
     assert config.dataset.n_epoch == 1
     assert config.dataset.train_args.batch_size == 16
