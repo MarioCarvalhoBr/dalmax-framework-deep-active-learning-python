@@ -1,5 +1,6 @@
-"""End-to-end regression test: re-run demo.py on the micro dataset and compare
-against the committed golden-run fixtures in tests/golden/.
+"""End-to-end regression test: re-run trainer.py (historical name `demo.py`,
+renamed 2026-08-23, see ADR 0006) on the micro dataset and compare against the
+committed golden-run fixtures in tests/golden/.
 
 This is the closest thing to a true smoke test in this repo (see
 `.specs/architecture/refactor-plan.md` Phase 1, `.specs/quality/testing-strategy.md`
@@ -16,14 +17,14 @@ Test isolation note
 This test passes `--dir_results` pointed at `tmp_path`, so only the per-run
 result artifacts under that directory (`results.json`, `predictions.csv`,
 `saved_model.pth`, plots) are isolated to the test's temp directory and
-cleaned up automatically. `demo.py` and `utils/data.py` still write to fixed,
+cleaned up automatically. `trainer.py` (historical `demo.py`) and `utils/data.py` still write to fixed,
 non-isolated repository paths as a side effect of every invocation of this
 test: `results/logs/` (the run's `log-dalmax.log`, via `utils.LOGGER`),
 `results/original_indices.txt` (written unconditionally by `Data.__init__` /
 `create_indexes_path`), and `results/cache/` (the SSRAE feature cache and
 `Y_train` pickle, via `cache_file_path` — see `.specs/quality/known-issues.md`
 KI-3 and KI-21). None of these are cleaned up by this test; they accumulate in
-the real `results/` tree exactly as a real `demo.py` run would.
+the real `results/` tree exactly as a real `trainer.py` run would.
 
 Determinism note
 -----------------
@@ -43,6 +44,7 @@ only, per the original test plan in `testing-strategy.md`.
 
 from __future__ import annotations
 
+import csv
 import json
 import re
 import subprocess
@@ -51,6 +53,7 @@ from pathlib import Path
 
 import pytest
 
+from dalmax.inference.predictor import Predictor
 from scripts.make_micro_dataset import SOURCE_ROOT, generate_micro_dataset
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -95,7 +98,7 @@ def test_golden_run_reproduces_indices_and_metrics(fixture_path: Path, tmp_path:
     dir_results = tmp_path / "smoke"
     cmd = [
         sys.executable,
-        "demo.py",
+        "trainer.py",
         "--params_json",
         str(PARAMS_JSON),
         "--dataset_name",
@@ -119,7 +122,7 @@ def test_golden_run_reproduces_indices_and_metrics(fixture_path: Path, tmp_path:
     )
     combined_output = proc.stdout + proc.stderr
     assert proc.returncode == 0, (
-        f"demo.py exited with {proc.returncode}\nstdout/stderr:\n{combined_output}"
+        f"trainer.py exited with {proc.returncode}\nstdout/stderr:\n{combined_output}"
     )
 
     initial_match = INITIAL_IDXS_RE.search(combined_output)
@@ -169,3 +172,34 @@ def test_golden_run_reproduces_indices_and_metrics(fixture_path: Path, tmp_path:
     assert "config" in run_metadata
     assert run_metadata["config"]["strategy_name"] == strategy_name
     assert run_metadata["config"]["seed"] == seed
+
+    # Checkpoint save/load fix (2026-08-23, dalmax.models.checkpoint —
+    # historical bug: DeepLearning.save_model saved the model CLASS instead
+    # of the trained instance, producing ~900-byte weight-less files, see
+    # .specs/quality/known-issues.md). Assert the real checkpoint this run
+    # wrote is a proper multi-MB weights file, and that loading it back
+    # reproduces this run's own predictions.csv for a handful of images —
+    # not just that *a* file exists at that path.
+    saved_model_path = leaf_dir / "saved_model.pth"
+    assert saved_model_path.exists(), f"expected saved_model.pth at {saved_model_path}"
+    assert saved_model_path.stat().st_size > 10 * 1024 * 1024, (
+        f"saved_model.pth is only {saved_model_path.stat().st_size} bytes -- "
+        "looks like the historical class-pickle bug, not a real checkpoint"
+    )
+
+    predictions_csv_path = leaf_dir / "predictions.csv"
+    assert predictions_csv_path.exists(), f"expected predictions.csv at {predictions_csv_path}"
+    with open(predictions_csv_path, newline="") as f:
+        prediction_rows = list(csv.DictReader(f))
+    sample_rows = prediction_rows[:5]
+    assert len(sample_rows) == 5
+
+    predictor = Predictor(str(saved_model_path), device="cpu")
+    sample_paths = [row["Path"] for row in sample_rows]
+    re_predicted = predictor.predict_paths(sample_paths)
+    for csv_row, predicted in zip(sample_rows, re_predicted, strict=True):
+        assert predicted.predicted_class == csv_row["Predicted Class"], (
+            f"re-predicting {csv_row['Path']} from the saved checkpoint gave "
+            f"{predicted.predicted_class!r}, but predictions.csv recorded "
+            f"{csv_row['Predicted Class']!r} for the same run"
+        )
