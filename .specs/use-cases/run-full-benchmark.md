@@ -37,7 +37,7 @@ after its own 9-run battery finishes.
 ## Baseline strategy sweep
 
 `scripts/benchmark/run_pipline.sh` is a **command generator**, not a direct executor
-— it `echo`s the `poetry run python demo.py ...` invocations for the 10 non-SSRAE/
+— it `echo`s the `poetry run python demo.py (historical) ...` invocations for the 10 non-SSRAE/
 VCTex strategies (`RandomSampling` through `BALDDropout`, with
 `AdversarialBIM`/`AdversarialDeepFool` commented out in the current script)
 across `n_query ∈ {10, 50, 100}`, for a given `(gpu, seed)` pair passed as
@@ -64,12 +64,12 @@ hardcoded inside the script — note this differs from the RNHAL sweep's
 ## Adversarial strategies
 
 `AdversarialBIM`/`AdversarialDeepFool` are commented out in
-`scripts/benchmark/run_pipline.sh` but are valid `demo.py --strategy_name` choices and
+`scripts/benchmark/run_pipline.sh` but are valid `demo.py (historical) --strategy_name` choices and
 appear in the existing `results/dalmax1/` output — they must have been run
-via a direct `demo.py` invocation outside these two scripts. Invoke
+via a direct `demo.py` (historical) invocation outside these two scripts. Invoke
 manually if needed:
 ```
-CUDA_VISIBLE_DEVICES=<gpu> poetry run python demo.py \
+CUDA_VISIBLE_DEVICES=<gpu> poetry run python demo.py (historical) \
   --params_json files_config/benchmark/params_df_gpu_<gpu>.json --dataset_name=DANINHAS \
   --strategy_name AdversarialBIM --n_query <10|50|100> --seed <1|2|3> \
   --n_round 8 --dir_results=results/<target>/

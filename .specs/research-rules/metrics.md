@@ -49,8 +49,8 @@ f1        = f1_score(self.Y_test, preds, average='weighted', zero_division=0)
 - The returned `accuracy` (`acc_skl`, sklearn's `accuracy_score`) is
   computed every round but **only the final round's value is logged**
   (`logger.warning(f'Final Accuracies (sklearn): {acc_skl}')` — this was a
-  `demo.py`-only log line, tied to the legacy `calc_metrics_sklearn` call path;
-  since `dalmax` never calls `calc_metrics_sklearn` and `demo.py` is now a
+  `demo.py` (historical)-only log line, tied to the legacy `calc_metrics_sklearn` call path;
+  since `dalmax` never calls `calc_metrics_sklearn` and `demo.py` (historical) is now a
   12-line shim, this specific log line no longer runs anywhere — confirmed
   absent from `dalmax/` by grep)
   — it is not stored in `results.json`; only `Data.cal_test_acc`'s value
@@ -81,11 +81,11 @@ diverge materially. Implementation path (1) below was chosen and landed:
    persists the macro values as `all_precision_macro`/`all_recall_macro`/
    `all_f1_macro` in `results.json`, additive to the unchanged legacy keys
    (`all_precision`/`all_recall`/`all_f1_score`, still weighted). Every run
-   through `dalmax.cli`/`demo.py` from this commit onward has both.
+   through `dalmax.cli`/`demo.py` (historical) from this commit onward has both.
 2. **Still needed for pre-Phase-2 `results.json` files** (e.g.
    `results/dalmax1/`, `results/dalmax2/`, used as-is by ablation §6.3's
    "RNHAL (full)" row): recompute macro F1 offline from `predictions.csv`
-   (`Real Class`, `Predicted Class` columns, already saved by `demo.py` for
+   (`Real Class`, `Predicted Class` columns, already saved by `demo.py` (historical) for
    every run) — no re-training needed, since those runs predate the
    `calc_metrics` addition and only have weighted F1 in their `results.json`.
 
@@ -100,7 +100,7 @@ values without labeling them explicitly would misrepresent the ablation.
 
 A hand-rolled binary-style TP/TN/FP/FN precision/recall/F1 computation using
 tensor bitwise ops (`&`, `~`). This only makes sense for boolean/binary
-labels and is **not called anywhere in `demo.py` or `dalmax/`** — appears to be dead code
+labels and is **not called anywhere in `demo.py` (historical) or `dalmax/`** — appears to be dead code
 retained from an earlier binary-classification iteration of the project.
 Not used for any reported metric; flagged here so it is not mistaken for
 the active metric path.

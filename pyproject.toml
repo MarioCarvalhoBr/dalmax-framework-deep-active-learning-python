@@ -17,8 +17,9 @@ dependencies = [
     "torch==2.5.0",
     "torchvision==0.20.0",
     "tqdm==4.67.1",
-    # Missing from the original requirements.txt but imported by demo.py and
-    # utils/report/*. 2.2.3 is the latest 2.x release compatible with numpy 2.1.3.
+    # Missing from the original requirements.txt but imported by the
+    # historical demo.py (renamed trainer.py 2026-08-23) and utils/report/*.
+    # 2.2.3 is the latest 2.x release compatible with numpy 2.1.3.
     "pandas==2.2.3",
     # Missing from requirements.txt/pyproject.toml but imported by
     # utils/report/1_cm_extract_from_pdf.py (see known-issues.md KI-28).
@@ -29,7 +30,7 @@ dependencies = [
 Repository = "https://github.com/MarioCarvalhoBr/dalmax-deep-active-learning-python"
 
 [tool.poetry]
-# This repo is a research application (demo.py CLI + run_*.sh experiment scripts),
+# This repo is a research application (trainer.py CLI, historically demo.py, + run_*.sh experiment scripts),
 # not a distributable library: `core/` and `utils/` are top-level packages used only
 # in-place via PYTHONPATH/relative imports, there is no console entry point, and
 # nothing downstream is meant to `pip install dalmax`. package-mode = false tells

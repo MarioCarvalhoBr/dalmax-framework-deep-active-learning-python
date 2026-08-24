@@ -8,7 +8,7 @@ not decoration. Specs and rules must never drift from what the code actually doe
 1. **Any change to behavior, CLI, params schema, strategy registry, or experiment
    protocol MUST update the corresponding `.specs/` file in the same task.**
    Examples of triggers and their target spec files:
-   - Adding/removing a `demo.py --strategy_name` choice, or editing
+   - Adding/removing a `trainer.py --strategy_name` choice, or editing
      `dalmax/query_strategies/registry.py` / `dalmax/query_strategies/__init__.py` →
      update `.specs/use-cases/add-new-strategy.md` and
      `.specs/architecture/current-state.md`.
@@ -36,7 +36,7 @@ not decoration. Specs and rules must never drift from what the code actually doe
 
 ## Practical checklist before closing a task
 
-- [ ] Did this change touch `demo.py`/`dalmax/cli.py` CLI args, `dalmax/query_strategies/registry.py`, or
+- [ ] Did this change touch `trainer.py`/`dalmax/cli.py` CLI args, `dalmax/query_strategies/registry.py`, or
       `dalmax/query_strategies/__init__.py`? → update `.specs/use-cases/add-new-strategy.md`.
 - [ ] Did this change touch a params JSON schema or the results directory layout?
       → update `.specs/experiments/experimental-protocol.md`.

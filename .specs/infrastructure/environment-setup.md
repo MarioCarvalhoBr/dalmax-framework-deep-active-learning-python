@@ -60,7 +60,7 @@ tqdm==4.67.1
 (`import pandas as pd`, used for `predictions.csv` export) and by every script in
 `dalmax/reporting/` (was `utils/report/`) (`import pandas as pd`); was absent from the
 hand-maintained `requirements.txt` snapshot shown above. This was a real bug at the time: a fresh
-`pip install -r requirements.txt` (historical command, no longer valid) followed by `python demo.py ...` would raise
+`pip install -r requirements.txt` (historical command, no longer valid) followed by `python trainer.py ...` would raise
 `ModuleNotFoundError: pandas` the first time `predictions_df = pd.DataFrame(...)` executes (end of
 a full run, after training — i.e. the failure surfaces late, wasting a full training run's
 compute). **Status: resolved, then moot** — `pyproject.toml` declares `pandas==2.2.3`, and the

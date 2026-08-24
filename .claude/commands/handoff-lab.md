@@ -18,7 +18,7 @@ Steps:
    pip/`requirements.txt` fallback was retired, see `.specs/adr/0001-adopt-poetry.md`'s
    amendment), so this is the only dependency-sync step needed.
 3. Run `git status` — there must be no uncommitted changes to anything under
-   `dalmax/`, `demo.py`, or `files_config/benchmark/params_df_gpu_*.json` that the lab machine
+   `dalmax/`, `trainer.py`, or `files_config/benchmark/params_df_gpu_*.json` that the lab machine
    needs. List any uncommitted files and ask the user to commit
    (`.claude/rules/git-workflow.md` — conventional commits, no push without
    confirmation) before proceeding.

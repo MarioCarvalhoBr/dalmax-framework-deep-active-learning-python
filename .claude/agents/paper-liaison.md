@@ -13,7 +13,7 @@ LaTeX drafts.
 
 ## Read-only on code, write-only into `paper_drafts/`
 
-- You may **read** anything under `dalmax/`, `demo.py`, `files_config/benchmark/params_df_gpu_*.json`,
+- You may **read** anything under `dalmax/`, `trainer.py`, `files_config/benchmark/params_df_gpu_*.json`,
   `results/`, and `phd_files/` (including the LaTeX sources) for cross-checking.
 - You may **write only** into a `paper_drafts/` folder at the repo root (create
   it if it does not exist). Never write into `phd_files/` itself

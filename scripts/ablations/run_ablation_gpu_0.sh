@@ -26,7 +26,7 @@
 # gets fewer heavy-hierarchy configs (2 vs this GPU's 3) to compensate for
 # having more configs overall.
 #
-# Unlike scripts/benchmark/run_pipe_gpu_*.sh (which lets any single `python demo.py` failure
+# Unlike scripts/benchmark/run_pipe_gpu_*.sh (which lets any single `python trainer.py` failure
 # kill the whole batch), this script logs a failing (study, config, seed) to
 # a failure file and continues to the next iteration -- an 8-hour, 15-run
 # lab batch should not be lost to one bad config. `set -uo pipefail` (not
@@ -80,7 +80,7 @@ for entry in "${CONFIGS[@]}"; do
         echo "EXECUTANDO: study=$study config=$config_name seed=$seed (GPU $GPU_NUMBER)"
         echo "------------------------------------------------------------"
 
-        if ! CUDA_VISIBLE_DEVICES=$GPU_NUMBER poetry run python demo.py \
+        if ! CUDA_VISIBLE_DEVICES=$GPU_NUMBER poetry run python trainer.py \
             --params_json "$params_json" \
             --dataset_name="$DATASET_NAME" \
             --strategy_name "$STRATEGY_NAME" \
@@ -92,7 +92,7 @@ for entry in "${CONFIGS[@]}"; do
         then
             echo "FAILED: study=$study config=$config_name seed=$seed" | tee -a "$FAILURE_LOG"
         else
-            echo "Comando executado: CUDA_VISIBLE_DEVICES=$GPU_NUMBER poetry run python demo.py --params_json $params_json --dataset_name=$DATASET_NAME --strategy_name $STRATEGY_NAME --n_query $N_QUERY --seed $seed --n_round $N_ROUND --dir_results=$dir_results --device cuda"
+            echo "Comando executado: CUDA_VISIBLE_DEVICES=$GPU_NUMBER poetry run python trainer.py --params_json $params_json --dataset_name=$DATASET_NAME --strategy_name $STRATEGY_NAME --n_query $N_QUERY --seed $seed --n_round $N_ROUND --dir_results=$dir_results --device cuda"
             echo "(study=$study, config=$config_name, seed=$seed) finalizado."
         fi
     done

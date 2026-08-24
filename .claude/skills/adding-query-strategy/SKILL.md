@@ -6,7 +6,7 @@ description: Step-by-step checklist of every file that must change to add a new 
 # Adding a query strategy
 
 **Rewritten 2026-08-23 for Phase 2; paths re-verified 2026-08-23 for Phase 4.** DalMax routes
-`demo.py`/`--strategy_name` through `dalmax/query_strategies/registry.py::build_strategy`. The old
+`trainer.py`/`--strategy_name` through `dalmax/query_strategies/registry.py::build_strategy`. The historical
 `utils/orchestrator.py::get_strategy` if/elif chain this replaced was **deleted in Phase 4** (it had
 been dead code since Phase 2). Full spec:
 `.specs/use-cases/add-new-strategy.md` — read it first if this summary is not enough context.
@@ -66,7 +66,7 @@ JSON `"embedding"`/`"selection"` block already reaches any combination (see
    entry (`"YourStrategyName": YourStrategyName`). There is no `utils/orchestrator.py` any more
    (deleted in Phase 4) — the registry dict is the only place to register a strategy.
 4. Add `"YourStrategyName"` to `dalmax/cli.py`'s `--strategy_name` `choices=[...]` list —
-   `demo.py` itself has no `choices=[...]` of its own any more (12-line shim).
+   `trainer.py` itself has no `choices=[...]` of its own any more (12-line shim; historically `demo.py`).
 5. If the strategy needs new hyperparameters, add a typed field to `dalmax/config/schema.py`,
    read via `config.dataset.<field>` — never a hardcoded dataset-name string key (the
    `self.params['DANINHAS']['config_kmh']` anti-pattern, KI-4, that Phase 2 fixed) and never a
@@ -87,7 +87,7 @@ poetry run ruff check dalmax/query_strategies/<touched files>
 
 `utils.orchestrator.get_strategy` no longer exists (deleted in Phase 4) — there is nothing to
 verify against there any more; `dalmax/query_strategies/registry.py::STRATEGY_REGISTRY` is the
-single source of truth for what `demo.py`/`dalmax.cli` resolves.
+single source of truth for what `trainer.py`/`dalmax.cli` resolves.
 
 ## Do not skip spec sync
 

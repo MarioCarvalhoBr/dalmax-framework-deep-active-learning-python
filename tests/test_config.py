@@ -415,7 +415,7 @@ def test_experiment_config_rejects_unresolved_auto_device():
         )
 
 
-# --- n_round >= 0 is allowed (legacy demo.py allowed `--n_round 0`: train/ ---
+# --- n_round >= 0 is allowed (historical legacy demo.py, now trainer.py, allowed `--n_round 0`: train/ ---
 # --- evaluate once, no query rounds); n_round < 0 still rejected; n_query ---
 # --- must still be > 0 ---------------------------------------------------
 

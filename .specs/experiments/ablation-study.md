@@ -25,7 +25,7 @@ budgets consistent with `experimental-protocol.md`.
 > `dalmax/data/datasets.py::Data.calc_metrics` (was `utils/data.py`, moved in Phase 4; new method) computes **both** weighted and macro
 > precision/recall/F1 in one pass, and `dalmax/experiment/reporter.py` writes all of them into
 > `results.json` (`all_precision_macro`/`all_recall_macro`/`all_f1_macro`, additive — the legacy
-> weighted keys are unchanged). Any run through `dalmax.cli`/`demo.py` from this commit onward
+> weighted keys are unchanged). Any run through `dalmax.cli`/`demo.py` (historical) from this commit onward
 > already has macro F1 in its `results.json`; no offline recomputation from `predictions.csv` is
 > needed for **new** runs. It is **still needed for already-executed pre-Phase-2 reference runs**
 > (`results/dalmax1/`, `results/dalmax2/`, used as-is by §6.3's "RNHAL (full)" row) — those
@@ -158,7 +158,7 @@ One params JSON per variant, differing only in `embedding.variant` (`spatial` sh
 ```
 
 ```bash
-CUDA_VISIBLE_DEVICES=<gpu> poetry run python demo.py \
+CUDA_VISIBLE_DEVICES=<gpu> poetry run python demo.py (historical) \
     --params_json params_ablation_6_1_spatial.json --dataset_name DANINHAS \
     --strategy_name RepresentationStrategy --n_query 100 --seed <1|2|3> \
     --n_round 8 --dir_results results/ablation_representation/ --device cuda
@@ -250,7 +250,7 @@ docstring):
 ```
 
 ```bash
-CUDA_VISIBLE_DEVICES=<gpu> poetry run python demo.py \
+CUDA_VISIBLE_DEVICES=<gpu> poetry run python demo.py (historical) \
     --params_json params_ablation_6_2_L3.json --dataset_name DANINHAS \
     --strategy_name RepresentationStrategy --n_query 100 --seed <1|2|3> \
     --n_round 8 --dir_results results/ablation_hierarchy/ --device cuda
@@ -325,7 +325,7 @@ as §6.1/§6.2's provisional fixed point):
 ```
 
 ```bash
-CUDA_VISIBLE_DEVICES=<gpu> poetry run python demo.py \
+CUDA_VISIBLE_DEVICES=<gpu> poetry run python demo.py (historical) \
     --params_json params_ablation_6_3_resnet_hier.json --dataset_name DANINHAS \
     --strategy_name RepresentationStrategy --n_query 100 --seed <1|2|3> \
     --n_round 8 --dir_results results/ablation_stage_contribution/ --device cuda
@@ -348,7 +348,7 @@ CUDA_VISIBLE_DEVICES=<gpu> poetry run python demo.py \
 ```
 
 ```bash
-CUDA_VISIBLE_DEVICES=<gpu> poetry run python demo.py \
+CUDA_VISIBLE_DEVICES=<gpu> poetry run python demo.py (historical) \
     --params_json params_ablation_6_3_ssrae_flat.json --dataset_name DANINHAS \
     --strategy_name RepresentationStrategy --n_query 100 --seed <1|2|3> \
     --n_round 8 --dir_results results/ablation_stage_contribution/ --device cuda
@@ -402,7 +402,7 @@ Kept here as the original requirements list for traceability.
 ## Output artifacts
 
 **Resolved (2026-08-23, Phase 3) — replaces the earlier TBD naming.** Per run: the same artifacts
-`demo.py` already produces (`results.json`, `predictions.csv`, `confusion_matrix.pdf`, per-metric
+`demo.py` (historical) already produces (`results.json`, `predictions.csv`, `confusion_matrix.pdf`, per-metric
 plots, `log-dalmax.log`, saved model, `run_metadata.json`) under
 `results/ablations/{study}/{config}/{dataset_folder}/SEED_{seed}/NQ_{n_query}_NIL_{n_init_labeled}_NR_{n_round}_NE_{n_epoch}/RepresentationStrategy/`
 — `{study}` is `6_1`/`6_2`/`6_3`, `{config}` is the `files_config/ablations/{config}.json` basename
@@ -459,7 +459,7 @@ per-config mean ± std across seeds of both the final-round value and the across
 `ablation_6_{1,2,3}.md`/`.tex` per sub-study (a config with zero discovered runs renders `TBD`).
 Unit-tested against a synthetic tree in `tests/test_ablation_report.py`; also run once against real
 (smoke) output — `results/smoke_ablations/` — to confirm the walk pattern matches actual
-`demo.py`/`ExperimentRunner` output byte-for-byte, not just the synthetic fixture's assumptions.
+`demo.py` (historical)/`ExperimentRunner` output byte-for-byte, not just the synthetic fixture's assumptions.
 
 **Ambiguities resolved while materializing these files** (none required a code change):
 

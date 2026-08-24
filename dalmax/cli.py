@@ -1,16 +1,18 @@
-"""Thin CLI: argparse identical to the pre-Phase-2 `demo.py`, plus the new
-`--device` and `--embedding_variant` flags and the `RepresentationStrategy`
-`--strategy_name` choice — everything else (config loading, the round loop,
-reporting) is delegated to `dalmax.config.loader`, `dalmax.experiment.runner`,
-and `dalmax.experiment.reporter` (`.specs/architecture/target-architecture.md`
-§10). `demo.py` at the repo root is now a thin shim that calls `main()` here,
-so existing shell scripts (`scripts/benchmark/run_pipe_gpu_*.sh`) keep working unchanged.
+"""Thin CLI: argparse identical to the pre-Phase-2 historical `demo.py`, plus
+the new `--device` and `--embedding_variant` flags and the
+`RepresentationStrategy` `--strategy_name` choice — everything else (config
+loading, the round loop, reporting) is delegated to `dalmax.config.loader`,
+`dalmax.experiment.runner`, and `dalmax.experiment.reporter`
+(`.specs/architecture/target-architecture.md` §10). `trainer.py` (renamed
+from the historical `demo.py` on 2026-08-23, see ADR 0006) at the repo root
+is a thin shim that calls `main()` here, so existing shell scripts
+(`scripts/benchmark/run_pipe_gpu_*.sh`) keep working unchanged.
 
 The list of valid `--strategy_name` values here is the single source of
 truth `tests/test_registry.py`/`tests/test_strategy_registry.py` parse via
 `ast` (see those tests' docstrings for why they never `import dalmax.cli`
 directly: importing it eagerly creates a `results/logs/` log file via
-`dalmax.logging_utils`, same side effect `demo.py` always had).
+`dalmax.logging_utils`, same side effect the historical `demo.py` always had).
 """
 
 from __future__ import annotations

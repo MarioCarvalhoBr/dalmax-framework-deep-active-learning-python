@@ -5,7 +5,7 @@ owned by a different batch): every experiment must be fully determined by
 **(params JSON + CLI args + seed + git commit)**.
 
 **Phase 2 status (2026-08-23)**: every gap this file originally documented is now resolved for the
-live `dalmax.cli`/`demo.py` path — see the "Resolved" notes inline below and
+live `dalmax.cli`/`demo.py` (historical) path — see the "Resolved" notes inline below and
 `.specs/architecture/current-state.md` §5 for the full coupling-point-by-coupling-point account.
 The original violation text is kept for the historical record in each subsection. **Phase 4
 (2026-08-23)** then physically deleted the legacy files these subsections cite as "unchanged, now
@@ -15,11 +15,11 @@ amendment.
 ## Seed policy
 
 - `--seed` (CLI, default 1) is the single source of randomness for a run.
-  **Phase 2**: `np.random.seed`/`torch.manual_seed`/etc. are no longer scattered across `demo.py` —
+  **Phase 2**: `np.random.seed`/`torch.manual_seed`/etc. are no longer scattered across `demo.py` (historical) —
   `dalmax/seeding.py::seed_everything(seed)` is the single place that seeds `random`, NumPy's legacy
   global RNG, and PyTorch (CPU + all CUDA devices), called exactly once by
   `dalmax.experiment.runner.ExperimentRunner.run()` before any dataset/model/strategy object is
-  constructed — same ordering guarantee the original text described for `demo.py`, now centralized.
+  constructed — same ordering guarantee the original text described for `demo.py` (historical), now centralized.
   `Data.initialize_labels`'s `np.random.shuffle` for the initial labeled pool is unchanged and still
   correctly seed-derived.
 - **Violation found, now resolved**: `core/query_strategies/ssrae_kmeans_sampling.py:23`
@@ -42,8 +42,8 @@ amendment.
   `HierarchicalKMeansSelection.select` reseeds `random.seed`/`np.random.seed` from a value derived
   from the caller's `rng` immediately before calling into the vendored code — deterministic given the
   same experiment seed, documented as a deliberate, bounded global-state coupling rather than hidden.
-- `torch.backends.cudnn.enabled = False` (`demo.py`) trades GPU performance
-  for determinism — **resolved (Phase 2)**: `demo.py`'s line no longer exists (12-line shim);
+- `torch.backends.cudnn.enabled = False` (`demo.py` (historical)) trades GPU performance
+  for determinism — **resolved (Phase 2)**: `demo.py` (historical)'s line no longer exists (12-line shim);
   `dalmax/seeding.py::seed_everything` sets `torch.backends.cudnn.deterministic = True` +
   `torch.backends.cudnn.benchmark = False` instead, keeping cuDNN's faster kernels while staying
   deterministic. Deliberate consequence: post-refactor GPU runs are **not** bit-identical to
@@ -115,7 +115,7 @@ also more complete now: it gained `all_precision_macro`/`all_recall_macro`/`all_
 see `research-rules/metrics.md`), though it still does not duplicate the full params JSON —
 `run_metadata.json` is the file to consult for that, not `results.json`.
 
-Original text (pre-Phase-2): **Not currently implemented.** `demo.py` logs the full `args` and the
+Original text (pre-Phase-2): **Not currently implemented.** `demo.py` (historical) logs the full `args` and the
 selected dataset's `params` block to `log-dalmax.log` via
 `logger.warning(json.dumps(...))` (visible in `dir_results/log-dalmax.log`
 after the run), and `results.json` records `dataset_name, strategy_name,
@@ -128,13 +128,13 @@ n_init_labeled, n_query, n_round, seed`, but:
 - **No git commit hash is recorded anywhere in the results.** This is
   required by the standing rule and is currently a gap: add
   `subprocess.check_output(['git', 'rev-parse', 'HEAD'])` (or equivalent) to
-  `dados_config_results` in `demo.py` before any ablation runs are executed,
+  `dados_config_results` in `demo.py` (historical) before any ablation runs are executed,
   so every `results.json` is traceable to the exact code state that produced
   it. Track this as a refactor-plan Phase 1 item (owned by another batch).
 
 ## What "fully determined" means in practice today
 
-**For any run through `dalmax.cli`/`demo.py` from Phase 2 onward**: open that run's
+**For any run through `dalmax.cli`/`demo.py` (historical) from Phase 2 onward**: open that run's
 `run_metadata.json` — it has the fully-resolved config (dataset/embedding/selection/device/seed/
 etc.) and the git commit hash directly, no inference needed.
 

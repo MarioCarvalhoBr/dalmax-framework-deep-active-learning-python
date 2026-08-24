@@ -21,7 +21,8 @@ question — escalate those back to the orchestrating session.
 
 - **`.claude/rules/code-quality.md`** — single responsibility, registry pattern
   over if/elif chains, explicit constructor injection (never `setattr` after
-  construction, the way `demo.py:79` does today), type hints on everything you
+  construction, the way the historical `demo.py:79` (pre-Phase-2; the repo-root
+  shim is now `trainer.py`) used to), type hints on everything you
   write or touch, no hardcoded dataset names/paths/seeds, keyed caches, English
   only, fail-fast.
 - **`.claude/rules/reproducibility.md`** — thread the experiment seed through

@@ -55,7 +55,7 @@ name (and `Q`, where relevant) instead of a fixed path, unblocking a CPU-safe `S
 golden run without risking the existing full-dataset caches
 (`results/features_dict_ssrae.pkl`/`results/features_dict_vctex.pkl`/`results/Y_train.pkl`, left
 untouched on disk). This is a partial fix of KI-3 (see `known-issues.md`); the full
-`EmbeddingProvider`/`EmbeddingCache` abstraction is still Phase 2 work. `demo.py` also gained two
+`EmbeddingProvider`/`EmbeddingCache` abstraction is still Phase 2 work. `demo.py` (historical) also gained two
 `logger.warning` lines (initial labeled idxs, per-round query idxs) — the only way to observe the
 indices a golden-run fixture needs to pin down, since nothing else in the codebase exposes them.
 
@@ -66,7 +66,7 @@ config changes, not new code.
 
 Work (mapped to `target-architecture.md` §2):
 1. **Config layer**: `config/schema.py` + `config/loader.py` replacing raw `params[dataset_name]`
-   dict indexing everywhere (`demo.py:38-44`, `ssl_ssrae_sampling.py:66`). Validation must reject a
+   dict indexing everywhere (`demo.py (historical):38-44`, `ssl_ssrae_sampling.py:66`). Validation must reject a
    missing `config_kmh` with a clear error instead of a `KeyError` three calls deep.
 2. **`EmbeddingProvider` abstraction** (`embeddings/base.py`, `ssrae_provider.py`, `vctex_provider.py`,
    `resnet_imagenet_provider.py`) + **keyed cache** (`embeddings/cache.py`) replacing
@@ -81,7 +81,7 @@ Work (mapped to `target-architecture.md` §2):
 6. **Seed propagation audit**: introduce `dalmax/seeding.py:seed_everything`, remove every literal
    `random_state=N`, confirm every source of randomness (numpy, torch, Python `random`, sklearn
    `KMeans`) derives from the CLI `--seed`.
-7. **Split `demo.py`**: `experiment/runner.py` (round loop) + `experiment/reporter.py` (plots/JSON/CSV)
+7. **Split `demo.py` (historical)**: `experiment/runner.py` (round loop) + `experiment/reporter.py` (plots/JSON/CSV)
    + thin `cli.py`. Remove the `setattr(strategy, "params", params)` pattern — strategies receive
    config through their constructor.
 8. **Run metadata**: `experiment/run_metadata.py` writing `run_metadata.json` (config snapshot + git
@@ -94,7 +94,7 @@ Work (mapped to `target-architecture.md` §2):
 **Acceptance criteria:**
 - [x] Old CLI strategy names (`SSRAEKmeansSampling`, `VCTexKmeansSampling`, `SSRAEKmeansHCSampling`,
       `VCTexKmeansHCSampling`, plus all baselines) still resolve via the CLI, now backed by
-      `RepresentationStrategy(embedding_provider, selection_strategy)` presets — `demo.py --strategy_name`
+      `RepresentationStrategy(embedding_provider, selection_strategy)` presets — `demo.py (historical) --strategy_name`
       choices are unchanged from a user's point of view. Evidence: `dalmax/cli.py`'s `choices=[...]`
       list is identical to the pre-Phase-2 list plus `RepresentationStrategy`;
       `dalmax/query_strategies/registry.py::REPRESENTATION_PRESETS` maps all four legacy names to
@@ -133,7 +133,7 @@ Work (mapped to `target-architecture.md` §2):
       `tests/test_run_metadata.py`.
 
 **Driver agent:** `implementer` (primary, follows this plan), `code-reviewer` (checks
-`demo.py --strategy_name` choices / registries / `.specs/` stay in sync per its role definition),
+`demo.py (historical) --strategy_name` choices / registries / `.specs/` stay in sync per its role definition),
 `experiment-auditor` (verifies seed propagation and cache-key correctness before sign-off),
 `spec-keeper` (updates `.specs/architecture/current-state.md` and ADRs as things land).
 
@@ -142,7 +142,7 @@ Work (mapped to `target-architecture.md` §2):
   must be called out to the advisor since it changes historical result reproducibility for seeds
   that previously always clustered as if `random_state=3`).
 - `dalmax.seeding.seed_everything` sets `torch.backends.cudnn.deterministic = True` /
-  `torch.backends.cudnn.benchmark = False` instead of `demo.py`'s old `cudnn.enabled = False`
+  `torch.backends.cudnn.benchmark = False` instead of `demo.py` (historical)'s old `cudnn.enabled = False`
   determinism shortcut. This is a deliberate, desired change (cuDNN stays enabled, so GPU runs are
   faster), but it means post-refactor GPU runs are **not** bit-identical to historical GPU runs
   recorded before this refactor, even with the same seed — cuDNN's deterministic algorithms are not
@@ -280,7 +280,7 @@ Work:
 **Acceptance criteria:**
 - [x] `import dalmax` works; no references to `core.` / `utils.` remain outside historical docs.
       Verified: `python -c "import dalmax"` succeeds; `grep -rn "^import core\|^from core\|^import
-      utils\|^from utils"` across `dalmax/`, `tests/`, `demo.py` → zero hits; `ls core utils` → both
+      utils\|^from utils"` across `dalmax/`, `tests/`, `demo.py` (historical) → zero hits; `ls core utils` → both
       "No such file or directory".
 - [x] Full test suite passes locally: `poetry run pytest -q -m "not gpu and not dataset and not
       slow"` → 277 passed. Golden-run fixtures (`tests/golden/*.json`) bit-identical; all 17 CLI

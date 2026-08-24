@@ -109,10 +109,10 @@ Unchanged in spirit since Phase 2, with paths updated for the Phase 4 package mo
 
 The previous version of this checklist described editing `utils/orchestrator.py`'s if/elif chain and
 `demo.py`'s `choices=[...]` list directly. `utils/orchestrator.py` was deleted entirely in Phase 4
-(it had been dead/unreachable since Phase 2), and `demo.py` is a 12-line shim with no
+(it had been dead/unreachable since Phase 2), and `demo.py` (historical) is a 12-line shim with no
 `choices=[...]` of its own — edit `dalmax/cli.py` instead. Do not "fix" a strategy by making it
 reachable only through some other path; it must be reachable through `dalmax.cli.build_arg_parser()`'s
-`choices=[...]`, since that is what `demo.py`/`scripts/benchmark/run_pipe_gpu_*.sh` actually invoke.
+`choices=[...]`, since that is what `demo.py` (historical)/`scripts/benchmark/run_pipe_gpu_*.sh` actually invoke.
 
 ## Reference: current full strategy list (for cross-checking Path B step 4 / Path A step 3)
 

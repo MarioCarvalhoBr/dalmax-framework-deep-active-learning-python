@@ -83,7 +83,7 @@ the task — never attempt a full training sweep on the local notebook.
      `.specs/adr/0001-adopt-poetry.md`'s amendment), so this is the same
      step used locally and on the lab machine, keeping Colab on the exact
      `pyproject.toml`/`poetry.lock` pins.
-  4. Run `poetry run python demo.py` with `--data_dir` pointing at the local
+  4. Run `poetry run python trainer.py` with `--data_dir` pointing at the local
      runtime copy (via the params JSON's `data_dir` key, not `DATA/` on Drive).
   5. Copy `results/` back to Drive (or download) at the end of the session —
      Colab runtimes are ephemeral; nothing under `/content/` survives a

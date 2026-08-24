@@ -10,7 +10,7 @@ removed as dead code in refactor Phase 4
 Two kinds of names are registered:
 
 - The 12 legacy strategies (`RandomSampling` ... `AdversarialDeepFool`) are
-  constructed exactly as `demo.py` always has:
+  constructed exactly as the historical `demo.py` always has:
   `LegacyClass(dataset, net, logger)`, no `dalmax` involvement.
 - The 4 legacy `*Kmeans*Sampling` names (`SSRAEKmeansSampling`,
   `VCTexKmeansSampling`, `SSRAEKmeansHCSampling`, `VCTexKmeansHCSampling`)

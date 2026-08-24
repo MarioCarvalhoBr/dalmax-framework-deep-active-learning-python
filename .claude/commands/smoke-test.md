@@ -7,7 +7,7 @@ Run the project's smoke test and interpret the results.
 Steps:
 
 1. Run `make smoke`. This is documented in the Makefile as a tiny CPU
-   end-to-end run of `demo.py` on a small subset of `daninhas_full` (or a
+   end-to-end run of `trainer.py` on a small subset of `daninhas_full` (or a
    generated micro-dataset) — see `.specs/quality/testing-strategy.md` and
    `.specs/quality/known-issues.md` for whether it is a real run or a
    documented stub in the current state of the repo.

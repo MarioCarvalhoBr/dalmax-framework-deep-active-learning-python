@@ -83,7 +83,7 @@ link as forward-looking, not broken.
 ## Spec-sync contract — when to update what
 
 - **Any change to CLI flags, params-JSON schema, the strategy registry, or
-  results directory naming** (in `demo.py`, `dalmax/cli.py`,
+  results directory naming** (in `demo.py` (historical), `dalmax/cli.py`,
   `dalmax/query_strategies/registry.py`, any `dalmax/query_strategies/*`) →
   update `experiments/experimental-protocol.md` and, if a new strategy was
   added, `use-cases/add-new-strategy.md` in the **same task**.

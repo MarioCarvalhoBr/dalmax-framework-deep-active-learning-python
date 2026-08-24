@@ -1,13 +1,13 @@
 # Experimental protocol
 
 This describes the active-learning experiment protocol as it exists in code
-today (`demo.py` → `dalmax/cli.py`, `dalmax/data/datasets.py`, `dalmax/data/handlers.py`
+today (`demo.py` (historical) → `dalmax/cli.py`, `dalmax/data/datasets.py`, `dalmax/data/handlers.py`
 — Phase 4 moved these from `utils/data.py`/`utils/dataset.py`, both now deleted) and
 as actually invoked by the run scripts. Where the scripts diverge from
-`demo.py`/`dalmax.cli` defaults, both are recorded explicitly — do not
+`demo.py` (historical)/`dalmax.cli` defaults, both are recorded explicitly — do not
 assume the CLI default is what was actually run.
 
-**Phase 2 update (2026-08-23)**: `demo.py` is now a thin shim routing to
+**Phase 2 update (2026-08-23)**: `demo.py` (historical) is now a thin shim routing to
 `dalmax.cli.main()`; every CLI flag, results-directory path, and
 `results.json` field described below is **unchanged** except two additive
 CLI flags and two additive `results.json` keys, called out explicitly in
@@ -27,7 +27,7 @@ every existing params JSON keep working unchanged. See
   per-class counts and imbalance notes.
 - **`CIFAR10`**: `DATA/DATA_CIFAR10/{train,test}/`, secondary benchmark, 10
   classes, images resized to 32×32.
-- Dataset selection is `--dataset_name {CIFAR10,DANINHAS}` in `demo.py`;
+- Dataset selection is `--dataset_name {CIFAR10,DANINHAS}` in `demo.py` (historical);
   params are read per-dataset from the same params JSON (`params[dataset_name]`).
 
 ## Split
@@ -37,14 +37,14 @@ each dataset root), not by a random split at run time — `X_train`/`Y_train`
 and `X_test`/`Y_test` are loaded independently in `dalmax/data/loaders.py`
 (was `utils/data.py`, moved in Phase 4) (`get_DANINHAS`, `get_CIFAR10`). The active-learning pool is the entire
 `train/` set; `initialize_labels` randomly selects `n_init_labeled` of it as
-the seed labeled set (seeded by `np.random.seed(args.seed)` in `demo.py`).
+the seed labeled set (seeded by `np.random.seed(args.seed)` in `demo.py` (historical)).
 The held-out `test/` set is used for every round's evaluation
 (`dataset.get_test_data()` → `strategy.predict()` → metrics).
 
 ## Seeds
 
 `--seed {1,2,3}` — used both for `np.random.seed`/`torch.manual_seed` in
-`demo.py` and as the AL initial-pool shuffle seed in
+`demo.py` (historical) and as the AL initial-pool shuffle seed in
 `Data.initialize_labels`. All batch runs (`scripts/benchmark/run_pipe_gpu_0.sh`,
 `scripts/benchmark/run_pipe_gpu_1.sh`) sweep `SEEDS=(1 2 3)`. `scripts/benchmark/run_pipline.sh` takes
 seed as a positional CLI arg (`$2`) and is invoked per seed externally (its
@@ -52,7 +52,7 @@ inner loop does not sweep seeds).
 
 ## n_init_labeled
 
-`demo.py --n_init_labeled` default is **100**. **Neither
+`demo.py (historical) --n_init_labeled` default is **100**. **Neither
 `scripts/benchmark/run_pipe_gpu_0.sh`/`scripts/benchmark/run_pipe_gpu_1.sh` nor `scripts/benchmark/run_pipline.sh` pass
 `--n_init_labeled` explicitly** — both rely on the CLI default of 100. This
 is confirmed by the results directory names actually on disk
@@ -63,7 +63,7 @@ script changes this, update here.
 
 `--n_query {10, 50, 100}` in `scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh`
 (`QUERIES=(10 50 100)`) and in `scripts/benchmark/run_pipline.sh` (looped separately
-as 10, then 50, then 100). `demo.py` CLI default is 10 (used only if not
+as 10, then 50, then 100). `demo.py` (historical) CLI default is 10 (used only if not
 overridden).
 
 ## n_round
@@ -71,7 +71,7 @@ overridden).
 - `scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh`: **`--n_round 8`** (hardcoded in
   the script, not swept).
 - `scripts/benchmark/run_pipline.sh`: **`N_ROUND=10`** (hardcoded).
-- `demo.py` CLI default: 10.
+- `demo.py` (historical) CLI default: 10.
 
 These two run scripts are NOT protocol-equivalent — `scripts/benchmark/run_pipe_gpu_*.sh` (RNHAL /
 `SSRAEKmeansHCSampling`, 8 rounds, `results/dalmax{1,2}/`) and
@@ -82,7 +82,7 @@ must first confirm `n_round` matches, or normalize on a common round index.
 
 ## n_epoch
 
-`n_epoch` comes from the params JSON, **not** a `demo.py` CLI flag.
+`n_epoch` comes from the params JSON, **not** a `demo.py` (historical) CLI flag.
 `files_config/benchmark/params_df_gpu_0.json` / `files_config/benchmark/params_df_gpu_1.json`: `DANINHAS.n_epoch = 10`,
 `CIFAR10.n_epoch = 20`. `params_dnf.json` (used by `scripts/benchmark/run_pipline.sh`):
 TBD, file absent from repo.
@@ -99,7 +99,7 @@ size 256, `num_workers=4` for DANINHAS (64 / 1000, `num_workers=1` for
 CIFAR10). `n_classes=5` for DANINHAS, `10` for CIFAR10.
 
 **Phase 2 update**: the old `torch.backends.cudnn.enabled = False` global
-disable (previously set in `demo.py`) is gone — `dalmax/seeding.py::seed_everything`
+disable (previously set in `demo.py` (historical)) is gone — `dalmax/seeding.py::seed_everything`
 sets `torch.backends.cudnn.deterministic = True` / `benchmark = False`
 instead, preserving cuDNN's faster kernels while staying deterministic. See
 `research-rules/reproducibility.md` and `known-issues.md` KI-8 for the
@@ -109,7 +109,7 @@ to historical GPU runs at the same seed (CPU runs are unaffected).
 
 ## Query strategies exercised
 
-Full `--strategy_name` choice list (from `demo.py` → `dalmax/cli.py`, unchanged plus one addition):
+Full `--strategy_name` choice list (from `demo.py` (historical) → `dalmax/cli.py`, unchanged plus one addition):
 `RandomSampling`, `LeastConfidence`, `MarginSampling`, `EntropySampling`,
 `LeastConfidenceDropout`, `MarginSamplingDropout`, `EntropySamplingDropout`,
 `KMeansSampling`, `KCenterGreedy`, `BALDDropout`, `AdversarialBIM`,
@@ -150,7 +150,7 @@ ablations.
   (all except `AdversarialBIM`/`AdversarialDeepFool`, which are commented
   out, and except `SSRAEKmeansSampling`/`VCTexKmeansSampling`/
   `SSRAEKmeansHCSampling`/`VCTexKmeansHCSampling`) — but note this script
-  only **echoes** the `poetry run python demo.py ...` command lines rather than
+  only **echoes** the `poetry run python demo.py (historical) ...` command lines rather than
   executing them directly (no `eval`/backticks); it is a command generator
   meant to be piped to a shell or copy-pasted. TBD confirm this is
   intentional and how it is actually invoked on the lab machine.
@@ -162,7 +162,7 @@ ablations.
 ## Metrics
 
 See `research-rules/metrics.md` for exact definitions. Summary: per round,
-`demo.py`/`dalmax.experiment.runner.ExperimentRunner` records `all_acc`
+`demo.py` (historical)/`dalmax.experiment.runner.ExperimentRunner` records `all_acc`
 (custom tensor-equality accuracy, `Data.cal_test_acc`), plus
 `accuracy, precision, recall, f1_score` — **`average='weighted'`** for
 precision/recall/F1 (sklearn), not macro, exactly as before. `acc_skl`
@@ -174,12 +174,12 @@ unchanged and still present) also computes macro-averaged
 precision/recall/F1 in the same call; `results.json` now additionally
 contains `all_precision_macro`, `all_recall_macro`, `all_f1_macro` (one
 value per round, same indexing as the legacy `all_*` lists) for **every**
-run through `dalmax.cli`/`demo.py` from this commit onward. See
+run through `dalmax.cli`/`demo.py` (historical) from this commit onward. See
 `research-rules/metrics.md` for which averaging to report where, and the
 "Metrics discrepancy" note in `ablation-study.md` for pre-Phase-2
 `results.json` files (which do not have these keys).
 
-## Results directory naming convention (from `demo.py`, unchanged by Phase 2)
+## Results directory naming convention (from `demo.py` (historical), unchanged by Phase 2)
 
 ```
 {dir_results}/{dataset_folder}/SEED_{seed}/NQ_{n_query}_NIL_{n_init_labeled}_NR_{n_round}_NE_{n_epoch}/{strategy_name}/
@@ -189,7 +189,7 @@ where `dataset_folder = os.path.basename(params[dataset_name]['data_dir'].rstrip
 — i.e. `daninhas_full` or `DATA_CIFAR10`, taken from the params JSON's
 `data_dir`, not from `--dataset_name` directly
 (`dalmax/experiment/runner.py::results_dir_for`, byte-identical logic to the
-pre-Phase-2 `demo.py`). Each leaf directory contains:
+pre-Phase-2 `demo.py` (historical)). Each leaf directory contains:
 `results.json` (config + per-round metric lists, now including the macro
 keys above), `predictions.csv` (per-test-image prediction record),
 `confusion_matrix.pdf`, `accuracy.pdf`/`precision.pdf`/`recall.pdf`/

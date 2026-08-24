@@ -19,7 +19,7 @@ def get_strategy(name):
         raise NotImplementedError
 ```
 Every new strategy required editing this function, `core/query_strategies/__init__.py`, and
-`demo.py`'s `choices=[...]` list by hand, with nothing enforcing they stay consistent. (Both
+`demo.py` (historical)'s `choices=[...]` list by hand, with nothing enforcing they stay consistent. (Both
 `utils/orchestrator.py` and the old `core/query_strategies/__init__.py` no longer exist — see the
 `dalmax/query_strategies/__init__.py`/`registry.py` implementation below, landed for real, not just
 sketched.)
@@ -40,13 +40,13 @@ def get_strategy(name: str) -> StrategyFactory:
     except KeyError:
         raise KeyError(f"Unknown strategy '{name}'. Available: {sorted(STRATEGY_REGISTRY)}") from None
 ```
-A new strategy self-registers with `@register("MyStrategy")` at definition time; `demo.py`'s CLI
+A new strategy self-registers with `@register("MyStrategy")` at definition time; `demo.py` (historical)'s CLI
 `choices` can be generated from `STRATEGY_REGISTRY.keys()` instead of hand-duplicated, which is what
 `test_registry.py` (see `testing-strategy.md`) enforces.
 
 ## 2. Explicit dependency injection, not `setattr` magic
 
-**Before** (`demo.py:76-79`, confirmed as-is):
+**Before** (`demo.py (historical):76-79`, confirmed as-is):
 ```python
 strategy = get_strategy(args.strategy_name)(dataset, net, logger)
 setattr(strategy, "params", params)  # strategy.params only exists after this line
@@ -72,7 +72,7 @@ deleted in Phase 4):
 config_kmh = self.params['DANINHAS']['config_kmh']
 ```
 This raised `KeyError` for any dataset other than DANINHAS, including `CIFAR10`, which is a
-documented CLI choice in `demo.py`.
+documented CLI choice in `demo.py` (historical).
 
 **After:**
 ```python

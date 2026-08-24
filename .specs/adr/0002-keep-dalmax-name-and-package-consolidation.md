@@ -62,7 +62,7 @@ Four legacy files became **dead code** rather than being deleted (`utils/orchest
 `core/query_strategies/{ssrae_kmeans_sampling,vctex_kmeans_sampling,ssl_ssrae_sampling}.py`) — kept
 in place per this ADR's original "defer the physical move to Phase 4" decision, scheduled for
 deletion there (see `.specs/architecture/refactor-plan.md` Phase 4 and
-`.specs/architecture/current-state.md` §0 for exactly why each is unreachable from `demo.py`/
+`.specs/architecture/current-state.md` §0 for exactly why each is unreachable from `demo.py` (historical)/
 `dalmax.cli` today). This amendment does not change the original Decision (DalMax keeps its name;
 full consolidation is still Phase 4) — it only records which of the two staging options was taken.
 
@@ -104,12 +104,12 @@ query strategies moved, `38c4b0e` models/data/tools/reporting moved, `d58e116` d
   `utils/data.py`), `plot_features_tsne_*` (legacy-only), `TRASH_TEXT.md`, `sampled_data.pdf`,
   `TODO.md`, and orphaned `results/*.pkl` files that were local scratch, not `results/` outputs a
   real experiment run produced.
-- `demo.py` remains at the repo root as a thin backward-compatible shim; it is no longer where the
+- `demo.py` (historical) remains at the repo root as a thin backward-compatible shim; it is no longer where the
   real logic lives (that's `dalmax/cli.py` and `dalmax/experiment/`).
 
 Verification performed before this amendment was written: `ls core utils` → both "No such file or
 directory"; `grep -rn "^import core\|^from core\|^import utils\|^from utils"` across `dalmax/`,
-`tests/`, `demo.py` → zero hits; all 17 CLI strategy names resolve via
+`tests/`, `demo.py` (historical) → zero hits; all 17 CLI strategy names resolve via
 `dalmax/query_strategies/registry.py`; golden-run fixtures bit-identical; 277 tests pass
 (`poetry run pytest -q -m "not gpu and not dataset and not slow"`).
 

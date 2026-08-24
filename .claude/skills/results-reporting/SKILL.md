@@ -6,7 +6,7 @@ description: How to use the dalmax/reporting/ scripts to go from raw results dir
 # Results reporting
 
 `dalmax/reporting/` contains the pipeline that turns raw per-run `results.json`
-files (written by `demo.py` under
+files (written by `trainer.py` under
 `results/<run>/<dataset>/SEED_<seed>/NQ_<n_query>_NIL_<n_init>_NR_<n_round>_NE_<n_epoch>/<strategy>/`)
 into aggregated tables and plots. Run the scripts in the order below; each
 script's own header comment (`# Example usage: ...`) is the authoritative

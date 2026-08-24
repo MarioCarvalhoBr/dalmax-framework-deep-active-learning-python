@@ -13,7 +13,7 @@ Steps:
    that instead of the last 5 commits.
 2. For each changed file, map it to the spec(s) it should have updated, using
    the table in `.claude/rules/spec-sync.md`:
-   - `demo.py`, `dalmax/cli.py`, `dalmax/query_strategies/registry.py`,
+   - `trainer.py`, `dalmax/cli.py`, `dalmax/query_strategies/registry.py`,
      `dalmax/query_strategies/__init__.py` →
      `.specs/use-cases/add-new-strategy.md`, `.specs/architecture/current-state.md`.
    - `files_config/benchmark/params_df_gpu_*.json`, results directory naming in `dalmax/experiment/runner.py` →

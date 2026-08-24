@@ -66,10 +66,10 @@ tests before a batch (this is part of what the `experiment-auditor` agent checks
    all-5-class 10%-stratified replica described above, for a more realistic pre-lab/pre-Colab
    end-to-end check. `files_config/params_micro.json` points DANINHAS at that micro-dataset with
    `n_epoch=1`, `n_classes=5`, `batch_size=16`.
-   `demo.py --strategy_name RandomSampling --n_init_labeled 10 --n_query 5 --n_round 1 --seed 1` and
+   `demo.py (historical) --strategy_name RandomSampling --n_init_labeled 10 --n_query 5 --n_round 1 --seed 1` and
    the same CLI with `--strategy_name SSRAEKmeansSampling` were each run twice in separate processes
    after the redefinition; the initial labeled indices, per-round query indices (both logged via two
-   `logger.warning` lines in `demo.py`, the only way to observe them), and every `results.json`
+   `logger.warning` lines in `demo.py` (historical), the only way to observe them), and every `results.json`
    metric were **bit-identical across both runs for both strategies** — no CPU-training
    nondeterminism was found in this configuration. Recorded as
    `tests/golden/random_sampling_micro_seed1.json` and `tests/golden/ssrae_kmeans_micro_seed1.json`
@@ -107,7 +107,7 @@ tests before a batch (this is part of what the `experiment-auditor` agent checks
    validation error instead of a bare `AssertionError` deep in `query()`).
 8. **Registry completeness**: `STRATEGY_REGISTRY`, `DATASET_REGISTRY`, `MODEL_REGISTRY`,
    `SELECTION_REGISTRY` each have at least the entries the current CLI/`config_kmh` schema requires;
-   a test iterates `demo.py`'s (or its replacement `cli.py`'s) declared choices and asserts each
+   a test iterates `demo.py` (historical)'s (or its replacement `cli.py`'s) declared choices and asserts each
    resolves.
 9. **Seed determinism**: `FlatKMeansClosest` (or its current equivalent) run twice with the same
    seed on the same tiny embedding matrix produces identical selected ids; run with two different
@@ -130,7 +130,7 @@ tests before a batch (this is part of what the `experiment-auditor` agent checks
   pre-flight checklist, not by `pytest`.
 - `make smoke` (see `.specs/architecture/refactor-plan.md` Phase 1 and the root `Makefile`) is a real
   end-to-end check as of Phase 1's closeout: it generates `DATA/daninhas_micro/` (or skips with a
-  message if `DATA/daninhas_full/` isn't present), runs `demo.py --strategy_name RandomSampling` on
+  message if `DATA/daninhas_full/` isn't present), runs `demo.py (historical) --strategy_name RandomSampling` on
   it (~30-35 CPU seconds since the 2026-08-23 micro-dataset redefinition to a 10%-stratified,
   all-5-class replica — see `.specs/adr/0004-micro-dataset-and-golden-run.md`'s amendment), then runs
   the fast test suite. This only covers `RandomSampling`

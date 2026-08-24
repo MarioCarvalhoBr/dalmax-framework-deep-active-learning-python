@@ -70,7 +70,7 @@ rounding/an off-by-one, not investigated further.)
   observed in `dalmax/data/datasets.py` (was `utils/data.py`),
   `dalmax/models/daninhas_resnet50.py` (was `core/daninhas_model.py`; not read in this
   batch — TBD confirm no `class_weight`/`WeightedRandomSampler` there), or
-  `demo.py`/`dalmax/cli.py`. The active-learning initial pool
+  `demo.py` (historical)/`dalmax/cli.py`. The active-learning initial pool
   (`Data.initialize_labels`) is a uniform random draw of `n_init_labeled`
   images from the **full, imbalanced** train pool
   (`np.random.shuffle(tmp_idxs); labeled_idxs[tmp_idxs[:n_init_labeled]] = True`)

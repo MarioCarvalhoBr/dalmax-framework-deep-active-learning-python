@@ -6,7 +6,7 @@
 laboratory for **Deep Active Learning applied to UAV weed recognition in
 precision agriculture** (UFMS, Brazil, advisor: Wesley Nunes Gonçalves). It is
 a Python research codebase, not a product: an entry-point script
-(`demo.py`) drives an active-learning loop (label a small seed set, train a
+(`trainer.py`, renamed from `demo.py` on 2026-08-23 — see ADR 0006; the historical name `demo.py` no longer exists) drives an active-learning loop (label a small seed set, train a
 classifier, query new samples, repeat) over a UAV weed-image dataset, and
 compares acquisition ("query") strategies by their resulting classification
 metrics.
@@ -108,7 +108,7 @@ distinct from "hierarchical" and matters for the ablation in
 ## Pointers
 
 - Method definition (LaTeX, source of truth for notation): `phd_files/Active_Learning_Mario/method_full.tex`
-- Entry point: `demo.py` (thin shim) → `dalmax/cli.py` → `dalmax/experiment/runner.py`
+- Entry point: `trainer.py` (historical name `demo.py`; thin shim) → `dalmax/cli.py` → `dalmax/experiment/runner.py`
 - Strategy registry: `dalmax/query_strategies/registry.py` (legacy `utils/orchestrator.py` was deleted in Phase 4)
 - Dataset loading / feature caching: `dalmax/data/datasets.py`, `dalmax/data/handlers.py`, `dalmax/data/loaders.py`
 - Experimental protocol: `.specs/experiments/experimental-protocol.md`

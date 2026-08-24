@@ -13,11 +13,11 @@ constructed. `dalmax/seeding.py::derive_seed(seed, tag)` derives a deterministic
 component that needs its own (e.g. `dalmax/selection/flat_kmeans_closest.py`'s `KMeans(random_state=...)`).
 Any **new** source of randomness (sampling, clustering, augmentation) must derive from `seed_everything`'s
 `np.random.Generator` or `derive_seed`, passed through explicitly — never read global state
-ambiently and never a literal. `demo.py` is now a 12-line shim; the two bullets below describe the
+ambiently and never a literal. `trainer.py` (historically `demo.py`) is now a 12-line shim; the two bullets below describe the
 pre-Phase-2 state for context, but the actual seeding code they refer to no longer exists at those
 locations.
 
-- `demo.py` used to seed `np.random.seed(args.seed)` and `torch.manual_seed(args.seed)`
+- The historical `demo.py` used to seed `np.random.seed(args.seed)` and `torch.manual_seed(args.seed)`
   from the `--seed` CLI argument (see `scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh`,
   which sweep `SEEDS=(1 2 3)`, still valid — the CLI flag and sweep are unchanged, only where the
   seeding happens moved to `dalmax/seeding.py`).
@@ -30,7 +30,7 @@ locations.
   "selection"))` — verified by the regenerated `tests/golden/ssrae_kmeans_micro_seed1.json` fixture.
   Any new strategy code must follow this pattern, not the legacy literal.
 - `torch.backends.cudnn.enabled = False` was used as a determinism
-  shortcut in `demo.py:59` (line no longer exists); it globally disabled cuDNN and cost performance on the
+  shortcut in the historical `demo.py:59` (line no longer exists); it globally disabled cuDNN and cost performance on the
   10 GB lab GPUs. **Now uses** `torch.backends.cudnn.deterministic = True` +
   `torch.backends.cudnn.benchmark = False` instead (`dalmax/seeding.py::seed_everything`).
   Deliberate consequence: post-refactor GPU runs are not bit-identical to historical GPU runs at the
@@ -51,7 +51,7 @@ locations.
 ## Embedding cache discipline
 
 **Phase 2 landed (2026-08-23)**: `dalmax/embeddings/cache.py::EmbeddingCache` is now the live cache
-for any run through `dalmax.cli`/`demo.py`, keyed on `(dataset, extractor, Q, variant, split,
+for any run through `dalmax.cli`/`trainer.py`, keyed on `(dataset, extractor, Q, variant, split,
 pool_hash)` — filename `results/cache/embeddings/{dataset}__{extractor}__Q{q}__{variant}__{split}__pool{pool_hash}.pkl`.
 This closes both gaps this section originally flagged: `embedding_variant` is now a key component
 (only `"full"` is ever cached; `"spatial"`/`"spectral"` are sliced from it on load via

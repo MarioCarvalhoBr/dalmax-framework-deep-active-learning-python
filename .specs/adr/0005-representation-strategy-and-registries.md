@@ -19,13 +19,13 @@ closest sibling had (the hardcoded `KMeans(random_state=3)`, KI-5; the hardcoded
 Separately, `utils/orchestrator.py` mapped `--strategy_name`/dataset/model name strings to classes
 via four `if/elif` chains (`get_handler`, `get_dataset`, `get_network_deep_learning`,
 `get_strategy`), each requiring hand-editing to add a new name, with no compile-time or import-time
-check that `utils/orchestrator.py`, `core/query_strategies/__init__.py`, and `demo.py`'s
+check that `utils/orchestrator.py`, `core/query_strategies/__init__.py`, and `demo.py` (historical)'s
 `choices=[...]` stayed in sync (KI-9).
 
 ADR 0003 already introduced the `EmbeddingProvider` abstraction (embedding source) and
 `.specs/architecture/target-architecture.md` §6 already specified a `SelectionStrategy` abstraction
 (clustering/picking logic) as two separate concerns. This ADR covers the third piece: how a
-`Strategy` (the interface `demo.py`/`dalmax.cli` actually calls `query()` on) is built by composing
+`Strategy` (the interface `demo.py` (historical)/`dalmax.cli` actually calls `query()` on) is built by composing
 one of each, and how every `--strategy_name` string — old and new — resolves to a constructed
 instance.
 
@@ -66,7 +66,7 @@ We will:
 4. Leave `utils/orchestrator.py` and the four superseded strategy files
    (`ssrae_kmeans_sampling.py`, `vctex_kmeans_sampling.py`, `ssl_ssrae_sampling.py`) in place,
    unmodified, per ADR 0002's Phase-2/Phase-4 staging — they become dead code (unreachable from
-   `demo.py`/`dalmax.cli`), not deleted, until Phase 4.
+   `demo.py` (historical)/`dalmax.cli`), not deleted, until Phase 4.
 
 ## Consequences
 

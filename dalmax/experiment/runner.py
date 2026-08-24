@@ -1,10 +1,11 @@
-"""`ExperimentRunner`: the round-loop half of `demo.py`'s former 289-line
-`main()` (see `.specs/architecture/target-architecture.md` §10 and
-`.claude/rules/code-quality.md` "single responsibility").
+"""`ExperimentRunner`: the round-loop half of the historical `demo.py`'s
+former 289-line `main()` (see `.specs/architecture/target-architecture.md`
+§10 and `.claude/rules/code-quality.md` "single responsibility"). The repo
+root shim is now `trainer.py` (renamed from the historical `demo.py` on 2026-08-23, ADR 0006).
 
-`ExperimentRunner(config, logger).run()` reproduces `demo.py`'s training
-loop **exactly in the same order of RNG consumption** as the pre-Phase-2
-`demo.py` (seed -> dataset -> net -> strategy -> initial labeling -> round
+`ExperimentRunner(config, logger).run()` reproduces the historical `demo.py`'s
+training loop **exactly in the same order of RNG consumption** as the
+pre-Phase-2, historical `demo.py` (seed -> dataset -> net -> strategy -> initial labeling -> round
 0 -> rounds loop), which is what keeps the Phase 1
 `tests/golden/random_sampling_micro_seed1.json` fixture bit-identical
 (`RandomSampling` never touches SSRAE/VCTex/embedding code, so nothing in
@@ -89,7 +90,7 @@ class ExperimentRunner:
 
         # Seed every global RNG source exactly once, before any
         # dataset/model/strategy object is constructed (`dalmax.seeding`
-        # module docstring) — this replaces demo.py's scattered
+        # module docstring) — this replaces the historical demo.py's scattered
         # `np.random.seed`/`torch.manual_seed`/`cudnn.enabled = False`.
         rng: np.random.Generator = seed_everything(config.seed)
 
@@ -165,7 +166,7 @@ class ExperimentRunner:
     @staticmethod
     def _record_round(result: RunResult, dataset, preds, *, round_idx: int) -> None:
         # `all_acc` uses the manual tensor-comparison accuracy (`cal_test_acc`),
-        # exactly as `demo.py` always has; `calc_metrics` (weighted + macro)
+        # exactly as the historical `demo.py` always has; `calc_metrics` (weighted + macro)
         # supplies every other metric, added in this refactor without
         # touching the pre-existing `calc_metrics_sklearn` method.
         acc = dataset.cal_test_acc(preds)

@@ -5,7 +5,7 @@
 # ("never run a full training/experiment locally").
 #
 # Runs all 11 files_config/ablations/micro/*.json configs (6.1 representation,
-# 6.2 hierarchy, 6.3 stage-contribution) through demo.py with a tiny budget
+# 6.2 hierarchy, 6.3 stage-contribution) through trainer.py (historical `demo.py`) with a tiny budget
 # (--n_init_labeled 10 --n_query 5 --n_round 1), one round, seed 1, --device
 # cpu, RepresentationStrategy. Fails on the first error (set -e) -- this is a
 # smoke test, not a batch job that should keep going after a broken config;
@@ -73,7 +73,7 @@ for entry in "${CONFIGS[@]}"; do
     echo "SMOKE: ${study}/${name} (${params_json})"
     echo "------------------------------------------------------------"
 
-    poetry run python demo.py \
+    poetry run python trainer.py \
         --params_json "$params_json" \
         --dataset_name DANINHAS \
         --strategy_name RepresentationStrategy \

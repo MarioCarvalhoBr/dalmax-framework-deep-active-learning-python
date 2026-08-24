@@ -1,8 +1,9 @@
 """The single place that touches global RNG state (`.claude/rules/reproducibility.md`).
 
 `seed_everything` replaces the scattered `np.random.seed(args.seed)` /
-`torch.manual_seed(args.seed)` calls in `demo.py` and the blanket
-`torch.backends.cudnn.enabled = False` determinism shortcut (`demo.py:59`)
+`torch.manual_seed(args.seed)` calls in the historical `demo.py` (renamed
+`trainer.py` 2026-08-23) and the blanket
+`torch.backends.cudnn.enabled = False` determinism shortcut (`demo.py:59`, historical)
 with the cheaper `deterministic=True` / `benchmark=False` pair recommended in
 `.specs/architecture/target-architecture.md` §7. It must be called exactly
 once, before any dataset/model/strategy object is constructed

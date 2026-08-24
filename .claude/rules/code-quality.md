@@ -10,7 +10,7 @@ not further from it.
 - **Single responsibility.** `demo.py` historically mixed CLI parsing, training loop,
   plotting, and persistence in ~290 lines. That was split into `dalmax/experiment/runner.py`
   (round loop) / `dalmax/experiment/reporter.py` (plotting/JSON/CSV) / a thin `dalmax/cli.py`
-  (argparse only) — `demo.py` is now a 12-line shim (`from dalmax.cli import main`). New code
+  (argparse only) — `trainer.py` (renamed from the historical `demo.py`) is now a 12-line shim (`from dalmax.cli import main`). New code
   must not add mixed-concern logic back into `dalmax/cli.py`.
 - **No duplicated strategy boilerplate.** Every `dalmax/query_strategies/*.py` file
   repeats the same `__init__(self, dataset, net, logger)` /
@@ -22,9 +22,9 @@ not further from it.
   `dalmax/models/registry.py::MODEL_REGISTRY`, `dalmax/query_strategies/registry.py::STRATEGY_REGISTRY`,
   `dalmax/embeddings/registry.py::EMBEDDING_REGISTRY`, `dalmax/selection/registry.py::SELECTION_REGISTRY`.
   Do not add a new `if/elif` branch to any of them — add a registry entry.
-- **Explicit dependency injection — no `setattr` magic.** The old `demo.py` did
+- **Explicit dependency injection — no `setattr` magic.** The historical `demo.py` did
   `setattr(strategy, "params", params)` after construction instead of passing
-  `params` into `Strategy.__init__` — that line no longer exists (`demo.py` is a shim).
+  `params` into `Strategy.__init__` — that line no longer exists (`trainer.py`, historically `demo.py`, is a shim).
   `dalmax/query_strategies/registry.py::build_strategy` constructs every strategy with
   everything it needs at `__init__` time. Do not repeat the `setattr` pattern in new code;
   pass dependencies through constructors.

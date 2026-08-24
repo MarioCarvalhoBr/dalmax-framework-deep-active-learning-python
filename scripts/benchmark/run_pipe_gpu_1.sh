@@ -30,7 +30,7 @@ for n_query in "${QUERIES[@]}"; do
     echo "------------------------------------------------------------"
 
     echo "Iniciando $STRATEGY_1 em GPU $GPU_NUMBER..."
-    CUDA_VISIBLE_DEVICES=$GPU_NUMBER poetry run python demo.py \
+    CUDA_VISIBLE_DEVICES=$GPU_NUMBER poetry run python trainer.py \
       --params_json $PARAMS_FILE \
       --dataset_name=$DATASET_NAME \
       --strategy_name $STRATEGY_1 \
@@ -40,7 +40,7 @@ for n_query in "${QUERIES[@]}"; do
       --dir_results=results/dalmax2/
 
 
-    echo "Comando executado: CUDA_VISIBLE_DEVICES=$GPU_NUMBER poetry run python demo.py --n_round 8 --params_json $PARAMS_FILE --dataset_name=$DATASET_NAME --strategy_name $STRATEGY_1 --n_query $n_query --seed $seed --dir_results=results/dalmax2/"
+    echo "Comando executado: CUDA_VISIBLE_DEVICES=$GPU_NUMBER poetry run python trainer.py --n_round 8 --params_json $PARAMS_FILE --dataset_name=$DATASET_NAME --strategy_name $STRATEGY_1 --n_query $n_query --seed $seed --dir_results=results/dalmax2/"
 
     echo "Par (n_query=$n_query, seed=$seed) finalizado."
 

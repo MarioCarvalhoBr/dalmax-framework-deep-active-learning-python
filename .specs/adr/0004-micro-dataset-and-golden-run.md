@@ -39,7 +39,7 @@ We will:
    golden run, not the full `EmbeddingProvider`/`EmbeddingCache` abstraction from ADR 0003 (still
    Phase 2). The pre-existing full-dataset pkl files at the old fixed paths are left on disk,
    untouched and unread by the new code path.
-3. Add two `logger.warning` lines in `demo.py` (initial labeled indices after
+3. Add two `logger.warning` lines in `demo.py` (historical) (initial labeled indices after
    `dataset.initialize_labels`, queried indices after each `strategy.query` call) — the only way to
    observe these indices for a golden-run fixture, since nothing else in the codebase exposes them.
 4. Capture `tests/golden/random_sampling_micro_seed1.json` and
@@ -49,7 +49,7 @@ We will:
    `tests/test_golden_run.py` (`dataset`+`slow`-marked, subprocess-driven, writes to `tmp_path` not
    `results/`).
 5. Make `Makefile`'s `smoke` target a real end-to-end check: generate the micro dataset, run
-   `demo.py --strategy_name RandomSampling` on it into `results/smoke/`, then run the fast test
+   `demo.py (historical) --strategy_name RandomSampling` on it into `results/smoke/`, then run the fast test
    suite — replacing the previous documented-stub behavior.
 
 ## Consequences
@@ -64,7 +64,7 @@ We will:
 - Positive: the cache-path fix is additive and backward-compatible — it doesn't change behavior for
   any existing run that never touches `Data.dataset_folder`-based paths differently than before,
   since old cache files are neither read nor deleted.
-- Negative: two `logger.warning` calls were added to `demo.py` at the same (arguably wrong, per
+- Negative: two `logger.warning` calls were added to `demo.py` (historical) at the same (arguably wrong, per
   KI-11) logging level as the rest of the file, to stay minimal and consistent with existing style
   rather than fixing logging levels as an unrelated drive-by change; KI-11 remains open.
 - Negative: the SSRAE golden fixture's queried indices will legitimately change (and must be
@@ -110,11 +110,11 @@ behavior. See `.specs/quality/known-issues.md` KI-3 and the fixtures' own `notes
 
 ## Amendment (2026-08-23, Phase 4)
 
-Every `utils/data.py`/`demo.py` reference above (`get_DANINHAS`, `cache_file_path`,
+Every `utils/data.py`/`demo.py` (historical) reference above (`get_DANINHAS`, `cache_file_path`,
 `create_feature_maps_ssrae`/`_vctex`, the `logger.warning` lines) describes the codebase as it
 existed at the time this ADR was written. Phase 4's package consolidation later deleted
 `utils/data.py` outright (its live logic had already moved to `dalmax/data/`/`dalmax/embeddings/` in
-Phase 2/3, so nothing from the file itself needed to carry forward) and reduced `demo.py` to a
+Phase 2/3, so nothing from the file itself needed to carry forward) and reduced `demo.py` (historical) to a
 12-line shim; see ADR 0002's final amendment. This does not change this ADR's Decision or the
 golden-run fixtures/tooling it describes (`scripts/make_micro_dataset.py`,
 `tests/golden/*.json`, `tests/test_golden_run.py`), which are unaffected by the later move and still
@@ -177,8 +177,8 @@ regenerating, since the pool identity (and therefore `pool_hash`) changed.
 **Golden fixtures regenerated**: `tests/golden/random_sampling_micro_seed1.json` and
 `tests/golden/ssrae_kmeans_micro_seed1.json` were re-captured against the redefined dataset, same
 recorded CLIs (`RandomSampling`, `SSRAEKmeansSampling`), verified deterministic across 2 separate
-processes each (both at the `demo.py` subprocess level via `tests/test_golden_run.py`, run twice
-back-to-back, and independently via direct `demo.py` invocations before the fixtures were written).
+processes each (both at the `demo.py` (historical) subprocess level via `tests/test_golden_run.py`, run twice
+back-to-back, and independently via direct `demo.py` (historical) invocations before the fixtures were written).
 The prior (2-class) fixture values are kept in each file's `previous_micro_2class_values` field for
 the historical record, not deleted — see those fields' own notes for exactly what changed and why
 (the `RandomSampling` fixture's indices/metrics changed because the pool grew from 40 to 796
@@ -188,7 +188,7 @@ to `FlatKMeansClosest`'s seed derivation). SSRAE feature extraction over the new
 still completes in ~10-15 seconds (~12 ms/image, consistent with the pre-redefinition per-image
 rate), so the CPU smoke-test budget is unaffected.
 
-**`make smoke` timing**: full target (`scripts/make_micro_dataset.py` + one `demo.py
+**`make smoke` timing**: full target (`scripts/make_micro_dataset.py` + one `demo.py (historical)
 --strategy_name RandomSampling` run + the fast test suite) measured at ~35 seconds wall time on the
 local CPU-only dev notebook after this redefinition (up from the ~10-15 seconds documented for the
 old 2-class dataset, since ResNet50 forward/backward now runs over 806 training images instead of

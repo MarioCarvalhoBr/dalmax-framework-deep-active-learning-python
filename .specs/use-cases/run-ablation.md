@@ -22,7 +22,7 @@ running these two scripts on the lab machine (never locally — no GPU here, per
    under two minutes on CPU. Always green this before touching the lab machine — it exercises the
    exact same `RepresentationStrategy` code path (embedding provider, selection strategy, hierarchy
    depth) each full-scale config uses, just at micro scale.
-2. **Metrics — already correct.** Every run through `dalmax.cli`/`demo.py` writes both weighted and
+2. **Metrics — already correct.** Every run through `dalmax.cli`/`demo.py` (historical) writes both weighted and
    macro F1 into `results.json` (`all_f1_score`/`all_f1_macro`) — see `research-rules/metrics.md`.
    The one remaining offline step: **pre-Phase-2 reference runs** (`results/dalmax{1,2}/`, an
    alternative source for §6.3's "RNHAL (full)" row if `stage_full.json`'s own re-run is not used)

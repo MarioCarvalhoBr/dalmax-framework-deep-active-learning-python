@@ -27,7 +27,8 @@ test:
 test-all:
 	poetry run pytest -q
 
-# `smoke` is a true end-to-end run of demo.py on a tiny CPU 2-class subset,
+# `smoke` is a true end-to-end run of trainer.py (historical name `demo.py`,
+# renamed 2026-08-23) on a tiny CPU 2-class subset,
 # landed in refactor Phase 1 (see .specs/architecture/refactor-plan.md and
 # .specs/quality/testing-strategy.md):
 #   1. scripts/make_micro_dataset.py deterministically samples 25 train + 10
@@ -35,7 +36,7 @@ test-all:
 #      DATA/daninhas_micro/, without ever writing into daninhas_full/ itself.
 #      If daninhas_full/ isn't present (e.g. a fresh clone with no dataset
 #      copied in), it prints a message and exits 0 instead of failing.
-#   2. demo.py runs against files_config/params_micro.json (n_epoch=1,
+#   2. trainer.py runs against files_config/params_micro.json (n_epoch=1,
 #      n_classes=2, batch_size=16) with RandomSampling, into results/smoke/
 #      (gitignored, never committed) — a few seconds on CPU, no GPU needed.
 #   3. The fast test suite runs on top, including tests/test_cache_paths.py.
@@ -46,14 +47,14 @@ test-all:
 smoke:
 	poetry run python scripts/make_micro_dataset.py
 	@if [ -d DATA/daninhas_micro/train ]; then \
-		poetry run python demo.py \
+		poetry run python trainer.py \
 			--params_json files_config/params_micro.json \
 			--dataset_name DANINHAS \
 			--strategy_name RandomSampling \
 			--n_init_labeled 10 --n_query 5 --n_round 1 --seed 1 \
 			--dir_results results/smoke/; \
 	else \
-		echo "NOTE: DATA/daninhas_full not present, skipping the demo.py smoke run."; \
+		echo "NOTE: DATA/daninhas_full not present, skipping the trainer.py smoke run."; \
 	fi
 	poetry run pytest -q -m "not gpu and not dataset and not slow"
 

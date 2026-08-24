@@ -5,7 +5,7 @@ Motivation
 ----------
 `.specs/infrastructure/execution-environments.md` forbids any real training run
 on the local (no-GPU) dev notebook. `make smoke` still needs a true end-to-end
-`demo.py` run to catch integration breakage that unit tests miss (see
+`trainer.py` (historical `demo.py`) run to catch integration breakage that unit tests miss (see
 `.specs/architecture/refactor-plan.md` Phase 1). This script builds a
 10%-stratified subset of the real dataset -- all 5 classes, both splits -- that
 a CPU can train on in a few seconds per epoch, giving a realistic pre-lab

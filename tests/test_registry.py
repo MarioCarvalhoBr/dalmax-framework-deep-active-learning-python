@@ -1,13 +1,15 @@
 """`dalmax.cli`'s `--strategy_name` `choices=[...]` must exactly match
 `dalmax.query_strategies.registry.STRATEGY_REGISTRY`'s keys.
 
-`dalmax.cli` (formerly `demo.py`, see `.specs/architecture/refactor-plan.md`
-Phase 2) is the single source of truth for which query strategies the CLI
-accepts. We parse its `--strategy_name` `choices=[...]` out of the source via
-`ast` (never importing `dalmax.cli`, since importing it has side effects: it
-eagerly calls `dalmax.logging_utils.get_logger()`, which creates a log file
-handler and a `results/logs/` directory as an import-time side effect — same
-reasoning that previously applied to `demo.py` before it became this thin
+`dalmax.cli` (historically `demo.py` itself, before Phase 2's split; the repo
+root shim is now `trainer.py`, renamed from the historical `demo.py` 2026-08-23 — see
+`.specs/architecture/refactor-plan.md` Phase 2 and ADR 0006) is the single
+source of truth for which query strategies the CLI accepts. We parse its
+`--strategy_name` `choices=[...]` out of the source via `ast` (never
+importing `dalmax.cli`, since importing it has side effects: it eagerly calls
+`dalmax.logging_utils.get_logger()`, which creates a log file handler and a
+`results/logs/` directory as an import-time side effect — same reasoning that
+previously applied to the historical `demo.py` before it became this thin
 shim).
 
 Historically this file also tested the legacy `utils.orchestrator.get_strategy`

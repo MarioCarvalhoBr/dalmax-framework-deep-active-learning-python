@@ -1,7 +1,7 @@
 """Typed configuration dataclasses for DalMax experiments.
 
 These dataclasses replace raw ``params[dataset_name]`` dict indexing
-(``demo.py``, ``core/query_strategies/ssl_ssrae_sampling.py``) with a
+(the historical ``demo.py``, ``core/query_strategies/ssl_ssrae_sampling.py``) with a
 validated, typed structure. See ``.specs/architecture/target-architecture.md``
 §2 and ``dalmax.config.loader`` for how instances are built from the existing
 params JSON files.
