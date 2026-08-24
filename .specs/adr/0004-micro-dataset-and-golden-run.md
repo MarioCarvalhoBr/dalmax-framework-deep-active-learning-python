@@ -119,3 +119,90 @@ Phase 2/3, so nothing from the file itself needed to carry forward) and reduced 
 golden-run fixtures/tooling it describes (`scripts/make_micro_dataset.py`,
 `tests/golden/*.json`, `tests/test_golden_run.py`), which are unaffected by the later move and still
 work exactly as decided here.
+
+## Amendment (2026-08-23, micro-dataset redefinition — `chore/micro-10pct`)
+
+**Purpose**: per user request, `DATA/daninhas_micro/` is redefined so that the local, no-GPU
+end-to-end check (`make smoke`, `make smoke-ablations`, `tests/test_golden_run.py`) is a *realistic
+pre-lab/pre-Colab validation* — exercising all 5 real classes with their real imbalance shape —
+rather than a 2-class toy case that could pass while a 5-class-specific bug (e.g. in
+`n_classes`-sized model heads, confusion-matrix plotting, or per-class metric aggregation) slipped
+through to the lab machine undetected.
+
+**What changed**: `scripts/make_micro_dataset.py` no longer hardcodes 2 classes
+(`DATASET_BRACHIARIA`, `DATASET_GRAMINEA`) and fixed per-class counts (25 train / 10 test). It now
+iterates **every** class folder in `DATA/daninhas_full/train/` and `.../test/` (all 5:
+`GRAMINEA`, `MAMONA`, `BRACHIARIA`, `COLONIAO`, `OUTRAS_FOLHAS_LARGAS`) and selects
+`max(1, floor(0.10 * n_files_in_class))` files each — a genuine 10%-stratified replica of
+`DATA/daninhas_full/`, computed from the real on-disk file counts (not `arquivos.txt`, which the
+script never reads). The same deterministic mechanism from the earlier amendment above (sorted
+filenames, `hashlib.sha256(f"{split}:{class_name}")`-derived per-`(split, class)` seed, idempotent,
+read-only w.r.t. `daninhas_full/`) is unchanged. Resulting sizes, measured against the real
+`DATA/daninhas_full/` folders on this machine (also matching `DATA/daninhas_full/arquivos.txt`'s
+counts exactly):
+
+| Class | Train (10%) | Test (10%) |
+|---|---|---|
+| GRAMINEA | 119 | 97 |
+| MAMONA | 337 | 45 |
+| BRACHIARIA | 77 | 33 |
+| COLONIAO | 103 | 19 |
+| OUTRAS_FOLHAS_LARGAS | 170 | 15 |
+| **Total** | **806** | **209** |
+
+The script now also writes/refreshes `DATA/daninhas_micro/arquivos.txt` on every run, in exactly the
+same format as `DATA/daninhas_full/arquivos.txt` (same class order, `Total`/`Average` lines).
+
+**Config updates**: `files_config/params_micro.json`'s `DANINHAS.n_classes` changed `2` → `5`;
+`config_kmh` rescaled to `n_clusters=[40, 10]`, `n_levels=2`, `sample_sizes=[2, 2]` for the new
+~796-image unlabeled pool (806 train - 10 initial labeled) — this block is schema-completeness-only,
+not exercised by any smoke-tested strategy (see the file's own `_comment`). All 11
+`files_config/ablations/micro/*.json` also changed `n_classes` `2` → `5` and had their hierarchies
+rescaled by dividing each full-scale `n_clusters` entry by 10 (rounding, floor 2), since the new
+micro pool is almost exactly 1/10th of the full-scale ablation pool — see
+`files_config/ablations/README.md`'s `micro/` section for the full derivation and the empirical
+re-verification (all 11 configs re-run end-to-end against the real regenerated dataset,
+`bash scripts/ablations/smoke_ablations.sh`, 11/11 passing, no vendored equal-cluster-size bug hit,
+~4m37s total wall time on the local CPU-only dev notebook).
+
+**Determinism re-verified**: `DATA/daninhas_micro/` was deleted and regenerated; determinism was
+re-verified by regenerating it in 2 separate processes (different `PYTHONHASHSEED` values, one via
+`poetry run python scripts/make_micro_dataset.py`, one via `PYTHONHASHSEED=42 poetry run python
+scripts/make_micro_dataset.py`) and diffing `find DATA/daninhas_micro -type f | sort | sha256sum`
+(identical digest both times, including the regenerated `arquivos.txt`, which is itself
+byte-identical across the two runs). Stale caches for the old dataset definition
+(`results/cache/*daninhas_micro*`, `results/cache/embeddings/*daninhas_micro*`) were deleted before
+regenerating, since the pool identity (and therefore `pool_hash`) changed.
+
+**Golden fixtures regenerated**: `tests/golden/random_sampling_micro_seed1.json` and
+`tests/golden/ssrae_kmeans_micro_seed1.json` were re-captured against the redefined dataset, same
+recorded CLIs (`RandomSampling`, `SSRAEKmeansSampling`), verified deterministic across 2 separate
+processes each (both at the `demo.py` subprocess level via `tests/test_golden_run.py`, run twice
+back-to-back, and independently via direct `demo.py` invocations before the fixtures were written).
+The prior (2-class) fixture values are kept in each file's `previous_micro_2class_values` field for
+the historical record, not deleted — see those fields' own notes for exactly what changed and why
+(the `RandomSampling` fixture's indices/metrics changed because the pool grew from 40 to 796
+unlabeled images across a different class count; `SSRAEKmeansSampling`'s queried ids changed because
+the underlying SSRAE embeddings/cluster assignments changed with the pool, not because of any change
+to `FlatKMeansClosest`'s seed derivation). SSRAE feature extraction over the new ~796-image pool
+still completes in ~10-15 seconds (~12 ms/image, consistent with the pre-redefinition per-image
+rate), so the CPU smoke-test budget is unaffected.
+
+**`make smoke` timing**: full target (`scripts/make_micro_dataset.py` + one `demo.py
+--strategy_name RandomSampling` run + the fast test suite) measured at ~35 seconds wall time on the
+local CPU-only dev notebook after this redefinition (up from the ~10-15 seconds documented for the
+old 2-class dataset, since ResNet50 forward/backward now runs over 806 training images instead of
+50) — still comfortably fast enough for routine local use before a lab/Colab handoff.
+
+**Consequences**:
+- Positive: `make smoke` / `make smoke-ablations` / the golden-run regression now catch integration
+  bugs specific to the real 5-class shape (imbalanced per-class counts, a 5-way classification head,
+  5-class confusion matrices/macro-F1 aggregation) that a 2-class toy case could not — directly
+  serving the "realistic pre-lab check" purpose this amendment was made for.
+- Neutral: `make smoke`'s wall time roughly doubled (~15s → ~35s) and
+  `make smoke-ablations`'s roughly quadrupled relative to the old 2-class hierarchies' runtime, but
+  both remain well within their respective "few seconds"/"~5 minutes" budgets.
+- Negative (expected, not a regression): every golden-run index/metric value changed, since the pool
+  of images and its class composition changed entirely — this is exactly what
+  `previous_micro_2class_values` documents to avoid the change being mistaken for a determinism
+  regression by a future reader.

@@ -472,17 +472,24 @@ Unit-tested against a synthetic tree in `tests/test_ablation_report.py`; also ru
   refactor-plan Phase 3 task's explicit instruction to mirror that file) — a deliberate deviation
   from this document's snippets, not an oversight; `256` is the batch size every other DANINHAS run
   in this repo uses.
-- **`hier_L2b.json`'s micro mirror**: the naive halving of `hier_L2a`'s micro `[8,4]` — `[4,2]` —
-  triggers a pre-existing vendored `dtype=object` bug (`dalmax/tools/SSL/src/utils.py:28`, was
-  `core/tools/SSL/src/utils.py:28` before Phase 4's move, documented
-  in `dalmax/selection/hierarchical_kmeans.py`) when the real `DATA/daninhas_micro` embedding
-  happens to split evenly at `--seed 1`; `[5,2]` was substituted after empirically probing several
-  candidates against the actual derived selection RNG and embeddings (see
-  `files_config/ablations/README.md` for the full account). Full-scale `hier_L2b.json` is unaffected
-  (unchanged `[100,50]`) — an exact-even split is not a practical risk at the ~10k-image full pool.
-- **`hier_L4.json`'s micro mirror**: used `[12,6,3,2]` rather than the naive `[8,4,2,1]` (bottoming
-  out at a cluster of size 1), since the vendored pipeline's behavior at `n_clusters=1` is untested;
-  this was verified empirically to run cleanly at `--seed 1` (see `files_config/ablations/README.md`).
+- **`hier_L2b.json`'s micro mirror**: on the original 2-class/70-image `DATA/daninhas_micro`, the
+  naive halving of `hier_L2a`'s micro `[8,4]` — `[4,2]` — triggered a pre-existing vendored
+  `dtype=object` bug (`dalmax/tools/SSL/src/utils.py:28`, was `core/tools/SSL/src/utils.py:28`
+  before Phase 4's move, documented in `dalmax/selection/hierarchical_kmeans.py`) when the real
+  embedding happened to split evenly at `--seed 1`; `[5,2]` was substituted after empirically probing
+  several candidates. **Since the 2026-08-23 micro-dataset redefinition** (all 5 classes,
+  10%-stratified, ~796-image unlabeled pool — see
+  `.specs/adr/0004-micro-dataset-and-golden-run.md`'s amendment), the micro hierarchies were
+  re-derived from scratch (each full-scale `n_clusters` entry divided by ~10) and re-verified
+  end-to-end against the new dataset: `hier_L2b.json` is now `[10,5]` and `hier_L2a.json` is
+  `[30,10]` — both passed cleanly (11/11 configs passed `bash scripts/ablations/smoke_ablations.sh`
+  with no equal-cluster-size bug hit); see `files_config/ablations/README.md`'s `micro/` section for
+  the full derivation and re-verification account. Full-scale `hier_L2b.json` is unaffected
+  (unchanged `[100,50]`) — an exact-even split is not a practical risk at the ~8k-image full pool.
+- **`hier_L4.json`'s micro mirror**: used `[30,10,5,2]` (post-redefinition; was `[12,6,3,2]` on the
+  old 2-class dataset) rather than a naive halving-to-1 progression, since the vendored pipeline's
+  behavior at `n_clusters=1` is untested; this was re-verified empirically to run cleanly at
+  `--seed 1` against the redefined dataset (see `files_config/ablations/README.md`).
 - **`stage_full.json`**: materialized for pipeline consistency (so all three §6.3 rows share one
   code path through `RepresentationStrategy`), even though this document's own §6.3 says the "RNHAL
   (full)" row's *reported* number should come from the pre-Phase-2 `results/dalmax{1,2}/` reference

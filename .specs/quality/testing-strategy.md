@@ -55,25 +55,33 @@ tests before a batch (this is part of what the `experiment-auditor` agent checks
      `.specs/quality/known-issues.md`,
    - runs in well under a second on CPU (no GPU, no dataset — safe for CI).
 4. **Golden-run regression fixture** — **done**. `scripts/make_micro_dataset.py` deterministically
-   samples 25 train + 10 test images from each of 2 real classes (`DATASET_BRACHIARIA`,
-   `DATASET_GRAMINEA`) in `DATA/daninhas_full/` into `DATA/daninhas_micro/` (sorted filenames, fixed
+   samples a stratified 10% of every class (all 5: `DATASET_BRACHIARIA`, `DATASET_COLONIAO`,
+   `DATASET_GRAMINEA`, `DATASET_MAMONA`, `DATASET_OUTRAS_FOLHAS_LARGAS`) in `DATA/daninhas_full/`
+   into `DATA/daninhas_micro/` (~806 train + ~209 test images total; sorted filenames, fixed
    sampling seed, idempotent, never writes into `daninhas_full/`, exits 0 with a message if
-   `daninhas_full/` isn't present). `files_config/params_micro.json` points DANINHAS at that
-   micro-dataset with `n_epoch=1`, `n_classes=2`, `batch_size=16`.
+   `daninhas_full/` isn't present, also writes `DATA/daninhas_micro/arquivos.txt` in the same format
+   as the source file's). **2026-08-23 redefinition** (see
+   `.specs/adr/0004-micro-dataset-and-golden-run.md`'s "micro-dataset redefinition" amendment):
+   this used to be a hand-picked 2-class, fixed 25-train/10-test-per-class subset; it is now the
+   all-5-class 10%-stratified replica described above, for a more realistic pre-lab/pre-Colab
+   end-to-end check. `files_config/params_micro.json` points DANINHAS at that micro-dataset with
+   `n_epoch=1`, `n_classes=5`, `batch_size=16`.
    `demo.py --strategy_name RandomSampling --n_init_labeled 10 --n_query 5 --n_round 1 --seed 1` and
-   the same CLI with `--strategy_name SSRAEKmeansSampling` were each run 3 times; the initial labeled
-   indices, per-round query indices (both logged via two new `logger.warning` lines in `demo.py`, the
-   only way to observe them), and every `results.json` metric were **bit-identical across all 3 runs
-   for both strategies** — no CPU-training nondeterminism was found in this configuration. Recorded
-   as `tests/golden/random_sampling_micro_seed1.json` and `tests/golden/ssrae_kmeans_micro_seed1.json`
-   (indices + metrics + exact CLI/params + git commit + notes). The SSRAE golden run required a
-   minimal, explicitly-scoped Phase 1 exception: `utils/data.py`'s `cache_file_path()` helper (this
-   whole file was deleted in Phase 4, superseded by `dalmax/embeddings/cache.py::EmbeddingCache` —
-   see KI-3 in `known-issues.md`) keyed the SSRAE/VCTex/`Y_train` pickle caches on dataset folder
-   name (+ `Q`) instead of a fixed path, so the micro-dataset run computed/read
-   `results/cache/features_ssrae_daninhas_micro_Q13.pkl` and never touched the pre-existing
-   full-dataset `results/features_dict_ssrae.pkl` (left on disk, untouched; partial fix of KI-3, see
-   `known-issues.md`). Note the SSRAE query indices are a function of
+   the same CLI with `--strategy_name SSRAEKmeansSampling` were each run twice in separate processes
+   after the redefinition; the initial labeled indices, per-round query indices (both logged via two
+   `logger.warning` lines in `demo.py`, the only way to observe them), and every `results.json`
+   metric were **bit-identical across both runs for both strategies** — no CPU-training
+   nondeterminism was found in this configuration. Recorded as
+   `tests/golden/random_sampling_micro_seed1.json` and `tests/golden/ssrae_kmeans_micro_seed1.json`
+   (indices + metrics + exact CLI/params + git commit + notes); the pre-redefinition (2-class) values
+   are kept in each fixture's `previous_micro_2class_values` field for the historical record, not
+   deleted. The SSRAE golden run originally required a minimal, explicitly-scoped Phase 1 exception:
+   `utils/data.py`'s `cache_file_path()` helper (this whole file was deleted in Phase 4, superseded by
+   `dalmax/embeddings/cache.py::EmbeddingCache` — see KI-3 in `known-issues.md`) keyed the
+   SSRAE/VCTex/`Y_train` pickle caches on dataset folder name (+ `Q`) instead of a fixed path, so the
+   micro-dataset run computed/read `results/cache/features_ssrae_daninhas_micro_Q13.pkl` and never
+   touched the pre-existing full-dataset `results/features_dict_ssrae.pkl` (left on disk, untouched;
+   partial fix of KI-3, see `known-issues.md`). Note the SSRAE query indices are a function of
    `SSRAEKmeansSampling`'s hardcoded `KMeans(random_state=3)` (KI-5), not of `--seed` — expected to
    change (and the fixture to be regenerated) once Phase 2's seed-propagation audit lands.
    `tests/test_golden_run.py` (marked `dataset`+`slow`) regenerates the micro dataset if needed, runs
@@ -123,7 +131,9 @@ tests before a batch (this is part of what the `experiment-auditor` agent checks
 - `make smoke` (see `.specs/architecture/refactor-plan.md` Phase 1 and the root `Makefile`) is a real
   end-to-end check as of Phase 1's closeout: it generates `DATA/daninhas_micro/` (or skips with a
   message if `DATA/daninhas_full/` isn't present), runs `demo.py --strategy_name RandomSampling` on
-  it (a few CPU seconds), then runs the fast test suite. This only covers `RandomSampling`
+  it (~30-35 CPU seconds since the 2026-08-23 micro-dataset redefinition to a 10%-stratified,
+  all-5-class replica — see `.specs/adr/0004-micro-dataset-and-golden-run.md`'s amendment), then runs
+  the fast test suite. This only covers `RandomSampling`
   end-to-end; the fuller golden-run regression (both `RandomSampling` and `SSRAEKmeansSampling`,
   exact index/metric comparison) is `tests/test_golden_run.py`, `dataset`+`slow`-marked and run via
   `make test-all`, not `make smoke`, to keep the latter fast. The hierarchical strategies
