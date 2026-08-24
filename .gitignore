@@ -179,3 +179,8 @@ cython_debug/
 paper_drafts/
 .ruff_cache/
 .DS_Store
+
+# Lab-machine-local params JSON copies (e.g. a batch-size-reduced copy made to
+# work around an OOM without editing files_config/ in place mid-batch — see
+# LAB_RUNBOOK.md's troubleshooting section). Never committed.
+files_config/local/
