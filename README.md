@@ -87,29 +87,99 @@ ablation design that isolates each RNHAL stage.
 
 ## Installation
 
-Python **3.10–3.12** is required (upper-bounded by the `torch==2.5.0` pin). The
-project historically documented Python 3.9; that constraint is stale and superseded
-by the Poetry configuration below.
+DalMax is **Poetry-only** — the pip/`requirements.txt` install path was retired
+(2026-08-23), on every machine (dev notebook, lab machine, or Colab). See
+[ADR 0001](.specs/adr/0001-adopt-poetry.md) and its amendment for why.
 
-### Poetry (primary)
+### 1. Prerequisites
+
+- Python **3.10–3.12** (upper-bounded by the `torch==2.5.0` pin). Check with:
+  ```bash
+  python3 --version
+  ```
+- `git`.
+
+### 2. Install Poetry
+
+Recommended — via [`pipx`](https://pipx.pypa.io/) (keeps Poetry isolated from
+any project virtualenv):
 
 ```bash
+sudo apt install pipx
+pipx ensurepath
+pipx install poetry
+```
+
+Alternative — the official installer:
+
+```bash
+curl -sSL https://install.python-poetry.org | python3 -
+```
+
+Verify:
+
+```bash
+poetry --version   # this project was developed against Poetry 2.x
+```
+
+### 3. Clone and install
+
+```bash
+git clone https://github.com/MarioCarvalhoBr/dalmax-deep-active-learning-python.git
+cd dalmax-deep-active-learning-python
 poetry install
 ```
 
-`poetry.toml` pins the virtualenv to `./.venv` (`in-project = true`). Dependency
-versions are exact-pinned in `pyproject.toml` for reproducibility (research lab,
-not a library). See [`make setup`](#development) for the wrapped version of this
-command.
+`poetry install` resolves `pyproject.toml`/`poetry.lock` and creates an
+in-project virtualenv at `./.venv` (`poetry.toml`'s `in-project = true`). On
+Linux x86_64 this installs `torch==2.5.0` from the CUDA 12.4 wheel index
+pinned in the lockfile — it also works on CPU-only machines (torch's CUDA
+build falls back to CPU when no GPU/driver is present), it is just a large
+download (~2.5 GB total). Dependency versions are exact-pinned in
+`pyproject.toml` for reproducibility (research lab, not a library).
 
-### pip (fallback, e.g. lab machine / Colab without Poetry)
+### 4. Run
 
 ```bash
-pip install -r requirements.txt
+poetry run python demo.py --dir_results results/dalmax1/ \
+    --params_json files_config/benchmark/params_df_gpu_0.json \
+    --dataset_name DANINHAS --strategy_name SSRAEKmeansHCSampling \
+    --n_query 100 --n_init_labeled 100 --n_round 8 --seed 1 --device cuda
 ```
 
-`requirements.txt` is a **generated export** (`make export-reqs`) from
-`pyproject.toml` — do not hand-edit it; regenerate it instead.
+`poetry run <cmd>` (recommended) runs `<cmd>` inside the project's virtualenv
+without activating it — use this form for every command in this README. To
+activate the virtualenv directly instead: `poetry env activate` (Poetry 2.x
+prints the exact activation command for your shell) or, since the venv is
+in-project, `source .venv/bin/activate`.
+
+### 5. Dev commands
+
+```bash
+make setup            # poetry install
+make lint             # ruff check
+make test             # pytest (fast tests only)
+make smoke            # true end-to-end micro-dataset run (demo.py, CPU) + fast tests
+make smoke-ablations  # CPU smoke test for all 11 Phase 3 ablation configs
+```
+
+### 6. Lab machine
+
+Same Poetry steps as above (`pipx install poetry` once per machine, then
+`poetry install` after each `git pull`), then run the benchmark/ablation
+scripts through `poetry run`:
+
+```bash
+poetry run bash scripts/benchmark/run_pipe_gpu_0.sh   # GPU 0, results/dalmax1/
+poetry run bash scripts/benchmark/run_pipe_gpu_1.sh   # GPU 1, results/dalmax2/
+poetry run bash scripts/ablations/run_ablation_gpu_0.sh
+poetry run bash scripts/ablations/run_ablation_gpu_1.sh
+```
+
+(The scripts themselves already invoke `poetry run python` internally, so
+`bash scripts/benchmark/run_pipe_gpu_0.sh` also works — the `poetry run bash`
+wrapper above is shown for consistency with "everything through `poetry
+run`".)
 
 ### CUDA
 
@@ -174,9 +244,9 @@ Phase 2); every flag and results-directory convention below is unchanged, plus t
 Example (RNHAL / SSRAE hierarchical strategy on the weed dataset):
 
 ```bash
-python demo.py \
+poetry run python demo.py \
     --dir_results results/dalmax1/ \
-    --params_json params_df_gpu_0.json \
+    --params_json files_config/benchmark/params_df_gpu_0.json \
     --dataset_name DANINHAS \
     --strategy_name SSRAEKmeansHCSampling \
     --n_query 100 \
@@ -219,8 +289,8 @@ the new `flat_proportional` selection.
 
 ### Params JSON schema
 
-Hyperparameters are keyed by dataset name (see `params_df_gpu_0.json` /
-`params_df_gpu_1.json`, one file per lab GPU). The schema below is unchanged from
+Hyperparameters are keyed by dataset name (see `files_config/benchmark/params_df_gpu_0.json` /
+`files_config/benchmark/params_df_gpu_1.json`, one file per lab GPU). The schema below is unchanged from
 before the Phase 2 refactor; `dalmax/config/loader.py` reads it exactly as shown —
 existing params JSON files need no edits.
 
@@ -319,8 +389,8 @@ DalMax is developed and run across three environments:
 1. **Local dev notebook** — 16 GB RAM, no GPU, Python 3.12, Poetry. Used for coding,
    CPU smoke tests on tiny subsets, and report generation.
 2. **Lab machine (primary training)** — 2× NVIDIA GPUs, 10 GB each. Workflow: push
-   from the notebook, pull on the lab machine, run `run_pipe_gpu_0.sh` /
-   `run_pipe_gpu_1.sh` (one params JSON per GPU), results come back via git or copy.
+   from the notebook, pull on the lab machine, run `scripts/benchmark/run_pipe_gpu_0.sh` /
+   `scripts/benchmark/run_pipe_gpu_1.sh` (one params JSON per GPU), results come back via git or copy.
 3. **Google Colab Pro (secondary/burst)** — one-off runs; the dataset is uploaded as
    a zip and extracted into the runtime rather than read file-by-file from Drive.
 
@@ -340,7 +410,7 @@ make lint          # ruff check
 make format        # ruff format
 make test          # pytest (fast tests only)
 make smoke         # true end-to-end micro-dataset run (demo.py, CPU) + fast tests
-make export-reqs   # regenerate requirements.txt from pyproject.toml
+make smoke-ablations  # CPU smoke test for all 11 Phase 3 ablation configs
 ```
 
 ## Repository layout
@@ -371,11 +441,19 @@ dalmax-deep-active-learning-python/
 │       ├── SSRAE/             # randomized-network spatio-spectral extractor
 │       ├── VCTex/              # alternative color-texture representation
 │       └── SSL/                # hierarchical k-means selection
-├── params_df_gpu_0.json       # hyperparameters for lab GPU 0
-├── params_df_gpu_1.json       # hyperparameters for lab GPU 1
-├── run_pipe_gpu_0.sh          # experiment batch runner, GPU 0
-├── run_pipe_gpu_1.sh          # experiment batch runner, GPU 1
-├── scripts/                   # baseline pipelines, report utilities
+├── files_config/
+│   ├── params_micro.json      # CPU smoke-test params (make smoke)
+│   ├── ablations/              # Phase 3 ablation-study params (6.1/6.2/6.3 + micro/ variants)
+│   └── benchmark/              # RNHAL reference-benchmark params (one file per lab GPU)
+│       ├── params_df_gpu_0.json
+│       └── params_df_gpu_1.json
+├── scripts/
+│   ├── make_micro_dataset.py  # generates DATA/daninhas_micro/ for make smoke
+│   ├── ablations/              # Phase 3 ablation run/smoke scripts (poetry run python)
+│   └── benchmark/              # RNHAL reference-benchmark batch runners (poetry run python)
+│       ├── run_pipe_gpu_0.sh
+│       ├── run_pipe_gpu_1.sh
+│       └── ...                 # older baseline-strategy scripts, kept for history
 ├── DATA/                      # datasets (gitignored, immutable)
 ├── results/                   # experiment outputs (gitignored)
 ├── phd_files/                 # PhD documents, paper LaTeX sources, references

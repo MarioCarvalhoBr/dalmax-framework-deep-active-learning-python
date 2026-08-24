@@ -26,21 +26,20 @@ drift (see spec-sync rule below) rather than trusting stale prose here.
 ## Setup & commands
 
 ```bash
-poetry install       # or: make setup
+poetry install       # or: make setup — Poetry-only; the pip/requirements.txt fallback was retired
 make lint             # ruff check
 make format           # ruff format
 make test             # pytest, fast tests only
 make smoke            # true end-to-end micro-dataset run (demo.py, CPU) + fast tests
-make export-reqs      # regenerate requirements.txt from pyproject.toml
 
 # Example run (unchanged CLI, now routed through dalmax.cli):
-python demo.py --dir_results results/dalmax1/ --params_json params_df_gpu_0.json \
+poetry run python demo.py --dir_results results/dalmax1/ --params_json files_config/benchmark/params_df_gpu_0.json \
     --dataset_name DANINHAS --strategy_name SSRAEKmeansHCSampling \
     --n_query 100 --n_init_labeled 100 --n_round 8 --seed 1 --device cuda
 
 # Example run using the new generic RepresentationStrategy + embedding/selection config
 # (see .specs/experiments/ablation-study.md for the exact params JSON syntax):
-python demo.py --dir_results results/ablation/ --params_json params_ablation_6_1_spatial.json \
+poetry run python demo.py --dir_results results/ablation/ --params_json params_ablation_6_1_spatial.json \
     --dataset_name DANINHAS --strategy_name RepresentationStrategy \
     --n_query 100 --n_init_labeled 100 --n_round 8 --seed 1 --device cuda
 ```
@@ -141,8 +140,9 @@ a lab-machine smoke run confirming Phase 4's move didn't break anything there.
   `VCTexKmeansHCSampling`, **`RepresentationStrategy`** (NEW — generic, driven
   by the params JSON's `"embedding"`/`"selection"` blocks; see
   `.specs/experiments/ablation-study.md` for exact syntax).
-- One params JSON per lab GPU: `params_df_gpu_0.json`, `params_df_gpu_1.json`, run
-  via `run_pipe_gpu_0.sh` / `run_pipe_gpu_1.sh` (`QUERIES=(10 50 100)`,
+- One params JSON per lab GPU: `files_config/benchmark/params_df_gpu_0.json`,
+  `files_config/benchmark/params_df_gpu_1.json`, run
+  via `scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh` (`QUERIES=(10 50 100)`,
   `SEEDS=(1 2 3)`, `n_round 8`, results into `results/dalmax1/`) — unchanged, still
   works via the legacy `config_kmh` key (Phase 2's loader reads it as
   `selection = {method: "hierarchical", hierarchy: config_kmh}` automatically).

@@ -23,13 +23,17 @@ longer exists (consolidated in Phase 4).
 ## Setup & commands
 
 ```bash
-poetry install     # or: make setup
+poetry install     # or: make setup — Poetry-only; the pip/requirements.txt fallback was retired
 make lint            # ruff check
 make format          # ruff format
 make test            # pytest, fast tests only
 make smoke           # true end-to-end micro-dataset run (demo.py, CPU) + fast tests
-make export-reqs     # regenerate requirements.txt from pyproject.toml
 ```
+
+Recommended install (any machine — dev, lab, or Colab): `pipx install poetry`
+(or the official installer, `curl -sSL https://install.python-poetry.org |
+python3 -`), then `poetry install`. See [`README.md`](README.md#installation)
+for the full step-by-step.
 
 ## Working mode
 
@@ -77,5 +81,6 @@ config layer, embedding provider abstraction, registries — done) → Phase 3
   the params JSON's `"embedding"`/`"selection"` blocks).
 - `--device {auto,cuda,cpu}` and `--embedding_variant {full,spatial,spectral}`
   are additional CLI flags on top of the original set.
-- One params JSON per lab GPU (`params_df_gpu_0.json`, `params_df_gpu_1.json`),
-  run via `run_pipe_gpu_0.sh` / `run_pipe_gpu_1.sh`.
+- One params JSON per lab GPU (`files_config/benchmark/params_df_gpu_0.json`,
+  `files_config/benchmark/params_df_gpu_1.json`),
+  run via `scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh`.
