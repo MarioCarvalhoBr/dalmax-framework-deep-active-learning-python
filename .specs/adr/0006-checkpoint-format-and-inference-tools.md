@@ -50,7 +50,7 @@ We will:
    replicates training/test preprocessing exactly — resize to the checkpoint's `img_size`, then the
    live dataset handler's own `.transform` (`dalmax.data.registry.get_handler`) — rather than
    re-deriving normalization constants, so it can never silently drift from what a real run used.
-5. Rename `demo.py` to `trainer.py` (`git mv`, pure rename, no behavior change) so the training
+5. Rename the historical `demo.py` to `trainer.py` (`git mv`, pure rename, no behavior change) so the training
    entry point and the new inference entry points read as a coherent set at the repo root
    (`trainer.py`, `predict.py`, `loader.py`, `gui.py`).
 

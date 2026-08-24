@@ -66,7 +66,7 @@ config layer, embedding provider abstraction, registries — done) → Phase 3
 (ablation study: config/code done, lab-machine runs outstanding) → Phase 4
 (polish: package consolidated into `dalmax/`, dead code deleted — done) → checkpoint
 fix + inference tools (`dalmax/models/checkpoint.py`, `dalmax/inference/`,
-`demo.py` → `trainer.py` rename — done, ADR 0006). Details:
+historical `demo.py` → `trainer.py` rename — done, ADR 0006). Details:
 [`.specs/architecture/refactor-plan.md`](.specs/architecture/refactor-plan.md).
 
 ## Never do

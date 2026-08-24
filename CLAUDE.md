@@ -112,7 +112,7 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   `results/dalmax1/`/`results/dalmax2/`, is unrecoverable, see
   [`.specs/quality/known-issues.md`](.specs/quality/known-issues.md) KI-22) via a new
   `dalmax-checkpoint` format (`dalmax/models/checkpoint.py`); added `dalmax/inference/`
-  (`predict.py`/`loader.py`/`gui.py` at the repo root); renamed `demo.py` → `trainer.py`
+  (`predict.py`/`loader.py`/`gui.py` at the repo root); renamed the historical `demo.py` → `trainer.py`
   (pure rename, `git mv`, no behavior change).
 
 Next milestone: run the three Phase 3 ablation sub-studies on the lab machine and
