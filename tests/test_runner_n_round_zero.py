@@ -1,7 +1,7 @@
 """Tests for `dalmax.experiment.runner.ExperimentRunner` with `n_round=0`.
 
 LOW finding fix: `dalmax.config.schema.ExperimentConfig` used to reject
-`n_round <= 0`, but the legacy `demo.py` always allowed `--n_round 0` (train
+`n_round <= 0`, but the historical legacy `demo.py` (renamed `trainer.py` 2026-08-23) always allowed `--n_round 0` (train
 and evaluate exactly once, no active-learning query rounds at all). Now that
 `ExperimentConfig` allows `n_round >= 0` (see `tests/test_config.py`), this
 file verifies `ExperimentRunner`/`dalmax.experiment.reporter.write_report`
@@ -36,6 +36,7 @@ from dalmax.config.schema import (
     SelectionConfig,
     TrainArgs,
 )
+from dalmax.experiment import reporter as reporter_module
 from dalmax.experiment import runner as runner_module
 from dalmax.experiment.reporter import write_report
 from dalmax.experiment.runner import ExperimentRunner
@@ -55,7 +56,7 @@ class _FakeNet:
     def predict(self, data):
         return torch.tensor([0, 1, 0, 1, 0])
 
-    def save_model(self, path: str) -> None:
+    def save_model(self, path: str, *, model_name, class_names, img_size, extra=None) -> None:
         with open(path, "w") as f:
             f.write("fake checkpoint")
 
@@ -88,8 +89,14 @@ class _FakeStrategy:
     def update(self, pos_idxs, neg_idxs=None) -> None:
         raise AssertionError("strategy.update() must not be called when n_round=0")
 
-    def save_model(self, dir_results: str) -> None:
-        self.net.save_model(dir_results + "/saved_model.pth")
+    def save_model(self, dir_results: str, *, model_name, class_names, img_size, extra=None) -> None:
+        self.net.save_model(
+            dir_results + "/saved_model.pth",
+            model_name=model_name,
+            class_names=class_names,
+            img_size=img_size,
+            extra=extra,
+        )
 
 
 class _FakeDataset:
@@ -203,6 +210,13 @@ def test_write_report_with_n_round_zero_plots_a_single_point_and_writes_confusio
 ):
     config = _make_config(tmp_path, n_round=0)
     result = _run_with_stubs(config, monkeypatch)
+
+    # `config.dataset.name` ("FAKE") is not a registered dataset, since this
+    # test uses a stub dataset/net/strategy instead of the real DANINHAS/
+    # CIFAR10 pipeline (see module docstring) -- stub out the one call in
+    # `write_report` that would otherwise look it up in
+    # `dalmax.data.registry.DATASET_REGISTRY`.
+    monkeypatch.setattr(reporter_module, "get_img_size", lambda name: 128)
 
     path_logger = tmp_path / "in_progress.log"
     path_logger.write_text("log contents")

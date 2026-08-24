@@ -1,3 +1,5 @@
+from typing import Any
+
 import matplotlib.pyplot as plt
 
 
@@ -59,10 +61,27 @@ class Strategy:
         embeddings = self.net.get_embeddings(data)
         return embeddings
 
-    def save_model(self, dir_results):
-
+    def save_model(
+        self,
+        dir_results: str,
+        *,
+        model_name: str,
+        class_names: list[str],
+        img_size: int,
+        extra: dict[str, Any] | None = None,
+    ) -> None:
+        """Save the trained network as `dir_results/saved_model.pth` (a
+        `dalmax-checkpoint`, see `dalmax.models.checkpoint`). Metadata is
+        required here — not read from `self` via `setattr` — per
+        `.claude/rules/code-quality.md` "explicit dependency injection":
+        `dalmax.experiment.reporter.write_report` is the only caller and has
+        all four values in scope (`config.dataset.name`, `result.class_names`,
+        `dalmax.data.registry.get_img_size`, and the run's provenance).
+        """
         path = dir_results + "/saved_model.pth"
-        self.net.save_model(path)
+        self.net.save_model(
+            path, model_name=model_name, class_names=class_names, img_size=img_size, extra=extra
+        )
         self.logger.warning(f"Model saved in '{path}'.")
 
 

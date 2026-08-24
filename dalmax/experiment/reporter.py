@@ -1,11 +1,11 @@
-"""`write_report`: the reporting half of `demo.py`'s former `main()`
+"""`write_report`: the reporting half of the historical `demo.py`'s former `main()`
 (confusion matrix PDF, per-metric plots, `results.json`, `predictions.csv`,
 model checkpoint, log file move) — see `.specs/architecture/
 target-architecture.md` §10 and `.claude/rules/code-quality.md`
 "single responsibility".
 
 Filenames and `results.json`/`predictions.csv` schemas are unchanged from
-`demo.py` (`.claude/rules/spec-sync.md`: changing the results directory
+the historical `demo.py` (`.claude/rules/spec-sync.md`: changing the results directory
 layout or `results.json` schema requires a spec update; this module keeps
 every legacy key and only *adds* `all_precision_macro`/`all_recall_macro`/
 `all_f1_macro`, so no existing consumer of `results.json` breaks).
@@ -21,6 +21,8 @@ import pandas as pd
 import seaborn as sns
 from sklearn.metrics import confusion_matrix
 
+from dalmax.data.registry import get_img_size
+from dalmax.experiment.run_metadata import snapshot
 from dalmax.experiment.runner import RunResult
 
 
@@ -96,6 +98,26 @@ def _write_predictions_csv(result: RunResult, dir_results: str) -> str:
     return predictions_csv_path
 
 
+def _build_checkpoint_extra(result: RunResult) -> dict:
+    """Provenance recorded alongside the trained model's weights (the
+    `"extra"` field of `dalmax.models.checkpoint.save_checkpoint`): strategy
+    name, seed, dataset name, git commit, torch/Python versions, and a save
+    timestamp — reusing `dalmax.experiment.run_metadata.snapshot`, the same
+    helper `run_metadata.json` is built from, so this never drifts from that
+    provenance logic (`.claude/rules/reproducibility.md`)."""
+    config = result.config
+    meta = snapshot(config)
+    return {
+        "strategy_name": config.strategy_name,
+        "seed": config.seed,
+        "dataset_name": config.dataset.name,
+        "git_commit": meta["git_commit"],
+        "python_version": meta["python_version"],
+        "torch_version": meta["torch_version"],
+        "saved_at": meta["started_at"],
+    }
+
+
 def write_report(result: RunResult, path_logger: str) -> None:
     """Persist plots, `results.json`, `predictions.csv`, the trained model,
     and the run's log file into `result.dir_results`.
@@ -107,7 +129,7 @@ def write_report(result: RunResult, path_logger: str) -> None:
     path_logger:
         Path to the in-progress log file (`dalmax.logging_utils.get_path_logger()`),
         moved into `result.dir_results` as `log-dalmax.log`, exactly as
-        `demo.py` always has.
+        the historical `demo.py` always has.
     """
     dir_results = result.dir_results
     dataset = result.dataset
@@ -122,7 +144,13 @@ def write_report(result: RunResult, path_logger: str) -> None:
 
     os.rename(path_logger, os.path.join(dir_results, "log-dalmax.log"))
 
-    result.strategy.save_model(dir_results)
+    result.strategy.save_model(
+        dir_results,
+        model_name=result.config.dataset.name,
+        class_names=result.class_names,
+        img_size=get_img_size(result.config.dataset.name),
+        extra=_build_checkpoint_extra(result),
+    )
 
     json_path = _write_results_json(result, dir_results)
     predictions_csv_path = _write_predictions_csv(result, dir_results)

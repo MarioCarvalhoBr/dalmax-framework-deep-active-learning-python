@@ -1,9 +1,13 @@
+from typing import Any
+
 import numpy as np
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+
+from dalmax.models.checkpoint import load_checkpoint, save_checkpoint
 
 
 class DeepLearning:
@@ -12,17 +16,48 @@ class DeepLearning:
         self.params = params
         self.device = device
 
-    def save_model(self, path):
-        torch.save(self.net, path)
+    def save_model(
+        self,
+        path: str,
+        *,
+        model_name: str,
+        class_names: list[str],
+        img_size: int,
+        extra: dict[str, Any] | None = None,
+    ) -> None:
+        """Save the trained model (`self.clf`) as a `dalmax-checkpoint`.
 
-    # TODO: FIX THIS
-    def load_model(self, path):
-        self.net = torch.load(path, map_location=torch.device("cuda" if torch.cuda.is_available() else "cpu"))
-        self.net.eval()
-        n_classes = self.params['n_classes']
-        self.clf = self.net(n_classes).to(self.device)
+        Historical bug (see `dalmax.models.checkpoint` module docstring):
+        this used to do `torch.save(self.net, path)`, saving the model
+        *class* (`self.net`) instead of the trained instance (`self.clf`) —
+        every checkpoint produced that way contains no weights.
+        `model_name`/`class_names`/`img_size`/`extra` are required because
+        `DeepLearning` itself only holds the legacy `params` dict, not the
+        dataset/registry context needed to make the checkpoint
+        self-describing for later inference (`dalmax/inference/predictor.py`).
+        """
+        save_checkpoint(
+            path,
+            self.clf,
+            model_name=model_name,
+            n_classes=self.params["n_classes"],
+            class_names=class_names,
+            img_size=img_size,
+            extra=extra,
+        )
 
-        return self.net
+    def load_model(self, path: str) -> dict[str, Any]:
+        """Load a `dalmax-checkpoint` written by `save_model`, setting
+        `self.clf` to the restored, `.eval()`'d model on `self.device`.
+
+        Returns the checkpoint's metadata dict (see
+        `dalmax.models.checkpoint.load_checkpoint`). Raises
+        `dalmax.models.checkpoint.CheckpointError` on a legacy pre-fix
+        class-pickle file (the historical bug this replaces) or any other
+        file that is not a `dalmax-checkpoint`.
+        """
+        self.clf, meta = load_checkpoint(path, device=self.device)
+        return meta
 
     def train(self, data):
         n_epoch = self.params['n_epoch']

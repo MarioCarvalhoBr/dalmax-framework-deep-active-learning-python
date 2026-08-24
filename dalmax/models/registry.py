@@ -60,9 +60,24 @@ def get_network(config: ExperimentConfig, device: str) -> DeepLearning:
         If `config.dataset.name` is not a registered model name.
     """
     name = config.dataset.name
-    if name not in MODEL_REGISTRY:
-        valid = ", ".join(sorted(MODEL_REGISTRY))
-        raise KeyError(f"Unknown dataset/model {name!r}. Valid names: {valid}")
-    model_cls = MODEL_REGISTRY[name]
+    model_cls = get_model_class(name)
     params = _legacy_params_dict(config.dataset)
     return DeepLearning(model_cls, params, torch.device(device))
+
+
+def get_model_class(model_name: str) -> Callable:
+    """Look up a model class by name, e.g. for
+    `dalmax.models.checkpoint.load_checkpoint` rebuilding an architecture
+    from a checkpoint's stored `model_name` — the same registry `get_network`
+    uses, keyed the same way (dataset name doubles as model name; there is
+    exactly one model architecture per dataset today).
+
+    Raises
+    ------
+    KeyError
+        If `model_name` is not a registered model name.
+    """
+    if model_name not in MODEL_REGISTRY:
+        valid = ", ".join(sorted(MODEL_REGISTRY))
+        raise KeyError(f"Unknown model_name {model_name!r}. Valid names: {valid}")
+    return MODEL_REGISTRY[model_name]
