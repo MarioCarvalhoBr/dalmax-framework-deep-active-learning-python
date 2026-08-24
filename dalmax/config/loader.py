@@ -1,7 +1,7 @@
 """Load and validate `ExperimentConfig` from the existing params JSON format.
 
 This is a drop-in reader for the params JSON files already on disk
-(`params_df_gpu_0.json`, `params_df_gpu_1.json`,
+(`files_config/benchmark/params_df_gpu_0.json`, `files_config/benchmark/params_df_gpu_1.json`,
 `files_config/params_micro.json`) — the on-disk schema is not changed by this
 module. It only adds two backward-compatible, optional keys per dataset:
 `"embedding"` and `"selection"` (see `.specs/architecture/target-architecture.md`
@@ -15,7 +15,7 @@ If a dataset entry has a legacy `"config_kmh"` block and no `"selection"` key,
 today assumes implicitly.
 
 If a dataset entry has neither `"selection"` nor `"config_kmh"` (e.g. `CIFAR10`
-in `params_df_gpu_0.json` today), `selection` defaults to
+in `files_config/benchmark/params_df_gpu_0.json` today), `selection` defaults to
 `SelectionConfig(method="flat_closest", hierarchy=None)` rather than the
 `SelectionConfig` dataclass's own `method="hierarchical"` default — a
 hierarchical method with `hierarchy=None` is invalid
@@ -171,7 +171,7 @@ def load_experiment_config(
     ----------
     params_json:
         Path to a params JSON file in the existing on-disk format (see module
-        docstring), e.g. `params_df_gpu_0.json` or `files_config/params_micro.json`.
+        docstring), e.g. `files_config/benchmark/params_df_gpu_0.json` or `files_config/params_micro.json`.
     dataset_name:
         Top-level key to read from `params_json` (e.g. `"DANINHAS"`, `"CIFAR10"`).
     strategy_name, seed, n_init_labeled, n_query, n_round, dir_results:

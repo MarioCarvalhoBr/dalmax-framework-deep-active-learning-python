@@ -12,7 +12,7 @@ not decoration. Specs and rules must never drift from what the code actually doe
      `dalmax/query_strategies/registry.py` / `dalmax/query_strategies/__init__.py` →
      update `.specs/use-cases/add-new-strategy.md` and
      `.specs/architecture/current-state.md`.
-   - Changing `params_df_gpu_*.json` schema (e.g. `config_kmh`, `n_classes`) →
+   - Changing `files_config/benchmark/params_df_gpu_*.json` schema (e.g. `config_kmh`, `n_classes`) →
      update `.specs/experiments/experimental-protocol.md`.
    - Changing results directory naming in `dalmax/experiment/runner.py`
      (`{dir_results}/{dataset}/SEED_{seed}/NQ_{n_query}_NIL_{n_init}_NR_{n_round}_NE_{n_epoch}/{strategy}/`) →

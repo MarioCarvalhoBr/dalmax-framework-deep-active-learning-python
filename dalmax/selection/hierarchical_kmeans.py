@@ -81,7 +81,7 @@ consistent with the two params files on disk) is to scale
 `sample_sizes[level]` with `n_clusters[level]` (e.g.
 `sample_sizes[level] ~= max(2, round(n_clusters[level] * ratio))` for a
 fixed `ratio` taken from an existing run, such as
-`params_df_gpu_0.json`'s `30/600 = 0.05`), not with `n_query`.
+`files_config/benchmark/params_df_gpu_0.json`'s `30/600 = 0.05`), not with `n_query`.
 
 ## RNG isolation
 

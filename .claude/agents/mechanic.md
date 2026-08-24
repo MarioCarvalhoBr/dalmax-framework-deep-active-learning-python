@@ -15,7 +15,7 @@ tasks so the orchestrating session and the `implementer` agent don't have to.
   is still some of this in `dalmax/data/datasets.py` (was `utils/data.py`) —
   see `.specs/quality/known-issues.md` KI-12) — translate the text only, never change logic.
 - Small, explicitly-specified config edits (e.g. a value in a
-  `params_df_gpu_*.json` file, a flag in `Makefile`) — only when told exactly
+  `files_config/benchmark/params_df_gpu_*.json` file, a flag in `Makefile`) — only when told exactly
   what to change; do not invent new config keys.
 - Running `poetry run ruff check .`, `poetry run pytest -m "not gpu and not dataset"`,
   `make lint`, `make test` and reporting the raw output back faithfully (do not

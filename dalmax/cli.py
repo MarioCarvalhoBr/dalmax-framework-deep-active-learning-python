@@ -4,7 +4,7 @@
 reporting) is delegated to `dalmax.config.loader`, `dalmax.experiment.runner`,
 and `dalmax.experiment.reporter` (`.specs/architecture/target-architecture.md`
 §10). `demo.py` at the repo root is now a thin shim that calls `main()` here,
-so existing shell scripts (`run_pipe_gpu_*.sh`) keep working unchanged.
+so existing shell scripts (`scripts/benchmark/run_pipe_gpu_*.sh`) keep working unchanged.
 
 The list of valid `--strategy_name` values here is the single source of
 truth `tests/test_registry.py`/`tests/test_strategy_registry.py` parse via

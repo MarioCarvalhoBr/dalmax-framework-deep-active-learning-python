@@ -1,7 +1,7 @@
 """Tests for `dalmax.config.schema` and `dalmax.config.loader`.
 
 Covers: parsing the two existing on-disk params JSON files
-(`params_df_gpu_0.json`, `files_config/params_micro.json`) unmodified,
+(`files_config/benchmark/params_df_gpu_0.json`, `files_config/params_micro.json`) unmodified,
 backward-compat `config_kmh` -> hierarchical `selection`, the
 no-`config_kmh`-no-`selection` -> `flat_closest` default (so a dataset like
 `CIFAR10` never gets an invalid `hierarchical`/`hierarchy=None` combination),
@@ -30,7 +30,7 @@ from dalmax.config.schema import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PARAMS_GPU_0 = REPO_ROOT / "params_df_gpu_0.json"
+PARAMS_GPU_0 = REPO_ROOT / "files_config" / "benchmark" / "params_df_gpu_0.json"
 PARAMS_MICRO = REPO_ROOT / "files_config" / "params_micro.json"
 
 

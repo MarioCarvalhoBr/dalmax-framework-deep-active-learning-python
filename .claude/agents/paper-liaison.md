@@ -13,7 +13,7 @@ LaTeX drafts.
 
 ## Read-only on code, write-only into `paper_drafts/`
 
-- You may **read** anything under `dalmax/`, `demo.py`, `params_df_gpu_*.json`,
+- You may **read** anything under `dalmax/`, `demo.py`, `files_config/benchmark/params_df_gpu_*.json`,
   `results/`, and `phd_files/` (including the LaTeX sources) for cross-checking.
 - You may **write only** into a `paper_drafts/` folder at the repo root (create
   it if it does not exist). Never write into `phd_files/` itself
@@ -28,12 +28,12 @@ LaTeX drafts.
   `Q = [5, 17]`, threaded through `dalmax/embeddings/{ssrae_provider,vctex_provider}.py`) are
   used in code — flag any mismatch between what the paper claims and what the code does.
   Hierarchy notation (`L` levels, `k_i` cluster counts per level) should match
-  `config_kmh` in `params_df_gpu_*.json` (`n_levels`, `n_clusters`,
+  `config_kmh` in `files_config/benchmark/params_df_gpu_*.json` (`n_levels`, `n_clusters`,
   `sample_sizes`).
 - **Reported configurations**: cross-check any hyperparameter table in the paper
-  against the actual `params_df_gpu_*.json` used for the reference runs
+  against the actual `files_config/benchmark/params_df_gpu_*.json` used for the reference runs
   (`n_epoch`, `batch_size`, `lr`, `momentum`, `n_classes`, `config_kmh`) and the
-  sweep in `run_pipe_gpu_0.sh` / `run_pipe_gpu_1.sh` (`QUERIES=(10 50 100)`,
+  sweep in `scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh` (`QUERIES=(10 50 100)`,
   `SEEDS=(1 2 3)`, `n_round 8`).
 - **Draft LaTeX skeletons from `results/*/results.json`**: when asked to produce
   a table or text skeleton, read the relevant `results.json` files (and/or the
@@ -59,7 +59,7 @@ decision for the user/advisor).
 - <symbol>: paper says <X>, code says <Y> — MATCH | MISMATCH
 
 ## Config cross-check
-- <param>: paper says <X>, params_df_gpu_*.json says <Y> — MATCH | MISMATCH
+- <param>: paper says <X>, files_config/benchmark/params_df_gpu_*.json says <Y> — MATCH | MISMATCH
 
 ## Drafts written
 - paper_drafts/<file>.tex — <what it contains, sourced from which results.json>

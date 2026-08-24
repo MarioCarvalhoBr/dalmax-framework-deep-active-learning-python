@@ -11,8 +11,8 @@ do not attempt full training locally (no GPU).
    locally.
 2. `DATA/daninhas_full/` present on the lab machine at the path referenced
    by the params JSON's `data_dir` (`DATA/daninhas_full/`).
-3. Confirm which params JSON to use per GPU: `params_df_gpu_0.json` for GPU
-   0, `params_df_gpu_1.json` for GPU 1 (they differ only in `config_kmh` for
+3. Confirm which params JSON to use per GPU: `files_config/benchmark/params_df_gpu_0.json` for GPU
+   0, `files_config/benchmark/params_df_gpu_1.json` for GPU 1 (they differ only in `config_kmh` for
    DANINHAS — see `experiments/experimental-protocol.md`).
 4. If any SSRAE/VCTex-based strategy will run, check
    `results/features_dict_ssrae.pkl` / `features_dict_vctex.pkl` for
@@ -22,8 +22,8 @@ do not attempt full training locally (no GPU).
 ## RNHAL reference sweep (SSRAEKmeansHCSampling only)
 
 ```
-bash run_pipe_gpu_0.sh   # GPU 0, params_df_gpu_0.json → results/dalmax1/
-bash run_pipe_gpu_1.sh   # GPU 1, params_df_gpu_1.json → results/dalmax2/
+bash scripts/benchmark/run_pipe_gpu_0.sh   # GPU 0, files_config/benchmark/params_df_gpu_0.json → results/dalmax1/
+bash scripts/benchmark/run_pipe_gpu_1.sh   # GPU 1, files_config/benchmark/params_df_gpu_1.json → results/dalmax2/
 ```
 
 Each script sweeps `n_query ∈ {10, 50, 100}` × `seed ∈ {1, 2, 3}` = 9 runs,
@@ -36,19 +36,19 @@ after its own 9-run battery finishes.
 
 ## Baseline strategy sweep
 
-`scripts/run_pipline.sh` is a **command generator**, not a direct executor
-— it `echo`s the `python demo.py ...` invocations for the 10 non-SSRAE/
+`scripts/benchmark/run_pipline.sh` is a **command generator**, not a direct executor
+— it `echo`s the `poetry run python demo.py ...` invocations for the 10 non-SSRAE/
 VCTex strategies (`RandomSampling` through `BALDDropout`, with
 `AdversarialBIM`/`AdversarialDeepFool` commented out in the current script)
 across `n_query ∈ {10, 50, 100}`, for a given `(gpu, seed)` pair passed as
 positional args:
 ```
-bash scripts/run_pipline.sh <gpu_number> <seed>
+bash scripts/benchmark/run_pipline.sh <gpu_number> <seed>
 ```
 This prints, but does not execute, the commands — pipe its output to a
 shell to actually run them, e.g.:
 ```
-bash scripts/run_pipline.sh 0 1 | bash
+bash scripts/benchmark/run_pipline.sh 0 1 | bash
 ```
 (**TBD**: confirm this is how it is actually invoked on the lab machine —
 not verified in this batch; it may instead be intended purely for
@@ -64,13 +64,13 @@ hardcoded inside the script — note this differs from the RNHAL sweep's
 ## Adversarial strategies
 
 `AdversarialBIM`/`AdversarialDeepFool` are commented out in
-`scripts/run_pipline.sh` but are valid `demo.py --strategy_name` choices and
+`scripts/benchmark/run_pipline.sh` but are valid `demo.py --strategy_name` choices and
 appear in the existing `results/dalmax1/` output — they must have been run
 via a direct `demo.py` invocation outside these two scripts. Invoke
 manually if needed:
 ```
-CUDA_VISIBLE_DEVICES=<gpu> python demo.py \
-  --params_json params_df_gpu_<gpu>.json --dataset_name=DANINHAS \
+CUDA_VISIBLE_DEVICES=<gpu> poetry run python demo.py \
+  --params_json files_config/benchmark/params_df_gpu_<gpu>.json --dataset_name=DANINHAS \
   --strategy_name AdversarialBIM --n_query <10|50|100> --seed <1|2|3> \
   --n_round 8 --dir_results=results/<target>/
 ```

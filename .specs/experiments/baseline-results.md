@@ -33,8 +33,8 @@ flag for a future `experiment-auditor` pass before relying on them.
 
 ## `results/dalmax1/`
 
-Path: `results/dalmax1/daninhas_full/`. Produced by `run_pipe_gpu_0.sh`
-(`params_df_gpu_0.json`, GPU 0, `config_kmh: n_clusters=[600,200,100],
+Path: `results/dalmax1/daninhas_full/`. Produced by `scripts/benchmark/run_pipe_gpu_0.sh`
+(`files_config/benchmark/params_df_gpu_0.json`, GPU 0, `config_kmh: n_clusters=[600,200,100],
 n_levels=3, sample_sizes=[30,15,2]`).
 
 Structure:
@@ -58,7 +58,7 @@ Strategies present under each `SEED_x/NQ_y_.../` (verified for
 `AdversarialDeepFool`, `SSRAEKmeansHCSampling`, `VCTexKmeansHCSampling` —
 i.e. the **full baseline set plus both RNHAL-family hierarchical
 strategies**, across all three `n_query` values and all three seeds. This is
-broader than what `run_pipe_gpu_0.sh` alone would produce (that script only
+broader than what `scripts/benchmark/run_pipe_gpu_0.sh` alone would produce (that script only
 runs `SSRAEKmeansHCSampling`), so `dalmax1/` reflects more than one script
 invocation over time — **TBD** reconcile the exact provenance/commit of each
 strategy's runs (`log-dalmax.log` per leaf directory should carry a
@@ -80,13 +80,13 @@ three seeds.
 
 ## `results/dalmax2/`
 
-Path: `results/dalmax2/daninhas_full/`. Produced by `run_pipe_gpu_1.sh`
-(`params_df_gpu_1.json`, GPU 1, `config_kmh: n_clusters=[500,200,150],
+Path: `results/dalmax2/daninhas_full/`. Produced by `scripts/benchmark/run_pipe_gpu_1.sh`
+(`files_config/benchmark/params_df_gpu_1.json`, GPU 1, `config_kmh: n_clusters=[500,200,150],
 n_levels=3, sample_sizes=[60,30,2]`).
 
 Structure mirrors `dalmax1/` (`SEED_{1,2,3}/NQ_{10,50,100}_NIL_100_NR_8_NE_10/`)
 but **only contains `SSRAEKmeansHCSampling`** — consistent with
-`run_pipe_gpu_1.sh` running exactly that one strategy across the
+`scripts/benchmark/run_pipe_gpu_1.sh` running exactly that one strategy across the
 `n_query × seed` grid, nothing else. No baseline strategies, no VCTex
 variant, no `results/` (report-pipeline output) subfolder or
 `data_results.json` observed under `dalmax2/` in this pass — TBD confirm

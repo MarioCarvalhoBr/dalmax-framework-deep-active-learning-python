@@ -117,7 +117,7 @@ tests before a batch (this is part of what the `experiment-auditor` agent checks
 
 ## What deliberately stays manual / lab-machine-only
 
-- Full multi-seed, multi-strategy sweeps (`run_pipe_gpu_*.sh`) are experiments, not tests — they are
+- Full multi-seed, multi-strategy sweeps (`scripts/benchmark/run_pipe_gpu_*.sh`) are experiments, not tests — they are
   covered by `.specs/experiments/experimental-protocol.md` and the `experiment-auditor` agent's
   pre-flight checklist, not by `pytest`.
 - `make smoke` (see `.specs/architecture/refactor-plan.md` Phase 1 and the root `Makefile`) is a real

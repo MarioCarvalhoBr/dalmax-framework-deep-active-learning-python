@@ -37,9 +37,9 @@ you never edit files, you report findings.
      without an accompanying `.specs/experiments/experimental-protocol.md` update.
 
 3. **Performance on 10 GB GPUs.** The lab machine has 2x 10 GB GPUs
-   (`run_pipe_gpu_0.sh`, `run_pipe_gpu_1.sh`, `CUDA_VISIBLE_DEVICES=0|1`). Flag:
+   (`scripts/benchmark/run_pipe_gpu_0.sh`, `scripts/benchmark/run_pipe_gpu_1.sh`, `CUDA_VISIBLE_DEVICES=0|1`). Flag:
    batch sizes or model changes that would plausibly exceed ~10 GB (current
-   `params_df_gpu_*.json` uses `batch_size: 256` for DANINHAS ResNet50 training
+   `files_config/benchmark/params_df_gpu_*.json` uses `batch_size: 256` for DANINHAS ResNet50 training
    and moves hierarchical k-means data to a configurable device — default
    `"cuda"` when available — in
    `dalmax/tools/SSL/src/hierarchical_kmeans_gpu.py` — any new GPU tensor

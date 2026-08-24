@@ -34,7 +34,7 @@ by the ablation study (`.specs/experiments/ablation-study.md`).
 ## Consequences
 
 - Positive: no branding/citation churn — existing citation blocks, paper drafts, and lab-machine
-  muscle memory (`git pull` + `run_pipe_gpu_*.sh`) stay valid throughout the refactor.
+  muscle memory (`git pull` + `scripts/benchmark/run_pipe_gpu_*.sh`) stay valid throughout the refactor.
 - Positive: deferring the package move to Phase 4 means Phases 2-3 (the parts that actually change
   runtime behavior and enable the ablations) are not entangled with a large, purely mechanical
   rename — easier to review, easier to bisect if something breaks on the lab machine.

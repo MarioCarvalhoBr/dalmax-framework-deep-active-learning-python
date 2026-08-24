@@ -16,7 +16,7 @@ Steps:
    - `demo.py`, `dalmax/cli.py`, `dalmax/query_strategies/registry.py`,
      `dalmax/query_strategies/__init__.py` →
      `.specs/use-cases/add-new-strategy.md`, `.specs/architecture/current-state.md`.
-   - `params_df_gpu_*.json`, results directory naming in `dalmax/experiment/runner.py` →
+   - `files_config/benchmark/params_df_gpu_*.json`, results directory naming in `dalmax/experiment/runner.py` →
      `.specs/experiments/experimental-protocol.md`.
    - `dalmax/embeddings/cache.py` (embedding cache, `Q` values) →
      `.specs/experiments/ablation-study.md`, `.specs/quality/known-issues.md`.

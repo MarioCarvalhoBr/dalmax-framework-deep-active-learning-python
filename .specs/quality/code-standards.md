@@ -110,7 +110,7 @@ deleted in Phase 4):
 ```python
 kmeans = KMeans(n_clusters=n, random_state=3, n_init=10)
 ```
-Literal `3`, independent of `--seed`; every seed in `SEEDS=(1 2 3)` (`run_pipe_gpu_0.sh`) clustered
+Literal `3`, independent of `--seed`; every seed in `SEEDS=(1 2 3)` (`scripts/benchmark/run_pipe_gpu_0.sh`) clustered
 identically for this strategy.
 
 **After:**

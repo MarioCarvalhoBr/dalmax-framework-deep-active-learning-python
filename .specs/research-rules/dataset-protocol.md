@@ -86,7 +86,7 @@ daninhas-specific hardcodes noted in `known-issues.md` (owned by another
 batch). The `SSLStrategy` hardcoded `'DANINHAS'` params key that used to block
 `SSRAEKmeansHCSampling`/`VCTexKmeansHCSampling` from running against CIFAR10 at
 all (KI-4) was resolved in Phase 2 and the file itself deleted in Phase 4; what
-remains is a content gap, not a code gap — `params_df_gpu_*.json`'s `CIFAR10`
+remains is a content gap, not a code gap — `files_config/benchmark/params_df_gpu_*.json`'s `CIFAR10`
 block still has no `config_kmh`/`selection.hierarchy` entry, so those two
 strategies raise a `dalmax.config.schema.ConfigError` (not a `KeyError`) against
 CIFAR10 until one is added (KI-23, still open — see

@@ -13,7 +13,7 @@ Status: Draft | Final — date YYYY-MM-DD
 | `n_query` | |
 | `n_round` | |
 | `n_epoch` | |
-| params JSON file | e.g. `params_df_gpu_0.json` |
+| params JSON file | e.g. `files_config/benchmark/params_df_gpu_0.json` |
 | Git commit | `<hash>` (from `run_metadata.json` once Phase 2 lands; `TBD` for pre-refactor runs) |
 | Results directory | `results/<...>/SEED_<seed>/NQ_<n_query>_NIL_<n_init>_NR_<n_round>_NE_<n_epoch>/<strategy>/` |
 | Execution environment | local dev \| lab machine (GPU 0/1) \| Colab |

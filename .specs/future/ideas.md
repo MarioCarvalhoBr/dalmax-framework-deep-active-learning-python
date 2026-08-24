@@ -29,7 +29,7 @@ already exists rather than duplicating it.
   relabeled patches) to avoid silently invalidating past comparisons.
 - **CIFAR10 parity for all strategies**: the code-level hardcoded `'DANINHAS'` params key is fixed
   (see above), but `SSRAEKmeansHCSampling`/`VCTexKmeansHCSampling` still cannot run against CIFAR10
-  because `params_df_gpu_{0,1}.json`'s `CIFAR10` block has no `config_kmh`/`selection.hierarchy`
+  because `files_config/benchmark/params_df_gpu_{0,1}.json`'s `CIFAR10` block has no `config_kmh`/`selection.hierarchy`
   block — a content gap, not a code gap (`.specs/quality/known-issues.md` KI-23, still open). Adding
   that block would let CIFAR10 serve as a true secondary-benchmark sanity check for RNHAL, not just
   for the uncertainty-based baselines.
@@ -52,7 +52,7 @@ already exists rather than duplicating it.
   `infrastructure/execution-environments.md` once reviewed, since it is
   currently only described via its CLI invocation in the run scripts.
 - **Reconcile `results/dalmax1/` provenance**: it contains more strategies
-  than `run_pipe_gpu_0.sh` alone would produce (see
+  than `scripts/benchmark/run_pipe_gpu_0.sh` alone would produce (see
   `experiments/baseline-results.md`) — worth an audit of `log-dalmax.log`
   timestamps/commit hashes (once the git-commit-hash logging fix lands) to
   document exactly which script/commit produced each strategy's results,

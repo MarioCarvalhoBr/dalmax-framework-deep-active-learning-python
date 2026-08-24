@@ -47,7 +47,7 @@ def _make_config() -> ExperimentConfig:
         n_round=8,
         dir_results="results/dalmax1/",
         device="cpu",
-        params_json_path="params_df_gpu_0.json",
+        params_json_path="files_config/benchmark/params_df_gpu_0.json",
     )
 
 

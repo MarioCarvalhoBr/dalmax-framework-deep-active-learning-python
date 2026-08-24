@@ -140,7 +140,7 @@ etc.) and the git commit hash directly, no inference needed.
 
 **For pre-Phase-2 runs** (everything under `results/dalmax{1,2}/` and earlier), the original
 limitation still applies: to reproduce a given `results.json` leaf directory exactly, you need the
-params JSON file used (identified only by filename convention, e.g. `params_df_gpu_0.json` vs
+params JSON file used (identified only by filename convention, e.g. `files_config/benchmark/params_df_gpu_0.json` vs
 `_1.json` — not embedded in the results), the exact CLI invocation (seed, n_query, n_round,
 dataset_name, strategy_name, dir_results — n_init_labeled and n_epoch are NOT in `results.json`,
 must be inferred from the directory name / params file), and a best-effort guess at which git commit

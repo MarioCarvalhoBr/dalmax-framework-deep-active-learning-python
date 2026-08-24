@@ -31,7 +31,7 @@ STRATEGY_NAME="RepresentationStrategy"
 N_QUERY=100
 N_ROUND=8
 # n_init_labeled: not passed explicitly, relying on the CLI default of 100 --
-# matches run_pipe_gpu_0.sh/run_pipe_gpu_1.sh and
+# matches scripts/benchmark/run_pipe_gpu_0.sh/scripts/benchmark/run_pipe_gpu_1.sh and
 # .specs/experiments/experimental-protocol.md's "n_init_labeled" section.
 
 CONFIG_DIR="files_config/ablations"
@@ -67,7 +67,7 @@ for entry in "${CONFIGS[@]}"; do
         echo "EXECUTANDO: study=$study config=$config_name seed=$seed (GPU $GPU_NUMBER)"
         echo "------------------------------------------------------------"
 
-        if ! CUDA_VISIBLE_DEVICES=$GPU_NUMBER python demo.py \
+        if ! CUDA_VISIBLE_DEVICES=$GPU_NUMBER poetry run python demo.py \
             --params_json "$params_json" \
             --dataset_name="$DATASET_NAME" \
             --strategy_name "$STRATEGY_NAME" \
@@ -79,7 +79,7 @@ for entry in "${CONFIGS[@]}"; do
         then
             echo "FAILED: study=$study config=$config_name seed=$seed" | tee -a "$FAILURE_LOG"
         else
-            echo "Comando executado: CUDA_VISIBLE_DEVICES=$GPU_NUMBER python demo.py --params_json $params_json --dataset_name=$DATASET_NAME --strategy_name $STRATEGY_NAME --n_query $N_QUERY --seed $seed --n_round $N_ROUND --dir_results=$dir_results --device cuda"
+            echo "Comando executado: CUDA_VISIBLE_DEVICES=$GPU_NUMBER poetry run python demo.py --params_json $params_json --dataset_name=$DATASET_NAME --strategy_name $STRATEGY_NAME --n_query $N_QUERY --seed $seed --n_round $N_ROUND --dir_results=$dir_results --device cuda"
             echo "(study=$study, config=$config_name, seed=$seed) finalizado."
         fi
     done
@@ -97,5 +97,5 @@ fi
 echo "------------------------------------------------------------"
 
 # Run ExperimentNotifier to send email notification (same pattern as
-# run_pipe_gpu_0.sh/run_pipe_gpu_1.sh).
-python3 ExperimentNotifier/main.py --dir_results="${RESULTS_ROOT}/" --args "GPU_NUMBER=$GPU_NUMBER, ABLATION_BATCH=gpu1, FAILURE_LOG=$FAILURE_LOG"
+# scripts/benchmark/run_pipe_gpu_0.sh/scripts/benchmark/run_pipe_gpu_1.sh).
+poetry run python ExperimentNotifier/main.py --dir_results="${RESULTS_ROOT}/" --args "GPU_NUMBER=$GPU_NUMBER, ABLATION_BATCH=gpu1, FAILURE_LOG=$FAILURE_LOG"

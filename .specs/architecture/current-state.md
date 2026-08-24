@@ -22,7 +22,7 @@ forward. See ADR 0002's final amendment for the itemized before/after and
 
 | Area | File(s) | Responsibility |
 |---|---|---|
-| CLI entry point | `demo.py` (thin shim, `from dalmax.cli import main`) → `dalmax/cli.py` | Argparse (same flags as the original `demo.py`, plus `--device`/`--embedding_variant`), builds an `ExperimentConfig` via `dalmax/config/loader.py`, delegates to `dalmax/experiment/runner.py::ExperimentRunner` + `dalmax/experiment/reporter.py::write_report`. `demo.py` and `run_pipe_gpu_*.sh` keep working unchanged. |
+| CLI entry point | `demo.py` (thin shim, `from dalmax.cli import main`) → `dalmax/cli.py` | Argparse (same flags as the original `demo.py`, plus `--device`/`--embedding_variant`), builds an `ExperimentConfig` via `dalmax/config/loader.py`, delegates to `dalmax/experiment/runner.py::ExperimentRunner` + `dalmax/experiment/reporter.py::write_report`. `demo.py` and `scripts/benchmark/run_pipe_gpu_*.sh` keep working unchanged. |
 | Config layer | `dalmax/config/schema.py` (`ExperimentConfig`, `DatasetConfig`, `ConfigError`), `dalmax/config/loader.py` (`load_experiment_config`) | Reads the on-disk params JSON schema (backward compatible, see §6), raises `ConfigError` (a `ValueError` subclass) naming the missing/invalid key instead of a bare `KeyError`. |
 | Seeding | `dalmax/seeding.py` | `seed_everything`, `derive_seed(seed, purpose)` — single source of RNG seeding, including `torch.backends.cudnn.deterministic = True` / `benchmark = False`. |
 | Logging | `dalmax/logging_utils.py` (moved from `utils/LOGGER.py`) | Module-level singleton logger; writes to `results/logs/<timestamp>-log-dalmax.log`, later renamed by the run into the run's results directory. |
@@ -37,7 +37,7 @@ forward. See ADR 0002's final amendment for the itemized before/after and
 | Vendored tools | `dalmax/tools/SSRAE/{extractor,rnn,splitter,classifier,classification}.py`, `dalmax/tools/VCTex/{VCTexMethod,extractor,rnn,split,classification}.py`, `dalmax/tools/SSL/src/{hierarchical_kmeans_gpu,hierarchical_sampling,clusters,kmeans_gpu,utils,dist_comm,distributed_kmeans_gpu}.py` | Moved unchanged (contents untouched) from `core/tools/`; `SSL/` remains Meta-licensed, wrap-don't-edit still applies to file *contents*. |
 | Experiment orchestration | `dalmax/experiment/{runner,reporter,run_metadata}.py` | `ExperimentRunner.run()` drives the round loop; `reporter.write_report` writes `results.json`/`predictions.csv`/plots; `run_metadata.write_run_metadata` writes `run_metadata.json` (see §8). |
 | Reporting (post-hoc) | `dalmax/reporting/{extract_confusion_matrices,chunk_results,average_confusion_matrices,average_results,build_method_metrics,plot_results_dir,ablation_report}.py` | Renamed/renumbered from `utils/report/1_..4_*.py` into descriptive names; `ablation_report.py` is new (Phase 3). |
-| Params | `params_df_gpu_0.json`, `params_df_gpu_1.json` | Per-dataset hyperparameter dict keyed by dataset name string; schema in §6. |
+| Params | `files_config/benchmark/params_df_gpu_0.json`, `files_config/benchmark/params_df_gpu_1.json` | Per-dataset hyperparameter dict keyed by dataset name string; schema in §6. |
 
 Deleted outright in Phase 4 (not moved, not kept as dead code): `utils/orchestrator.py`,
 `core/query_strategies/{ssrae_kmeans_sampling,vctex_kmeans_sampling,ssl_ssrae_sampling}.py`,
@@ -65,7 +65,7 @@ became `dalmax/models/daninhas_resnet50.py`.
 ```mermaid
 flowchart TD
     CLI["demo.py -> dalmax.cli.main()\n(--dataset_name, --strategy_name, --seed, --n_query, --n_round, --device, ...)"]
-    PARAMS["params_df_gpu_N.json\n-> dalmax/config/loader.py: ExperimentConfig"]
+    PARAMS["files_config/benchmark/params_df_gpu_N.json\n-> dalmax/config/loader.py: ExperimentConfig"]
     SEED["dalmax/seeding.py: seed_everything\ncudnn.deterministic = True, benchmark = False"]
     DATAREG["dalmax/data/registry.py: get_dataset"]
     MODELREG["dalmax/models/registry.py: get_network"]
@@ -128,7 +128,7 @@ constructor injection (a duck-typed `HierarchyConfig`), resolved by
 never a hardcoded dataset-name string lookup. A legacy `"config_kmh"` block with no `"selection"`
 key in the params JSON is read as `selection = {"method": "hierarchical", "hierarchy": config_kmh}`
 (full backward compatibility with the existing shape `{"n_clusters": List[int], "n_levels": int,
-"sample_sizes": List[int]}`, e.g. `params_df_gpu_0.json`'s `n_clusters=[600,200,100]`,
+"sample_sizes": List[int]}`, e.g. `files_config/benchmark/params_df_gpu_0.json`'s `n_clusters=[600,200,100]`,
 `n_levels=3`, `sample_sizes=[30,15,2]`). Running a hierarchical strategy against a dataset whose
 params JSON entry has no `config_kmh`/`selection.hierarchy` block raises a `ConfigError` naming the
 missing key (not a `KeyError`) — this is currently true for `CIFAR10` (KI-23, still open: a content
@@ -175,8 +175,8 @@ tracked as a numbered known issue.
   }
 }
 ```
-`config_kmh` is only present for `DANINHAS` in both `params_df_gpu_0.json` and
-`params_df_gpu_1.json`. `dalmax/config/loader.py::load_experiment_config` reads this exact on-disk
+`config_kmh` is only present for `DANINHAS` in both `files_config/benchmark/params_df_gpu_0.json` and
+`files_config/benchmark/params_df_gpu_1.json`. `dalmax/config/loader.py::load_experiment_config` reads this exact on-disk
 schema (no breaking change) and additionally accepts two optional per-dataset keys:
 `"embedding": {"extractor": "ssrae"|"vctex"|"resnet_imagenet", "q": ..., "variant":
 "full"|"spatial"|"spectral"}` and `"selection": {"method":

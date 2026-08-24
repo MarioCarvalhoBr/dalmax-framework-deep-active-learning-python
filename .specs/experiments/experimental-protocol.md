@@ -13,7 +13,7 @@ assume the CLI default is what was actually run.
 CLI flags and two additive `results.json` keys, called out explicitly in
 their own sections below (`--device`/`--embedding_variant`,
 `all_precision_macro`/`all_recall_macro`/`all_f1_macro`) and one new
-artifact (`run_metadata.json`). `run_pipe_gpu_0.sh`/`run_pipe_gpu_1.sh` and
+artifact (`run_metadata.json`). `scripts/benchmark/run_pipe_gpu_0.sh`/`scripts/benchmark/run_pipe_gpu_1.sh` and
 every existing params JSON keep working unchanged. See
 `.specs/architecture/current-state.md` §0 for what changed under the hood.
 
@@ -45,15 +45,15 @@ The held-out `test/` set is used for every round's evaluation
 
 `--seed {1,2,3}` — used both for `np.random.seed`/`torch.manual_seed` in
 `demo.py` and as the AL initial-pool shuffle seed in
-`Data.initialize_labels`. All batch runs (`run_pipe_gpu_0.sh`,
-`run_pipe_gpu_1.sh`) sweep `SEEDS=(1 2 3)`. `scripts/run_pipline.sh` takes
+`Data.initialize_labels`. All batch runs (`scripts/benchmark/run_pipe_gpu_0.sh`,
+`scripts/benchmark/run_pipe_gpu_1.sh`) sweep `SEEDS=(1 2 3)`. `scripts/benchmark/run_pipline.sh` takes
 seed as a positional CLI arg (`$2`) and is invoked per seed externally (its
 inner loop does not sweep seeds).
 
 ## n_init_labeled
 
 `demo.py --n_init_labeled` default is **100**. **Neither
-`run_pipe_gpu_0.sh`/`run_pipe_gpu_1.sh` nor `scripts/run_pipline.sh` pass
+`scripts/benchmark/run_pipe_gpu_0.sh`/`scripts/benchmark/run_pipe_gpu_1.sh` nor `scripts/benchmark/run_pipline.sh` pass
 `--n_init_labeled` explicitly** — both rely on the CLI default of 100. This
 is confirmed by the results directory names actually on disk
 (`NQ_*_NIL_100_NR_*_NE_10`, see `baseline-results.md`). TBD: if a future run
@@ -61,21 +61,21 @@ script changes this, update here.
 
 ## n_query (budget per round)
 
-`--n_query {10, 50, 100}` in `run_pipe_gpu_0.sh` / `run_pipe_gpu_1.sh`
-(`QUERIES=(10 50 100)`) and in `scripts/run_pipline.sh` (looped separately
+`--n_query {10, 50, 100}` in `scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh`
+(`QUERIES=(10 50 100)`) and in `scripts/benchmark/run_pipline.sh` (looped separately
 as 10, then 50, then 100). `demo.py` CLI default is 10 (used only if not
 overridden).
 
 ## n_round
 
-- `run_pipe_gpu_0.sh` / `run_pipe_gpu_1.sh`: **`--n_round 8`** (hardcoded in
+- `scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh`: **`--n_round 8`** (hardcoded in
   the script, not swept).
-- `scripts/run_pipline.sh`: **`N_ROUND=10`** (hardcoded).
+- `scripts/benchmark/run_pipline.sh`: **`N_ROUND=10`** (hardcoded).
 - `demo.py` CLI default: 10.
 
-These two run scripts are NOT protocol-equivalent — `run_pipe_gpu_*` (RNHAL /
+These two run scripts are NOT protocol-equivalent — `scripts/benchmark/run_pipe_gpu_*.sh` (RNHAL /
 `SSRAEKmeansHCSampling`, 8 rounds, `results/dalmax{1,2}/`) and
-`run_pipline.sh` (baseline strategies, 10 rounds, `params_dnf.json`, **file
+`scripts/benchmark/run_pipline.sh` (baseline strategies, 10 rounds, `params_dnf.json`, **file
 not present in the repo — TBD** whether it existed only on the lab machine)
 were evidently authored at different times. Any cross-strategy comparison
 must first confirm `n_round` matches, or normalize on a common round index.
@@ -83,8 +83,8 @@ must first confirm `n_round` matches, or normalize on a common round index.
 ## n_epoch
 
 `n_epoch` comes from the params JSON, **not** a `demo.py` CLI flag.
-`params_df_gpu_0.json` / `params_df_gpu_1.json`: `DANINHAS.n_epoch = 10`,
-`CIFAR10.n_epoch = 20`. `params_dnf.json` (used by `scripts/run_pipline.sh`):
+`files_config/benchmark/params_df_gpu_0.json` / `files_config/benchmark/params_df_gpu_1.json`: `DANINHAS.n_epoch = 10`,
+`CIFAR10.n_epoch = 20`. `params_dnf.json` (used by `scripts/benchmark/run_pipline.sh`):
 TBD, file absent from repo.
 
 ## Model / classifier
@@ -93,8 +93,8 @@ ResNet50 (`dalmax/models/daninhas_resnet50.py`, was `core/daninhas_model.py` bef
 Phase 4's move, TBD verify exact torchvision variant and
 pretrained-weights flag — not read in this batch), trained per round via
 `Strategy.train()` → `net.train(labeled_data)`. `optimizer_args`:
-`lr=0.05`, `momentum=0.3` (both `params_df_gpu_0.json` and
-`params_df_gpu_1.json`, `DANINHAS` section). `train_args`/`test_args` batch
+`lr=0.05`, `momentum=0.3` (both `files_config/benchmark/params_df_gpu_0.json` and
+`files_config/benchmark/params_df_gpu_1.json`, `DANINHAS` section). `train_args`/`test_args` batch
 size 256, `num_workers=4` for DANINHAS (64 / 1000, `num_workers=1` for
 CIFAR10). `n_classes=5` for DANINHAS, `10` for CIFAR10.
 
@@ -142,21 +142,21 @@ ablations.
   of three separate JSON files, if preferred over the JSON-per-variant
   approach `ablation-study.md`'s exact configs use.
 
-- `run_pipe_gpu_0.sh` / `run_pipe_gpu_1.sh` run **only**
+- `scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh` run **only**
   `SSRAEKmeansHCSampling` (the RNHAL strategy) across the `n_query × seed`
   grid, each on its own GPU/params file, into `results/dalmax1/` and
   `results/dalmax2/` respectively.
-- `scripts/run_pipline.sh` runs the ten non-SSRAE/VCTex baseline strategies
+- `scripts/benchmark/run_pipline.sh` runs the ten non-SSRAE/VCTex baseline strategies
   (all except `AdversarialBIM`/`AdversarialDeepFool`, which are commented
   out, and except `SSRAEKmeansSampling`/`VCTexKmeansSampling`/
   `SSRAEKmeansHCSampling`/`VCTexKmeansHCSampling`) — but note this script
-  only **echoes** the `python demo.py ...` command lines rather than
+  only **echoes** the `poetry run python demo.py ...` command lines rather than
   executing them directly (no `eval`/backticks); it is a command generator
   meant to be piped to a shell or copy-pasted. TBD confirm this is
   intentional and how it is actually invoked on the lab machine.
 - `results/dalmax1/` on disk (see `baseline-results.md`) additionally
   contains results for the full baseline set + `VCTexKmeansHCSampling`, so a
-  more complete run than `run_pipe_gpu_0.sh` alone was executed at some
+  more complete run than `scripts/benchmark/run_pipe_gpu_0.sh` alone was executed at some
   point — TBD reconcile with the exact script/commit used.
 
 ## Metrics
@@ -210,13 +210,13 @@ seed + git commit) fully determine a run" verifiable after the fact — see
 
 ## Params file per GPU / environment
 
-- `params_df_gpu_0.json` → `run_pipe_gpu_0.sh` (`GPU_NUMBER=0`) →
+- `files_config/benchmark/params_df_gpu_0.json` → `scripts/benchmark/run_pipe_gpu_0.sh` (`GPU_NUMBER=0`) →
   `results/dalmax1/`. `config_kmh`: `n_clusters=[600,200,100]`,
   `n_levels=3`, `sample_sizes=[30,15,2]`.
-- `params_df_gpu_1.json` → `run_pipe_gpu_1.sh` (`GPU_NUMBER=1`) →
+- `files_config/benchmark/params_df_gpu_1.json` → `scripts/benchmark/run_pipe_gpu_1.sh` (`GPU_NUMBER=1`) →
   `results/dalmax2/`. `config_kmh`: `n_clusters=[500,200,150]`,
   `n_levels=3`, `sample_sizes=[60,30,2]`.
-- `params_dnf.json` → `scripts/run_pipline.sh` — **file not in the repo**
+- `params_dnf.json` → `scripts/benchmark/run_pipline.sh` — **file not in the repo**
   (TBD: lab-machine-only or lost).
-- Both `params_df_gpu_*.json` are otherwise identical for DANINHAS except
+- Both `files_config/benchmark/params_df_gpu_*.json` are otherwise identical for DANINHAS except
   `config_kmh`, and identical for CIFAR10.

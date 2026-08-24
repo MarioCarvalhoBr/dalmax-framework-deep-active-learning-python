@@ -18,7 +18,7 @@ pre-Phase-2 state for context, but the actual seeding code they refer to no long
 locations.
 
 - `demo.py` used to seed `np.random.seed(args.seed)` and `torch.manual_seed(args.seed)`
-  from the `--seed` CLI argument (see `run_pipe_gpu_0.sh` / `run_pipe_gpu_1.sh`,
+  from the `--seed` CLI argument (see `scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh`,
   which sweep `SEEDS=(1 2 3)`, still valid — the CLI flag and sweep are unchanged, only where the
   seeding happens moved to `dalmax/seeding.py`).
 - **Known violation, now fixed**: the now-deleted `core/query_strategies/ssrae_kmeans_sampling.py`

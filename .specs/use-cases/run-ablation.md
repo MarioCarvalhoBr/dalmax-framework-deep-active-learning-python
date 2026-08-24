@@ -9,7 +9,7 @@ plus `files_config/ablations/micro/*.json` (CPU smoke mirrors) exist on disk, va
 `tests/test_ablation_configs.py` and smoke-tested end-to-end by `make smoke-ablations` (11/11
 passing on the local CPU-only dev notebook against `DATA/daninhas_micro/`).
 `scripts/ablations/run_ablation_gpu_0.sh` / `run_ablation_gpu_1.sh` are the actual lab-machine
-entry points (mirroring `run_pipe_gpu_0.sh`/`run_pipe_gpu_1.sh`'s style), splitting the 11 configs
+entry points (mirroring `scripts/benchmark/run_pipe_gpu_0.sh`/`scripts/benchmark/run_pipe_gpu_1.sh`'s style), splitting the 11 configs
 across the two GPUs by expected cost. This use case is now purely operational: what remains is
 running these two scripts on the lab machine (never locally — no GPU here, per
 `.specs/infrastructure/execution-environments.md`) and aggregating with

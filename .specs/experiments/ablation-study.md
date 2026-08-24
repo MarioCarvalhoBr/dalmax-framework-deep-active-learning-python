@@ -116,7 +116,7 @@ naive halving is never silently wrong again.
   docstring). Use `"embedding": {"extractor": "ssrae", "q": 13, "variant": "spatial"|"spectral"|"full"}`
   with `"selection": {"method": "hierarchical", "hierarchy": {...}}` held fixed
   at whatever value is chosen as the ablation's reference hierarchy (see §6.2
-  — pick the winning config there first, or use the `run_pipe_gpu_0.sh`
+  — pick the winning config there first, or use the `scripts/benchmark/run_pipe_gpu_0.sh`
   reference `n_clusters=[600,200,100]`, `n_levels=3`, `sample_sizes=[30,15,2]`
   as a provisional fixed point, as done in the exact config below).
 
@@ -158,13 +158,13 @@ One params JSON per variant, differing only in `embedding.variant` (`spatial` sh
 ```
 
 ```bash
-CUDA_VISIBLE_DEVICES=<gpu> python demo.py \
+CUDA_VISIBLE_DEVICES=<gpu> poetry run python demo.py \
     --params_json params_ablation_6_1_spatial.json --dataset_name DANINHAS \
     --strategy_name RepresentationStrategy --n_query 100 --seed <1|2|3> \
     --n_round 8 --dir_results results/ablation_representation/ --device cuda
 ```
 
-**Note on `n_classes`**: `5`, matching `params_df_gpu_0.json` and the five class
+**Note on `n_classes`**: `5`, matching `files_config/benchmark/params_df_gpu_0.json` and the five class
 subdirectories under `DATA/daninhas_full/` (verified 2026-08-23; an earlier audit snippet
 mistakenly carried `6`).
 
@@ -250,7 +250,7 @@ docstring):
 ```
 
 ```bash
-CUDA_VISIBLE_DEVICES=<gpu> python demo.py \
+CUDA_VISIBLE_DEVICES=<gpu> poetry run python demo.py \
     --params_json params_ablation_6_2_L3.json --dataset_name DANINHAS \
     --strategy_name RepresentationStrategy --n_query 100 --seed <1|2|3> \
     --n_round 8 --dir_results results/ablation_hierarchy/ --device cuda
@@ -325,7 +325,7 @@ as §6.1/§6.2's provisional fixed point):
 ```
 
 ```bash
-CUDA_VISIBLE_DEVICES=<gpu> python demo.py \
+CUDA_VISIBLE_DEVICES=<gpu> poetry run python demo.py \
     --params_json params_ablation_6_3_resnet_hier.json --dataset_name DANINHAS \
     --strategy_name RepresentationStrategy --n_query 100 --seed <1|2|3> \
     --n_round 8 --dir_results results/ablation_stage_contribution/ --device cuda
@@ -348,7 +348,7 @@ CUDA_VISIBLE_DEVICES=<gpu> python demo.py \
 ```
 
 ```bash
-CUDA_VISIBLE_DEVICES=<gpu> python demo.py \
+CUDA_VISIBLE_DEVICES=<gpu> poetry run python demo.py \
     --params_json params_ablation_6_3_ssrae_flat.json --dataset_name DANINHAS \
     --strategy_name RepresentationStrategy --n_query 100 --seed <1|2|3> \
     --n_round 8 --dir_results results/ablation_stage_contribution/ --device cuda
@@ -463,12 +463,12 @@ Unit-tested against a synthetic tree in `tests/test_ablation_report.py`; also ru
 
 **Ambiguities resolved while materializing these files** (none required a code change):
 
-- **§6.1's reference hierarchy**: used the `run_pipe_gpu_0.sh`/`params_df_gpu_0.json` reference
+- **§6.1's reference hierarchy**: used the `scripts/benchmark/run_pipe_gpu_0.sh`/`files_config/benchmark/params_df_gpu_0.json` reference
   (`n_clusters=[600,200,100]`, `sample_sizes=[30,15,2]`) exactly as this document's own §6.1 exact-config
   note already specifies, rather than waiting on a §6.2 "winning config" (§6.2 itself hasn't been run
   yet, so there is no winner to pick).
 - **`train_args`/`test_args` batch size**: this document's exact-config JSON snippets show
-  `batch_size: 64`, but the materialized files use `256` (matching `params_df_gpu_0.json` and the
+  `batch_size: 64`, but the materialized files use `256` (matching `files_config/benchmark/params_df_gpu_0.json` and the
   refactor-plan Phase 3 task's explicit instruction to mirror that file) — a deliberate deviation
   from this document's snippets, not an oversight; `256` is the batch size every other DANINHAS run
   in this repo uses.

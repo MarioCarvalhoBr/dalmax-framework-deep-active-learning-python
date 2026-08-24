@@ -12,7 +12,7 @@ Use conventional commit prefixes:
   superseding the now-deleted `utils/orchestrator.py`).
 - `docs:` — README, CLAUDE.md, `.specs/` changes with no code behavior change.
 - `exp:` — experiment configs or results metadata (e.g. a new
-  `params_df_gpu_*.json`, an ablation run script, a `results/` metadata update —
+  `files_config/benchmark/params_df_gpu_*.json`, an ablation run script, a `results/` metadata update —
   never the raw result artifacts themselves, see `data-safety.md`).
 
 ## Commit hygiene

@@ -10,14 +10,14 @@ ablation section for the paper's `\subsection{Ablation study}`. All three
 sub-studies are evaluated with **macro F1** on the held-out split, dataset
 `daninhas_full`, using the seeds and budgets from
 `.specs/experiments/experimental-protocol.md` (seeds 1-3, matching
-`run_pipe_gpu_0.sh` / `run_pipe_gpu_1.sh`).
+`scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh`).
 
 **Status (2026-08-23, Phase 3 landed): configs and lab scripts materialized, CPU smoke-tested
 11/11, not yet run on the lab machine.** All 11 run-table rows are now real files, not just JSON
 snippets in this spec: `files_config/ablations/*.json` (+ `files_config/ablations/micro/*.json` CPU
 mirrors, validated by `tests/test_ablation_configs.py`, smoke-tested by
 `scripts/ablations/smoke_ablations.sh` / `make smoke-ablations`), and
-`scripts/ablations/run_ablation_gpu_0.sh` / `run_ablation_gpu_1.sh` (mirroring `run_pipe_gpu_*.sh`,
+`scripts/ablations/run_ablation_gpu_0.sh` / `run_ablation_gpu_1.sh` (mirroring `scripts/benchmark/run_pipe_gpu_*.sh`,
 splitting the 11 configs across the two lab GPUs by expected hierarchical-clustering cost). See
 `.specs/experiments/ablation-study.md`'s "Materialized files" section for the exact mapping and
 `.specs/use-cases/run-ablation.md` for the operational run order. This file's content
@@ -88,14 +88,14 @@ entry, so they cannot collide with each other or read a stale variant. Use the g
 ## 6.2 Hierarchy ablation
 
 Fix `n_query = 100`, SSRAE full embeddings (`emb_full`). Vary `config_kmh`
-(the hierarchy config in the params JSON — see `params_df_gpu_0.json`'s
+(the hierarchy config in the params JSON — see `files_config/benchmark/params_df_gpu_0.json`'s
 `config_kmh: {n_clusters, n_levels, sample_sizes}`):
 
 | L | k (n_clusters) | Note |
 |---|---|---|
 | 1 | `[50]` | |
 | 2 | `[300, 100]` (alternative: `[100, 50]` — record both, run per advisor's choice) | |
-| 3 | `[300, 100, 50]` | Close to current `params_df_gpu_*.json` shape (`[600,200,100]`, 3 levels) but not identical — this ablation cell uses the exact `[300,100,50]` triple |
+| 3 | `[300, 100, 50]` | Close to current `files_config/benchmark/params_df_gpu_*.json` shape (`[600,200,100]`, 3 levels) but not identical — this ablation cell uses the exact `[300,100,50]` triple |
 | 4 | `[300, 100, 50, 25]` | Matches the `config_kmh` example that was in the now-deleted `ssl_ssrae_sampling.py`'s inline docstring comment |
 
 **Implementation requirement — done (2026-08-23, Phase 2)**: hierarchy depth/cluster counts come
@@ -115,7 +115,7 @@ row are in `.specs/experiments/ablation-study.md` §6.2's run table (derived pro
 Three conditions, all macro F1 on `daninhas_full`:
 
 1. **RNHAL (full)** — F1 taken from the already-executed reference experiments
-   (`SSRAEKmeansHCSampling`, the current `run_pipe_gpu_*.sh` sweeps). No new
+   (`SSRAEKmeansHCSampling`, the current `scripts/benchmark/run_pipe_gpu_*.sh` sweeps). No new
    run needed; pull the number from existing `results/` via
    `.claude/skills/results-reporting/SKILL.md`. Their `results.json` predates the Phase 2 macro-F1
    addition (weighted F1 only) — recompute macro F1 offline from `predictions.csv` for these
