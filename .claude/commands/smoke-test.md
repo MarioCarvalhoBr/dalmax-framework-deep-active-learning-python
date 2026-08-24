@@ -21,9 +21,9 @@ Steps:
      dalmax.data.registry import get_dataset; from dalmax.models.registry import
      get_network"` as a minimal import sanity check.
 3. On failure, read the traceback and classify it:
-   - Import error → likely a missing dependency (check `pyproject.toml` against
-     `requirements.txt`, remembering `pandas` was historically missing — see
-     `.specs/quality/known-issues.md`).
+   - Import error → likely a missing dependency (check whether `pyproject.toml`
+     declares it and re-run `poetry install`; `pandas` was historically missing
+     from the project's dependency list — see `.specs/quality/known-issues.md`).
    - Registry error (`KeyError`/`dalmax.config.schema.ConfigError` from
      `dalmax/query_strategies/registry.py` or another `dalmax/*/registry.py`) →
      likely a strategy/dataset name mismatch between `dalmax/cli.py` choices and the

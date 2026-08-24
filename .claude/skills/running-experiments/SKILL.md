@@ -32,9 +32,9 @@ the task — never attempt a full training sweep on the local notebook.
   `SHARED_CONTEXT.md`, so "via git" means the run scripts/configs, not the
   `results/` artifacts themselves — copy those back separately, e.g. `scp` or
   a shared drive).
-- One params JSON per GPU: `params_df_gpu_0.json` (used by `run_pipe_gpu_0.sh`,
+- One params JSON per GPU: `files_config/benchmark/params_df_gpu_0.json` (used by `scripts/benchmark/run_pipe_gpu_0.sh`,
   `CUDA_VISIBLE_DEVICES=0`, writes to `results/dalmax1/`) and
-  `params_df_gpu_1.json` (used by `run_pipe_gpu_1.sh`,
+  `files_config/benchmark/params_df_gpu_1.json` (used by `scripts/benchmark/run_pipe_gpu_1.sh`,
   `CUDA_VISIBLE_DEVICES=1`, writes to `results/dalmax2/`). Both currently
   configure `DANINHAS`: `n_epoch 10`, `batch_size 256`, `lr 0.05`,
   `momentum 0.3`, `n_classes 5`, `config_kmh` (`n_clusters [600,200,100]`,
@@ -42,21 +42,21 @@ the task — never attempt a full training sweep on the local notebook.
 - Each script sweeps `QUERIES=(10 50 100)` x `SEEDS=(1 2 3)` for one strategy
   (`SSRAEKmeansHCSampling` in both current scripts) with `--n_round 8`:
   ```bash
-  bash run_pipe_gpu_0.sh   # GPU 0, results/dalmax1/
-  bash run_pipe_gpu_1.sh   # GPU 1, results/dalmax2/
+  poetry run bash scripts/benchmark/run_pipe_gpu_0.sh   # GPU 0, results/dalmax1/
+  poetry run bash scripts/benchmark/run_pipe_gpu_1.sh   # GPU 1, results/dalmax2/
   ```
   Run each under `nohup`/`tmux`/`screen` for a long unattended sweep, e.g.
-  `tmux new -s gpu0 'bash run_pipe_gpu_0.sh'`.
-- For the older baseline-strategy sweep, `scripts/run_pipline.sh` iterates all
+  `tmux new -s gpu0 'poetry run bash scripts/benchmark/run_pipe_gpu_0.sh'`.
+- For the older baseline-strategy sweep, `scripts/benchmark/run_pipline.sh` iterates all
   non-adversarial strategies (`RandomSampling`, `LeastConfidence`,
   `MarginSampling`, `EntropySampling`, the dropout variants, `KMeansSampling`,
   `KCenterGreedy`, `BALDDropout`) over `n_query` in `{10, 50, 100}` with
   `N_ROUND=10`, using `params_dnf.json` (usage:
-  `bash scripts/run_pipline.sh <gpu_id> <seed>`) — note `params_dnf.json` is
+  `bash scripts/benchmark/run_pipline.sh <gpu_id> <seed>`) — note `params_dnf.json` is
   **not committed to this repo**; it must exist locally on the lab machine
   before running this script.
-- **ExperimentNotifier**: both `run_pipe_gpu_0.sh` and `run_pipe_gpu_1.sh` call
-  `python3 ExperimentNotifier/main.py --dir_results=<results_dir> --args "..."`
+- **ExperimentNotifier**: both `scripts/benchmark/run_pipe_gpu_0.sh` and `scripts/benchmark/run_pipe_gpu_1.sh` call
+  `poetry run python ExperimentNotifier/main.py --dir_results=<results_dir> --args "..."`
   after the sweep finishes, which sends an HTML email via SMTP (STARTTLS,
   `smtp.gmail.com:587` by default) summarizing the run. It requires
   `ExperimentNotifier/.env` (gitignored — a separate git repo) with
@@ -78,12 +78,13 @@ the task — never attempt a full training sweep on the local notebook.
      keep a pre-made zip in Drive.
   2. In the Colab notebook, copy the zip from Drive to the local runtime disk
      and `unzip` it there (e.g. `/content/DATA/`), not `/content/drive/...`.
-  3. `pip install -r requirements.txt` using the **exported** requirements
-     file (`make export-reqs` — see Deliverable A / `pyproject.toml`), not a
-     hand-maintained list, so Colab matches the pinned versions used locally
-     and on the lab machine.
-  4. Run `demo.py` with `--data_dir` pointing at the local runtime copy (via
-     the params JSON's `data_dir` key, not `DATA/` on Drive).
+  3. `pipx install poetry` (once per runtime) then `poetry install` —
+     DalMax is Poetry-only — the `requirements.txt`/pip fallback was retired (see
+     `.specs/adr/0001-adopt-poetry.md`'s amendment), so this is the same
+     step used locally and on the lab machine, keeping Colab on the exact
+     `pyproject.toml`/`poetry.lock` pins.
+  4. Run `poetry run python demo.py` with `--data_dir` pointing at the local
+     runtime copy (via the params JSON's `data_dir` key, not `DATA/` on Drive).
   5. Copy `results/` back to Drive (or download) at the end of the session —
      Colab runtimes are ephemeral; nothing under `/content/` survives a
      disconnect.

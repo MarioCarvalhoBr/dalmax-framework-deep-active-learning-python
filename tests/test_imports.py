@@ -96,7 +96,7 @@ def test_module_imports_cleanly(module_name):
         # an environment/packaging gap, not a code defect this test should
         # fail on. Historically this covered utils/report/1_cm_extract_from_pdf.py's
         # (now dalmax/reporting/extract_confusion_matrices.py) PyPDF2 import
-        # (undeclared in requirements.txt/pyproject.toml, see
+        # (undeclared in pyproject.toml, see
         # known-issues.md KI-28); PyPDF2 is now a declared dependency
         # (pyproject.toml) and that module imports cleanly, but this
         # fallback stays as a defensive guard for any future undeclared

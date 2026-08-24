@@ -1,4 +1,4 @@
-.PHONY: setup lint format test test-all smoke smoke-ablations export-reqs clean
+.PHONY: setup lint format test test-all smoke smoke-ablations clean
 
 # Install the Poetry-managed environment (./.venv, see poetry.toml).
 setup:
@@ -67,13 +67,6 @@ smoke:
 # own header for why this is set -e, unlike the lab run scripts).
 smoke-ablations:
 	bash scripts/ablations/smoke_ablations.sh
-
-# Regenerate requirements.txt from the Poetry lock file, for the lab machine
-# and Colab (which install via `pip install -r requirements.txt`, not
-# Poetry). Requires the export plugin:
-#   poetry self add poetry-plugin-export
-export-reqs:
-	poetry export -f requirements.txt --output requirements.txt --without-hashes
 
 clean:
 	find . -type d -name '__pycache__' -not -path './.venv/*' -exec rm -rf {} +

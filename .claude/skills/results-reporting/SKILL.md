@@ -11,8 +11,8 @@ files (written by `demo.py` under
 into aggregated tables and plots. Run the scripts in the order below; each
 script's own header comment (`# Example usage: ...`) is the authoritative
 source for its exact CLI flags — read it before running. Every script is
-runnable either directly (`python dalmax/reporting/<name>.py`) or as a module
-(`python -m dalmax.reporting.<name>`).
+runnable either directly (`poetry run python dalmax/reporting/<name>.py`) or as a module
+(`poetry run python -m dalmax.reporting.<name>`).
 
 (Moved and renamed from `utils/report/{1_cm_extract_from_pdf,
 2_report_build_chunk_results, 3_cm_build_average,
@@ -32,7 +32,7 @@ prefixes are gone, since a name starting with a digit can't be used with
 
 2. **`dalmax/reporting/chunk_results.py`** (was
    `2_report_build_chunk_results.py`)
-   (`python -m dalmax.reporting.chunk_results --input_dir results/dalmax1/daninhas_full/ --pattern SEED*`) —
+   (`poetry run python -m dalmax.reporting.chunk_results --input_dir results/dalmax1/daninhas_full/ --pattern SEED*`) —
    walks a results tree matching `--pattern` (e.g. `SEED*`), reads each run's
    `results.json`, and builds per-seed CSV tables and plots for the four
    metrics it tracks (`MetricsType`: `all_acc`, `all_precision`, `all_recall`,
@@ -40,13 +40,13 @@ prefixes are gone, since a name starting with a digit can't be used with
 
 3. **`dalmax/reporting/average_confusion_matrices.py`** (was
    `3_cm_build_average.py`)
-   (`python3 -m dalmax.reporting.average_confusion_matrices --input_dir results/dalmax1/daninhas_full/results/ --pattern SEED*`) —
+   (`poetry run python -m dalmax.reporting.average_confusion_matrices --input_dir results/dalmax1/daninhas_full/results/ --pattern SEED*`) —
    averages confusion matrices across seeds for each strategy/`n_query`
    configuration.
 
 4. **`dalmax/reporting/average_results.py`** (was
    `4_report_build_average_results.py`)
-   (`python -m dalmax.reporting.average_results --input_dir results/dalmax1/daninhas_full/results/ --pattern SEED*`) —
+   (`poetry run python -m dalmax.reporting.average_results --input_dir results/dalmax1/daninhas_full/results/ --pattern SEED*`) —
    builds the final across-seed averaged metrics tables/plots (same
    `MetricsType` set as step 2, now averaged over `SEEDS`), the form most
    directly useful for a paper table.
@@ -56,14 +56,14 @@ prefixes are gone, since a name starting with a digit can't be used with
    one `n_query`, across seeds matching a glob pattern. Example usage (from its
    own docstring):
    ```bash
-   python3 dalmax/reporting/build_method_metrics.py --method MarginSampling --round 8 --nq 100
-   python3 dalmax/reporting/build_method_metrics.py --method LeastConfidence --round 5 --nq 50 --input_folder ./resultados
-   python3 dalmax/reporting/build_method_metrics.py --method BALDDropout --round 3 --nq 10 --seed "EXPERIMENTO_*"
+   poetry run python dalmax/reporting/build_method_metrics.py --method MarginSampling --round 8 --nq 100
+   poetry run python dalmax/reporting/build_method_metrics.py --method LeastConfidence --round 5 --nq 50 --input_folder ./resultados
+   poetry run python dalmax/reporting/build_method_metrics.py --method BALDDropout --round 3 --nq 10 --seed "EXPERIMENTO_*"
    ```
    Use this for a quick one-off number instead of the full pipeline.
 
 6. **`dalmax/reporting/plot_results_dir.py`**
-   (`python dalmax/reporting/plot_results_dir.py --dir_input results/<some_run_dir>`) —
+   (`poetry run python dalmax/reporting/plot_results_dir.py --dir_input results/<some_run_dir>`) —
    lists all run subfolders under `--dir_input`, reads each `results.json`, and
    produces summary plots directly from a flat results directory (does not
    require the `SEED_*` / `NQ_*` nesting the numbered pipeline expects — TBD
@@ -73,8 +73,8 @@ prefixes are gone, since a name starting with a digit can't be used with
 ## Notes
 
 - All of steps 2-4 depend on `pandas`, `numpy`, `matplotlib`, `seaborn` —
-  confirm these are installed (`pandas` was historically missing from
-  `requirements.txt`; see `.specs/quality/known-issues.md`).
+  `poetry install` installs all of them (`pandas` was historically missing
+  from the project's dependency list; see `.specs/quality/known-issues.md`).
 - Never point these scripts' output at a path that would overwrite an existing
   raw `results.json` or plot from a prior run — `.claude/rules/data-safety.md`
   treats `results/` as append-only. Check each script's `argparse` defaults for

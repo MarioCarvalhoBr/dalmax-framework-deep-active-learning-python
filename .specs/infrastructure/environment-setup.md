@@ -18,21 +18,32 @@ This file documents the setup **procedure** for reference:
    wheels, but standard PyPI `torch==2.5.0` wheels already include a CPU
    fallback path, so no separate CPU-only index is required locally.
 
-## Lab machine / Colab — pip fallback from exported requirements
+## Lab machine / Colab — Poetry, same as local (pip fallback retired)
 
-Poetry is the source of truth for dependency versions, but the lab machine
-and Colab install via a **plain pip requirements file exported from
-Poetry**, not via Poetry itself (Poetry is a local dev convenience, not
-assumed present on the lab machine):
+**Amendment (2026-08-23)**: the pip/`requirements.txt` fallback documented below (historical) was
+retired. Poetry is now the **only** supported install path on every machine — dev notebook, lab
+machine, and Colab alike (see `.specs/adr/0001-adopt-poetry.md`'s amendment). The historical
+`requirements.txt` file was deleted from the repo and the `export-reqs` Makefile target retired.
+
+Lab machine / Colab install procedure (identical to the local dev notebook procedure above):
+```
+pipx install poetry   # once per machine, if Poetry isn't already installed
+poetry install
+```
+
+### Historical record: the pre-2026-08-23 pip fallback
+
+Poetry was previously the source of truth for dependency versions, but the lab machine
+and Colab installed via a **plain pip requirements file exported from
+Poetry**, not via Poetry itself:
 
 ```
-poetry export -f requirements.txt --output requirements.txt --without-hashes
+poetry export -f requirements.txt --output requirements.txt --without-hashes   # historical, retired
 ```
 
-(Documented as the `export-reqs` Makefile target in the Poetry-deliverable
-batch; requires the `poetry-plugin-export` plugin.) The committed
-`requirements.txt` currently at the repo root is a **hand-maintained
-pre-Poetry file**:
+(Historical — was the `export-reqs` Makefile target; required the `poetry-plugin-export` plugin.) The
+`requirements.txt` file was historical — it used to sit at the repo root and started life as a
+**hand-maintained pre-Poetry file**:
 
 ```
 matplotlib==3.9.2
@@ -49,16 +60,13 @@ tqdm==4.67.1
 (`import pandas as pd`, used for `predictions.csv` export) and by every script in
 `dalmax/reporting/` (was `utils/report/`) (`import pandas as pd`); was absent from the
 hand-maintained `requirements.txt` snapshot shown above. This was a real bug at the time: a fresh
-`pip install -r requirements.txt` followed by `python demo.py ...` would raise
+`pip install -r requirements.txt` (historical command, no longer valid) followed by `python demo.py ...` would raise
 `ModuleNotFoundError: pandas` the first time `predictions_df = pd.DataFrame(...)` executes (end of
 a full run, after training — i.e. the failure surfaces late, wasting a full training run's
-compute). **Status: resolved** — `pyproject.toml` declares `pandas==2.2.3` and `requirements.txt`
-has since been re-exported to include it; see `.specs/quality/known-issues.md` KI-2.
-
-Lab machine / Colab install procedure:
-```
-pip install -r requirements.txt      # exported-from-Poetry version, once available
-```
+compute). **Status: resolved, then moot** — `pyproject.toml` declares `pandas==2.2.3`, and the
+`requirements.txt` export mechanism this whole section describes was retired outright on
+2026-08-23, so this gap can no longer recur by construction; see `.specs/quality/known-issues.md`
+KI-2.
 
 ## CUDA note
 
@@ -69,7 +77,8 @@ conda install pytorch==2.5.0 torchvision==0.20.0 torchaudio==2.5.0 pytorch-cuda=
 ```
 This is the CUDA toolkit version the lab machine's GPU training is expected
 to target — `torch==2.5.0`/`torchvision==0.20.0` are consistent with the
-`requirements.txt` pins above. The current README also references Python
+historical `requirements.txt` pins above (that file no longer exists — see the
+Amendment note at the top of this file). The current README also references Python
 3.9 for the conda/venv setup instructions, which **predates and conflicts
 with** the Poetry `python = ">=3.10,<3.13"` constraint being introduced —
 this reconciliation (drop the stale 3.9 guidance) is the responsibility of
