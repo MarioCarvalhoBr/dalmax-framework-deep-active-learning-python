@@ -453,13 +453,16 @@ DalMax is developed and run across three environments:
 2. **Lab machine (primary training)** — 2× NVIDIA GPUs, 10 GB each. Workflow: push
    from the notebook, pull on the lab machine, run `scripts/benchmark/run_pipe_gpu_0.sh` /
    `scripts/benchmark/run_pipe_gpu_1.sh` (one params JSON per GPU), results come back via git or copy.
-3. **Google Colab Pro (secondary/burst)** — one-off runs; the dataset is uploaded as
-   a zip and extracted into the runtime rather than read file-by-file from Drive.
+3. **Google Colab Pro (secondary/burst)** — single GPU, session-limited; a hybrid
+   layout (repo + `.venv` + dataset on the runtime's local disk, `results/`
+   symlinked to Drive so artifacts survive a disconnect) via `make colab-setup` /
+   `make ablations-colab`.
 
 Details, decision matrix, and the Colab checklist:
 [`.specs/infrastructure/execution-environments.md`](.specs/infrastructure/execution-environments.md).
 For the lab machine specifically, see **[`LAB_RUNBOOK.md`](LAB_RUNBOOK.md)**
-for the operator-facing step-by-step guide.
+for the operator-facing step-by-step guide. For Colab, see
+**[`COLAB_RUNBOOK.md`](COLAB_RUNBOOK.md)** for the numbered-notebook-cell guide.
 
 ## Development
 

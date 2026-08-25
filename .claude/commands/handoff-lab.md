@@ -50,6 +50,16 @@ Steps:
    `.claude/skills/running-experiments/SKILL.md`) — confirm
    `ExperimentNotifier/.env` is configured on the lab machine (it is
    gitignored, so it must be set up there independently, not pulled from git).
+   The notifier call is guarded (`[ -f ExperimentNotifier/main.py ]`), so a
+   lab machine without it configured just skips the email rather than failing
+   the batch.
+6. If this is a relaunch (e.g. after a lab crash) rather than a first run,
+   remind that `scripts/ablations/run_ablation_gpu_{0,1}.sh` default to
+   `SKIP_EXISTING=1` — any `(study, config, seed)` triple that already has a
+   `results.json` under `results/ablations/` is skipped instead of re-run, so
+   just re-launching the same `make ablations-gpu0`/`ablations-gpu1` command
+   is safe and only completes what's missing. Set `SKIP_EXISTING=0` to force
+   a full re-run instead.
 
 Report: GO/NO-GO from the auditor, Poetry environment sync status, uncommitted
 files (if any), and the final commands to paste on the lab machine.

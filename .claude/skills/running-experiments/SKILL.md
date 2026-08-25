@@ -76,24 +76,36 @@ rather than reconstructing the steps from this skill's prose.
 
 ## 3. Google Colab Pro — secondary/burst, one-off runs
 
-- Dataset is small enough (~47 MB) to **upload as a zip and extract into the
-  runtime** — never read thousands of small files directly from Google Drive
-  (Drive I/O for ~10,193 small files is a well-known slow path on Colab).
-  Checklist:
-  1. Zip `DATA/daninhas_full/` (and `DATA/DATA_CIFAR10/` if needed) locally or
-     keep a pre-made zip in Drive.
-  2. In the Colab notebook, copy the zip from Drive to the local runtime disk
-     and `unzip` it there (e.g. `/content/DATA/`), not `/content/drive/...`.
-  3. `pipx install poetry` (once per runtime) then `poetry install` —
-     DalMax is Poetry-only — the `requirements.txt`/pip fallback was retired (see
-     `.specs/adr/0001-adopt-poetry.md`'s amendment), so this is the same
-     step used locally and on the lab machine, keeping Colab on the exact
-     `pyproject.toml`/`poetry.lock` pins.
-  4. Run `poetry run python trainer.py` with `--data_dir` pointing at the local
-     runtime copy (via the params JSON's `data_dir` key, not `DATA/` on Drive).
-  5. Copy `results/` back to Drive (or download) at the end of the session —
-     Colab runtimes are ephemeral; nothing under `/content/` survives a
-     disconnect.
+**[`COLAB_RUNBOOK.md`](../../../COLAB_RUNBOOK.md)** (repo root) is the
+step-by-step, numbered-notebook-cell operator guide — follow it directly for
+an actual Colab session rather than reconstructing the steps from this
+skill's summary below.
+
+- **Hybrid layout** (decided 2026-08-25, see
+  `.specs/infrastructure/execution-environments.md`'s "Colab: hybrid
+  local-disk + Drive-symlink layout" section): the repo, its `.venv`, and
+  `DATA/daninhas_full` all live on the Colab runtime's **local disk**
+  (`/content/dalmax`) for fast reads and a normal `poetry install`; `results/`
+  is replaced by a **symlink to Google Drive** so `results.json`,
+  checkpoints, logs, and the embedding cache all persist across a session
+  disconnect. `make colab-setup` (`scripts/colab/setup_colab.sh`) wires this
+  up idempotently every session.
+- Dataset transfer never reads `daninhas_full`'s ~10,193 individual files
+  directly from Drive (a well-known slow FUSE path). Instead, the first
+  session zips the Drive dataset folder into
+  `$DRIVE_ROOT/DATA/daninhas_full.zip` (~47 MB) and stores it back on Drive;
+  every later session copies that single zip to `/content` and unzips it
+  locally in seconds.
+- `pipx install poetry`/`pip install poetry` then `poetry install` — same
+  Poetry-only step as every other environment (the `requirements.txt`/pip
+  fallback was retired, see `.specs/adr/0001-adopt-poetry.md`'s amendment),
+  keeping Colab on the exact `pyproject.toml`/`poetry.lock` pins (requires
+  Python 3.10-3.12; `torch==2.5.0` has no 3.13 wheels).
+- `make ablations-colab` runs the full 11-config Phase 3 ablation sweep
+  sequentially on Colab's single GPU (both
+  `scripts/ablations/run_ablation_gpu_{0,1}.sh` halves, pinned to GPU 0).
+  `SKIP_EXISTING=1` (default in both scripts) makes relaunching after a
+  disconnect safe — only incomplete `(study, config, seed)` triples re-run.
 
 ## Which environment for which task
 

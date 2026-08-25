@@ -28,7 +28,9 @@ drift (see spec-sync rule below) rather than trusting stale prose here.
 For the lab machine specifically (one-time setup, dataset transfer, ablation
 batch launch/monitoring, results collection), see
 [`LAB_RUNBOOK.md`](LAB_RUNBOOK.md) — the commands below are the quick
-reference; that file is the step-by-step operator guide.
+reference; that file is the step-by-step operator guide. For Google Colab Pro
+(single GPU, session-limited; hybrid local-disk + Drive-symlink layout), see
+[`COLAB_RUNBOOK.md`](COLAB_RUNBOOK.md).
 
 ```bash
 poetry install       # or: make setup — Poetry-only; the pip/requirements.txt fallback was retired
@@ -64,6 +66,11 @@ make ablations-gpu0                   # this GPU's half of the Phase 3 ablation 
 make ablations-gpu1                   # this GPU's half of the Phase 3 ablation batch (6 configs)
 make ablation-report                  # aggregate results/ablations/ -> docs/results/ablation_tables/
 make benchmark-gpu0 / benchmark-gpu1  # re-run the reference RNHAL sweep (scripts/benchmark/run_pipe_gpu_*.sh)
+
+# Colab targets (see COLAB_RUNBOOK.md for the full notebook-cell guide):
+make colab-setup                      # verify Drive mount, build/reuse dataset zip, symlink results/ -> Drive
+make colab-check                      # one short real-data GPU run into results/colab_check/ (GPU 0)
+make ablations-colab                  # both ablation-script halves sequentially on Colab's single GPU (SKIP_EXISTING=1 default makes relaunch after a disconnect safe)
 ```
 
 ## Working mode: multi-agent with model delegation (standing policy)
@@ -170,6 +177,16 @@ a lab-machine smoke run confirming Phase 4's move didn't break anything there.
   `VCTexKmeansHCSampling`, **`RepresentationStrategy`** (NEW — generic, driven
   by the params JSON's `"embedding"`/`"selection"` blocks; see
   `.specs/experiments/ablation-study.md` for exact syntax).
+- **Ablation scripts are now idempotent (2026-08-25, `docs/colab-runbook`)**:
+  `scripts/ablations/run_ablation_gpu_{0,1}.sh` read `GPU_NUMBER` (default 0/1),
+  `SKIP_EXISTING` (default `1` — skips a `(study, config, seed)` triple whose
+  `results.json` already exists instead of re-running it), `DRY_RUN` (default
+  `0` — echoes commands instead of executing them), and `RESULTS_ROOT`
+  (default `results/ablations`) from the environment; the `ExperimentNotifier`
+  call is now guarded by `[ -f ExperimentNotifier/main.py ]` (absent on
+  Colab). This is what makes `scripts/colab/run_ablations_colab.sh` (both
+  scripts pinned to `GPU_NUMBER=0`) safe to relaunch after a Colab disconnect.
+  See `tests/test_ablation_scripts.py` and `COLAB_RUNBOOK.md`.
 - One params JSON per lab GPU: `files_config/benchmark/params_df_gpu_0.json`,
   `files_config/benchmark/params_df_gpu_1.json`, run
   via `scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh` (`QUERIES=(10 50 100)`,
