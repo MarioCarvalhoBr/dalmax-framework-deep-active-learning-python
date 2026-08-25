@@ -341,6 +341,16 @@ up by default. Two options:
 
 ## 8. Troubleshooting
 
+- **`ValueError: Key backend: 'module://matplotlib_inline.backend_inline' is not a valid value`**
+  (seen on Colab, 2026-08-25, on every `trainer.py` launch). The notebook
+  front-end exports `MPLBACKEND=module://matplotlib_inline.backend_inline` to
+  every subprocess, but that module only exists in Colab's system Python, not
+  in the Poetry `.venv`, so `import matplotlib` failed at import time. Fixed
+  in `dalmax/__init__.py` (`_ensure_matplotlib_backend` falls back to the
+  headless `Agg` backend when the configured module is unimportable) and
+  belt-and-braces `export MPLBACKEND=Agg` in `scripts/colab/run_ablations_colab.sh`
+  / `scripts/ablations/run_ablation_gpu_{0,1}.sh`. If you see it again, you are
+  running a checkout older than that fix: `git pull origin main`.
 - **Drive FUSE slowness.** Never read `daninhas_full`'s individual files
   directly from `/content/drive/...` during training — that's exactly why
   §4 copies a single zip to local disk instead. If you ever see very slow

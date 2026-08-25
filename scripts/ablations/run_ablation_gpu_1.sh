@@ -35,6 +35,10 @@
 
 set -uo pipefail
 
+# Headless plotting: notebook front-ends (Colab) export an MPLBACKEND that the
+# Poetry .venv cannot import (see dalmax/__init__.py). Belt-and-braces here.
+export MPLBACKEND=Agg
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 

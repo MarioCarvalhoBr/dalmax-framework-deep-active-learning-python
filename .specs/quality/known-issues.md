@@ -126,3 +126,14 @@ Phase 2/3 fixes had already made the legacy file unreachable:
 
 See `.specs/architecture/current-state.md` §5 for the historical coupling-point-numbered version of
 this same resolution story, and ADR 0002's final amendment for the full move/delete inventory.
+
+### KI-33 — Colab-exported `MPLBACKEND` broke every CLI launch inside the `.venv` (FIXED 2026-08-25)
+
+**Symptom**: on Colab, every `poetry run python trainer.py ...` died at `import matplotlib` with
+`ValueError: Key backend: 'module://matplotlib_inline.backend_inline' is not a valid value`.
+**Cause**: Colab sets `MPLBACKEND=module://matplotlib_inline.backend_inline` process-wide;
+`matplotlib_inline` is not a dependency of this project, so the `.venv` matplotlib cannot import it.
+**Fix**: `dalmax/__init__.py::_ensure_matplotlib_backend()` (falls back to `Agg` only when the
+configured `module://` backend is unimportable; valid/absent values untouched) + `export MPLBACKEND=Agg`
+in the ablation/Colab batch scripts. Regression test: `tests/test_matplotlib_backend.py` (subprocess
+reproduction of the Colab environment). Documented in `COLAB_RUNBOOK.md` §8.
