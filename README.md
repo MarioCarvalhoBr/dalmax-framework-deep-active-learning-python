@@ -462,7 +462,11 @@ Details, decision matrix, and the Colab checklist:
 [`.specs/infrastructure/execution-environments.md`](.specs/infrastructure/execution-environments.md).
 For the lab machine specifically, see **[`LAB_RUNBOOK.md`](LAB_RUNBOOK.md)**
 for the operator-facing step-by-step guide. For Colab, see
-**[`COLAB_RUNBOOK.md`](COLAB_RUNBOOK.md)** for the numbered-notebook-cell guide.
+**[`COLAB_RUNBOOK.md`](COLAB_RUNBOOK.md)** for the numbered-notebook-cell guide,
+or open the runnable notebook directly:
+[`notebooks/colab_runbook.ipynb`](notebooks/colab_runbook.ipynb) —
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MarioCarvalhoBr/dalmax-deep-active-learning-python/blob/main/notebooks/colab_runbook.ipynb)
 
 ## Development
 

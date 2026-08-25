@@ -17,6 +17,9 @@ For Google Colab Pro, **[`COLAB_RUNBOOK.md`](../../COLAB_RUNBOOK.md)** (repo
 root) is the equivalent operator-facing guide (numbered notebook cells), built
 on top of the "Colab: hybrid local-disk + Drive-symlink layout" section below,
 via the `make colab-setup`/`colab-check`/`ablations-colab` targets.
+[`notebooks/colab_runbook.ipynb`](../../notebooks/colab_runbook.ipynb) is the
+runnable notebook generated to mirror `COLAB_RUNBOOK.md` cell-for-cell (that
+file stays the source of truth).
 
 ## Phase 2 lab-handoff hazards (2026-08-23)
 

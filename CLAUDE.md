@@ -30,7 +30,9 @@ batch launch/monitoring, results collection), see
 [`LAB_RUNBOOK.md`](LAB_RUNBOOK.md) — the commands below are the quick
 reference; that file is the step-by-step operator guide. For Google Colab Pro
 (single GPU, session-limited; hybrid local-disk + Drive-symlink layout), see
-[`COLAB_RUNBOOK.md`](COLAB_RUNBOOK.md).
+[`COLAB_RUNBOOK.md`](COLAB_RUNBOOK.md) — or run
+[`notebooks/colab_runbook.ipynb`](notebooks/colab_runbook.ipynb) directly,
+the runnable notebook generated to mirror it cell-for-cell.
 
 ```bash
 poetry install       # or: make setup — Poetry-only; the pip/requirements.txt fallback was retired

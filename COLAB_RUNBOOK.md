@@ -12,6 +12,13 @@ nothing here is invented.
 **Never run any of these on the local no-GPU dev notebook**
 (`.claude/rules/data-safety.md`).
 
+A runnable notebook that mirrors every cell below already exists —
+[`notebooks/colab_runbook.ipynb`](notebooks/colab_runbook.ipynb) — so you
+don't need to copy-paste each command by hand; open it directly in Colab and
+run it top to bottom. **This file stays the source of truth**: the notebook
+is generated to match it, not the other way around, so if they ever
+disagree, trust this file and regenerate the notebook.
+
 ## Architecture decision: hybrid local-disk + Drive-symlink layout
 
 Colab Pro gives one GPU per session (T4/L4/A100, varies) and **no guaranteed
