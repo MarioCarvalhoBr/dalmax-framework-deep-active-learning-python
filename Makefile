@@ -1,7 +1,8 @@
 .PHONY: setup lint format test test-all smoke smoke-ablations clean \
 	lab-setup lab-check micro-dataset \
 	ablations-gpu0 ablations-gpu1 ablations-all ablation-report \
-	benchmark-gpu0 benchmark-gpu1
+	benchmark-gpu0 benchmark-gpu1 \
+	colab-setup ablations-colab colab-check
 
 # GPU index used by `lab-check` (0 or 1, matching files_config/benchmark/params_df_gpu_{0,1}.json).
 # Override on the command line, e.g. `make lab-check GPU=1`.
@@ -169,3 +170,35 @@ benchmark-gpu0:
 
 benchmark-gpu1:
 	bash scripts/benchmark/run_pipe_gpu_1.sh
+
+# --- Colab targets (single GPU, session-limited) -----------------------------
+# See COLAB_RUNBOOK.md for the full step-by-step notebook-cell guide these
+# targets are called from.
+
+# One-time-per-session Colab setup: verify Drive is mounted, build/reuse the
+# DATA/daninhas_full.zip on Drive and unzip it onto the local runtime disk,
+# and symlink results/ to Drive (see scripts/colab/setup_colab.sh's header
+# for the full hybrid-layout rationale). Idempotent -- safe to re-run after a
+# disconnect. Override the Drive path with `DRIVE_ROOT=... make colab-setup`.
+colab-setup:
+	bash scripts/colab/setup_colab.sh
+
+# Run the full 11-config / 33-run Phase 3 ablation sweep sequentially on
+# Colab's single GPU (both scripts/ablations/run_ablation_gpu_{0,1}.sh halves,
+# both pinned to GPU 0), logging to results/ablations/colab.log. SKIP_EXISTING
+# (default on in both underlying scripts) makes relaunching this after a
+# disconnect safe -- see scripts/colab/run_ablations_colab.sh.
+ablations-colab:
+	bash scripts/colab/run_ablations_colab.sh
+
+# The same single real-data GPU sanity check as `lab-check`, but into a
+# dedicated results/colab_check/ directory (so it never collides with the
+# real ablation/benchmark results trees symlinked to Drive) and pinned to
+# Colab's single GPU 0. Run this once per session, right after `colab-setup`
+# and before `ablations-colab`, per COLAB_RUNBOOK.md.
+colab-check:
+	CUDA_VISIBLE_DEVICES=0 poetry run python trainer.py \
+		--params_json files_config/benchmark/params_df_gpu_0.json \
+		--dataset_name DANINHAS --strategy_name SSRAEKmeansHCSampling \
+		--n_query 100 --n_init_labeled 100 --n_round 1 --seed 1 \
+		--device cuda --dir_results results/colab_check/
