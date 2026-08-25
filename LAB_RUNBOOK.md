@@ -235,7 +235,7 @@ split across the two GPUs by `scripts/ablations/run_ablation_gpu_{0,1}.sh`:
 
 | § | Config | Params JSON | GPU |
 |---|--------|--------------|-----|
-| 6.1 | Full | `files_config/ablations/rep_full.json` | GPU 1 |
+| 6.1 | Full | `files_config/ablations/rep_full.json` | GPU 0 |
 | 6.1 | Spatial-only | `files_config/ablations/rep_spatial.json` | GPU 0 |
 | 6.1 | Spectral-only | `files_config/ablations/rep_spectral.json` | GPU 1 |
 | 6.2 | L=1, k=[50] | `files_config/ablations/hier_L1.json` | GPU 0 |
