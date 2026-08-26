@@ -272,6 +272,9 @@ ablation batch" audit facts. This is why running all three `rep_*` configs
 back-to-back at the same seed is cheap: only the first extracts SSRAE
 features, the other two reuse the cached `results/cache/embeddings/...pkl`.
 
+
+**Measured reference (Colab, single NVIDIA T4, 2026-08-26):** the same 33-run sweep took ~5 h 15 min on one T4 (~9–10 min/run, ~10 GB VRAM at batch_size 256). Two lab GPUs of 10 GB each should therefore finish in roughly 2.5–3 h if per-GPU speed is comparable — note the VRAM headroom is tight on 10 GB cards; see §6 (OOM) for the batch_size fallback.
+
 **Rough wall-clock — estimate only, not a measured figure.** Reasoning: 33
 runs total, each doing `n_round=8` (9 evaluation points: initial + 8 query
 rounds) x `n_epoch=10` ResNet50 training passes on up to ~8k images at

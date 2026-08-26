@@ -246,6 +246,9 @@ per-GPU lab wall-clock time as a rough estimate (**TBD**: no measured
 Colab wall-clock exists yet; record it after the first full run here and
 feed it back into this section and `LAB_RUNBOOK.md`).
 
+
+**Measured (2026-08-26, Colab Pro, NVIDIA T4, batch_size 256, ~10 GB VRAM in use):** the full 33-run sweep took **~5 h 15 min wall-clock** including one disconnect/relaunch (the `SKIP_EXISTING` resume worked as designed: 35 completed triples were skipped on relaunch), i.e. **~9–10 min per run**. A100 would cut the GPU part but not the CPU-bound SSRAE extraction; T4 is the cost-effective choice.
+
 Cell (launch):
 ```python
 !make ablations-colab
