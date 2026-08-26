@@ -62,7 +62,7 @@ Read this before the first lab-machine run after pulling Phase 2 (`refactor/phas
 |---|---|---|---|
 | **Local dev notebook** (this machine) | 16 GB RAM, **no GPU**, Python 3.12, Poetry 2.2.1 | Coding, code review, spec/doc authoring, smoke tests on tiny subsets, report generation from results already copied back | `poetry` commands, `ruff`, `pytest` (fast tests only), `python -c` import checks, `dalmax/reporting/*.py` against already-present `results/` data, `make smoke` (see below). **Never** a real training run — no GPU, and a full `daninhas_full` epoch would be impractically slow on CPU. |
 | **Lab machine** (primary training) | 2× NVIDIA GPUs, **10 GB VRAM each** | All real experiment execution: baseline sweeps, RNHAL reference runs, and (once implemented) the ablation study runs | `scripts/benchmark/run_pipe_gpu_0.sh` (GPU 0, `files_config/benchmark/params_df_gpu_0.json` → `results/dalmax1/`), `scripts/benchmark/run_pipe_gpu_1.sh` (GPU 1, `files_config/benchmark/params_df_gpu_1.json` → `results/dalmax2/`), long-lived via `tmux`/`nohup`; `ExperimentNotifier/main.py` sends an email after each script's full battery completes. |
-| **Google Colab Pro** | Single GPU (T4/L4/A100, varies), session-limited, no guaranteed background execution, burst/secondary | One-off runs, retries of a specific config, or running the full Phase 3 ablation sweep sequentially on one GPU when the lab machine is busy | `make colab-setup` (repo/`.venv`/`DATA/daninhas_full` on the runtime's local disk for fast reads and a normal `poetry install`; `results/` replaced by a symlink to Drive so artifacts survive a disconnect — see "Colab: hybrid local-disk + Drive-symlink layout" below), then `make colab-check` / `make ablations-colab` (both scripts/ablations/run_ablation_gpu_{0,1}.sh halves, `SKIP_EXISTING=1` by default so a relaunch after a disconnect only re-runs incomplete `(study, config, seed)` triples). See [`COLAB_RUNBOOK.md`](../../COLAB_RUNBOOK.md). |
+| **Google Colab Pro** | Single GPU (T4/L4/A100, varies; **measured on a T4, 2026-08-25/26**), session-limited, no guaranteed background execution, burst/secondary | One-off runs, retries of a specific config, or running the full Phase 3 ablation sweep sequentially on one GPU when the lab machine is busy | `make colab-setup` (repo/`.venv`/`DATA/daninhas_full` on the runtime's local disk for fast reads and a normal `poetry install`; `results/` replaced by a symlink to Drive so artifacts survive a disconnect — see "Colab: hybrid local-disk + Drive-symlink layout" below), then `make colab-check` / `make ablations-colab` (both scripts/ablations/run_ablation_gpu_{0,1}.sh halves, `SKIP_EXISTING=1` by default so a relaunch after a disconnect only re-runs incomplete `(study, config, seed)` triples). See [`COLAB_RUNBOOK.md`](../../COLAB_RUNBOOK.md). **Measured timing (Phase 3 ablation batch, one T4, 33 runs)**: ~5 h 15 min total wall-clock including one disconnect/relaunch, ~9-10 min/run, ~10 GB VRAM at `batch_size=256` — this is close to the 10 GB lab GPUs' full capacity, so a Colab-sized batch run on the lab machine carries real **OOM risk** and should not be assumed to fit headroom-free alongside another job on the same GPU. |
 
 ## Local smoke testing: the micro dataset
 
@@ -198,6 +198,16 @@ running concurrently (one job per GPU, per `scripts/benchmark/run_pipe_gpu_0.sh`
 `scripts/benchmark/run_pipe_gpu_1.sh`) share any resource (e.g. shared dataset loading, disk
 I/O) that could bottleneck parallel throughput even with `CUDA_VISIBLE_DEVICES`
 correctly isolating compute.
+
+**Proxy measurement available (2026-08-25/26, Colab, not the lab machine)**: the Phase 3 ablation
+batch's `RepresentationStrategy` runs used the same `batch_size=256`/128×128-image configuration on
+a single NVIDIA T4 and measured ~10 GB VRAM — i.e. essentially the full capacity of the lab
+machine's 10 GB GPUs, with little to no headroom. This is a same-model/same-batch-size proxy, not a
+lab-machine measurement (still TBD as stated above), but it upgrades the "not measured" status to
+"measured on comparable hardware, consistent with the 10 GB budget being tight rather than
+comfortable" — see the environment comparison table above and
+`.specs/quality/known-issues.md` for any issue this implies for concurrent multi-job scheduling on
+the lab machine.
 
 ## Lab handoff — Phase 3 ablation batch (pre-flighted 2026-08-23, verdict GO)
 

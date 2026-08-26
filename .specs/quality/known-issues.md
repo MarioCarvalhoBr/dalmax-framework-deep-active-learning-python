@@ -96,13 +96,15 @@ plan.
 
 ## Open item count
 
-32 tracked items total (KI-32 added in this Phase 4 docs-sync batch). Of these, **25 are now fully
-resolved**: KI-1 through KI-10, KI-13 through KI-20, KI-22, and KI-24 through KI-29 (KI-22 fixed
-2026-08-23, `dalmax/models/checkpoint.py`, ADR 0006 — see that row for why every checkpoint saved
-before this fix is unrecoverable, not just the ones affected by a bug that is still open). The
-remaining **7 are open**: KI-11, KI-12 (partially — comments/type hints), KI-21, KI-23, KI-30,
-KI-31, and the new KI-32. Treat the per-row tables above as the source of truth over this summary
-if they ever disagree after future edits.
+34 tracked items total (KI-34 added 2026-08-26, while reconciling the Phase 3 ablation execution
+batch; KI-33 added/resolved 2026-08-25). Of these, **26 are now fully resolved**: KI-1 through
+KI-10, KI-13 through KI-20, KI-22, KI-24 through KI-29, and KI-33 (KI-22 fixed 2026-08-23,
+`dalmax/models/checkpoint.py`, ADR 0006 — see that row for why every checkpoint saved before this
+fix is unrecoverable, not just the ones affected by a bug that is still open; KI-33 fixed
+2026-08-25, `dalmax/__init__.py::_ensure_matplotlib_backend()`). The remaining **8 are open**:
+KI-11, KI-12 (partially — comments/type hints), KI-21, KI-23, KI-30, KI-31, KI-32, and the new
+KI-34 (`run_metadata.json` missing the GPU model). Treat the per-row tables above as the source of
+truth over this summary if they ever disagree after future edits.
 
 **Phase 4 resolution summary (2026-08-23, this docs-sync batch)**: Phase 4's physical move-and-delete
 work closed a large batch of known issues simply by deleting the file that had them, since their
@@ -137,3 +139,33 @@ this same resolution story, and ADR 0002's final amendment for the full move/del
 configured `module://` backend is unimportable; valid/absent values untouched) + `export MPLBACKEND=Agg`
 in the ablation/Colab batch scripts. Regression test: `tests/test_matplotlib_backend.py` (subprocess
 reproduction of the Colab environment). Documented in `COLAB_RUNBOOK.md` §8.
+
+### KI-34 — `run_metadata.json` does not record the GPU model (OPEN)
+
+**Found**: 2026-08-26, while reconciling the Phase 3 ablation batch (executed on a Google Colab Pro
+T4) against the pre-Phase-2 lab-machine reference runs and the same-config re-run across two
+ablation sub-studies (`6_1/rep_full` vs. `6_3/stage_full`, both the identical `RepresentationStrategy`
+config at `n_query=100`, differing by 0.0032 weighted F1 — see
+`.specs/experiments/ablation-study.md`'s "Execution record" section). `run_metadata.json`
+(`dalmax/experiment/run_metadata.py::write_run_metadata`) records Python/torch versions, CUDA
+availability, `git_commit`, and the resolved config, but **not the GPU model/name**
+(`torch.cuda.get_device_name(0)`) actually used for the run — so a `results/` tree mixing lab-machine
+and Colab runs (or different Colab session GPU classes — T4/L4/A100, which Colab does not let the
+user pin) cannot be told apart by inspecting `run_metadata.json` alone; only the run's containing
+directory path or a memory of which environment executed it distinguishes them.
+
+**Consequence**: cross-GPU runs of the same config are **not bit-identical**
+(`.claude/rules/reproducibility.md`'s determinism policy already documents that
+`cudnn.deterministic=True` does not guarantee cross-run bit-identity even on the *same* GPU model;
+different GPU models compound this further) — this is expected and not itself a bug, but the
+inability to attribute an observed F1 difference to "different hardware" vs. "ordinary same-hardware
+run-to-run variance" from `run_metadata.json` alone is a genuine reproducibility-auditing gap.
+
+**Planned fix**: a one-line addition to `write_run_metadata` —
+`torch.cuda.get_device_name(0) if torch.cuda.is_available() else None` — stored as a new
+`gpu_model` field, alongside the existing `cuda_available` boolean. Not yet implemented; flag for
+`implementer` the next time `dalmax/experiment/run_metadata.py` is touched.
+
+**Severity**: Low-Medium — does not affect correctness of any result, only the ability to audit
+*why* two nominally-identical runs differ after the fact. | Open | Planned (one-line addition to
+`dalmax/experiment/run_metadata.py::write_run_metadata`, not yet implemented).

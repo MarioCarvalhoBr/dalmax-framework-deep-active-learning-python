@@ -116,10 +116,12 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   (`dalmax/selection/`), strategy/dataset/model registries (`dalmax/{query_strategies,
   data,models}/registry.py`), seed-propagation audit (`dalmax/seeding.py`), macro-F1
   metrics, `run_metadata.json`. `trainer.py` (historical `demo.py`) now routes through `dalmax.cli.main()`.
-- **Phase 3 — Ablations**: config/code prerequisites all met and materialized
-  (`.specs/experiments/ablation-study.md`); **still outstanding**: run the three
-  sub-studies on the lab machine and record macro-F1 numbers in
-  `ablation-study.md`/`baseline-results.md`.
+- **Phase 3 — Ablations** (executed 2026-08-26, on Google Colab Pro — one NVIDIA T4, not the lab
+  machine): all 33 runs (11 configs × 3 seeds) completed, zero failures, ~5h15 wall-clock. Weighted
+  and macro F1 recorded in `.specs/experiments/ablation-study.md`'s §6.1/§6.2/§6.3 run tables and
+  "Execution record" section; aggregated tables committed at `docs/results/ablation_tables/`; paper
+  text drafted by `paper-liaison` (`paper_drafts/ablation_section.tex`) and applied to the paper
+  under revision.
 - **Phase 4 — Polish** (done, 2026-08-23, branch `refactor/phase-4-package`):
   `core/`/`utils/` physically moved into `dalmax/` (models, query strategies, data
   loaders, vendored tools, reporting scripts), and the code Phase 2 had made dead
@@ -137,9 +139,12 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   (`predict.py`/`loader.py`/`gui.py` at the repo root); renamed the historical `demo.py` → `trainer.py`
   (pure rename, `git mv`, no behavior change).
 
-Next milestone: run the three Phase 3 ablation sub-studies on the lab machine and
-record their macro-F1 numbers in `ablation-study.md`/`baseline-results.md`, and do
-a lab-machine smoke run confirming Phase 4's move didn't break anything there.
+Next milestone: advisor review of the ablation section (`paper_drafts/ablation_section.tex`,
+including the weighted-primary/macro-secondary framing pending confirmation — see
+`.specs/experiments/ablation-study.md`), and, optionally, a lab-machine re-run of the reference
+benchmark checkpoints (the Phase 3 ablation batch ran on Colab, not the lab machine; a
+lab-machine smoke run confirming Phase 4's move didn't break anything there is still separately
+outstanding).
 
 ## Never do
 

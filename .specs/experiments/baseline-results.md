@@ -3,9 +3,14 @@
 `results/` is **gitignored and local-only** (0 files under `results/` are
 tracked in git as of this writing). This file documents, read-only, what was
 observed on disk in this environment on 2026-08-23; it is not a substitute
-for the lab machine's actual state and must be re-verified there before the
-ablation runs (§ `ablation-study.md`) are executed, since results can differ
-between the local checkout and the lab/Colab machines that produced them.
+for the lab machine's actual state, since results can differ between the
+local checkout and the lab/Colab machines that produced them.
+
+**Update, 2026-08-26**: the Phase 3 ablation runs referenced below as not-yet-executed have since
+been executed (on Google Colab Pro, not the lab machine — see "Phase 3 ablation results" below and
+`.specs/experiments/ablation-study.md`'s "Execution record" section for the full account); the
+`results/dalmax{1,2}/` sections immediately below are unaffected and still describe the
+pre-Phase-2 reference runs as originally observed.
 
 ## Top-level `results/` listing (observed)
 
@@ -100,6 +105,41 @@ same nominal SSRAEKmeansHCSampling protocol under two different
 point for the hierarchy ablation (§6.2) but not a substitute for it: neither
 matches any of the `L=1..4` rows in the ablation table (both use `n_levels=3`
 with different `n_clusters`/`sample_sizes`).
+
+## Phase 3 ablation results (executed 2026-08-26)
+
+The full ablation numbers (representation, hierarchy, stage-contribution sub-studies; final-round
+weighted and macro F1, mean ± std across seeds 1-3) live in
+[`ablation-study.md`](ablation-study.md)'s §6.1/§6.2/§6.3 run tables and "Execution record"
+section — not duplicated here to avoid a second place these numbers can drift out of sync. Source
+of the numbers: `docs/results/ablation_tables/ablation_summary.csv` (+ per-study `.md`/`.tex`),
+produced from `results/ablations/` (Google Colab Pro, one NVIDIA T4, 2026-08-25/26, 33/33 runs, zero
+failures). The paper text drafted from these numbers is `paper_drafts/ablation_section.tex`,
+applied to the paper under revision.
+
+### Paper's main-table reference values (for context)
+
+Used by the ablation section's interpretation (`paper_drafts/ablation_section.tex`) to situate the
+ablation numbers against the paper's own baseline comparison, from
+`phd_files/Active_Learning_Mario/elsarticle-template.tex` (`\label{tab:results_nquery100}`, the
+`n_query=100` main results table, lines ~1388-1400 per `ablation_section.tex`'s header comment) —
+read-only source, not re-derived here:
+
+| Method | F1-score (weighted) at `n_query=100` |
+|---|---|
+| RNHAL | 0.8766 (±0.0208) |
+| RandomSampling | 0.8218 |
+| EntropySampling | 0.8652 |
+| Upper bound (fully labeled) | 0.9134 |
+
+These are the values the ablation section's discussion compares against — e.g. the §6.3 "w/o
+hierarchical module" ablation result (0.8124 weighted F1) falls *below* `RandomSampling` (0.8218)
+here, and "w/o representation module" (0.8378) sits between `RandomSampling` and `EntropySampling`
+(0.8652). Note the ablation study's own "RNHAL (full)" rows (0.8917 in §6.1/§6.2's reference row,
+0.8949 in §6.3) are close to but not identical with the 0.8766 main-table RNHAL value above — all
+three are the same nominal config at `n_query=100`, and the differences are consistent with ordinary
+seed/GPU run-to-run variance (see `ablation-study.md`'s "Execution record" section), not a
+discrepancy requiring reconciliation.
 
 ## Pointer to paper tables
 

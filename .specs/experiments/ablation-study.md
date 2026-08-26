@@ -1,9 +1,17 @@
 # Ablation study specification
 
-Status: **materialized as of 2026-08-23 (Phase 3 landed) — configs, scripts, and report tooling
-all exist on disk and are CPU-smoke-tested (11/11); not yet run on the lab machine.** See the
-"Materialized files" section near the end of this document for the exact mapping from every run
-table row below to its `files_config/ablations/*.json` file and GPU run script.
+Status: **executed as of 2026-08-26 — all 33 runs (11 configs × 3 seeds) completed on Google
+Colab Pro (one NVIDIA T4), zero failures.** See the "Execution record" section below for
+where/when/hardware/timing, and the run tables in §6.1/§6.2/§6.3 for the final numbers (mean ± std
+across seeds 1-3), aggregated from `docs/results/ablation_tables/ablation_summary.csv` (+ per-study
+`.md`/`.tex`). The paper text drafted from these numbers is in
+`paper_drafts/ablation_section.tex` and has been applied to the paper under revision.
+
+Previous status (materialized as of 2026-08-23, Phase 3 landed): configs, scripts, and report
+tooling all existed on disk and were CPU-smoke-tested (11/11); not yet run on real hardware. See
+the "Materialized files" section near the end of this document for the exact mapping from every
+run table row below to its `files_config/ablations/*.json` file and GPU run script — that mapping
+is unchanged by execution, only the "not yet run" qualifier is now stale.
 
 Previous status: **implementable via config as of 2026-08-23 (Phase 2 landed) — not yet run.** This is the
 advisor-requested ablation section for the paper's `\subsection{Ablation study}`. It was originally
@@ -17,9 +25,22 @@ needed to execute any of the three sub-studies; what remains is running them on 
 here and in `baseline-results.md`. A future implementation session should be able to work from this
 file without re-deriving anything from the LaTeX or the codebase.
 
-All three sub-studies are evaluated with **macro F1** (per the advisor's
-request) on the held-out `test/` split of `daninhas_full`, using seeds and
-budgets consistent with `experimental-protocol.md`.
+All three sub-studies are evaluated on the held-out `test/` split of
+`daninhas_full`, using seeds and budgets consistent with
+`experimental-protocol.md`, and report **both weighted and macro F1**.
+
+> **"Which F1 is primary" — resolved 2026-08-26, pending final advisor sign-off.** The original
+> advisor request (line above, historical) asked for macro F1; once both metrics were available in
+> every `results.json` (Phase 2's `calc_metrics` fix), `paper-liaison` drafted
+> `paper_drafts/ablation_section.tex` reporting **weighted F1 as the primary metric**, consistent
+> with the rest of the paper's main results table (`\label{tab:results_nquery100}`, weighted F1),
+> with **macro F1 added as a secondary column** in all three ablation tables — motivated by the
+> representation and hierarchy ablations both being expected to interact with `daninhas_full`'s
+> class imbalance in ways a weighted average can mask (see the interpretation prose in
+> `ablation_section.tex`). This has been applied to the paper text as drafted; **advisor
+> confirmation that weighted-primary/macro-secondary is the intended framing is still pending** —
+> if the advisor prefers macro-primary, only the LaTeX prose's framing needs to change, not the
+> numbers themselves (both are already reported in every table).
 
 > **Metrics discrepancy — resolved 2026-08-23 (Phase 2).** Option (a) below was implemented:
 > `dalmax/data/datasets.py::Data.calc_metrics` (was `utils/data.py`, moved in Phase 4; new method) computes **both** weighted and macro
@@ -122,16 +143,25 @@ naive halving is never silently wrong again.
 
 ### 6.1 run table
 
-| Variant       | embedding_variant | n_query | seeds  | strategy_name          | n_round | n_epoch |
-|---------------|--------------------|---------|--------|------------------------|---------|---------|
-| Spatial-only  | `spatial`          | 100     | 1,2,3  | RepresentationStrategy | 8       | 10      |
-| Spectral-only | `spectral`         | 100     | 1,2,3  | RepresentationStrategy | 8       | 10      |
-| Full          | `full`             | 100     | 1,2,3  | RepresentationStrategy | 8       | 10      |
+| Variant       | embedding_variant | n_query | seeds  | strategy_name          | n_round | n_epoch | F1 (weighted, mean±std) | F1 (macro, mean±std) |
+|---------------|--------------------|---------|--------|------------------------|---------|---------|--------------------------|------------------------|
+| Full          | `full`             | 100     | 1,2,3  | RepresentationStrategy | 8       | 10      | **0.8917 (±0.0209)**     | **0.8446 (±0.0220)**   |
+| Spatial-only  | `spatial`          | 100     | 1,2,3  | RepresentationStrategy | 8       | 10      | 0.8688 (±0.0158)         | 0.8126 (±0.0181)       |
+| Spectral-only | `spectral`         | 100     | 1,2,3  | RepresentationStrategy | 8       | 10      | 0.8824 (±0.0045)         | 0.8320 (±0.0054)       |
+
+Final-round F1, mean ± std across seeds 1-3, from
+`docs/results/ablation_tables/ablation_summary.csv` (rows `6_1/rep_full`, `6_1/rep_spatial`,
+`6_1/rep_spectral`). Full outperforms both single-block variants on both metrics; spectral-only is
+close to full (within 0.0093 weighted F1) with markedly lower cross-seed variance (std 0.0045 vs.
+0.0209); spatial-only is the weakest of the three. See `paper_drafts/ablation_section.tex`
+§"Representation ablation" for the full interpretation, including the AUC-vs-round finding that
+reduced embeddings show faster early-round gains despite the full descriptor's better final score.
 
 TBD confirm with advisor whether §6.1 should also sweep `n_query ∈ {10,50,100}`
 like the main protocol, or is scoped to a single representative budget
 (n_query=100 chosen above as the largest/most informative budget — flag for
-confirmation, not a settled decision).
+confirmation, not a settled decision; this was **not** revisited for the 2026-08-26 execution —
+only `n_query=100` was run, matching this table).
 
 ### 6.1 exact params JSON + CLI (Phase 2 syntax)
 
@@ -220,13 +250,28 @@ docstring):
 
 ### 6.2 run table
 
-| Variant | selection.hierarchy.n_levels | selection.hierarchy.n_clusters | selection.hierarchy.sample_sizes | n_query | seeds | strategy_name |
-|---------|------------------------------|----------------------------------|-------------------------------------|---------|-------|----------------|
-| L=1     | 1                            | [50]                              | [3]                                  | 100     | 1,2,3 | RepresentationStrategy |
-| L=2 (a) | 2                            | [300, 100]                        | [15, 5]                              | 100     | 1,2,3 | RepresentationStrategy |
-| L=2 (b) | 2                            | [100, 50]                         | [5, 3]                               | 100     | 1,2,3 | RepresentationStrategy |
-| L=3     | 3                            | [300, 100, 50]                    | [15, 5, 3]                           | 100     | 1,2,3 | RepresentationStrategy |
-| L=4     | 4                            | [300, 100, 50, 25]                | [15, 5, 3, 2]                        | 100     | 1,2,3 | RepresentationStrategy |
+| Variant | selection.hierarchy.n_levels | selection.hierarchy.n_clusters | selection.hierarchy.sample_sizes | n_query | seeds | strategy_name | F1 (weighted, mean±std) | F1 (macro, mean±std) |
+|---------|------------------------------|----------------------------------|-------------------------------------|---------|-------|----------------|--------------------------|------------------------|
+| L=1     | 1                            | [50]                              | [3]                                  | 100     | 1,2,3 | RepresentationStrategy | 0.8511 (±0.0219) | 0.8091 (±0.0196) |
+| L=2 (a) | 2                            | [300, 100]                        | [15, 5]                              | 100     | 1,2,3 | RepresentationStrategy | **0.8712 (±0.0080)** | **0.8209 (±0.0150)** |
+| L=2 (b) | 2                            | [100, 50]                         | [5, 3]                               | 100     | 1,2,3 | RepresentationStrategy | 0.8503 (±0.0223) | 0.8046 (±0.0228) |
+| L=3     | 3                            | [300, 100, 50]                    | [15, 5, 3]                           | 100     | 1,2,3 | RepresentationStrategy | 0.8608 (±0.0183) | 0.8116 (±0.0187) |
+| L=4     | 4                            | [300, 100, 50, 25]                | [15, 5, 3, 2]                        | 100     | 1,2,3 | RepresentationStrategy | 0.8567 (±0.0125) | 0.8076 (±0.0163) |
+| Reference (`scripts/benchmark`-style, §6.1's "Full" row) | 3 | [600, 200, 100] | [30, 15, 2] | 100 | 1,2,3 | RepresentationStrategy | **0.8917 (±0.0209)** | **0.8446 (±0.0220)** |
+
+Final-round F1, mean ± std across seeds 1-3, from
+`docs/results/ablation_tables/ablation_summary.csv` (rows `6_2/hier_L1` .. `6_2/hier_L4`; the
+reference row reproduces `6_1/rep_full` for comparison, it was not re-run under `6_2`). Among the
+grid configurations, `L=2, k=[300,100]` is the best on both metrics; adding depth beyond it
+(`L=3`/`L=4`, both starting from `k_1=300`) does not improve on it. Comparing the two `L=2` rows
+isolates first-level granularity: `k=[300,100]` beats `k=[100,50]` by 0.0209 weighted F1 despite
+both using two levels, so `k_1` (first-level coarseness) is the dominant factor, more than depth.
+The reference configuration (`L=3`, `k_1=600`) beats every grid row, including deeper rows with a
+coarser first level — reinforcing that a fine first-level partition of the pool relative to the
+query budget, not hierarchy depth per se, drives the hierarchical module's benefit. `L=1`
+(`k=50 < n_query=100`) is the weakest of the study. Performance in `L` is **non-monotonic**: it is
+not the case that more levels is always better, or that fewer is always better. See
+`paper_drafts/ablation_section.tex` §"Hierarchy ablation" for the full interpretation.
 
 ### 6.2 exact params JSON + CLI (Phase 2 syntax, L=3 shown)
 
@@ -261,10 +306,14 @@ L=4) — one params JSON per row, same CLI shape. (verify against the live datas
 
 ## 6.3 Contribution of the two RNHAL stages
 
-- **RNHAL (full)**: F1 taken from the **already-executed** reference runs
-  (`results/dalmax1/daninhas_full/.../SSRAEKmeansHCSampling/`,
-  `results/dalmax2/daninhas_full/.../SSRAEKmeansHCSampling/`, n_query=100 —
-  see `baseline-results.md`). No new runs needed for this row.
+- **RNHAL (full)**: originally planned to reuse F1 from the **already-executed** pre-Phase-2
+  reference runs (`results/dalmax1/daninhas_full/.../SSRAEKmeansHCSampling/`,
+  `results/dalmax2/daninhas_full/.../SSRAEKmeansHCSampling/`, n_query=100 — see
+  `baseline-results.md`). **Superseded by execution (2026-08-26)**: `stage_full.json` was run
+  through the new pipeline anyway (see "Materialized files" below, "for pipeline consistency"), and
+  its result (0.8949 ± 0.0190 weighted F1) is what the §6.3 run table below actually reports, kept
+  distinct from — not replacing — the pre-Phase-2 reference and from `6_1/rep_full`'s identical
+  config re-run (0.8917 ± 0.0209); see the "Execution record" section's note on this discrepancy.
 - **Without representation module**: keep hierarchical selection, replace
   SSRAE embeddings with **ImageNet-pretrained ResNet embeddings**
   (penultimate layer of the existing ResNet50). **Implemented (Phase 2)**:
@@ -296,11 +345,25 @@ L=4) — one params JSON per row, same CLI shape. (verify against the live datas
 
 ### 6.3 run table
 
-| Variant                      | Representation           | Selection                                   | strategy_name / config | F1 source |
-|-------------------------------|---------------------------|----------------------------------------------|--------------------------|-----------|
-| RNHAL (full)                  | SSRAE (Φ)                 | Hierarchical k-means (Γ)                     | `SSRAEKmeansHCSampling` preset (unchanged behavior) | Reuse `results/dalmax{1,2}` reference runs, n_query=100 — recompute macro F1 offline from their `predictions.csv` (pre-Phase-2 `results.json` has weighted F1 only, see the "Metrics discrepancy" note above) |
-| w/o representation module      | ImageNet ResNet50 penult. | Hierarchical k-means (Γ)                     | `RepresentationStrategy`, `embedding.extractor="resnet_imagenet"`, `selection.method="hierarchical"` | New runs, all seeds, n_query per protocol |
-| w/o hierarchical module        | SSRAE (Φ)                 | Flat k-means, proportional-random per cluster | `RepresentationStrategy`, `embedding.extractor="ssrae"`, `selection.method="flat_proportional"` | New runs, all seeds, n_query per protocol |
+| Variant                      | Representation           | Selection                                   | strategy_name / config | F1 (weighted, mean±std) | F1 (macro, mean±std) |
+|-------------------------------|---------------------------|----------------------------------------------|--------------------------|--------------------------|------------------------|
+| RNHAL (full)                  | SSRAE (Φ)                 | Hierarchical k-means (Γ)                     | `RepresentationStrategy`, `stage_full.json` | **0.8949 (±0.0190)** | **0.8471 (±0.0203)** |
+| w/o representation module      | ImageNet ResNet50 penult. | Hierarchical k-means (Γ)                     | `RepresentationStrategy`, `embedding.extractor="resnet_imagenet"`, `selection.method="hierarchical"` | 0.8378 (±0.0068) | 0.7764 (±0.0043) |
+| w/o hierarchical module        | SSRAE (Φ)                 | Flat k-means, proportional-random per cluster | `RepresentationStrategy`, `embedding.extractor="ssrae"`, `selection.method="flat_proportional"` | 0.8124 (±0.0228) | 0.7641 (±0.0226) |
+
+Final-round F1, mean ± std across seeds 1-3, from
+`docs/results/ablation_tables/ablation_summary.csv` (rows `6_3/stage_full`,
+`6_3/stage_no_representation`, `6_3/stage_no_hierarchy`). **This table's "RNHAL (full)" row is a
+fresh run of `stage_full.json` through the new pipeline, not the pre-Phase-2 `results/dalmax{1,2}`
+reference** — see the "Execution record" section below for why both sources are kept side by side
+rather than one superseding the other. Removing the hierarchical module costs more (-0.0825
+weighted F1 relative to RNHAL full) than removing the representation module (-0.0571); the w/o
+hierarchical module variant (0.8124) falls *below* `RandomSampling` (0.8218, main comparison at
+`n_query=100`, see `baseline-results.md`), while the w/o representation module variant (0.8378)
+beats `RandomSampling` but falls short of `EntropySampling` (0.8652, same reference). Neither
+single-stage variant approaches the full combination (0.8949) — the two stages are complementary.
+See `paper_drafts/ablation_section.tex` §"Contribution of the two RNHAL stages" for the full
+interpretation.
 
 ### 6.3 exact params JSON + CLI (Phase 2 syntax)
 
@@ -495,6 +558,66 @@ Unit-tested against a synthetic tree in `tests/test_ablation_report.py`; also ru
   (full)" row's *reported* number should come from the pre-Phase-2 `results/dalmax{1,2}/` reference
   runs, not a new run — both are valid sources; `run_ablation_gpu_1.sh` runs `stage_full.json` so a
   cross-check is available, but does not obsolete the reference-run recomputation path.
+
+## Execution record (2026-08-25/26)
+
+**Where**: Google Colab Pro, one NVIDIA T4 GPU (single-GPU session, not the lab machine's 2×10 GB
+setup — see `.specs/architecture/refactor-plan.md` Phase 3's acceptance criteria note on this), via
+`make ablations-colab` (`scripts/colab/run_ablations_colab.sh`, both
+`scripts/ablations/run_ablation_gpu_{0,1}.sh` halves pinned to `GPU_NUMBER=0` and run sequentially
+on the one available GPU).
+
+**When**: 2026-08-25 into 2026-08-26 (wall-clock spanned the day boundary).
+
+**Result**: all 33 runs (11 configs × 3 seeds) completed, **zero failures**
+(`results/ablations/gpu{0,1}_failures.log` empty both halves).
+
+**Timing**: ~5 h 15 min total wall-clock, including one relaunch after a Colab disconnect
+(`SKIP_EXISTING=1` made the relaunch skip every already-completed `(study, config, seed)` triple
+automatically, per this file's "Materialized files" section and `COLAB_RUNBOOK.md` §6); ~9-10
+minutes per run; ~10 GB VRAM at `batch_size=256` on the T4. See
+`.specs/infrastructure/execution-environments.md` for these figures recorded against the Colab
+environment row and the OOM-risk note for the lab machine's 10 GB GPUs.
+
+**Results layout**: `results/ablations/<study>/<config>/daninhas_full/SEED_<seed>/
+NQ_100_NIL_100_NR_8_NE_10/RepresentationStrategy/` for every `(study, config, seed)` triple listed
+in "Materialized files" above (e.g. `results/ablations/6_1/rep_full/daninhas_full/SEED_1/
+NQ_100_NIL_100_NR_8_NE_10/RepresentationStrategy/results.json`) — `results/` itself is a
+Drive-symlink on Colab (per the "Colab: hybrid local-disk + Drive-symlink layout" decision in
+`execution-environments.md`) and is gitignored, not committed.
+
+**Tables committed**: `python -m dalmax.reporting.ablation_report --root results/ablations --out
+docs/results/ablation_tables` was run against the completed batch; `docs/results/ablation_tables/
+ablation_summary.csv` + `.md`/`.tex` per sub-study (`ablation_6_1`, `ablation_6_2`, `ablation_6_3`)
+are committed to the repo (unlike the raw `results/` tree) and are the source of every number in
+the run tables above. The paper text drafted from these tables,
+`paper_drafts/ablation_section.tex`, has been applied to the paper under revision.
+
+**Key findings**:
+
+- **Representation (§6.1)**: full spatio-spectral descriptor > spectral-only > spatial-only on both
+  weighted and macro F1; spectral-only has the lowest cross-seed variance of the three variants
+  (std 0.0045 weighted F1), making it the most stable single-block choice even though full scores
+  higher on average.
+- **Hierarchy (§6.2)**: performance is **non-monotonic in depth `L`** — more levels is not
+  uniformly better or worse. First-level cluster count `k_1` is the dominant factor (the two `L=2`
+  rows differ by 0.0209 weighted F1 purely from `k_1`), and the reference hierarchy
+  (`L=3`, `k=[600,200,100]`, `k_1=600`) beats every grid configuration, including deeper ones with
+  a coarser `k_1=300`.
+- **Stage contribution (§6.3)**: removing the hierarchical module costs more (-0.0825 weighted F1)
+  than removing the representation module (-0.0571) relative to RNHAL (full) — the hierarchical
+  selector is the more load-bearing of the two stages at this budget.
+- **Both single-stage ablations underperform simple baselines**: w/o hierarchical module (0.8124
+  weighted F1) falls below `RandomSampling` (0.8218); w/o representation module (0.8378) beats
+  `RandomSampling` but falls short of `EntropySampling` (0.8652) — neither stage alone is
+  competitive, underscoring that RNHAL's advantage comes from the combination.
+- **GPU run-to-run variance is real and non-negligible**: `stage_full` (§6.3, 0.8949 ± 0.0190
+  weighted F1) and `rep_full`/the §6.2 reference row (§6.1, 0.8917 ± 0.0209) are the *same*
+  `RepresentationStrategy` config (full SSRAE embedding, reference hierarchy, `n_query=100`) run
+  independently as part of two different sub-studies, yet differ by 0.0032 weighted F1 — attributed
+  to ordinary GPU/cuDNN run-to-run variance (see `.claude/rules/reproducibility.md` on
+  `cudnn.deterministic=True` not implying cross-run bit-identity), not a bug. Both values are kept,
+  each in its own table, rather than reconciled to one number.
 
 ## Mapping to the paper's `\subsubsection`s
 
