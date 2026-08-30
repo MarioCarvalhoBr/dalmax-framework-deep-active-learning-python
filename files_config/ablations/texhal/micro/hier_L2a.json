@@ -1,0 +1,42 @@
+{
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_micro/",
+        "n_epoch": 1,
+        "n_drop": 10,
+        "n_classes": 5,
+        "train_args": {
+            "batch_size": 16,
+            "num_workers": 0
+        },
+        "test_args": {
+            "batch_size": 16,
+            "num_workers": 0
+        },
+        "optimizer_args": {
+            "lr": 0.05,
+            "momentum": 0.3
+        },
+        "embedding": {
+            "extractor": "vctex",
+            "q": [
+                5,
+                17
+            ],
+            "variant": "full"
+        },
+        "selection": {
+            "method": "hierarchical",
+            "hierarchy": {
+                "n_clusters": [
+                    30,
+                    10
+                ],
+                "n_levels": 2,
+                "sample_sizes": [
+                    2,
+                    2
+                ]
+            }
+        }
+    }
+}
