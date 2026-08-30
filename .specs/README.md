@@ -46,7 +46,9 @@ decisions** (ADRs) about the codebase supporting that research. Hence:
 │   └── template.md                       # [owned elsewhere]
 ├── experiments/
 │   ├── experimental-protocol.md          # datasets, splits, seeds, budgets, metrics, results layout
-│   ├── ablation-study.md                 # THE ablation spec (representation / hierarchy / stage-contribution)
+│   ├── ablation-study.md                 # RNHAL (paper 3) ablation spec (representation / hierarchy / stage-contribution) — EXECUTED
+│   ├── ablation-study-texhal.md          # TexHAL (paper 2) ablation spec, same structure — materialized, not yet run
+│   ├── papers-roadmap.md                 # the three-paper plan (DAL benchmark / TexHAL / RNHAL) and how it maps onto the codebase
 │   └── baseline-results.md               # where existing results/ runs live, what they cover
 ├── research-rules/
 │   ├── reproducibility.md                # seed policy, cache policy, config snapshot per run

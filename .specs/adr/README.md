@@ -16,6 +16,7 @@ session must be captured here in the same task, not deferred.
 | [0004](0004-micro-dataset-and-golden-run.md) | Deterministic micro-dataset + golden-run fixtures for local smoke testing | Accepted |
 | [0005](0005-representation-strategy-and-registries.md) | One generic `RepresentationStrategy` + dict registries replacing the four fixed embedding-based strategy classes and the (now-deleted) `utils/orchestrator.py`'s if/elif chains | Accepted |
 | [0006](0006-checkpoint-format-and-inference-tools.md) | Self-describing `dalmax-checkpoint` format fixing the historical save/load bug, plus standalone inference tools (`predict.py`, `loader.py`, `gui.py`) and the `demo.py` → `trainer.py` rename | Accepted |
+| [0007](0007-per-method-ablation-layout.md) | Organize ablation configs/scripts/results by method (RNHAL vs. TexHAL) via a `METHOD` variable | Accepted |
 
 ## When to add a new ADR
 

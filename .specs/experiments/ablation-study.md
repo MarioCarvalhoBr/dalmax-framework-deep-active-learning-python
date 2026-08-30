@@ -1,4 +1,13 @@
-# Ablation study specification
+# Ablation study specification — RNHAL (paper 3)
+
+**This file is the RNHAL (paper 3, SSRAE) suite.** TexHAL (paper 2, VCTex) has its own spec,
+[`ablation-study-texhal.md`](ablation-study-texhal.md) — not yet run. See
+[`papers-roadmap.md`](papers-roadmap.md) for the full three-paper plan. Configs for this suite
+moved to `files_config/ablations/rnhal/` on 2026-08-30 (were `files_config/ablations/` directly);
+every path below that still says `files_config/ablations/<name>.json` (no `rnhal/` segment) reflects
+the pre-2026-08-30 layout and should be read as `files_config/ablations/rnhal/<name>.json` — the
+content/values are unchanged, only the directory moved (`files_config/ablations/README.md` has the
+current, authoritative layout and naming-convention table for both methods).
 
 Status: **executed as of 2026-08-26 — all 33 runs (11 configs × 3 seeds) completed on Google
 Colab Pro (one NVIDIA T4), zero failures.** See the "Execution record" section below for
@@ -483,29 +492,32 @@ directly — `dalmax/reporting/chunk_results.py`/`average_results.py` (was
 move/rename) remain the tool for the main `results/dalmax{1,2}/` sweeps
 (`use-cases/generate-report.md`), not for this ablation-specific tree.
 
-## Materialized files (Phase 3, 2026-08-23)
+## Materialized files (Phase 3, 2026-08-23; moved under `rnhal/` 2026-08-30)
 
 Every run-table row above is now a real file, not just a JSON snippet in this document. Full-scale
-configs live in `files_config/ablations/`; `files_config/ablations/micro/` mirrors each one for
+configs live in `files_config/ablations/rnhal/` (moved from `files_config/ablations/` directly on
+2026-08-30, see this file's header note); `files_config/ablations/rnhal/micro/` mirrors each one for
 local CPU smoke-testing (`make smoke-ablations`, 11/11 passing against `DATA/daninhas_micro/`) —
-see that folder's own `README.md` for every config's exact `embedding`/`selection` values and the
-`sample_sizes`/micro-hierarchy derivation rules. `tests/test_ablation_configs.py` loads all 22
-files (11 full-scale + 11 micro) through `dalmax.config.loader.load_experiment_config` and asserts
+see `files_config/ablations/README.md` (top-level, covers both `rnhal/` and `texhal/`) for every
+config's exact `embedding`/`selection` values and the `sample_sizes`/micro-hierarchy derivation
+rules. `tests/test_ablation_configs.py` loads all 44 files across both methods (11 full-scale + 11
+micro for `rnhal/`, 12 full-scale + 12 micro for `texhal/`) through
+`dalmax.config.loader.load_experiment_config` and asserts
 each resolves to the extractor/variant/method/hierarchy its filename implies.
 
 | §  | Row | Params JSON | GPU script |
 |----|-----|--------------|------------|
-| 6.1 | Full | `files_config/ablations/rep_full.json` | `run_ablation_gpu_1.sh` |
-| 6.1 | Spatial-only | `files_config/ablations/rep_spatial.json` | `run_ablation_gpu_0.sh` |
-| 6.1 | Spectral-only | `files_config/ablations/rep_spectral.json` | `run_ablation_gpu_1.sh` |
-| 6.2 | L=1, k=[50] | `files_config/ablations/hier_L1.json` | `run_ablation_gpu_0.sh` |
-| 6.2 | L=2, k=[300,100] | `files_config/ablations/hier_L2a.json` | `run_ablation_gpu_1.sh` |
-| 6.2 | L=2, k=[100,50] | `files_config/ablations/hier_L2b.json` | `run_ablation_gpu_0.sh` |
-| 6.2 | L=3, k=[300,100,50] | `files_config/ablations/hier_L3.json` | `run_ablation_gpu_1.sh` |
-| 6.2 | L=4, k=[300,100,50,25] | `files_config/ablations/hier_L4.json` | `run_ablation_gpu_1.sh` |
-| 6.3 | RNHAL (full) | `files_config/ablations/stage_full.json` | `run_ablation_gpu_1.sh` |
-| 6.3 | w/o representation module | `files_config/ablations/stage_no_representation.json` | `run_ablation_gpu_0.sh` |
-| 6.3 | w/o hierarchical module | `files_config/ablations/stage_no_hierarchy.json` | `run_ablation_gpu_1.sh` |
+| 6.1 | Full | `files_config/ablations/rnhal/rep_full.json` | `run_ablation_gpu_1.sh` |
+| 6.1 | Spatial-only | `files_config/ablations/rnhal/rep_spatial.json` | `run_ablation_gpu_0.sh` |
+| 6.1 | Spectral-only | `files_config/ablations/rnhal/rep_spectral.json` | `run_ablation_gpu_1.sh` |
+| 6.2 | L=1, k=[50] | `files_config/ablations/rnhal/hier_L1.json` | `run_ablation_gpu_0.sh` |
+| 6.2 | L=2, k=[300,100] | `files_config/ablations/rnhal/hier_L2a.json` | `run_ablation_gpu_1.sh` |
+| 6.2 | L=2, k=[100,50] | `files_config/ablations/rnhal/hier_L2b.json` | `run_ablation_gpu_0.sh` |
+| 6.2 | L=3, k=[300,100,50] | `files_config/ablations/rnhal/hier_L3.json` | `run_ablation_gpu_1.sh` |
+| 6.2 | L=4, k=[300,100,50,25] | `files_config/ablations/rnhal/hier_L4.json` | `run_ablation_gpu_1.sh` |
+| 6.3 | RNHAL (full) | `files_config/ablations/rnhal/stage_full.json` | `run_ablation_gpu_1.sh` |
+| 6.3 | w/o representation module | `files_config/ablations/rnhal/stage_no_representation.json` | `run_ablation_gpu_0.sh` |
+| 6.3 | w/o hierarchical module | `files_config/ablations/rnhal/stage_no_hierarchy.json` | `run_ablation_gpu_1.sh` |
 
 (`scripts/ablations/run_ablation_gpu_0.sh` = 5 configs, `run_ablation_gpu_1.sh` = 6 configs, split
 by expected relative cost — hierarchical selection over a large/multi-level hierarchy dominates
