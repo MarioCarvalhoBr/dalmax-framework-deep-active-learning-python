@@ -1,16 +1,18 @@
 """Tests for scripts/ablations/run_ablation_gpu_{0,1}.sh.
 
-Two things are checked, both without spending any GPU time or touching the
+Three things are checked, all without spending any GPU time or touching the
 real results/ tree:
 
 1. Both scripts are syntactically valid bash (`bash -n`).
 2. The `SKIP_EXISTING`/`DRY_RUN` logic added for Colab idempotency
    (`.claude/rules/data-safety.md` "results/ is append-only") behaves
-   correctly: given a temp results tree with exactly one fake
-   `results.json` already present, running the script under `DRY_RUN=1`
-   produces exactly one "SKIP (already completed)" line and one
-   "DRY-RUN: ..." line per remaining (config, seed) triple -- and never
-   invokes `poetry run python trainer.py` or ExperimentNotifier for real.
+   correctly for both `METHOD=rnhal` (default) and `METHOD=texhal`: given a
+   temp results tree with exactly one fake `results.json` already present,
+   running the script under `DRY_RUN=1` produces exactly one "SKIP (already
+   completed)" line and one "DRY-RUN: ..." line per remaining (config, seed)
+   triple -- and never invokes `poetry run python trainer.py` or
+   ExperimentNotifier for real.
+3. An invalid `METHOD` value exits 2 without running anything.
 
 `DRY_RUN=1` makes this safe to run from the fast test suite: the script
 still executes end-to-end (loop, glob checks, ExperimentNotifier guard) but
@@ -32,16 +34,23 @@ SCRIPTS = [
     REPO_ROOT / "scripts" / "ablations" / "run_ablation_gpu_1.sh",
 ]
 
-# (script, number of CONFIGS entries, seeds) -- must match each script's
-# CONFIGS array so the expected SKIP/DRY-RUN counts below stay correct.
 N_SEEDS = 3
+
+# (script, method) -> number of CONFIGS entries -- must match each script's
+# CONFIGS_{RNHAL,TEXHAL} arrays so the expected SKIP/DRY-RUN counts below
+# stay correct. texhal has one more §6.1 row (rep_q13) than rnhal, and it
+# lives on GPU 1 -- see scripts/ablations/run_ablation_gpu_{0,1}.sh headers.
 N_CONFIGS = {
-    "run_ablation_gpu_0.sh": 5,
-    "run_ablation_gpu_1.sh": 6,
+    ("run_ablation_gpu_0.sh", "rnhal"): 5,
+    ("run_ablation_gpu_0.sh", "texhal"): 5,
+    ("run_ablation_gpu_1.sh", "rnhal"): 6,
+    ("run_ablation_gpu_1.sh", "texhal"): 7,
 }
 FIRST_STUDY_CONFIG = {
-    "run_ablation_gpu_0.sh": ("6_1", "rep_full"),
-    "run_ablation_gpu_1.sh": ("6_1", "rep_spectral"),
+    ("run_ablation_gpu_0.sh", "rnhal"): ("6_1", "rep_full"),
+    ("run_ablation_gpu_0.sh", "texhal"): ("6_1", "rep_full"),
+    ("run_ablation_gpu_1.sh", "rnhal"): ("6_1", "rep_spectral"),
+    ("run_ablation_gpu_1.sh", "texhal"): ("6_1", "rep_q17"),
 }
 
 
@@ -55,10 +64,14 @@ def test_bash_syntax_is_valid(script: Path) -> None:
     assert result.returncode == 0, result.stderr
 
 
-@pytest.mark.parametrize("script", SCRIPTS, ids=lambda p: p.name)
-def test_skip_existing_and_dry_run(script: Path, tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "script,method",
+    [(s, m) for s in SCRIPTS for m in ("rnhal", "texhal")],
+    ids=lambda v: v.name if isinstance(v, Path) else v,
+)
+def test_skip_existing_and_dry_run(script: Path, method: str, tmp_path: Path) -> None:
     results_root = tmp_path / "ablations"
-    study, config_name = FIRST_STUDY_CONFIG[script.name]
+    study, config_name = FIRST_STUDY_CONFIG[(script.name, method)]
     seed = 1
 
     # Fake a completed (study, config, seed=1) leaf, matching the layout
@@ -78,6 +91,7 @@ def test_skip_existing_and_dry_run(script: Path, tmp_path: Path) -> None:
 
     env = os.environ.copy()
     env["DRY_RUN"] = "1"
+    env["METHOD"] = method
     env["RESULTS_ROOT"] = str(results_root)
 
     proc = subprocess.run(
@@ -93,7 +107,7 @@ def test_skip_existing_and_dry_run(script: Path, tmp_path: Path) -> None:
     skip_lines = [line for line in proc.stdout.splitlines() if line.startswith("SKIP (already completed)")]
     dry_run_lines = [line for line in proc.stdout.splitlines() if line.startswith("DRY-RUN: CUDA_VISIBLE_DEVICES")]
 
-    total_triples = N_CONFIGS[script.name] * N_SEEDS
+    total_triples = N_CONFIGS[(script.name, method)] * N_SEEDS
     assert len(skip_lines) == 1, proc.stdout
     assert f"study={study} config={config_name} seed={seed}" in skip_lines[0]
     assert len(dry_run_lines) == total_triples - 1, proc.stdout
@@ -104,3 +118,25 @@ def test_skip_existing_and_dry_run(script: Path, tmp_path: Path) -> None:
     assert "FAILED:" not in proc.stdout
     assert "finalizado." not in proc.stdout
     assert "DRY-RUN: skipping ExperimentNotifier call." in proc.stdout
+
+
+@pytest.mark.parametrize("script", SCRIPTS, ids=lambda p: p.name)
+def test_invalid_method_exits_2_without_running_anything(script: Path, tmp_path: Path) -> None:
+    env = os.environ.copy()
+    env["METHOD"] = "bogus"
+    env["DRY_RUN"] = "1"
+    env["RESULTS_ROOT"] = str(tmp_path / "ablations")
+
+    proc = subprocess.run(
+        ["bash", str(script)],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert proc.returncode == 2, proc.stdout
+    assert "METHOD must be" in proc.stderr
+    assert "DRY-RUN:" not in proc.stdout
+    assert not (tmp_path / "ablations").exists()

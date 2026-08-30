@@ -1,19 +1,31 @@
 #!/bin/bash
-# Lab-machine batch run for Phase 3 ablation configs, GPU 1's half of the
-# 11-config split. See run_ablation_gpu_0.sh's header for the full split
-# rationale (by expected relative cost, hierarchical selection dominates
-# runtime, not training) and .specs/experiments/ablation-study.md's
-# "Materialized files" section.
+# Lab-machine batch run for the ablation configs, GPU 1's half of the split
+# (11 configs for METHOD=rnhal, 12 for METHOD=texhal). See
+# run_ablation_gpu_0.sh's header for the full split rationale (by expected
+# relative cost, hierarchical selection dominates runtime, not training) and
+# .specs/experiments/ablation-study.md / ablation-study-texhal.md's
+# "Materialized files" sections.
 #
-# This GPU (1) gets: rep_spectral (last of 6.1's 3 heavy-hierarchy configs),
-# stage_full (heavy reference hierarchy -- the RNHAL-full row re-run through
-# the new RepresentationStrategy pipeline for cross-checking, see
-# files_config/ablations/README.md), stage_no_hierarchy (the cheapest config
-# in the whole sweep -- flat k-means, no multi-level clustering), and
-# hier_L2a/hier_L3/hier_L4 (the three heavier/medium 6.2 rows) -- 6 configs,
-# a comparable total load to GPU 0's 5 configs (run_ablation_gpu_0.sh), which
-# carries 3 heavy-hierarchy configs vs this GPU's 2 to compensate for having
-# fewer configs overall.
+# METHOD (2026-08-30): this script now serves BOTH ablation suites -- `rnhal`
+# (paper 3, SSRAE, already executed 2026-08-25/26 on Colab) and `texhal`
+# (paper 2, VCTex, not yet run) -- see files_config/ablations/README.md and
+# .specs/experiments/papers-roadmap.md.
+#
+# This GPU (1) gets, per METHOD:
+#   rnhal:  rep_spectral (last of 6.1's 3 heavy-hierarchy configs),
+#           stage_full (heavy reference hierarchy -- the RNHAL-full row
+#           re-run through the new RepresentationStrategy pipeline for
+#           cross-checking, see files_config/ablations/README.md),
+#           stage_no_hierarchy (the cheapest config in the whole sweep --
+#           flat k-means, no multi-level clustering), and hier_L2a/hier_L3/
+#           hier_L4 (the three heavier/medium 6.2 rows) -- 6 configs.
+#   texhal: rep_q17, rep_q13 (the remaining two of 6.1's 4 heavy-hierarchy
+#           configs -- rep_q13 added 2026-08-30 per the VCTex method
+#           authors, see files_config/ablations/README.md), stage_full,
+#           stage_no_hierarchy, hier_L2a, hier_L3, hier_L4 -- 7 configs.
+# a comparable total load to GPU 0's half (run_ablation_gpu_0.sh, 5 configs
+# for either method), which carries more heavy-hierarchy configs per config
+# to compensate for having fewer configs overall.
 #
 # Same "keep going on failure" behavior as run_ablation_gpu_0.sh: `set -uo
 # pipefail` (not `-e`), explicit `if ! ...; then ...` per run, failures
@@ -22,6 +34,10 @@
 # Environment overrides (all optional, defaults match the original lab-only
 # behavior exactly) -- see run_ablation_gpu_0.sh's header for the full
 # rationale of each:
+#   METHOD        - "rnhal" (default) or "texhal" -- selects
+#                   files_config/ablations/${METHOD}/ as the config source
+#                   and results/ablations/${METHOD}/ as the default results
+#                   root. Any other value exits 2.
 #   GPU_NUMBER    - which CUDA device to target (default 1). Colab has a
 #                   single GPU 0, so scripts/colab/run_ablations_colab.sh
 #                   sets GPU_NUMBER=0 for both this and run_ablation_gpu_0.sh.
@@ -31,7 +47,15 @@
 #                   disconnect or a lab crash idempotent. Set "0" to force.
 #   DRY_RUN       - "1" echoes commands (training + ExperimentNotifier)
 #                   instead of executing them; default "0".
-#   RESULTS_ROOT  - base results directory (default results/ablations).
+#   RESULTS_ROOT  - base results directory (default results/ablations/${METHOD}).
+#
+# IMPORTANT back-compat note: the already-executed RNHAL batch (2026-08-25/26)
+# lives at the LEGACY root `results/ablations/{6_1,6_2,6_3}/` (no `rnhal/`
+# segment) -- append-only, left in place. A new `METHOD=rnhal` run of this
+# script writes to `results/ablations/rnhal/{6_1,6_2,6_3}/` by default;
+# `SKIP_EXISTING` will NOT see the legacy tree (its glob is scoped to
+# `RESULTS_ROOT`). Pass `RESULTS_ROOT=results/ablations` explicitly to
+# extend the legacy layout instead of starting a new one.
 
 set -uo pipefail
 
@@ -41,6 +65,12 @@ export MPLBACKEND=Agg
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
+
+METHOD="${METHOD:-rnhal}"
+if [ "$METHOD" != "rnhal" ] && [ "$METHOD" != "texhal" ]; then
+    echo "ERROR: METHOD must be 'rnhal' or 'texhal', got '$METHOD'" >&2
+    exit 2
+fi
 
 GPU_NUMBER="${GPU_NUMBER:-1}"
 SEEDS=(1 2 3)
@@ -55,14 +85,17 @@ N_ROUND=8
 SKIP_EXISTING="${SKIP_EXISTING:-1}"
 DRY_RUN="${DRY_RUN:-0}"
 
-CONFIG_DIR="files_config/ablations"
-RESULTS_ROOT="${RESULTS_ROOT:-results/ablations}"
+CONFIG_DIR="files_config/ablations/${METHOD}"
+RESULTS_ROOT="${RESULTS_ROOT:-results/ablations/${METHOD}}"
 FAILURE_LOG="${RESULTS_ROOT}/gpu1_failures.log"
 
 # (study, config_name) pairs -- config_name matches
-# files_config/ablations/<config_name>.json and becomes the results
-# subfolder: results/ablations/<study>/<config_name>/.
-CONFIGS=(
+# files_config/ablations/${METHOD}/<config_name>.json and becomes the results
+# subfolder: results/ablations/${METHOD}/<study>/<config_name>/. Per-method
+# arrays because §6.1's basenames (and row count) differ between rnhal and
+# texhal (see files_config/ablations/README.md's naming-convention table);
+# §6.2/§6.3 basenames are identical across methods.
+CONFIGS_RNHAL=(
     "6_1:rep_spectral"
     "6_3:stage_full"
     "6_3:stage_no_hierarchy"
@@ -70,11 +103,26 @@ CONFIGS=(
     "6_2:hier_L3"
     "6_2:hier_L4"
 )
+CONFIGS_TEXHAL=(
+    "6_1:rep_q17"
+    "6_1:rep_q13"
+    "6_3:stage_full"
+    "6_3:stage_no_hierarchy"
+    "6_2:hier_L2a"
+    "6_2:hier_L3"
+    "6_2:hier_L4"
+)
+
+if [ "$METHOD" = "rnhal" ]; then
+    CONFIGS=("${CONFIGS_RNHAL[@]}")
+else
+    CONFIGS=("${CONFIGS_TEXHAL[@]}")
+fi
 
 mkdir -p "$(dirname "$FAILURE_LOG")"
 : > "$FAILURE_LOG"
 
-echo "Iniciando bateria de ablações (GPU ${GPU_NUMBER})..."
+echo "Iniciando bateria de ablações (METHOD=${METHOD}, GPU ${GPU_NUMBER})..."
 
 for entry in "${CONFIGS[@]}"; do
     study="${entry%%:*}"
@@ -85,7 +133,7 @@ for entry in "${CONFIGS[@]}"; do
     for seed in "${SEEDS[@]}"; do
         echo ""
         echo "------------------------------------------------------------"
-        echo "EXECUTANDO: study=$study config=$config_name seed=$seed (GPU $GPU_NUMBER)"
+        echo "EXECUTANDO: method=$METHOD study=$study config=$config_name seed=$seed (GPU $GPU_NUMBER)"
         echo "------------------------------------------------------------"
 
         # SKIP_EXISTING: glob for this triple's results.json rather than
@@ -124,7 +172,7 @@ done
 
 echo ""
 echo "------------------------------------------------------------"
-echo "Todas as ablações da GPU ${GPU_NUMBER} foram concluídas."
+echo "Todas as ablações da GPU ${GPU_NUMBER} (METHOD=${METHOD}) foram concluídas."
 if [ -s "$FAILURE_LOG" ]; then
     echo "FALHAS registradas em $FAILURE_LOG:"
     cat "$FAILURE_LOG"
@@ -142,7 +190,7 @@ echo "------------------------------------------------------------"
 if [ "$DRY_RUN" = "1" ]; then
     echo "DRY-RUN: skipping ExperimentNotifier call."
 elif [ -f ExperimentNotifier/main.py ]; then
-    poetry run python ExperimentNotifier/main.py --dir_results="${RESULTS_ROOT}/" --args "GPU_NUMBER=$GPU_NUMBER, ABLATION_BATCH=gpu1, FAILURE_LOG=$FAILURE_LOG"
+    poetry run python ExperimentNotifier/main.py --dir_results="${RESULTS_ROOT}/" --args "METHOD=$METHOD, GPU_NUMBER=$GPU_NUMBER, ABLATION_BATCH=gpu1, FAILURE_LOG=$FAILURE_LOG"
 else
     echo "ExperimentNotifier/main.py not found (expected on Colab) -- skipping email notification."
 fi
