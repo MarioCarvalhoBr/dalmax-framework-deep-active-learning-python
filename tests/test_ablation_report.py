@@ -19,6 +19,9 @@ import pytest
 
 from dalmax.reporting.ablation_report import (
     STUDY_CONFIGS,
+    STUDY_CONFIGS_BY_METHOD,
+    STUDY_CONFIGS_TEXHAL,
+    build_arg_parser,
     build_summaries,
     find_run_results,
     load_run,
@@ -221,3 +224,38 @@ def test_main_cli_writes_all_expected_files(tmp_path: Path):
     for study in STUDY_CONFIGS:
         assert (out_dir / f"ablation_{study}.md").is_file()
         assert (out_dir / f"ablation_{study}.tex").is_file()
+
+
+# --- --method (2026-08-30 texhal support) -----------------------------------
+
+
+def test_build_summaries_accepts_texhal_study_configs(tmp_path: Path):
+    _write_run(tmp_path, "6_1", "rep_q5", seed=1, all_f1_macro=[0.3], all_f1_score=[0.2])
+
+    summaries = build_summaries(tmp_path, STUDY_CONFIGS_TEXHAL)
+
+    assert {c for c, _ in STUDY_CONFIGS_TEXHAL["6_1"]} == {s.config for s in summaries["6_1"]}
+    rep_q5 = next(s for s in summaries["6_1"] if s.config == "rep_q5")
+    assert rep_q5.macro.has_data
+    # texhal's §6.1 has a 4th row (rep_q13) that rnhal's doesn't.
+    assert "rep_q13" in {c for c, _ in STUDY_CONFIGS_TEXHAL["6_1"]}
+    assert "rep_q13" not in {c for c, _ in STUDY_CONFIGS["6_1"]}
+
+
+def test_main_cli_method_texhal_uses_texhal_config_names(tmp_path: Path):
+    root = tmp_path / "results" / "ablations" / "texhal"
+    _write_run(root, "6_1", "rep_q17", seed=1, all_f1_macro=[0.5], all_f1_score=[0.4])
+    out_dir = tmp_path / "docs" / "ablation_tables" / "texhal"
+
+    main(["--root", str(root), "--out", str(out_dir), "--method", "texhal"])
+
+    md_6_1 = (out_dir / "ablation_6_1.md").read_text()
+    assert "Q=17" in md_6_1
+    assert "Q=13" in md_6_1  # zero-run row still rendered as TBD
+    assert "Spatial-only" not in md_6_1
+
+
+def test_main_cli_default_method_is_rnhal() -> None:
+    args = build_arg_parser().parse_args([])
+    assert args.method == "rnhal"
+    assert STUDY_CONFIGS_BY_METHOD[args.method] is STUDY_CONFIGS

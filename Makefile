@@ -1,12 +1,21 @@
 .PHONY: setup lint format test test-all smoke smoke-ablations clean \
 	lab-setup lab-check micro-dataset \
-	ablations-gpu0 ablations-gpu1 ablations-all ablation-report \
+	ablations-gpu0 ablations-gpu1 ablations-all ablation-report ablation-report-legacy \
 	benchmark-gpu0 benchmark-gpu1 \
 	colab-setup ablations-colab colab-check
 
 # GPU index used by `lab-check` (0 or 1, matching files_config/benchmark/params_df_gpu_{0,1}.json).
 # Override on the command line, e.g. `make lab-check GPU=1`.
 GPU ?= 0
+
+# Which ablation suite to run/report: `rnhal` (paper 3, SSRAE -- default,
+# already executed 2026-08-26 on Colab) or `texhal` (paper 2, VCTex -- not
+# yet run). Selects files_config/ablations/${METHOD}/ as the config source
+# and results/ablations/${METHOD}/ (docs/results/ablation_tables/${METHOD}/
+# for reports) as the results root. Override on the command line, e.g.
+# `METHOD=texhal make ablations-gpu0`. See files_config/ablations/README.md
+# and .specs/experiments/papers-roadmap.md.
+METHOD ?= rnhal
 
 # Install the Poetry-managed environment (./.venv, see poetry.toml).
 setup:
@@ -66,16 +75,20 @@ smoke:
 	fi
 	poetry run pytest -q -m "not gpu and not dataset and not slow"
 
-# `smoke-ablations`: CPU end-to-end smoke test for all 11 Phase 3 ablation
-# configs (files_config/ablations/micro/*.json — see
-# .specs/experiments/ablation-study.md and that folder's README.md), against
-# the same tiny DATA/daninhas_micro dataset as `make smoke`. Each config runs
-# with a tiny budget (--n_init_labeled 10 --n_query 5 --n_round 1, seed 1,
-# --device cpu) into its own results/smoke_ablations/<config>/ subfolder.
-# Fails on the first broken config (see scripts/ablations/smoke_ablations.sh's
-# own header for why this is set -e, unlike the lab run scripts).
+# `smoke-ablations`: CPU end-to-end smoke test for every ablation config
+# (files_config/ablations/{rnhal,texhal}/micro/*.json — see
+# .specs/experiments/ablation-study.md / ablation-study-texhal.md and
+# files_config/ablations/README.md), against the same tiny
+# DATA/daninhas_micro dataset as `make smoke`. Each config runs with a tiny
+# budget (--n_init_labeled 10 --n_query 5 --n_round 1, seed 1, --device cpu)
+# into its own results/smoke_ablations/<method>/<config>/ subfolder. Runs
+# BOTH methods by default (METHOD=both in the underlying script); pass
+# METHOD=rnhal or METHOD=texhal to restrict to one suite, e.g.
+# `METHOD=texhal make smoke-ablations`. Fails on the first broken config (see
+# scripts/ablations/smoke_ablations.sh's own header for why this is set -e,
+# unlike the lab run scripts).
 smoke-ablations:
-	bash scripts/ablations/smoke_ablations.sh
+	METHOD=$${METHOD:-both} bash scripts/ablations/smoke_ablations.sh
 
 clean:
 	find . -type d -name '__pycache__' -not -path './.venv/*' -exec rm -rf {} +
@@ -118,46 +131,66 @@ lab-check:
 micro-dataset:
 	poetry run python scripts/make_micro_dataset.py
 
-# Run one GPU's half of the Phase 3 ablation batch (see
+# Run one GPU's half of the ablation batch for METHOD (rnhal|texhal, default
+# rnhal — override with e.g. `METHOD=texhal make ablations-gpu0`; see
 # scripts/ablations/run_ablation_gpu_{0,1}.sh's headers for the exact
 # (study, config) split and its cost-balancing rationale, and
-# .specs/experiments/ablation-study.md for the run tables). Each of these
-# survives a single failing (study, config, seed) run and logs it to
-# results/ablations/gpu{N}_failures.log instead of aborting the batch, and
-# emails a completion notification via ExperimentNotifier/main.py at the end
-# (its .env must already be configured on the lab machine — see LAB_RUNBOOK.md
-# step 0). Meant to be launched inside its own tmux session/pane, one per GPU.
+# .specs/experiments/ablation-study.md / ablation-study-texhal.md for the run
+# tables). Each of these survives a single failing (study, config, seed) run
+# and logs it to results/ablations/${METHOD}/gpu{N}_failures.log instead of
+# aborting the batch, and emails a completion notification via
+# ExperimentNotifier/main.py at the end (its .env must already be configured
+# on the lab machine — see LAB_RUNBOOK.md step 0). Meant to be launched
+# inside its own tmux session/pane, one per GPU.
+#
+# IMPORTANT: the already-executed RNHAL batch (2026-08-26) lives at the
+# LEGACY root results/ablations/{6_1,6_2,6_3}/ (no method segment) — see
+# scripts/ablations/run_ablation_gpu_0.sh's header. `METHOD=rnhal` (the
+# default) writes new runs to results/ablations/rnhal/ instead, which
+# SKIP_EXISTING cannot see in the legacy tree — pass
+# `RESULTS_ROOT=results/ablations` to extend the legacy layout instead.
 ablations-gpu0:
-	bash scripts/ablations/run_ablation_gpu_0.sh
+	METHOD=$(METHOD) bash scripts/ablations/run_ablation_gpu_0.sh
 
 ablations-gpu1:
-	bash scripts/ablations/run_ablation_gpu_1.sh
+	METHOD=$(METHOD) bash scripts/ablations/run_ablation_gpu_1.sh
 
 # Run both GPUs' ablation halves concurrently from a single shell, via `&` +
 # `wait` rather than two separate `tmux` panes. Each script's combined
-# stdout/stderr is redirected to its own results/ablations/gpu{0,1}.log
+# stdout/stderr is redirected to its own results/ablations/${METHOD}/gpu{0,1}.log
 # specifically to avoid the two concurrent processes' output interleaving
 # unreadably in one terminal (that unredirected interleaving is exactly what
 # `&`-backgrounding both would otherwise produce) — tail each log separately
-# to monitor progress (`tail -f results/ablations/gpu0.log`), and check
-# results/ablations/gpu{0,1}_failures.log once both finish. Prefer two tmux
-# panes (`make ablations-gpu0` / `make ablations-gpu1`) when you want to watch
-# each GPU's live output directly instead of via a log file; this target is
-# for a single unattended `nohup make ablations-all &`-style launch.
+# to monitor progress (`tail -f results/ablations/${METHOD}/gpu0.log`), and
+# check results/ablations/${METHOD}/gpu{0,1}_failures.log once both finish.
+# Prefer two tmux panes (`make ablations-gpu0` / `make ablations-gpu1`) when
+# you want to watch each GPU's live output directly instead of via a log
+# file; this target is for a single unattended `nohup make ablations-all &`-
+# style launch. Pass METHOD the same way, e.g. `METHOD=texhal make ablations-all`.
 ablations-all:
-	mkdir -p results/ablations
-	( bash scripts/ablations/run_ablation_gpu_0.sh > results/ablations/gpu0.log 2>&1 & \
-	  bash scripts/ablations/run_ablation_gpu_1.sh > results/ablations/gpu1.log 2>&1 & \
+	mkdir -p results/ablations/$(METHOD)
+	( METHOD=$(METHOD) bash scripts/ablations/run_ablation_gpu_0.sh > results/ablations/$(METHOD)/gpu0.log 2>&1 & \
+	  METHOD=$(METHOD) bash scripts/ablations/run_ablation_gpu_1.sh > results/ablations/$(METHOD)/gpu1.log 2>&1 & \
 	  wait )
 
-# Aggregate every discovered results/ablations/<study>/<config>/.../results.json
-# into docs/results/ablation_tables/ (ablation_summary.csv + one
+# Aggregate every discovered results/ablations/${METHOD}/<study>/<config>/.../results.json
+# into docs/results/ablation_tables/${METHOD}/ (ablation_summary.csv + one
 # ablation_6_{1,2,3}.md/.tex per sub-study) — see
 # dalmax/reporting/ablation_report.py and docs/results/README.md. Run this
 # after both ablations-gpu{0,1} batches finish (or against
-# results/smoke_ablations/ with --root overridden, for a dry run).
+# results/smoke_ablations/${METHOD}/ with --root overridden, for a dry run).
+# METHOD defaults to rnhal; override with e.g. `make ablation-report METHOD=texhal`.
 ablation-report:
-	poetry run python -m dalmax.reporting.ablation_report --root results/ablations --out docs/results/ablation_tables
+	poetry run python -m dalmax.reporting.ablation_report --root results/ablations/$(METHOD) --out docs/results/ablation_tables/$(METHOD) --method $(METHOD)
+
+# Report on the already-executed legacy RNHAL batch (2026-08-26), which lives
+# at the LEGACY root results/ablations/ (no method segment) and whose
+# committed tables are the top-level docs/results/ablation_tables/*.{csv,md,tex}
+# files — see docs/results/README.md. Kept as its own target (rather than
+# folded into `ablation-report`) so the historical path still works exactly
+# as before this reorganization.
+ablation-report-legacy:
+	poetry run python -m dalmax.reporting.ablation_report --root results/ablations --out docs/results/ablation_tables --method rnhal
 
 # Re-run the reference RNHAL benchmark sweep (SSRAEKmeansHCSampling,
 # QUERIES=(10 50 100) x SEEDS=(1 2 3), n_round=8) on one GPU — see
@@ -183,13 +216,15 @@ benchmark-gpu1:
 colab-setup:
 	bash scripts/colab/setup_colab.sh
 
-# Run the full 11-config / 33-run Phase 3 ablation sweep sequentially on
-# Colab's single GPU (both scripts/ablations/run_ablation_gpu_{0,1}.sh halves,
-# both pinned to GPU 0), logging to results/ablations/colab.log. SKIP_EXISTING
-# (default on in both underlying scripts) makes relaunching this after a
-# disconnect safe -- see scripts/colab/run_ablations_colab.sh.
+# Run the full ablation sweep for METHOD (rnhal|texhal, default rnhal)
+# sequentially on Colab's single GPU (both
+# scripts/ablations/run_ablation_gpu_{0,1}.sh halves, both pinned to GPU 0),
+# logging to results/ablations/${METHOD}/colab.log. SKIP_EXISTING (default on
+# in both underlying scripts) makes relaunching this after a disconnect safe
+# -- see scripts/colab/run_ablations_colab.sh. Override with e.g.
+# `METHOD=texhal make ablations-colab`.
 ablations-colab:
-	bash scripts/colab/run_ablations_colab.sh
+	METHOD=$(METHOD) bash scripts/colab/run_ablations_colab.sh
 
 # The same single real-data GPU sanity check as `lab-check`, but into a
 # dedicated results/colab_check/ directory (so it never collides with the

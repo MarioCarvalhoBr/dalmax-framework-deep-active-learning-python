@@ -1,4 +1,4 @@
-"""Aggregate Phase 3 ablation results into the paper's macro-F1 tables.
+"""Aggregate ablation results into the paper's macro-F1 tables.
 
 Walks `<root>/<study>/<config>/<dataset>/SEED_*/NQ_*/RepresentationStrategy/
 results.json` (the layout `scripts/ablations/run_ablation_gpu_*.sh` and
@@ -6,6 +6,18 @@ results.json` (the layout `scripts/ablations/run_ablation_gpu_*.sh` and
 `.specs/experiments/ablation-study.md`'s "Materialized files" section),
 reads each run's `all_f1_macro`/`all_f1_score` and `run_metadata.json`, and
 writes, per `--out` directory:
+
+Since 2026-08-30 this module is **method-aware** (`--method {rnhal,texhal}`,
+default `rnhal`, matching `files_config/ablations/{rnhal,texhal}/` -- see
+that folder's README.md and `.specs/experiments/papers-roadmap.md`): each
+method has its own `STUDY_CONFIGS` (the two only differ in §6.1's config
+basenames -- rnhal slices SSRAE `full`/`spatial`/`spectral`, texhal sweeps
+VCTex's `Q` scale). `--root` should already point at the method's own
+results subtree (e.g. `results/ablations/texhal`, not the shared parent),
+since the config *basenames* inside a study directory are method-specific
+for §6.1. `STUDY_CONFIGS` (module-level, no explicit method) is kept as an
+alias for `STUDY_CONFIGS_BY_METHOD["rnhal"]`, unchanged, for backward
+compatibility with existing callers/tests that predate the `--method` flag.
 
 - `ablation_summary.csv`: one row per `(study, config)`, mean +/- std across
   seeds of both the **final-round** value and the **across-rounds mean**
@@ -22,8 +34,12 @@ writes, per `--out` directory:
   rendered as `TBD` rather than omitted, so every row of
   `ablation-study.md`'s run tables always has a corresponding table row.
 
-CLI: `python -m dalmax.reporting.ablation_report --root results/ablations
---out paper_drafts/ablation_tables`.
+CLI: `python -m dalmax.reporting.ablation_report --root results/ablations/rnhal
+--out docs/results/ablation_tables/rnhal --method rnhal` (or `--root
+results/ablations/texhal --out docs/results/ablation_tables/texhal --method
+texhal` for the TexHAL suite; `make ablation-report METHOD=texhal` wraps
+this). `--method` defaults to `rnhal`, matching this module's pre-2026-08-30
+behavior for callers that don't pass it.
 """
 
 from __future__ import annotations
@@ -37,8 +53,9 @@ from pathlib import Path
 
 # study -> ordered list of (config_name, display_label), matching the exact
 # run-table rows in .specs/experiments/ablation-study.md and the files under
-# files_config/ablations/ (see that folder's README.md).
-STUDY_CONFIGS: dict[str, list[tuple[str, str]]] = {
+# files_config/ablations/rnhal/ (see that folder's README.md). §6.2/§6.3
+# config basenames are identical between rnhal and texhal; only §6.1 differs.
+STUDY_CONFIGS_RNHAL: dict[str, list[tuple[str, str]]] = {
     "6_1": [
         ("rep_full", "Full"),
         ("rep_spatial", "Spatial-only"),
@@ -58,10 +75,46 @@ STUDY_CONFIGS: dict[str, list[tuple[str, str]]] = {
     ],
 }
 
+# TexHAL (paper 2, VCTex): §6.1 sweeps VCTex's own multi-scale hyperparameter
+# `Q` instead of a spatial/spectral column-group split (slice_embedding is
+# SSRAE-only) -- see files_config/ablations/README.md and
+# .specs/experiments/ablation-study-texhal.md. `rep_q13`/`rep_q17` were added
+# 2026-08-30 per the VCTex method authors (Fares & Ribas). §6.2/§6.3 mirror
+# rnhal's basenames exactly.
+STUDY_CONFIGS_TEXHAL: dict[str, list[tuple[str, str]]] = {
+    "6_1": [
+        ("rep_q5", "Q=5"),
+        ("rep_q13", "Q=13"),
+        ("rep_q17", "Q=17"),
+        ("rep_full", "Q=[5,17] (full)"),
+    ],
+    "6_2": [
+        ("hier_L1", "L=1, k=[50]"),
+        ("hier_L2a", "L=2, k=[300,100]"),
+        ("hier_L2b", "L=2, k=[100,50]"),
+        ("hier_L3", "L=3, k=[300,100,50]"),
+        ("hier_L4", "L=4, k=[300,100,50,25]"),
+    ],
+    "6_3": [
+        ("stage_full", "TexHAL (full)"),
+        ("stage_no_representation", "w/o representation module"),
+        ("stage_no_hierarchy", "w/o hierarchical module"),
+    ],
+}
+
+STUDY_CONFIGS_BY_METHOD: dict[str, dict[str, list[tuple[str, str]]]] = {
+    "rnhal": STUDY_CONFIGS_RNHAL,
+    "texhal": STUDY_CONFIGS_TEXHAL,
+}
+
+# Backward-compatible alias: pre-`--method` callers (and tests written before
+# 2026-08-30) import `STUDY_CONFIGS` directly, always meaning the rnhal suite.
+STUDY_CONFIGS: dict[str, list[tuple[str, str]]] = STUDY_CONFIGS_RNHAL
+
 STUDY_TITLES: dict[str, str] = {
     "6_1": "6.1 Representation ablation",
     "6_2": "6.2 Hierarchy ablation",
-    "6_3": "6.3 Contribution of the two RNHAL stages",
+    "6_3": "6.3 Contribution of the two stages",
 }
 
 
@@ -173,13 +226,17 @@ def summarize_config(study: str, config: str, label: str, runs: list[RunRecord])
     return ConfigSummary(study=study, config=config, label=label, macro=macro, weighted=weighted)
 
 
-def build_summaries(root: Path) -> dict[str, list[ConfigSummary]]:
+def build_summaries(
+    root: Path, study_configs: dict[str, list[tuple[str, str]]] = STUDY_CONFIGS
+) -> dict[str, list[ConfigSummary]]:
     """Build every `ConfigSummary` for every `(study, config)` in
-    `STUDY_CONFIGS`, whether or not any runs were actually found (a
-    zero-run config still gets a `ConfigSummary` with `has_data=False`, so
-    every table row is always present -- see module docstring)."""
+    `study_configs` (default: `STUDY_CONFIGS`, i.e. the rnhal suite -- pass
+    `STUDY_CONFIGS_BY_METHOD["texhal"]` for the texhal suite), whether or not
+    any runs were actually found (a zero-run config still gets a
+    `ConfigSummary` with `has_data=False`, so every table row is always
+    present -- see module docstring)."""
     summaries: dict[str, list[ConfigSummary]] = {}
-    for study, rows in STUDY_CONFIGS.items():
+    for study, rows in study_configs.items():
         study_summaries = []
         for config, label in rows:
             run_paths = find_run_results(root, study, config)
@@ -304,6 +361,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         default="paper_drafts/ablation_tables",
         help="Output directory for the CSV/MD/TeX tables (default: paper_drafts/ablation_tables).",
     )
+    parser.add_argument(
+        "--method",
+        type=str,
+        choices=sorted(STUDY_CONFIGS_BY_METHOD),
+        default="rnhal",
+        help=(
+            "Which ablation suite's (study, config) basenames to look for under --root "
+            "(default: rnhal). --root should already point at that method's own results "
+            "subtree, e.g. results/ablations/texhal for --method texhal -- see "
+            "files_config/ablations/README.md."
+        ),
+    )
     return parser
 
 
@@ -313,8 +382,9 @@ def main(argv: list[str] | None = None) -> None:
 
     root = Path(args.root)
     out_dir = Path(args.out)
+    study_configs = STUDY_CONFIGS_BY_METHOD[args.method]
 
-    summaries = build_summaries(root)
+    summaries = build_summaries(root, study_configs)
     write_summary_csv(summaries, out_dir / "ablation_summary.csv")
     write_study_tables(summaries, out_dir)
 
