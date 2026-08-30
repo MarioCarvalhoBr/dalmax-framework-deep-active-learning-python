@@ -64,15 +64,19 @@ poetry run python gui.py                                                     # t
 # Lab-machine targets (see LAB_RUNBOOK.md for the full operator guide):
 make lab-setup                        # poetry install + torch/CUDA visibility check
 make lab-check GPU=0                  # one short real-data GPU run (n_round=1) before a full batch
-make ablations-gpu0                   # this GPU's half of the Phase 3 ablation batch (5 configs)
-make ablations-gpu1                   # this GPU's half of the Phase 3 ablation batch (6 configs)
-make ablation-report                  # aggregate results/ablations/ -> docs/results/ablation_tables/
+make ablations-gpu0                   # this GPU's half of the ablation batch, METHOD?=rnhal (5 configs either method)
+make ablations-gpu1                   # this GPU's half of the ablation batch, METHOD?=rnhal (6 configs rnhal / 7 texhal)
+make ablation-report                  # aggregate results/ablations/$(METHOD)/ -> docs/results/ablation_tables/$(METHOD)/
+make ablation-report-legacy           # report on the already-executed legacy RNHAL tree (results/ablations/, no method segment)
 make benchmark-gpu0 / benchmark-gpu1  # re-run the reference RNHAL sweep (scripts/benchmark/run_pipe_gpu_*.sh)
+# Pass METHOD=texhal to any ablations-*/ablation-report target above to run/report the TexHAL
+# (paper 2, VCTex) suite instead of the default rnhal (paper 3, SSRAE) one, e.g.
+# `METHOD=texhal make ablations-gpu0`. See files_config/ablations/README.md.
 
 # Colab targets (see COLAB_RUNBOOK.md for the full notebook-cell guide):
 make colab-setup                      # verify Drive mount, build/reuse dataset zip, symlink results/ -> Drive
 make colab-check                      # one short real-data GPU run into results/colab_check/ (GPU 0)
-make ablations-colab                  # both ablation-script halves sequentially on Colab's single GPU (SKIP_EXISTING=1 default makes relaunch after a disconnect safe)
+make ablations-colab                  # both ablation-script halves sequentially on Colab's single GPU, METHOD?=rnhal (SKIP_EXISTING=1 default makes relaunch after a disconnect safe)
 ```
 
 ## Working mode: multi-agent with model delegation (standing policy)
@@ -189,11 +193,28 @@ outstanding).
   `SKIP_EXISTING` (default `1` — skips a `(study, config, seed)` triple whose
   `results.json` already exists instead of re-running it), `DRY_RUN` (default
   `0` — echoes commands instead of executing them), and `RESULTS_ROOT`
-  (default `results/ablations`) from the environment; the `ExperimentNotifier`
+  (default `results/ablations/${METHOD}`) from the environment; the `ExperimentNotifier`
   call is now guarded by `[ -f ExperimentNotifier/main.py ]` (absent on
   Colab). This is what makes `scripts/colab/run_ablations_colab.sh` (both
   scripts pinned to `GPU_NUMBER=0`) safe to relaunch after a Colab disconnect.
   See `tests/test_ablation_scripts.py` and `COLAB_RUNBOOK.md`.
+- **Per-method ablation layout + `METHOD` variable (2026-08-30)**: two ablation
+  suites now exist side by side — `files_config/ablations/rnhal/` (paper 3,
+  SSRAE, **executed** 2026-08-26) and `files_config/ablations/texhal/` (paper
+  2, VCTex, materialized, not yet run; 12 configs, one more §6.1 row than
+  rnhal's 11 since VCTex sweeps its own `Q` scale instead of an SSRAE
+  spatial/spectral split). Every ablation script/Makefile target reads
+  `METHOD` (`rnhal` default, or `texhal`), selecting
+  `files_config/ablations/${METHOD}/` as the config source and
+  `results/ablations/${METHOD}/` as the results root. **The already-executed
+  RNHAL batch lives at the LEGACY root `results/ablations/{6_1,6_2,6_3}/`**
+  (no method segment) — append-only, unaffected by this reorganization; a new
+  `METHOD=rnhal` run writes to `results/ablations/rnhal/` instead (use
+  `RESULTS_ROOT=results/ablations` to extend the legacy tree, or
+  `make ablation-report-legacy` to report on it). See
+  `files_config/ablations/README.md`, `.specs/experiments/ablation-study-texhal.md`,
+  and `.specs/experiments/papers-roadmap.md` (the three-paper plan: 1 — DAL
+  benchmark comparison; 2 — TexHAL; 3 — RNHAL).
 - One params JSON per lab GPU: `files_config/benchmark/params_df_gpu_0.json`,
   `files_config/benchmark/params_df_gpu_1.json`, run
   via `scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh` (`QUERIES=(10 50 100)`,

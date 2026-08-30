@@ -1,49 +1,55 @@
 ---
-description: Read the ablation study spec and results/ablations/, and print a checklist of which ablation runs are implemented, executed, or pending, plus the aggregated F1 table where available.
+description: Read the ablation study spec(s) and results/ablations/, and print a checklist of which ablation runs are implemented, executed, or pending, plus the aggregated F1 table where available.
 ---
 
-Read `.specs/experiments/ablation-study.md` (mirrored by
-`.claude/skills/ablation-study/SKILL.md`) and cross-reference against
-`results/ablations/` (Phase 3's materialized layout — see that spec's
-"Materialized files" section) to report ablation progress.
+**Method-aware since 2026-08-30**: there are two ablation suites, `rnhal` (paper 3, SSRAE,
+`.specs/experiments/ablation-study.md`, **executed** 2026-08-26) and `texhal` (paper 2, VCTex,
+`.specs/experiments/ablation-study-texhal.md`, materialized, not yet run) — see
+`files_config/ablations/README.md` and `.specs/experiments/papers-roadmap.md`. Treat `$ARGUMENTS`
+as `[method] [results_root]` (both optional): `method` defaults to `rnhal`, `results_root` defaults
+to `results/ablations/<method>` (or `results/ablations` — the legacy root — when explicitly asked
+to check the already-executed RNHAL batch). Read `.specs/experiments/ablation-study.md` (for
+`rnhal`) or `.specs/experiments/ablation-study-texhal.md` (for `texhal`), mirrored by
+`.claude/skills/ablation-study/SKILL.md`, and cross-reference against the results root's
+"Materialized files" section to report ablation progress.
 
-**Status (Phase 3 landed, 2026-08-23): all 11 configs are implemented as
-`files_config/ablations/*.json` (+ `files_config/ablations/micro/*.json` CPU
-smoke mirrors); `make smoke-ablations` passes 11/11 locally.** What remains
-is running `scripts/ablations/run_ablation_gpu_0.sh` /
-`run_ablation_gpu_1.sh` on the lab machine — this command's job is to report
-which of the 11 × 3 seeds have actually landed under `results/ablations/`.
+**Status (2026-08-30): rnhal has 11 configs, all executed 2026-08-26 (33/33 runs, zero failures) —
+see `ablation-study.md`'s "Execution record". texhal has 12 configs (`files_config/ablations/
+texhal/*.json` + `micro/*.json` CPU smoke mirrors, `make smoke-ablations` covers both suites), none
+executed yet.** For `rnhal` this command's job is mostly confirmation (the batch is done); for
+`texhal` its job is to report which of the 12 × 3 seeds have landed under `results/ablations/texhal/`
+(none, as of this writing).
 
 Steps:
 
-1. Load `.specs/experiments/ablation-study.md`'s "Materialized files" section
-   for the 11 `(study, config)` pairs and their exact JSON/GPU-script
-   mapping:
-   - **6.1 Representation ablation** (`files_config/ablations/rep_full.json`,
-     `rep_spatial.json`, `rep_spectral.json`): SSRAE `Q=13`, reference
-     hierarchy `n_clusters=[600,200,100]`.
-   - **6.2 Hierarchy ablation** (`hier_L1.json` .. `hier_L4.json`): SSRAE
-     full, `n_query=100`, hierarchy per `ablation-study.md`'s run table.
-   - **6.3 RNHAL stage contribution** (`stage_full.json`,
-     `stage_no_representation.json`, `stage_no_hierarchy.json`): full RNHAL
-     vs. ResNet-ImageNet + hierarchical vs. SSRAE + `flat_proportional`.
-2. For each of the 11 configs, check two things:
-   - **Implemented**: always "yes" as of Phase 3 — every config has a
-     `files_config/ablations/<config>.json` validated by
-     `tests/test_ablation_configs.py`. Flag as regressed only if that test
-     file or the JSON is missing/failing.
-   - **Executed**: run `find results/ablations -path "*/<config>/*/SEED_*/NQ_*/RepresentationStrategy/results.json"`
-     (scoped to `$ARGUMENTS` as the results root if given, default
-     `results/ablations`) to count how many of the 3 seeds have landed for
-     that config. §6.3's `stage_full` row may also be satisfied by the
-     pre-Phase-2 reference runs (`results/dalmax{1,2}/.../SSRAEKmeansHCSampling/`,
-     recomputed for macro F1 offline) — check both locations.
+1. Load the chosen method's spec's "Materialized files" section for its `(study, config)` pairs and
+   their exact JSON/GPU-script mapping:
+   - **rnhal, §6.1 Representation ablation** (`files_config/ablations/rnhal/rep_full.json`,
+     `rep_spatial.json`, `rep_spectral.json`): SSRAE `Q=13`, reference hierarchy
+     `n_clusters=[600,200,100]`.
+   - **texhal, §6.1 Representation ablation** (`files_config/ablations/texhal/rep_q5.json`,
+     `rep_q13.json`, `rep_q17.json`, `rep_full.json`): VCTex `Q` swept single-scale vs. multi-scale
+     `[5,17]`, same reference hierarchy.
+   - **§6.2 Hierarchy ablation** (`hier_L1.json` .. `hier_L4.json`, identical basenames for both
+     methods): method's own full-scale embedding, `n_query=100`, hierarchy per the spec's run table.
+   - **§6.3 Stage contribution** (`stage_full.json`, `stage_no_representation.json`,
+     `stage_no_hierarchy.json`, identical basenames for both methods): full method vs.
+     ResNet-ImageNet + hierarchical vs. method's embedding + `flat_proportional`.
+2. For each config, check two things:
+   - **Implemented**: "yes" for every config in both suites as of 2026-08-30 — each has a
+     `files_config/ablations/<method>/<config>.json` validated by `tests/test_ablation_configs.py`.
+     Flag as regressed only if that test file or the JSON is missing/failing.
+   - **Executed**: run `find results/ablations/<method> -path "*/<config>/*/SEED_*/NQ_*/RepresentationStrategy/results.json"`
+     (or `find results/ablations -path "..."` for the rnhal legacy root) to count how many of the 3
+     seeds have landed for that config. §6.3's `stage_full` row for `rnhal` may also be satisfied by
+     the pre-Phase-2 reference runs (`results/dalmax{1,2}/.../SSRAEKmeansHCSampling/`, recomputed for
+     macro F1 offline) — check both locations.
 3. If any runs were found, run
-   `poetry run python -m dalmax.reporting.ablation_report --root results/ablations --out <scratch dir>`
-   and include the resulting `ablation_summary.csv` numbers (final-round
-   macro F1 mean ± std per config) in the report — do not write into
-   `paper_drafts/` from this read-only status command; use a scratch/tmp
-   output directory instead, per `.claude/rules/data-safety.md`.
+   `poetry run python -m dalmax.reporting.ablation_report --root results/ablations/<method> --out <scratch dir> --method <method>`
+   (or `--root results/ablations` with `--method rnhal` for the legacy root) and include the
+   resulting `ablation_summary.csv` numbers (final-round macro F1 mean ± std per config) in the
+   report — do not write into `paper_drafts/` or `docs/results/` from this read-only status
+   command; use a scratch/tmp output directory instead, per `.claude/rules/data-safety.md`.
 4. Print a checklist:
 
 ```
@@ -59,13 +65,15 @@ Steps:
 - [ ] hier_L3  (k=[300,100,50])      — implemented: yes | executed: <n>/3 seeds | macro F1: <status>
 - [ ] hier_L4  (k=[300,100,50,25])   — implemented: yes | executed: <n>/3 seeds | macro F1: <status>
 
-## 6.3 RNHAL stage contribution
+## 6.3 Stage contribution
 - [ ] stage_full               — implemented: yes | executed: <n>/3 seeds (or reused dalmax{1,2}) | macro F1: <status>
 - [ ] stage_no_representation  — implemented: yes | executed: <n>/3 seeds | macro F1: <status>
 - [ ] stage_no_hierarchy       — implemented: yes | executed: <n>/3 seeds | macro F1: <status>
 ```
 
 5. End with a one-line summary of what to run next on the lab machine (e.g.
-   `bash scripts/ablations/run_ablation_gpu_0.sh` / `run_ablation_gpu_1.sh`,
-   checking `results/ablations/gpu{0,1}_failures.log` for any prior partial
-   failures first), per `.claude/skills/running-experiments/SKILL.md`.
+   `METHOD=<method> bash scripts/ablations/run_ablation_gpu_0.sh` / `run_ablation_gpu_1.sh`,
+   checking `results/ablations/<method>/gpu{0,1}_failures.log` for any prior partial
+   failures first), per `.claude/skills/running-experiments/SKILL.md`. If `<method>` is `texhal`
+   and nothing has run yet, say so plainly — that suite's status is "not started," not partially
+   complete.
