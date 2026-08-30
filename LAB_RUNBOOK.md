@@ -227,6 +227,36 @@ Only proceed to the full ablation batch (§3) once all three checks above pass.
 
 ## 2. The advisor's ablation study — what will run
 
+### Choosing the method (METHOD=rnhal | texhal)
+
+Two independent ablation suites live side by side under
+`files_config/ablations/{rnhal,texhal}/` (2026-08-30 reorganization — see
+that folder's `README.md` and `.specs/experiments/papers-roadmap.md` for the
+three-paper plan):
+
+- **`METHOD=rnhal`** (default) — paper 3, SSRAE + hierarchical k-means. This
+  is the suite **already executed** 2026-08-25/26 on Colab (see
+  `.specs/experiments/ablation-study.md`'s "Execution record"); the table
+  below documents that run.
+- **`METHOD=texhal`** — paper 2, VCTex + hierarchical k-means. Not yet run;
+  12 configs (§6.1 has a 4th row, `rep_q13`, added 2026-08-30 per the VCTex
+  method authors — see `files_config/ablations/README.md`). Its own table is
+  in the "TexHAL (METHOD=texhal)" subsection below.
+
+Every `make ablations-gpu0`/`ablations-gpu1`/`ablations-all`/`ablations-colab`/
+`ablation-report` target in this section accepts `METHOD` as an environment
+override, e.g.:
+```bash
+METHOD=texhal make ablations-gpu0
+METHOD=texhal make ablations-gpu1
+METHOD=texhal make ablation-report   # -> docs/results/ablation_tables/texhal/
+```
+Results land under `results/ablations/${METHOD}/<study>/<config>/...`
+(`METHOD=rnhal`'s new-run root — **not** the already-executed legacy root,
+see the note at the end of this subsection).
+
+#### RNHAL (METHOD=rnhal, default) — executed 2026-08-25/26
+
 Three sub-studies (`.specs/experiments/ablation-study.md` §6.1/§6.2/§6.3), 11
 configs total, each swept over `seeds=(1 2 3)`, `n_query=100`, `n_round=8`
 (`n_init_labeled` left at the CLI default of 100), `--strategy_name
@@ -235,17 +265,65 @@ split across the two GPUs by `scripts/ablations/run_ablation_gpu_{0,1}.sh`:
 
 | § | Config | Params JSON | GPU |
 |---|--------|--------------|-----|
-| 6.1 | Full | `files_config/ablations/rep_full.json` | GPU 0 |
-| 6.1 | Spatial-only | `files_config/ablations/rep_spatial.json` | GPU 0 |
-| 6.1 | Spectral-only | `files_config/ablations/rep_spectral.json` | GPU 1 |
-| 6.2 | L=1, k=[50] | `files_config/ablations/hier_L1.json` | GPU 0 |
-| 6.2 | L=2, k=[300,100] | `files_config/ablations/hier_L2a.json` | GPU 1 |
-| 6.2 | L=2, k=[100,50] | `files_config/ablations/hier_L2b.json` | GPU 0 |
-| 6.2 | L=3, k=[300,100,50] | `files_config/ablations/hier_L3.json` | GPU 1 |
-| 6.2 | L=4, k=[300,100,50,25] | `files_config/ablations/hier_L4.json` | GPU 1 |
-| 6.3 | RNHAL (full) | `files_config/ablations/stage_full.json` | GPU 1 |
-| 6.3 | w/o representation module | `files_config/ablations/stage_no_representation.json` | GPU 0 |
-| 6.3 | w/o hierarchical module | `files_config/ablations/stage_no_hierarchy.json` | GPU 1 |
+| 6.1 | Full | `files_config/ablations/rnhal/rep_full.json` | GPU 0 |
+| 6.1 | Spatial-only | `files_config/ablations/rnhal/rep_spatial.json` | GPU 0 |
+| 6.1 | Spectral-only | `files_config/ablations/rnhal/rep_spectral.json` | GPU 1 |
+| 6.2 | L=1, k=[50] | `files_config/ablations/rnhal/hier_L1.json` | GPU 0 |
+| 6.2 | L=2, k=[300,100] | `files_config/ablations/rnhal/hier_L2a.json` | GPU 1 |
+| 6.2 | L=2, k=[100,50] | `files_config/ablations/rnhal/hier_L2b.json` | GPU 0 |
+| 6.2 | L=3, k=[300,100,50] | `files_config/ablations/rnhal/hier_L3.json` | GPU 1 |
+| 6.2 | L=4, k=[300,100,50,25] | `files_config/ablations/rnhal/hier_L4.json` | GPU 1 |
+| 6.3 | RNHAL (full) | `files_config/ablations/rnhal/stage_full.json` | GPU 1 |
+| 6.3 | w/o representation module | `files_config/ablations/rnhal/stage_no_representation.json` | GPU 0 |
+| 6.3 | w/o hierarchical module | `files_config/ablations/rnhal/stage_no_hierarchy.json` | GPU 1 |
+
+**IMPORTANT**: this executed batch's results live at the LEGACY root
+`results/ablations/{6_1,6_2,6_3}/` (no `rnhal/` segment) — append-only, left
+in place (`.claude/rules/data-safety.md`). A *new* `METHOD=rnhal` invocation
+of `run_ablation_gpu_{0,1}.sh` writes to the NEW root
+`results/ablations/rnhal/{6_1,6_2,6_3}/` by default, which `SKIP_EXISTING`
+cannot see in the legacy tree (its glob is scoped to `RESULTS_ROOT`). To
+extend the already-executed legacy batch instead of starting a fresh one,
+pass `RESULTS_ROOT=results/ablations` explicitly; to report on the legacy
+tree, use `make ablation-report-legacy` (§4 below), not `make
+ablation-report`.
+
+#### TexHAL (METHOD=texhal) — not yet run
+
+Same three sub-studies, but §6.1 sweeps VCTex's own multi-scale
+hyperparameter `Q` instead of an SSRAE spatial/spectral split (`slice_embedding`
+is SSRAE-only) — 4 rows instead of 3, so **12 configs / 36 runs** total. See
+`.specs/experiments/ablation-study-texhal.md` and
+`files_config/ablations/README.md` for the full rationale.
+
+| § | Config | Params JSON | GPU |
+|---|--------|--------------|-----|
+| 6.1 | Q=5 | `files_config/ablations/texhal/rep_q5.json` | GPU 0 |
+| 6.1 | Q=13 | `files_config/ablations/texhal/rep_q13.json` | GPU 1 |
+| 6.1 | Q=17 | `files_config/ablations/texhal/rep_q17.json` | GPU 1 |
+| 6.1 | Q=[5,17] (full) | `files_config/ablations/texhal/rep_full.json` | GPU 0 |
+| 6.2 | L=1, k=[50] | `files_config/ablations/texhal/hier_L1.json` | GPU 0 |
+| 6.2 | L=2, k=[300,100] | `files_config/ablations/texhal/hier_L2a.json` | GPU 1 |
+| 6.2 | L=2, k=[100,50] | `files_config/ablations/texhal/hier_L2b.json` | GPU 0 |
+| 6.2 | L=3, k=[300,100,50] | `files_config/ablations/texhal/hier_L3.json` | GPU 1 |
+| 6.2 | L=4, k=[300,100,50,25] | `files_config/ablations/texhal/hier_L4.json` | GPU 1 |
+| 6.3 | TexHAL (full) | `files_config/ablations/texhal/stage_full.json` | GPU 1 |
+| 6.3 | w/o representation module | `files_config/ablations/texhal/stage_no_representation.json` | GPU 0 |
+| 6.3 | w/o hierarchical module | `files_config/ablations/texhal/stage_no_hierarchy.json` | GPU 1 |
+
+GPU 0 gets 5 configs, GPU 1 gets 7 (the two extra §6.1 rows both land on
+GPU 1 — see `scripts/ablations/run_ablation_gpu_1.sh`'s header). VCTex
+per-run wall-clock is **unmeasured (TBD)** — VCTex's RAE extraction cost
+differs from SSRAE's (different input dimensionality: 27 vs 9 per patch, see
+`.specs/experiments/ablation-study-texhal.md`); record it on the first real
+run and update this section.
+
+---
+
+The rest of this section documents the executed RNHAL batch's numbers
+(measured timing, results layout) as a worked example — the same commands
+apply verbatim to `METHOD=texhal`, just with different expected wall-clock
+(TBD, see above) and, obviously, different (unexecuted) results.
 
 GPU 0 gets 5 configs, GPU 1 gets 6 — balanced by *expected relative cost*, not
 raw count: hierarchical selection over a large/multi-level hierarchy dominates
@@ -292,6 +370,10 @@ batch runs, and update this section with a real number.
 
 ## 3. Launch
 
+Every command below runs the RNHAL suite by default (`METHOD=rnhal`); prefix
+any of them with `METHOD=texhal` to run the TexHAL suite instead (§2's
+"Choosing the method" — e.g. `METHOD=texhal make ablations-gpu0`).
+
 Use two `tmux` sessions (or panes), one per GPU, so each script's live output
 stays directly watchable and the batch survives an SSH disconnect:
 
@@ -299,11 +381,13 @@ stays directly watchable and the batch survives an SSH disconnect:
 tmux new -s gpu0
 # inside the gpu0 session:
 make ablations-gpu0
+# or: METHOD=texhal make ablations-gpu0
 # detach: Ctrl-b d
 
 tmux new -s gpu1
 # inside the gpu1 session:
 make ablations-gpu1
+# or: METHOD=texhal make ablations-gpu1
 # detach: Ctrl-b d
 ```
 
@@ -391,18 +475,27 @@ Once both GPUs' batches finish (and `gpu{0,1}_failures.log` are empty, or any
 failures have been re-run per §3):
 
 ```bash
-make ablation-report
+make ablation-report                    # rnhal (default) -> results/ablations/rnhal/
+make ablation-report METHOD=texhal      # texhal -> results/ablations/texhal/
 ```
 which runs:
 ```bash
-poetry run python -m dalmax.reporting.ablation_report --root results/ablations --out docs/results/ablation_tables
+poetry run python -m dalmax.reporting.ablation_report --root results/ablations/${METHOD} --out docs/results/ablation_tables/${METHOD} --method ${METHOD}
 ```
-This walks every discovered `results/ablations/<study>/<config>/.../results.json`,
-computes mean +/- std macro-F1 (and weighted F1) across seeds, and writes into
-`docs/results/ablation_tables/` (the **only** place experiment numbers are
-tracked in git, per `docs/results/README.md`):
+This walks every discovered
+`results/ablations/${METHOD}/<study>/<config>/.../results.json`, computes
+mean +/- std macro-F1 (and weighted F1) across seeds, and writes into
+`docs/results/ablation_tables/${METHOD}/`:
 - `ablation_summary.csv`
 - `ablation_6_1.md` / `.tex`, `ablation_6_2.md` / `.tex`, `ablation_6_3.md` / `.tex`
+
+**Reporting on the already-executed legacy RNHAL batch** (2026-08-26, living
+at the legacy root `results/ablations/{6_1,6_2,6_3}/`, whose committed
+tables are the top-level `docs/results/ablation_tables/*.{csv,md,tex}` files
+— see `docs/results/README.md`): use `make ablation-report-legacy` instead,
+which runs `--root results/ablations --out docs/results/ablation_tables
+--method rnhal` — kept as its own target so this historical path is
+unaffected by the 2026-08-30 per-method reorganization.
 
 A config with zero discovered runs renders as `TBD` in these tables rather
 than being silently omitted — if you see `TBD` after a full batch, some

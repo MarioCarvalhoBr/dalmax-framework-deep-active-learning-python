@@ -19,6 +19,13 @@ run it top to bottom. **This file stays the source of truth**: the notebook
 is generated to match it, not the other way around, so if they ever
 disagree, trust this file and regenerate the notebook.
 
+**This runbook covers both ablation suites** (§6/§7): `METHOD=rnhal`
+(paper 3, SSRAE — already executed, see `.specs/experiments/ablation-study.md`)
+and `METHOD=texhal` (paper 2, VCTex — not yet run, see
+`.specs/experiments/ablation-study-texhal.md`). Every ablation command below
+accepts `METHOD` as an environment override; see §6's "Choosing the method"
+note.
+
 ## Architecture decision: hybrid local-disk + Drive-symlink layout
 
 Colab Pro gives one GPU per session (T4/L4/A100, varies) and **no guaranteed
@@ -239,25 +246,42 @@ Only proceed to §6 once all of the above pass.
 
 ## 6. Run the ablation study
 
-**What will run**: the same 11-config / 33-run Phase 3 ablation batch as
-`LAB_RUNBOOK.md` §2 (full table there), but sequentially on Colab's **one**
-GPU instead of split across two lab GPUs — expect roughly **2x** the
-per-GPU lab wall-clock time as a rough estimate (**TBD**: no measured
-Colab wall-clock exists yet; record it after the first full run here and
-feed it back into this section and `LAB_RUNBOOK.md`).
+### Choosing the method (METHOD=rnhal | texhal)
 
+Two suites, same as `LAB_RUNBOOK.md` §2: `METHOD=rnhal` (default, paper 3,
+SSRAE — **already executed**, 11 configs / 33 runs) and `METHOD=texhal`
+(paper 2, VCTex — not yet run, 12 configs / 36 runs, §6.1 has a 4th row
+`rep_q13` per the VCTex method authors). Pass `METHOD` as an environment
+variable to every cell below, e.g. `!METHOD=texhal make ablations-colab`.
+Results land under `results/ablations/${METHOD}/`, logs under
+`results/ablations/${METHOD}/colab.log`. See `LAB_RUNBOOK.md` §2 for the
+full per-config GPU-split tables (identical split logic applies here, just
+both halves run on Colab's one GPU 0 sequentially).
 
-**Measured (2026-08-26, Colab Pro, NVIDIA T4, batch_size 256, ~10 GB VRAM in use):** the full 33-run sweep took **~5 h 15 min wall-clock** including one disconnect/relaunch (the `SKIP_EXISTING` resume worked as designed: 35 completed triples were skipped on relaunch), i.e. **~9–10 min per run**. A100 would cut the GPU part but not the CPU-bound SSRAE extraction; T4 is the cost-effective choice.
+**What will run**: the same ablation batch as `LAB_RUNBOOK.md` §2 (11 or 12
+configs depending on `METHOD`), but sequentially on Colab's **one** GPU
+instead of split across two lab GPUs — expect roughly **2x** the per-GPU lab
+wall-clock time as a rough estimate for a suite with no measured Colab
+number yet.
+
+**Measured RNHAL (2026-08-26, Colab Pro, NVIDIA T4, batch_size 256, ~10 GB VRAM in use):** the full 33-run sweep took **~5 h 15 min wall-clock** including one disconnect/relaunch (the `SKIP_EXISTING` resume worked as designed: 35 completed triples were skipped on relaunch), i.e. **~9–10 min per run**. A100 would cut the GPU part but not the CPU-bound SSRAE extraction; T4 is the cost-effective choice.
+
+**TexHAL wall-clock: TBD (unmeasured).** VCTex's RAE extraction operates on a
+27-dim per-patch input (vs. SSRAE's 9-dim), so its per-image extraction cost
+is expected to differ from SSRAE's — not assumed to be faster or slower
+without a measurement. Record it after the first `METHOD=texhal` run here
+and feed it back into this section and `LAB_RUNBOOK.md`.
 
 Cell (launch):
 ```python
-!make ablations-colab
+!make ablations-colab                    # rnhal (default)
+!METHOD=texhal make ablations-colab      # texhal
 ```
 This runs `scripts/colab/run_ablations_colab.sh`, which is just
-`GPU_NUMBER=0 bash scripts/ablations/run_ablation_gpu_0.sh` followed by
-`GPU_NUMBER=0 bash scripts/ablations/run_ablation_gpu_1.sh` — i.e. both lab
-scripts' config lists, both pinned to GPU 0 — logging combined output to
-`results/ablations/colab.log`.
+`METHOD=${METHOD} GPU_NUMBER=0 bash scripts/ablations/run_ablation_gpu_0.sh`
+followed by `METHOD=${METHOD} GPU_NUMBER=0 bash scripts/ablations/run_ablation_gpu_1.sh`
+— i.e. both lab scripts' config lists for the chosen method, both pinned to
+GPU 0 — logging combined output to `results/ablations/${METHOD}/colab.log`.
 
 **Disconnect policy**: since `results/` is symlinked to Drive and both
 underlying scripts default to `SKIP_EXISTING=1`, a disconnect loses at most
@@ -265,30 +289,31 @@ the one `(study, config, seed)` triple that was mid-run when it happened.
 To resume:
 1. Re-run cells in §0–§4 (all idempotent — `colab-setup` detects the dataset
    and symlink are already in place and does the minimal work).
-2. Re-run `!make ablations-colab`. Every triple with an existing
-   `results.json` under `results/ablations/<study>/<config>/.../results.json`
-   is logged as `SKIP (already completed)` and skipped; only the
-   incomplete or not-yet-run triples actually execute.
+2. Re-run `!make ablations-colab` (with the same `METHOD` as before). Every
+   triple with an existing `results.json` under
+   `results/ablations/${METHOD}/<study>/<config>/.../results.json` is logged
+   as `SKIP (already completed)` and skipped; only the incomplete or
+   not-yet-run triples actually execute.
 
 **Running a single triple manually** (e.g. to retry one that failed — see
 monitoring below), same CLI pattern as `LAB_RUNBOOK.md` §3, pinned to GPU 0:
 ```python
 !CUDA_VISIBLE_DEVICES=0 poetry run python trainer.py \
-    --params_json files_config/ablations/<config>.json \
+    --params_json files_config/ablations/{METHOD}/<config>.json \
     --dataset_name=DANINHAS \
     --strategy_name RepresentationStrategy \
     --n_query 100 \
     --seed <seed> \
     --n_round 8 \
-    --dir_results=results/ablations/<study>/<config>/ \
+    --dir_results=results/ablations/{METHOD}/<study>/<config>/ \
     --device cuda
 ```
 
 **Monitoring** (from a separate cell while the sweep cell above is still
 running — or after a disconnect, to see how far it got):
 ```python
-!tail -n 30 results/ablations/colab.log
-!cat results/ablations/gpu0_failures.log results/ablations/gpu1_failures.log
+!tail -n 30 results/ablations/{METHOD}/colab.log
+!cat results/ablations/{METHOD}/gpu0_failures.log results/ablations/{METHOD}/gpu1_failures.log
 ```
 An empty (or missing, before any run finishes) failures file means no
 failures so far.
@@ -313,12 +338,15 @@ planning figure, not a verified one).
 
 Cell:
 ```python
-!make ablation-report
+!make ablation-report                    # rnhal (default) -> docs/results/ablation_tables/rnhal/
+!make ablation-report METHOD=texhal      # texhal -> docs/results/ablation_tables/texhal/
 ```
 Same as `LAB_RUNBOOK.md` §4 — aggregates every discovered
-`results/ablations/<study>/<config>/.../results.json` into
-`docs/results/ablation_tables/` (`ablation_summary.csv` plus
-`ablation_6_{1,2,3}.md`/`.tex`).
+`results/ablations/${METHOD}/<study>/<config>/.../results.json` into
+`docs/results/ablation_tables/${METHOD}/` (`ablation_summary.csv` plus
+`ablation_6_{1,2,3}.md`/`.tex`). For the already-executed legacy RNHAL batch
+(no `rnhal/` segment in its results tree), use `!make ablation-report-legacy`
+instead — see `LAB_RUNBOOK.md` §4.
 
 **Committing from Colab requires git credentials** (a GitHub token or SSH
 key configured in this ephemeral runtime), which this runbook does not set
@@ -327,7 +355,7 @@ up by default. Two options:
 - **Recommended**: copy the tables to Drive, then commit from your local
   notebook after downloading/syncing them there:
   ```python
-  !cp -r docs/results/ablation_tables "$DRIVE_ROOT/results/"
+  !cp -r docs/results/ablation_tables/{METHOD} "$DRIVE_ROOT/results/ablation_tables/{METHOD}"
   ```
   Then, on the local notebook: pull the tables down from Drive (or however
   you sync), `git add docs/results/ablation_tables/`, and commit/push per
