@@ -50,6 +50,12 @@ Steps:
    resulting `ablation_summary.csv` numbers (final-round macro F1 mean ± std per config) in the
    report — do not write into `paper_drafts/` or `docs/results/` from this read-only status
    command; use a scratch/tmp output directory instead, per `.claude/rules/data-safety.md`.
+   For a quicker completeness check (per-triple OK/INCOMPLETE/MISSING against the full expected
+   artifact set, not just a run count), use
+   `poetry run python -m dalmax.reporting.results_doctor verify --root results/ablations --method
+   <method>` instead/in addition — for `rnhal` it transparently also checks the legacy
+   no-method-segment root, so it works whether or not that tree has been migrated (see
+   `dalmax/reporting/results_doctor.py`, `COLAB_RUNBOOK.md` §9 / `LAB_RUNBOOK.md` §6).
 4. Print a checklist:
 
 ```

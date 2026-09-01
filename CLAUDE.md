@@ -221,3 +221,8 @@ outstanding).
   `SEEDS=(1 2 3)`, `n_round 8`, results into `results/dalmax1/`) — unchanged, still
   works via the legacy `config_kmh` key (Phase 2's loader reads it as
   `selection = {method: "hierarchical", hierarchy: config_kmh}` automatically).
+- **`results_doctor` (2026-09-01)**: `python -m dalmax.reporting.results_doctor
+  {verify,migrate-legacy}` (notebook: `notebooks/results_doctor.ipynb`) checks a
+  `results/ablations/` tree against the expected `(study, config, seed)` grid and, once
+  approved, moves the legacy no-method-segment RNHAL tree into `results/ablations/rnhal/`
+  — see `COLAB_RUNBOOK.md` §9 / `LAB_RUNBOOK.md` §6.

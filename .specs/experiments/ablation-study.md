@@ -598,6 +598,16 @@ NQ_100_NIL_100_NR_8_NE_10/RepresentationStrategy/results.json`) — `results/` i
 Drive-symlink on Colab (per the "Colab: hybrid local-disk + Drive-symlink layout" decision in
 `execution-environments.md`) and is gitignored, not committed.
 
+**Sanctioned migration tooling (2026-09-01, `dalmax/reporting/results_doctor.py`)**: this legacy,
+no-method-segment layout can optionally be moved into the per-method layout
+(`results/ablations/rnhal/{6_1,6_2,6_3}/`) via `python -m dalmax.reporting.results_doctor
+migrate-legacy --root results/ablations --apply`, at the user's explicit request — a
+`results/`-internal directory move (never an edit or delete of any run's contents, so
+`.claude/rules/data-safety.md`'s append-only policy is unaffected), guarded against overwriting an
+existing destination and idempotent. `verify` (same module) works against either layout without
+requiring migration first, confirming this legacy tree's all 33 runs are complete. See
+`COLAB_RUNBOOK.md` §9 / `LAB_RUNBOOK.md` §6 and `notebooks/results_doctor.ipynb`.
+
 **Tables committed**: `python -m dalmax.reporting.ablation_report --root results/ablations --out
 docs/results/ablation_tables` was run against the completed batch; `docs/results/ablation_tables/
 ablation_summary.csv` + `.md`/`.tex` per sub-study (`ablation_6_1`, `ablation_6_2`, `ablation_6_3`)

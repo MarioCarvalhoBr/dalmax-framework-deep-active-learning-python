@@ -351,7 +351,7 @@ back-to-back at the same seed is cheap: only the first extracts SSRAE
 features, the other two reuse the cached `results/cache/embeddings/...pkl`.
 
 
-**Measured reference (Colab, single NVIDIA T4, 2026-08-26):** the same 33-run sweep took ~5 h 15 min on one T4 (~9–10 min/run, ~10 GB VRAM at batch_size 256). Two lab GPUs of 10 GB each should therefore finish in roughly 2.5–3 h if per-GPU speed is comparable — note the VRAM headroom is tight on 10 GB cards; see §6 (OOM) for the batch_size fallback.
+**Measured reference (Colab, single NVIDIA T4, 2026-08-26):** the same 33-run sweep took ~5 h 15 min on one T4 (~9–10 min/run, ~10 GB VRAM at batch_size 256). Two lab GPUs of 10 GB each should therefore finish in roughly 2.5–3 h if per-GPU speed is comparable — note the VRAM headroom is tight on 10 GB cards; see §7 (OOM) for the batch_size fallback.
 
 **Rough wall-clock — estimate only, not a measured figure.** Reasoning: 33
 runs total, each doing `n_round=8` (9 evaluation points: initial + 8 query
@@ -543,7 +543,27 @@ leaf directories rather than overwriting anything, per
 
 ---
 
-## 6. Troubleshooting
+## 6. Verifying and migrating existing results (results_doctor)
+
+The same CPU-only `results_doctor` CLI documented in `COLAB_RUNBOOK.md` §9
+works unchanged on the lab machine (it's pure filesystem checks and,
+optionally, directory moves — no GPU/Drive involved):
+```bash
+poetry run python -m dalmax.reporting.results_doctor verify --root results/ablations --method rnhal
+poetry run python -m dalmax.reporting.results_doctor migrate-legacy --root results/ablations           # dry run
+poetry run python -m dalmax.reporting.results_doctor migrate-legacy --root results/ablations --apply   # once reviewed
+```
+Use `verify` to confirm a batch (fresh or already-executed) is fully
+complete before running `make ablation-report`; use `migrate-legacy` if you
+want the already-executed legacy RNHAL tree (`results/ablations/{6_1,6_2,6_3}/`)
+moved into the per-method layout (`results/ablations/rnhal/`) — `verify`
+works fine against the legacy layout without migrating first, so this is
+optional, not a prerequisite for reporting (`make ablation-report-legacy`
+already targets the legacy root as-is).
+
+---
+
+## 7. Troubleshooting
 
 - [ ] **CUDA not visible to torch.** `--device cuda` does not itself validate
   `torch.cuda.is_available()` at config-load time (only `--device auto` does —

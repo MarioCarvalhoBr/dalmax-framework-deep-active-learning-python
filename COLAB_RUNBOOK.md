@@ -413,3 +413,42 @@ up by default. Two options:
   wheels and must be revisited (a `poetry.lock` upgrade to a torch version
   with 3.13 support) before this runbook works again — that is a real code
   change, not something to patch around in a notebook cell.
+
+---
+
+## 9. Verifying and migrating existing results (results_doctor)
+
+A CPU-only companion tool, `dalmax/reporting/results_doctor.py`
+(`python -m dalmax.reporting.results_doctor`), checks a `results/ablations/`
+tree against the expected `(study, config, seed)` grid and, once, migrates
+the already-executed legacy RNHAL tree into the per-method layout. Runnable
+form: [`notebooks/results_doctor.ipynb`](notebooks/results_doctor.ipynb)
+(same construction style as `colab_runbook.ipynb`, but CPU-only — no GPU
+accelerator needed).
+
+**The executed RNHAL batch does NOT need re-running.** It already lives at
+the legacy no-method-segment root `results/ablations/{6_1,6_2,6_3}/` (see
+§6/§7 above and `CLAUDE.md`'s "Per-method ablation layout" note) —
+`migrate-legacy` just moves those directories (plus the batch-level
+`gpu{0,1}_failures.log`/`colab.log` files) into `results/ablations/rnhal/`,
+byte-for-byte, so that `SKIP_EXISTING` and `make ablation-report
+METHOD=rnhal` see them as already-completed runs under the new layout. This
+is a `results/`-internal move, not an edit or delete
+(`.claude/rules/data-safety.md`'s append-only policy is unaffected — file
+contents never change, only their parent directory).
+
+Quick reference:
+```bash
+# Dry run (default) -- prints the exact moves, changes nothing:
+poetry run python -m dalmax.reporting.results_doctor migrate-legacy --root results/ablations
+
+# Apply, once reviewed:
+poetry run python -m dalmax.reporting.results_doctor migrate-legacy --root results/ablations --apply
+
+# Verify a tree (works before OR after migration -- rnhal transparently
+# checks the legacy layout too):
+poetry run python -m dalmax.reporting.results_doctor verify --root results/ablations --method rnhal
+```
+See `notebooks/results_doctor.ipynb` for the guided, cell-by-cell version
+(dry run first, then an explicit `APPLY_MIGRATION` opt-in flag before
+anything moves).
