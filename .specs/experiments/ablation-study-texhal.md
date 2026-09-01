@@ -77,12 +77,9 @@ structural parity with RNHAL's table).
 `params_df_gpu_0.json`'s `config_kmh`) for cross-paper/cross-method comparability at the same
 hierarchy shape.
 
-**Open question (not resolved here, flagged for advisor)**: the historical VCTex benchmark
-elsewhere in this repo (`results/dalmax2_vctex_*`, `VCTexKmeansHCSampling` preset) may have used a
-*different* hierarchy shape than this reference one — if so, the advisor may want TexHAL's ablation
-reference hierarchy to match that historical benchmark instead of RNHAL's, for a fairer
-apples-to-apples comparison against TexHAL's own non-ablation baseline. Not changed here; flagged
-for confirmation before treating the §6.1/§6.2/§6.3 reference-hierarchy choice as final.
+**Confirmed (2026-09-01)**: TexHAL's ablation reference hierarchy is confirmed to match RNHAL's
+reference hierarchy (`n_clusters=[600,200,100]`, `n_levels=3`) for cross-paper comparability (confirmed
+by user 2026-09-01). The §6.1/§6.2/§6.3 reference-hierarchy choice is final.
 
 ### 6.1 run table
 
@@ -188,15 +185,13 @@ CUDA_VISIBLE_DEVICES=<gpu> poetry run python trainer.py \
 | Variant | Representation | Selection | strategy_name / config | F1 (weighted, mean±std) | F1 (macro, mean±std) |
 |---|---|---|---|---|---|
 | TexHAL (full)             | VCTex, Q=[5,17]           | Hierarchical k-means | `RepresentationStrategy`, `stage_full.json` | TBD | TBD |
-| w/o representation module | ImageNet ResNet50 penult. | Hierarchical k-means | `RepresentationStrategy`, `stage_no_representation.json` | TBD (open question: may share RNHAL's number, see below) | TBD |
+| w/o representation module | ImageNet ResNet50 penult. | Hierarchical k-means | `RepresentationStrategy`, `stage_no_representation.json` | TBD | TBD |
 | w/o hierarchical module   | VCTex, Q=[5,17]           | Flat k-means, proportional-random | `RepresentationStrategy`, `stage_no_hierarchy.json` | TBD | TBD |
 
-**Open question for the advisor**: whether `stage_no_representation`'s result may be *shared*
-between the RNHAL and TexHAL papers (since the config is identical and the row measures a
-representation-agnostic condition), or whether each paper must report its own independently-run
-number even though the config is the same. Not resolved here — both papers currently run their own
-copy (`files_config/ablations/{rnhal,texhal}/stage_no_representation.json`), so either choice is
-available once numbers exist.
+**Confirmed (2026-09-01)**: `stage_no_representation` is NOT shared between the RNHAL and TexHAL papers.
+Each paper runs its own independently (confirmed 2026-09-01 by user), even though the config is identical
+and the row measures a representation-agnostic condition. Both papers maintain separate copies
+(`files_config/ablations/{rnhal,texhal}/stage_no_representation.json`), one per-method results tree.
 
 ### 6.3 exact params JSON + CLI
 

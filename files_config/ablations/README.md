@@ -66,10 +66,7 @@ pipeline, so it is never done here.
   each individual scale (`q: [5]`, `q: [17]`) against the multi-scale combination (`q: [5, 17]`,
   named `rep_full.json` for structural parity with RNHAL's "Full" row). `selection` is held at the
   **same reference hierarchy** as RNHAL's §6.1 (`[600,200,100]`/`[30,15,2]`) for cross-paper
-  comparability — **note**: the historical VCTex benchmark elsewhere in this repo used a
-  *different* hierarchy than this reference one; the advisor may want to revisit whether TexHAL's
-  ablation should instead use that historical VCTex hierarchy as its reference point. Flagged as an
-  open question in `.specs/experiments/ablation-study-texhal.md`, not resolved here.
+  comparability (confirmed 2026-09-01).
 
 ## §6.2 — hierarchy ablation
 

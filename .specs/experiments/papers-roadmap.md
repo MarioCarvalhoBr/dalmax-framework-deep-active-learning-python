@@ -35,12 +35,11 @@ paper 1's baselines. CLI preset (unchanged by this naming): `VCTexKmeansHCSampli
 `files_config/ablations/texhal/` (`.specs/experiments/ablation-study-texhal.md`) — materialized
 2026-08-30, not yet executed.
 
-**Name alternatives considered for paper 2**: `VTHAL`, `VCT-HAL` were also considered; **TexHAL**
-is the name the user picked (pending final confirmation — if it changes, update this table, the
-spec title, and `files_config/ablations/README.md`'s three-paper mapping table; the CLI preset name
+**Name alternatives considered for paper 2**: alternatives `VTHAL`, `VCT-HAL` were considered but rejected
+(2026-09-01); **TexHAL** is the confirmed name (confirmed 2026-09-01 by user). The CLI preset name
 `VCTexKmeansHCSampling` and every `files_config/ablations/texhal/*.json` file are unaffected by the
 paper's working title either way, since they name the method's mechanism — VCTex + hierarchical —
-not the paper).
+not the paper.
 
 **Paper 3 — RNHAL.** Proposes **RNHAL** (randomized-network spatio-spectral representation, SSRAE,
 plus the same hierarchical k-means selection module). Claim: RNHAL beats both TexHAL (paper 2) and
@@ -71,12 +70,11 @@ method segment, is append-only and left in place) and
 committed top-level `docs/results/ablation_tables/*.{csv,md,tex}` files are unaffected — see
 `docs/results/README.md`).
 
-## Open questions
+## Confirmed decisions (2026-09-01)
 
-- **TexHAL vs. VTHAL vs. VCT-HAL**: name pending final confirmation (see above).
-- **§6.1 reference hierarchy for TexHAL**: whether it should match RNHAL's reference hierarchy
-  (current choice, for cross-paper comparability) or the historical VCTex benchmark's own hierarchy
-  if that differs — see `.specs/experiments/ablation-study-texhal.md`'s §6.1 open question.
-- **`stage_no_representation` sharing**: whether papers 2 and 3 may cite the same
-  `stage_no_representation` number (the config is byte-for-byte identical between the two methods)
-  or must each report an independently-run number — see `ablation-study-texhal.md`'s §6.3.
+- **TexHAL name**: confirmed as **TexHAL** (alternatives `VTHAL`, `VCT-HAL` rejected 2026-09-01).
+- **§6.1 reference hierarchy for TexHAL**: confirmed to match RNHAL's reference hierarchy
+  (`n_clusters=[600,200,100]`, `n_levels=3`, `sample_sizes=[30,15,2]`) for cross-paper comparability
+  (confirmed 2026-09-01).
+- **`stage_no_representation` sharing**: confirmed NOT shared — papers 2 and 3 each run their own
+  independently (confirmed 2026-09-01), even though the config is byte-for-byte identical between the two methods.
