@@ -5,7 +5,7 @@ check.
 
 Example
 -------
-    poetry run python loader.py --model results/dalmax1/.../saved_model.pth
+    poetry run python tools/loader.py --model results/dalmax1/.../saved_model.pth
 
 On a legacy pre-2026-08-23 checkpoint (the historical `DeepLearning.save_model`
 bug, see `dalmax/models/checkpoint.py`'s module docstring), prints a clear
@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+import _bootstrap  # noqa: F401  (must precede the `dalmax` imports)
 import torch
 
 from dalmax.models.checkpoint import CheckpointError, describe_checkpoint, load_checkpoint

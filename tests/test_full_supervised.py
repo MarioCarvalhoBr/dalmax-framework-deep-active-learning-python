@@ -107,7 +107,7 @@ def test_micro_end_to_end_one_round_full_pool(tmp_path: Path) -> None:
         pytest.skip("DATA/daninhas_micro not present")
     out = tmp_path / "ub"
     proc = subprocess.run(
-        [sys.executable, "trainer.py", "--params_json", "files_config/params_micro.json",
+        [sys.executable, "tools/trainer.py", "--params_json", "files_config/params_micro.json",
          "--dataset_name", "DANINHAS", "--strategy_name", FULL_SUPERVISED_STRATEGY,
          "--n_init_labeled", "10", "--n_query", "100", "--n_round", "0", "--seed", "1",
          "--device", "cpu", "--dir_results", str(out)],

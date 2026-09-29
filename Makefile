@@ -1,33 +1,15 @@
-.PHONY: setup lint format test test-all smoke smoke-ablations clean \
-	campaign-list campaign-run campaign-verify campaign-report campaign-smoke campaign-manifest \
-	lab-setup lab-check micro-dataset \
-	ablations-gpu0 ablations-gpu1 ablations-all ablation-report ablation-report-legacy \
-	benchmark-gpu0 benchmark-gpu1 \
-	colab-setup ablations-colab colab-check
+.PHONY: setup lint format test test-all smoke clean micro-dataset \
+	lab-setup lab-check colab-setup colab-check \
+	campaign-list campaign-run campaign-verify campaign-report campaign-smoke campaign-manifest
 
 # GPU index used by `lab-check` (0 or 1, matching files_config/benchmark/params_df_gpu_{0,1}.json).
 # Override on the command line, e.g. `make lab-check GPU=1`.
 GPU ?= 0
 
-# Which ablation suite to run/report: `rnhal` (paper 3, SSRAE -- default,
-# already executed 2026-08-26 on Colab) or `texhal` (paper 2, VCTex -- not
-# yet run). Selects files_config/ablations/${METHOD}/ as the config source
-# and results/ablations/${METHOD}/ (docs/results/ablation_tables/${METHOD}/
-# for reports) as the results root. Override on the command line, e.g.
-# `METHOD=texhal make ablations-gpu0`. See files_config/ablations/README.md
-# and .specs/experiments/papers-roadmap.md.
-METHOD ?= rnhal
-
 # Install the Poetry-managed environment (./.venv, see poetry.toml).
 setup:
 	poetry install
 
-# Report-only lint pass. Existing code (pre-refactor) has known ruff
-# violations (see .specs/quality/known-issues.md); this target does not fail
-# the build on findings, it just reports them. `make -k` is used so a
-# non-zero ruff exit does not stop a `make ci`-style chain; CI itself sets
-# `continue-on-error: true` on the equivalent step for the same reason
-# (see .github/workflows/ci.yml).
 lint:
 	poetry run ruff check .
 
@@ -39,218 +21,98 @@ format:
 test:
 	poetry run pytest -q -m "not gpu and not dataset and not slow"
 
-# Full test suite, including gpu/dataset/slow-marked tests. Meant to be run
-# on the lab machine (2x GPU, DATA/ present), not on the local CPU-only
-# notebook.
+# Full test suite, including gpu/dataset/slow-marked tests (needs DATA/ present).
 test-all:
 	poetry run pytest -q
 
-# `smoke` is a true end-to-end run of trainer.py (historical name `demo.py`,
-# renamed 2026-08-23) on a tiny CPU 2-class subset,
-# landed in refactor Phase 1 (see .specs/architecture/refactor-plan.md and
+# `smoke`: a true end-to-end run of tools/trainer.py on a tiny CPU 2-class
+# subset (see .specs/architecture/refactor-plan.md Phase 1 and
 # .specs/quality/testing-strategy.md):
 #   1. scripts/make_micro_dataset.py deterministically samples 25 train + 10
 #      test images per class from DATA/daninhas_full/ (2 classes) into
 #      DATA/daninhas_micro/, without ever writing into daninhas_full/ itself.
-#      If daninhas_full/ isn't present (e.g. a fresh clone with no dataset
-#      copied in), it prints a message and exits 0 instead of failing.
-#   2. trainer.py runs against files_config/params_micro.json (n_epoch=1,
-#      n_classes=2, batch_size=16) with RandomSampling, into results/smoke/
-#      (gitignored, never committed) — a few seconds on CPU, no GPU needed.
-#   3. The fast test suite runs on top, including tests/test_cache_paths.py.
-# The full golden-run regression (tests/test_golden_run.py, comparing exact
-# selected indices + metrics against tests/golden/*.json for both
-# RandomSampling and SSRAEKmeansSampling) is `dataset`+`slow`-marked and runs
-# via `make test-all`, not here, to keep `make smoke` fast.
+#      If daninhas_full/ isn't present it prints a message and exits 0.
+#   2. tools/trainer.py runs against files_config/params_micro.json with
+#      RandomSampling into results/smoke/ (gitignored) -- a few seconds on CPU.
+#   3. The fast test suite runs on top.
+# The golden-run regression (tests/test_golden_run.py) is `dataset`+`slow`-marked
+# and runs via `make test-all`.
 smoke:
 	poetry run python scripts/make_micro_dataset.py
 	@if [ -d DATA/daninhas_micro/train ]; then \
-		poetry run python trainer.py \
+		poetry run python tools/trainer.py \
 			--params_json files_config/params_micro.json \
 			--dataset_name DANINHAS \
 			--strategy_name RandomSampling \
 			--n_init_labeled 10 --n_query 5 --n_round 1 --seed 1 \
 			--dir_results results/smoke/; \
 	else \
-		echo "NOTE: DATA/daninhas_full not present, skipping the trainer.py smoke run."; \
+		echo "NOTE: DATA/daninhas_full not present, skipping the tools/trainer.py smoke run."; \
 	fi
 	poetry run pytest -q -m "not gpu and not dataset and not slow"
-
-# `smoke-ablations`: CPU end-to-end smoke test for every ablation config
-# (files_config/ablations/{rnhal,texhal}/micro/*.json — see
-# .specs/experiments/ablation-study.md / ablation-study-texhal.md and
-# files_config/ablations/README.md), against the same tiny
-# DATA/daninhas_micro dataset as `make smoke`. Each config runs with a tiny
-# budget (--n_init_labeled 10 --n_query 5 --n_round 1, seed 1, --device cpu)
-# into its own results/smoke_ablations/<method>/<config>/ subfolder. Runs
-# BOTH methods by default (METHOD=both in the underlying script); pass
-# METHOD=rnhal or METHOD=texhal to restrict to one suite, e.g.
-# `METHOD=texhal make smoke-ablations`. Fails on the first broken config (see
-# scripts/ablations/smoke_ablations.sh's own header for why this is set -e,
-# unlike the lab run scripts).
-smoke-ablations:
-	METHOD=$${METHOD:-both} bash scripts/ablations/smoke_ablations.sh
 
 clean:
 	find . -type d -name '__pycache__' -not -path './.venv/*' -exec rm -rf {} +
 	rm -rf .pytest_cache .ruff_cache .coverage htmlcov
 
-# --- Lab machine targets (2x NVIDIA GPU, 10 GB each) -------------------------
-# See LAB_RUNBOOK.md for the full step-by-step operator guide these targets
-# are called from; do not run any of these on the local no-GPU dev notebook
-# (`.claude/rules/data-safety.md` / `.specs/infrastructure/execution-environments.md`).
+# Regenerate DATA/daninhas_micro/ (10%-stratified replica of DATA/daninhas_full/,
+# see scripts/make_micro_dataset.py) -- a no-op that exits 0 if daninhas_full/
+# is not present on this machine. Also runs implicitly as part of `smoke`.
+micro-dataset:
+	poetry run python scripts/make_micro_dataset.py
 
-# One-time (or post-`git pull`) lab environment setup: sync the Poetry env to
-# poetry.lock, then print whether CUDA is visible and how many devices torch
-# sees. Expected output on the lab machine: `True 2`. Does not run any
-# training — see `lab-check` for the first real-data GPU smoke run.
+# --- Environment checks (any GPU machine; never run on a no-GPU dev box) ------
+# See LAB_RUNBOOK.md / COLAB_RUNBOOK.md. GPU identity is never hardcoded: it is
+# captured at runtime into each run's run_metadata.json (`environment.gpus`).
+
+# One-time (or post-`git pull`) setup: sync the Poetry env to poetry.lock, then
+# print whether CUDA is visible and how many devices torch sees. No training.
 lab-setup:
 	poetry install
 	poetry run python -c "import torch; print(torch.cuda.is_available(), torch.cuda.device_count())"
 
-# The first real-data GPU check after a fresh `lab-setup` (or after any code
-# change that touches the training/embedding/selection path): one short
-# SSRAEKmeansHCSampling run on the real daninhas_full dataset, n_round=1, into
-# a throwaway results/lab_check/ directory (not results/dalmax{1,2}/, so it
-# never collides with the real reference runs). `GPU` selects both
-# `CUDA_VISIBLE_DEVICES` and which of the two per-GPU params JSONs to use
-# (`files_config/benchmark/params_df_gpu_{0,1}.json`) — override with
-# `make lab-check GPU=1`. See LAB_RUNBOOK.md step 1 for expected artifacts,
-# duration, and how to verify the resulting checkpoint with loader.py/predict.py.
+# One short real-data GPU run (n_round=1) into results/lab_check/ before a full
+# batch. `GPU` selects CUDA_VISIBLE_DEVICES and which per-GPU params JSON to use.
 lab-check:
-	CUDA_VISIBLE_DEVICES=$(GPU) poetry run python trainer.py \
+	CUDA_VISIBLE_DEVICES=$(GPU) poetry run python tools/trainer.py \
 		--params_json files_config/benchmark/params_df_gpu_$(GPU).json \
 		--dataset_name DANINHAS --strategy_name SSRAEKmeansHCSampling \
 		--n_query 100 --n_init_labeled 100 --n_round 1 --seed 1 \
 		--device cuda --dir_results results/lab_check/
 
-# Regenerate DATA/daninhas_micro/ (10%-stratified replica of DATA/daninhas_full/,
-# see scripts/make_micro_dataset.py) — a no-op that exits 0 if daninhas_full/
-# is not present on this machine. Also runs implicitly as part of `smoke`/
-# `smoke-ablations`; exposed standalone here for the lab-runbook's data-arrival
-# verification step.
-micro-dataset:
-	poetry run python scripts/make_micro_dataset.py
-
-# Run one GPU's half of the ablation batch for METHOD (rnhal|texhal, default
-# rnhal — override with e.g. `METHOD=texhal make ablations-gpu0`; see
-# scripts/ablations/run_ablation_gpu_{0,1}.sh's headers for the exact
-# (study, config) split and its cost-balancing rationale, and
-# .specs/experiments/ablation-study.md / ablation-study-texhal.md for the run
-# tables). Each of these survives a single failing (study, config, seed) run
-# and logs it to results/ablations/${METHOD}/gpu{N}_failures.log instead of
-# aborting the batch, and emails a completion notification via
-# ExperimentNotifier/main.py at the end (its .env must already be configured
-# on the lab machine — see LAB_RUNBOOK.md step 0). Meant to be launched
-# inside its own tmux session/pane, one per GPU.
-#
-# IMPORTANT: the already-executed RNHAL batch (2026-08-26) lives at the
-# LEGACY root results/ablations/{6_1,6_2,6_3}/ (no method segment) — see
-# scripts/ablations/run_ablation_gpu_0.sh's header. `METHOD=rnhal` (the
-# default) writes new runs to results/ablations/rnhal/ instead, which
-# SKIP_EXISTING cannot see in the legacy tree — pass
-# `RESULTS_ROOT=results/ablations` to extend the legacy layout instead.
-ablations-gpu0:
-	METHOD=$(METHOD) bash scripts/ablations/run_ablation_gpu_0.sh
-
-ablations-gpu1:
-	METHOD=$(METHOD) bash scripts/ablations/run_ablation_gpu_1.sh
-
-# Run both GPUs' ablation halves concurrently from a single shell, via `&` +
-# `wait` rather than two separate `tmux` panes. Each script's combined
-# stdout/stderr is redirected to its own results/ablations/${METHOD}/gpu{0,1}.log
-# specifically to avoid the two concurrent processes' output interleaving
-# unreadably in one terminal (that unredirected interleaving is exactly what
-# `&`-backgrounding both would otherwise produce) — tail each log separately
-# to monitor progress (`tail -f results/ablations/${METHOD}/gpu0.log`), and
-# check results/ablations/${METHOD}/gpu{0,1}_failures.log once both finish.
-# Prefer two tmux panes (`make ablations-gpu0` / `make ablations-gpu1`) when
-# you want to watch each GPU's live output directly instead of via a log
-# file; this target is for a single unattended `nohup make ablations-all &`-
-# style launch. Pass METHOD the same way, e.g. `METHOD=texhal make ablations-all`.
-ablations-all:
-	mkdir -p results/ablations/$(METHOD)
-	( METHOD=$(METHOD) bash scripts/ablations/run_ablation_gpu_0.sh > results/ablations/$(METHOD)/gpu0.log 2>&1 & \
-	  METHOD=$(METHOD) bash scripts/ablations/run_ablation_gpu_1.sh > results/ablations/$(METHOD)/gpu1.log 2>&1 & \
-	  wait )
-
-# Aggregate every discovered results/ablations/${METHOD}/<study>/<config>/.../results.json
-# into docs/results/ablation_tables/${METHOD}/ (ablation_summary.csv + one
-# ablation_6_{1,2,3}.md/.tex per sub-study) — see
-# dalmax/reporting/ablation_report.py and docs/results/README.md. Run this
-# after both ablations-gpu{0,1} batches finish (or against
-# results/smoke_ablations/${METHOD}/ with --root overridden, for a dry run).
-# METHOD defaults to rnhal; override with e.g. `make ablation-report METHOD=texhal`.
-ablation-report:
-	poetry run python -m dalmax.reporting.ablation_report --root results/ablations/$(METHOD) --out docs/results/ablation_tables/$(METHOD) --method $(METHOD)
-
-# Report on the already-executed legacy RNHAL batch (2026-08-26), which lives
-# at the LEGACY root results/ablations/ (no method segment) and whose
-# committed tables are the top-level docs/results/ablation_tables/*.{csv,md,tex}
-# files — see docs/results/README.md. Kept as its own target (rather than
-# folded into `ablation-report`) so the historical path still works exactly
-# as before this reorganization.
-ablation-report-legacy:
-	poetry run python -m dalmax.reporting.ablation_report --root results/ablations --out docs/results/ablation_tables --method rnhal
-
-# Re-run the reference RNHAL benchmark sweep (SSRAEKmeansHCSampling,
-# QUERIES=(10 50 100) x SEEDS=(1 2 3), n_round=8) on one GPU — see
-# scripts/benchmark/run_pipe_gpu_{0,1}.sh. Historical saved_model.pth files
-# under results/dalmax{1,2}/ predate the checkpoint fix (KI-22 / ADR 0006)
-# and contain no weights; re-running these targets regenerates real,
-# loadable checkpoints for the same sweep.
-benchmark-gpu0:
-	bash scripts/benchmark/run_pipe_gpu_0.sh
-
-benchmark-gpu1:
-	bash scripts/benchmark/run_pipe_gpu_1.sh
-
-# --- Colab targets (single GPU, session-limited) -----------------------------
-# See COLAB_RUNBOOK.md for the full step-by-step notebook-cell guide these
-# targets are called from.
-
 # One-time-per-session Colab setup: verify Drive is mounted, build/reuse the
-# DATA/daninhas_full.zip on Drive and unzip it onto the local runtime disk,
-# and symlink results/ to Drive (see scripts/colab/setup_colab.sh's header
-# for the full hybrid-layout rationale). Idempotent -- safe to re-run after a
-# disconnect. Override the Drive path with `DRIVE_ROOT=... make colab-setup`.
+# DATA/daninhas_full.zip on Drive, unzip it onto the local runtime disk, and
+# symlink results/ to Drive (scripts/colab/setup_colab.sh). Idempotent. Override
+# the Drive path with `DRIVE_ROOT=... make colab-setup`.
 colab-setup:
 	bash scripts/colab/setup_colab.sh
 
-# Run the full ablation sweep for METHOD (rnhal|texhal, default rnhal)
-# sequentially on Colab's single GPU (both
-# scripts/ablations/run_ablation_gpu_{0,1}.sh halves, both pinned to GPU 0),
-# logging to results/ablations/${METHOD}/colab.log. SKIP_EXISTING (default on
-# in both underlying scripts) makes relaunching this after a disconnect safe
-# -- see scripts/colab/run_ablations_colab.sh. Override with e.g.
-# `METHOD=texhal make ablations-colab`.
-ablations-colab:
-	METHOD=$(METHOD) bash scripts/colab/run_ablations_colab.sh
-
-# The same single real-data GPU sanity check as `lab-check`, but into a
-# dedicated results/colab_check/ directory (so it never collides with the
-# real ablation/benchmark results trees symlinked to Drive) and pinned to
-# Colab's single GPU 0. Run this once per session, right after `colab-setup`
-# and before `ablations-colab`, per COLAB_RUNBOOK.md.
+# The same real-data GPU check as `lab-check`, into results/colab_check/ and
+# pinned to GPU 0. Run once per session, right after `colab-setup`.
 colab-check:
-	CUDA_VISIBLE_DEVICES=0 poetry run python trainer.py \
+	CUDA_VISIBLE_DEVICES=0 poetry run python tools/trainer.py \
 		--params_json files_config/benchmark/params_df_gpu_0.json \
 		--dataset_name DANINHAS --strategy_name SSRAEKmeansHCSampling \
 		--n_query 100 --n_init_labeled 100 --n_round 1 --seed 1 \
 		--device cuda --dir_results results/colab_check/
 
-# --- A100 full campaign (2026-09-29; ADR 0008/0009) --------------------------
+# --- The campaign (ADR 0008/0009) ---------------------------------------------
 # One manifest (files_config/campaign/manifest.json) drives the single clean
-# re-execution of everything papers 1-3 need -- no redundant runs. See
-# .specs/experiments/campaign-a100.md, COLAB_RUNBOOK.md ("A100 full campaign")
-# and LAB_RUNBOOK.md. Variables (all optional):
+# execution of everything papers 1-3 need -- no redundant runs. See
+# .specs/experiments/campaign.md, COLAB_RUNBOOK.md and LAB_RUNBOOK.md.
+# Variables (all optional):
 #   PART=all|paper1|upper_bound|rnhal|texhal (comma-separated allowed; default all)
-#   MICRO=1   -> use files_config/campaign/manifest_micro.json (CPU smoke, results/smoke_campaign/)
-#   SEEDS=1   -> restrict to a subset of the seeds (smoke)
+#   MICRO=1     -> files_config/campaign/manifest_micro.json (CPU smoke, results/smoke_campaign/)
+#   SEEDS=1     -> restrict to a subset of the seeds (smoke)
+#   EXCLUDE=... -> comma-separated strategies to drop (default: none; with MICRO=1 the
+#                  two adversarial baselines, far too slow on CPU -- override with
+#                  `SMOKE_EXCLUDE=` to include them)
 #   DEVICE=cuda|cpu|auto, default cuda (cpu with MICRO=1)
 #   RUN_ARGS='--no-skip-existing' / '--dry-run' -> extra flags for `campaign-run`
 PART ?= all
-CAMPAIGN_FLAGS = --part $(PART) $(if $(MICRO),--micro) $(if $(SEEDS),--seeds $(SEEDS))
+SMOKE_EXCLUDE ?= AdversarialBIM,AdversarialDeepFool
+EXCLUDE ?= $(if $(MICRO),$(SMOKE_EXCLUDE))
+CAMPAIGN_FLAGS = --part $(PART) $(if $(MICRO),--micro) $(if $(SEEDS),--seeds $(SEEDS)) $(if $(EXCLUDE),--exclude-strategy $(EXCLUDE))
 
 # Print the job table and the run counts per part/total.
 campaign-list:
@@ -260,19 +122,21 @@ campaign-list:
 campaign-run:
 	poetry run python -m dalmax.campaign run $(CAMPAIGN_FLAGS) $(if $(DEVICE),--device $(DEVICE)) $(RUN_ARGS)
 
-# Per-job OK/INCOMPLETE/MISSING + the seed-consistency audit; non-zero exit if anything is not OK.
+# Per-job OK/INCOMPLETE/MISSING + the seed-consistency audit.
+# Exit 0 all OK, 1 incomplete/missing job or FAIL audit, 2 only audit WARNs.
 campaign-verify:
 	poetry run python -m dalmax.campaign verify $(CAMPAIGN_FLAGS)
 
-# Tables (md/tex/csv), seed audit and mean confusion matrices from results/campaign_a100/
-# into docs/results/campaign_a100/ (MICRO=1: results/smoke_campaign/ -> results/smoke_campaign/report/).
+# Tables (md/tex/csv), seed audit and mean confusion matrices from results/campaign/
+# into docs/results/campaign/ (MICRO=1: results/smoke_campaign/ -> results/smoke_campaign/report/).
 campaign-report:
-	poetry run python -m dalmax.reporting.campaign_report $(if $(MICRO),--micro --root results/smoke_campaign --out results/smoke_campaign/report,--root results/campaign_a100 --out docs/results/campaign_a100)
+	poetry run python -m dalmax.reporting.campaign_report $(if $(MICRO),--micro --root results/smoke_campaign --out results/smoke_campaign/report,--root results/campaign --out docs/results/campaign)
 
-# Micro campaign on CPU, seed 1 only (every run group once, 64 jobs) into results/smoke_campaign/.
-# Verify afterwards with `make campaign-verify MICRO=1 SEEDS=1`.
+# Micro campaign on CPU, seed 1 only, into results/smoke_campaign/ (every run
+# group once; the two adversarial baselines are skipped by default: 58 of the 64
+# jobs). Verify afterwards with `make campaign-verify MICRO=1 SEEDS=1`.
 campaign-smoke:
-	poetry run python -m dalmax.campaign run --part all --micro --seeds 1
+	poetry run python -m dalmax.campaign run --part all --micro --seeds 1 $(if $(SMOKE_EXCLUDE),--exclude-strategy $(SMOKE_EXCLUDE))
 
 # Regenerate the two committed manifests from scripts/campaign/build_manifest.py.
 campaign-manifest:

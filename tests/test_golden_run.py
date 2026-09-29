@@ -98,7 +98,7 @@ def test_golden_run_reproduces_indices_and_metrics(fixture_path: Path, tmp_path:
     dir_results = tmp_path / "smoke"
     cmd = [
         sys.executable,
-        "trainer.py",
+        "tools/trainer.py",
         "--params_json",
         str(PARAMS_JSON),
         "--dataset_name",

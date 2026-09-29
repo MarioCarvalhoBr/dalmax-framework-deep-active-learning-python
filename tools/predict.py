@@ -4,10 +4,10 @@ outside the active-learning loop.
 
 Examples
 --------
-    poetry run python predict.py --model results/dalmax1/.../saved_model.pth \\
+    poetry run python tools/predict.py --model results/dalmax1/.../saved_model.pth \\
         --image DATA/daninhas_micro/test/DATASET_GRAMINEA/some_image.jpg
 
-    poetry run python predict.py --model results/dalmax1/.../saved_model.pth \\
+    poetry run python tools/predict.py --model results/dalmax1/.../saved_model.pth \\
         --dir DATA/daninhas_micro/test/DATASET_GRAMINEA --out results/predictions/
 
 Writes, into `--out` (default: alongside the input image, or inside `--dir`
@@ -32,6 +32,8 @@ import argparse
 import json
 import sys
 from pathlib import Path
+
+import _bootstrap  # noqa: F401  (must precede the `dalmax` imports)
 
 from dalmax.inference.export import write_predictions_csv
 from dalmax.inference.predictor import PredictionRow, Predictor
