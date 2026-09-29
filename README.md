@@ -80,6 +80,11 @@ These are the exact `--strategy_name` choices exposed by `trainer.py`.
 - **SSRAE KMeans HC Sampling** — hierarchical k-means (RNHAL) over SSRAE embeddings.
 - **VCTex KMeans HC Sampling** — hierarchical k-means (RNHAL) over VCTex embeddings.
 
+**Upper bound (not active learning)**
+- **FullSupervised** — trains once on the entire pool (every label known at
+  initialization, `--n_round 0`) and evaluates on the test set: the reference
+  "maximum achievable" score of the paper-1 benchmark. It never queries.
+
 See [`.specs/experiments/experimental-protocol.md`](.specs/experiments/experimental-protocol.md)
 for the exact protocol (seeds, budgets, metrics) and
 [`.specs/experiments/ablation-study.md`](.specs/experiments/ablation-study.md) for the
@@ -266,7 +271,9 @@ poetry run python trainer.py \
 
 CLI arguments: `--dir_results`, `--params_json`, `--seed`, `--n_init_labeled`,
 `--n_query`, `--n_round`, `--dataset_name {CIFAR10,DANINHAS}`, `--strategy_name`
-(one of the strategies listed above, plus `RepresentationStrategy` — see below),
+(one of the strategies listed above, plus `RepresentationStrategy` — see below — and
+`FullSupervised`, the paper-1 **upper bound, not active learning**: trains once on the entire pool,
+requires `--n_round 0`),
 and two flags added in the Phase 2 core refactor:
 
 - `--device {auto,cuda,cpu}` (default `auto`, resolving to `cuda` iff available) —

@@ -7,7 +7,8 @@ if/elif chains") for the `dalmax`-routed CLI (`dalmax.cli`) — that module was
 removed as dead code in refactor Phase 4
 (`.specs/architecture/refactor-plan.md`).
 
-Two kinds of names are registered:
+Three kinds of names are registered (the third, `FullSupervised`, is the
+paper-1 upper bound -- not active learning, see `full_supervised.py`):
 
 - The 12 legacy strategies (`RandomSampling` ... `AdversarialDeepFool`) are
   constructed exactly as the historical `demo.py` always has:
@@ -43,7 +44,7 @@ from typing import Any
 
 import numpy as np
 
-from dalmax.config.schema import ConfigError, ExperimentConfig
+from dalmax.config.schema import FULL_SUPERVISED_STRATEGY, ConfigError, ExperimentConfig
 from dalmax.embeddings.registry import get_embedding_provider
 from dalmax.query_strategies.adversarial_bim import AdversarialBIM
 from dalmax.query_strategies.adversarial_deepfool import AdversarialDeepFool
@@ -51,6 +52,7 @@ from dalmax.query_strategies.base import Strategy
 from dalmax.query_strategies.bayesian_active_learning_disagreement_dropout import BALDDropout
 from dalmax.query_strategies.entropy_sampling import EntropySampling
 from dalmax.query_strategies.entropy_sampling_dropout import EntropySamplingDropout
+from dalmax.query_strategies.full_supervised import FullSupervised
 from dalmax.query_strategies.kcenter_greedy import KCenterGreedy
 from dalmax.query_strategies.kmeans_sampling import KMeansSampling
 from dalmax.query_strategies.least_confidence import LeastConfidence
@@ -75,6 +77,11 @@ LEGACY_STRATEGY_REGISTRY: dict[str, type[Strategy]] = {
     "BALDDropout": BALDDropout,
     "AdversarialBIM": AdversarialBIM,
     "AdversarialDeepFool": AdversarialDeepFool,
+}
+
+# Not active learning: the paper-1 upper bound (train once on the whole pool).
+NON_ACTIVE_STRATEGY_REGISTRY: dict[str, type[Strategy]] = {
+    FULL_SUPERVISED_STRATEGY: FullSupervised,
 }
 
 # name -> (embedding extractor, selection method)
@@ -105,6 +112,7 @@ REPRESENTATION_PRESET_Q: dict[str, Any] = {"ssrae": 13, "vctex": (5, 17)}
 
 STRATEGY_REGISTRY: dict[str, Any] = {
     **LEGACY_STRATEGY_REGISTRY,
+    **NON_ACTIVE_STRATEGY_REGISTRY,
     **dict.fromkeys(REPRESENTATION_PRESETS, RepresentationStrategy),
     GENERIC_REPRESENTATION_NAME: RepresentationStrategy,
 }
@@ -187,6 +195,9 @@ def build_strategy(
     """
     if name in LEGACY_STRATEGY_REGISTRY:
         return LEGACY_STRATEGY_REGISTRY[name](dataset, net, logger)
+
+    if name in NON_ACTIVE_STRATEGY_REGISTRY:
+        return NON_ACTIVE_STRATEGY_REGISTRY[name](dataset, net, logger)
 
     if name in REPRESENTATION_PRESETS:
         extractor, selection_method = REPRESENTATION_PRESETS[name]

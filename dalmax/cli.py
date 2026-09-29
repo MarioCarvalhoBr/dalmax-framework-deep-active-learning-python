@@ -64,6 +64,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "SSRAEKmeansHCSampling",
             "VCTexKmeansHCSampling",
             "RepresentationStrategy",
+            "FullSupervised",
         ],
         help="query strategy",
     )

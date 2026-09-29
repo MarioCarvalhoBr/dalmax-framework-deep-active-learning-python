@@ -19,12 +19,12 @@ from __future__ import annotations
 
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
 
-from dalmax.config.schema import ExperimentConfig
+from dalmax.config.schema import FULL_SUPERVISED_STRATEGY, ExperimentConfig
 from dalmax.data.registry import get_dataset
 from dalmax.experiment.environment import summarize_environment
 from dalmax.experiment.run_metadata import snapshot, write_run_metadata
@@ -72,6 +72,21 @@ def results_dir_for(config: ExperimentConfig) -> str:
     return base + f"{config.strategy_name}/"
 
 
+def resolve_full_supervised_config(config: ExperimentConfig, dataset, logger) -> ExperimentConfig:
+    """For `FullSupervised` (the upper bound), force `n_init_labeled` to the
+    real pool size (warning if the caller passed something else); every other
+    strategy's config is returned untouched."""
+    if config.strategy_name != FULL_SUPERVISED_STRATEGY:
+        return config
+    pool_size = int(dataset.n_pool)
+    if config.n_init_labeled != pool_size:
+        logger.warning(
+            f"{FULL_SUPERVISED_STRATEGY}: overriding n_init_labeled={config.n_init_labeled} "
+            f"with the full pool size {pool_size}"
+        )
+    return replace(config, n_init_labeled=pool_size)
+
+
 class ExperimentRunner:
     """Runs one active-learning experiment end to end (no reporting)."""
 
@@ -83,6 +98,20 @@ class ExperimentRunner:
         config = self.config
         logger = self.logger
 
+        # Seed every global RNG source exactly once, before any
+        # dataset/model/strategy object is constructed (`dalmax.seeding`
+        # module docstring) — this replaces the historical demo.py's scattered
+        # `np.random.seed`/`torch.manual_seed`/`cudnn.enabled = False`. The
+        # dataset is built right after (same RNG position as ever) because
+        # `FullSupervised` needs the real pool size to name the results dir
+        # and fill `run_metadata.json`; nothing between here and the strategy
+        # construction consumes seeded randomness, so the RNG trace of every
+        # other strategy is unchanged (golden fixtures).
+        rng: np.random.Generator = seed_everything(config.seed)
+        dataset = get_dataset(config)
+        config = resolve_full_supervised_config(config, dataset, logger)
+        self.config = config
+
         dir_results = results_dir_for(config)
         os.makedirs(dir_results, exist_ok=True)
         logger.warning(f"Results directory: {dir_results}")
@@ -91,15 +120,8 @@ class ExperimentRunner:
         write_run_metadata(dir_results, metadata)
         logger.warning(summarize_environment(metadata["environment"]))
 
-        # Seed every global RNG source exactly once, before any
-        # dataset/model/strategy object is constructed (`dalmax.seeding`
-        # module docstring) — this replaces the historical demo.py's scattered
-        # `np.random.seed`/`torch.manual_seed`/`cudnn.enabled = False`.
-        rng: np.random.Generator = seed_everything(config.seed)
-
         logger.warning(f"device: {config.device}")
 
-        dataset = get_dataset(config)
         net = get_network(config, config.device)
         strategy = build_strategy(config.strategy_name, dataset, net, config, logger, rng)
 

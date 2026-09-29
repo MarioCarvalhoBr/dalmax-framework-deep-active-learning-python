@@ -120,4 +120,4 @@ reachable only through some other path; it must be reachable through `dalmax.cli
 `LeastConfidenceDropout`, `MarginSamplingDropout`, `EntropySamplingDropout`,
 `KMeansSampling`, `KCenterGreedy`, `BALDDropout`, `AdversarialBIM`,
 `AdversarialDeepFool`, `SSRAEKmeansSampling`, `VCTexKmeansSampling`,
-`SSRAEKmeansHCSampling`, `VCTexKmeansHCSampling`, `RepresentationStrategy`.
+`SSRAEKmeansHCSampling`, `VCTexKmeansHCSampling`, `RepresentationStrategy`, `FullSupervised` (2026-09-29: the paper-1 upper bound, *not* active learning — registered in `NON_ACTIVE_STRATEGY_REGISTRY`, forces `n_init_labeled` = pool size, requires `--n_round 0`, `query()` raises).

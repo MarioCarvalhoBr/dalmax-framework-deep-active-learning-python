@@ -21,6 +21,11 @@ VALID_EMBEDDING_VARIANTS = ("full", "spatial", "spectral")
 VALID_SELECTION_METHODS = ("flat_closest", "flat_proportional", "hierarchical")
 VALID_DEVICES = ("cuda", "cpu")
 
+# The upper-bound "strategy" (paper 1): train once on the ENTIRE pool, no
+# active learning. Lives here (not in `dalmax.query_strategies`) so the config
+# layer can validate `n_round == 0` without importing torch-heavy modules.
+FULL_SUPERVISED_STRATEGY = "FullSupervised"
+
 
 class ConfigError(ValueError):
     """Raised when a params JSON / experiment configuration is invalid.
@@ -213,5 +218,10 @@ class ExperimentConfig:
             raise ConfigError(f"ExperimentConfig.n_query must be > 0, got {self.n_query}")
         if self.n_round < 0:
             raise ConfigError(f"ExperimentConfig.n_round must be >= 0, got {self.n_round}")
+        if self.strategy_name == FULL_SUPERVISED_STRATEGY and self.n_round != 0:
+            raise ConfigError(
+                f"strategy {FULL_SUPERVISED_STRATEGY!r} is the full-pool upper bound (no active "
+                f"learning rounds): --n_round must be 0, got {self.n_round}"
+            )
         if not self.dir_results:
             raise ConfigError("ExperimentConfig.dir_results must be non-empty")
