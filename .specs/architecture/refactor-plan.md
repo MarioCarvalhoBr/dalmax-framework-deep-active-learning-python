@@ -310,10 +310,9 @@ Work:
 - [ ] `known-issues.md` has zero remaining "Open" items rated Medium or higher — **not yet true**:
       KI-21 (`Data.__init__` disk side effects), KI-22 (`DeepLearning.load_model` TODO), KI-23
       (CIFAR10 params missing `config_kmh`/`selection.hierarchy`), KI-30 (vendored `dtype=object`
-      edge case), KI-31 (`worker_init_fn` landmine), and KI-32 (`ExperimentNotifier`'s stale
-      `utils/report/` path, found by this docs-sync batch) remain open at Medium; none of these are
+      edge case), and KI-31 (`worker_init_fn` landmine) remain open at Medium; none of these are
       things Phase 4's move-and-delete work was scoped to fix — they are pre-existing content/scope
-      gaps (KI-21/22/23/30/31) or a stale reference in a tool outside `dalmax/` (KI-32).
+      gaps.
 
 **Driver agent:** `implementer` (the move itself — scripted rename + import-path fixes),
 `mechanic` (mechanical cleanup, dead file removal), `code-reviewer` (final review, APPROVEd with

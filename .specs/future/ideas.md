@@ -47,10 +47,6 @@ already exists rather than duplicating it.
   generally useful given `daninhas_full`'s class imbalance
   (`research-rules/dataset-protocol.md`), where weighted metrics can mask
   poor minority-class performance.
-- **`ExperimentNotifier` documentation**: its README (if any) was not read
-  in this batch; worth folding its actual usage/config into
-  `infrastructure/execution-environments.md` once reviewed, since it is
-  currently only described via its CLI invocation in the run scripts.
 - **Reconcile `results/dalmax1/` provenance**: it contains more strategies
   than `scripts/benchmark/run_pipe_gpu_0.sh` alone would produce (see
   `experiments/baseline-results.md`) — worth an audit of `log-dalmax.log`

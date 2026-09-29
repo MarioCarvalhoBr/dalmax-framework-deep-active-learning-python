@@ -51,7 +51,6 @@ exclude = [
     "results",
     "DATA",
     "phd_files",
-    "ExperimentNotifier",
     "local_assets",
     ".venv",
     # Vendored/adapted third-party code (SSRAE, VCTex, and the Meta-licensed

@@ -138,38 +138,6 @@ the same `results/campaign/` tree; groups never overlap between the two commands
   transfer. **Never write into `DATA/daninhas_full/`** once it's in place
   (`.claude/rules/data-safety.md`) — it is read-only input for every run below.
 
-- [ ] **Set up `ExperimentNotifier`** (a separate, gitignored sibling repo —
-  not part of this `git pull`):
-  ```bash
-  cd ExperimentNotifier
-  cp .env.example .env
-  # edit .env: EMAIL_FROM, EMAIL_TO, EMAIL_PASSWORD (a Gmail App Password,
-  # not your main account password)
-  cd ..
-  ```
-  This `.env` is gitignored and lab-machine-local — it does not come from
-  `git pull` and must be set up on **this** machine independently
-  (`.claude/skills/running-experiments/SKILL.md`).
-
-  **One-time stale-path fix (KI-32):** `ExperimentNotifier/main.py` (lines 222
-  and 224) still calls the pre-Phase-4 path:
-  ```python
-  ["python3", "utils/report/build_method_metrics.py", "--method", "SSRAEKmeansHCSampling", ...]
-  ["python3", "utils/report/build_method_metrics.py", "--method", "VCTexKmeansHCSampling", ...]
-  ```
-  `utils/report/` was moved to `dalmax/reporting/` in this repo's Phase 4;
-  `ExperimentNotifier` is a separate repo and was not touched by that move, so
-  its own copy of the path is stale. Edit both occurrences in
-  `ExperimentNotifier/main.py` to point at
-  `dalmax/reporting/build_method_metrics.py` (or invoke it as
-  `python3 -m dalmax.reporting.build_method_metrics`, which avoids relying on
-  the caller's working directory). This branch only fires for the legacy
-  CIFAR10 email path (`SSRAEKmeansHCSampling`/`VCTexKmeansHCSampling` against a
-  `DATA_CIFAR10/` results tree) — it is currently inert for the DANINHAS runs
-  in this runbook, but will raise a "file not found" error the first time that
-  branch is exercised against a post-Phase-4 tree, so fix it now rather than
-  waiting to hit it mid-batch.
-
 - [ ] **Optional cleanup: orphaned pre-refactor cache files.** If any of these
   exist under `results/` on this machine:
   ```

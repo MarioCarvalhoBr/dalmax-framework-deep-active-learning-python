@@ -46,8 +46,7 @@ rather than reconstructing the steps from this skill's prose.
 - `files_config/benchmark/params_df_gpu_{0,1}.json` (`DANINHAS`: `n_epoch 10`, `batch_size 256`,
   `lr 0.05`, `momentum 0.3`, `n_classes 5`, `config_kmh`) remain the reference params used by
   `make lab-check GPU=<n>` / `make colab-check`.
-- The legacy sweep scripts (`scripts/benchmark/*`, `scripts/ablations/*`) and `ExperimentNotifier`
-  hooks in them were retired on 2026-09-29 (ADR 0010).
+- The legacy sweep scripts (`scripts/benchmark/*`, `scripts/ablations/*`) were retired on 2026-09-29 (ADR 0010).
 
 ## 3. Google Colab Pro — secondary/burst, one-off runs
 

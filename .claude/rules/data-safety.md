@@ -15,14 +15,10 @@
   revision, the LaTeX sources). Agents may read `phd_files/Active_Learning_Mario/
   method_full.tex` for notation but must never write there. The only paper-related
   write location is `paper_drafts/` (owned by the `paper-liaison` agent).
-- **`ExperimentNotifier/`** is a separate gitignored repo used only to send email
-  notifications after a batch (`ExperimentNotifier/main.py`); do not modify it as
-  part of DalMax tasks.
 
 ## No secrets, no personal paths
 
 - No dataset images, credentials, API keys, or `.env` contents may be committed.
-  `ExperimentNotifier/.env` (SMTP credentials) must stay untracked.
 - No absolute personal filesystem paths (e.g.
   `/home/carvalho/Desktop/UFMS/...`) in committed files — use paths relative to
   the repo root instead.

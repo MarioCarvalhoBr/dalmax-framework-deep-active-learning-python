@@ -29,9 +29,7 @@ Steps:
    make campaign-verify && make campaign-report
    ```
    After the first job finishes, check `environment.gpus[0].name` in its `run_metadata.json`.
-5. `ExperimentNotifier` (gitignored, lab-local `.env`) is not called by the campaign runner; if an email
-   is wanted, wrap the launch command yourself.
-6. If this is a relaunch (e.g. after a crash), `make campaign-run` skips every job whose leaf is
+5. If this is a relaunch (e.g. after a crash), `make campaign-run` skips every job whose leaf is
    complete (`results.json` is written last), so re-launching the same command is safe; add
    `RUN_ARGS=--no-skip-existing` only to force a full re-run.
 
