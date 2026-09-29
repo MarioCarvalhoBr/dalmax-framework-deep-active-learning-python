@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from dalmax import campaign as C
-from dalmax.reporting.results_doctor import REQUIRED_FILES
+from dalmax.reporting.leaf_check import REQUIRED_FILES
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FULL = REPO_ROOT / C.DEFAULT_MANIFEST
@@ -252,7 +252,7 @@ def test_run_jobs_skip_existing_failures_and_dry_run(tmp_path: Path) -> None:
 def test_build_command_matches_the_ablation_scripts_conventions(tmp_path: Path) -> None:
     manifest = _tiny_manifest(tmp_path)
     cmd = C.build_command(C.Job(manifest.groups[0], 2), manifest, "cuda", python="python")
-    assert cmd[:2] == ["python", "trainer.py"]
+    assert cmd[:2] == ["python", "tools/trainer.py"]
     assert cmd[cmd.index("--seed") + 1] == "2" and cmd[cmd.index("--device") + 1] == "cuda"
     assert cmd[cmd.index("--n_round") + 1] == "1" and cmd[cmd.index("--n_init_labeled") + 1] == "10"
 
@@ -317,3 +317,122 @@ def test_cli_list_and_parts(capsys: pytest.CaptureFixture[str]) -> None:
     out = capsys.readouterr().out
     assert "TOTAL" in out and "24 runs" in out
     assert C.main(["list", "--part", "nope"]) == 2
+
+
+# --- resume: only a COMPLETE leaf counts as done (A2) ------------------------------
+
+
+def test_job_done_requires_a_complete_leaf(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manifest = _tiny_manifest(tmp_path)
+    monkeypatch.setattr(C, "REPO_ROOT", tmp_path)  # find_leaf resolves dir_results against it
+    job = C.Job(manifest.groups[0], 1)
+    assert not C.job_done(job)  # no leaf at all
+    _write_leaf(_leaf_of(job.group, 1), omit=("saved_model.pth",))
+    assert (_leaf_of(job.group, 1) / "results.json").is_file()
+    assert not C.job_done(job)  # results.json exists but the run did not finish writing
+    _write_leaf(_leaf_of(job.group, 1))
+    assert C.job_done(job)
+
+
+def test_reporter_writes_results_json_last() -> None:
+    import ast
+
+    tree = ast.parse((REPO_ROOT / "dalmax/experiment/reporter.py").read_text())
+    func = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "write_report")
+    calls = [n.func.id for n in ast.walk(func) if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)]
+    assert calls.index("_write_results_json") > calls.index("_write_predictions_csv")
+    save = [n.lineno for n in ast.walk(func) if isinstance(n, ast.Attribute) and n.attr == "save_model"]
+    results = [n.lineno for n in ast.walk(func) if isinstance(n, ast.Name) and n.id == "_write_results_json"]
+    assert save and results and max(save) < min(results)
+
+
+# --- seed audit WARN + verify exit codes (A3) ------------------------------------------
+
+
+def test_seed_audit_warns_on_missing_log_and_exit_codes(tmp_path: Path) -> None:
+    manifest = _tiny_manifest(tmp_path)
+    g_random, g_margin = manifest.groups
+    for seed in (1, 2):
+        _write_leaf(_leaf_of(g_random, seed), initial="[1, 2, 3]")
+        _write_leaf(_leaf_of(g_margin, seed), initial="[1, 2, 3]")
+    jobs = C.expand_jobs(manifest)
+    ok = [C.verify_job(j) for j in jobs]
+    audits = C.audit_seed_consistency(jobs)
+    assert {a.status for a in audits} == {"PASS"} and C.verify_exit_code(ok, audits) == 0
+
+    (_leaf_of(g_margin, 2) / "log-dalmax.log").unlink()  # missing log: WARN, not silence
+    # `log-dalmax.log` is a required artifact, so make the leaf otherwise complete again
+    (_leaf_of(g_margin, 2) / "log-dalmax.log").write_text("no initial idxs line here\n")
+    jobs = C.expand_jobs(manifest)
+    audits = {a.seed: a for a in C.audit_seed_consistency(jobs)}
+    assert audits[1].status == "PASS" and audits[2].status == "WARN"
+    assert audits[2].unreadable == ("p1/MarginSampling/nq5",)
+    statuses = [C.verify_job(j) for j in jobs]
+    assert C.verify_exit_code(statuses, list(audits.values())) == 2
+
+    _write_leaf(_leaf_of(g_margin, 2), initial="[7, 7]")  # a real mismatch: FAIL
+    audits = C.audit_seed_consistency(C.expand_jobs(manifest))
+    assert {a.seed: a.status for a in audits}[2] == "FAIL"
+    assert C.verify_exit_code([C.verify_job(j) for j in C.expand_jobs(manifest)], audits) == 1
+
+
+def test_seed_audit_warn_when_no_log_is_readable(tmp_path: Path) -> None:
+    manifest = _tiny_manifest(tmp_path)
+    g = manifest.groups[0]
+    _write_leaf(_leaf_of(g, 1))
+    (_leaf_of(g, 1) / "log-dalmax.log").unlink()
+    audits = {a.seed: a for a in C.audit_seed_consistency(C.expand_jobs(manifest))}
+    assert audits[1].status == "WARN" and audits[2].status == "NO_DATA"
+
+
+# --- --exclude-strategy (CPU smoke skips the two adversarial baselines) ------------------------
+
+
+ADVERSARIAL = ("AdversarialBIM", "AdversarialDeepFool")
+
+
+def test_exclude_strategy_filter_drops_only_those_groups(full_manifest: C.Manifest) -> None:
+    jobs = C.expand_jobs(full_manifest)
+    kept = C.expand_jobs(full_manifest, exclude_strategies=ADVERSARIAL)
+    dropped = [j for j in jobs if j not in kept]
+    assert dropped and {j.group.strategy_name for j in dropped} == set(ADVERSARIAL)
+    assert len(dropped) == 2 * 3 * 3  # 2 strategies x 3 n_query x 3 seeds
+    assert len(kept) == len(jobs) - len(dropped) == 192 - 18
+    assert all(j.group.strategy_name not in ADVERSARIAL for j in kept)
+    assert [j for j in jobs if j in kept] == kept  # order preserved
+
+
+def test_exclude_strategy_parsing_fails_fast_on_unknown_names(full_manifest: C.Manifest) -> None:
+    assert C.parse_exclude_strategies(None, full_manifest) == frozenset()
+    assert C.parse_exclude_strategies("AdversarialBIM, AdversarialDeepFool", full_manifest) == frozenset(ADVERSARIAL)
+    with pytest.raises(C.CampaignError, match="unknown strategy"):
+        C.parse_exclude_strategies("NoSuchStrategy", full_manifest)
+
+
+def test_cli_exclude_strategy_applies_to_list(capsys: pytest.CaptureFixture[str]) -> None:
+    assert C.main(["list", "--micro", "--seeds", "1", "--exclude-strategy", ",".join(ADVERSARIAL)]) == 0
+    out = capsys.readouterr().out
+    assert "excluded strategies: AdversarialBIM, AdversarialDeepFool" in out
+    assert "Adversarial" not in out.split("excluded strategies:")[1].split("\n", 1)[1]
+    assert "TOTAL" in out and "58 runs" in out  # 64 micro seed-1 jobs - 2 strategies x 3 n_query
+    assert C.main(["list", "--micro", "--exclude-strategy", "Nope"]) == 2
+
+
+def test_verify_with_exclusion_does_not_report_excluded_groups_missing(tmp_path: Path) -> None:
+    manifest = _tiny_manifest(tmp_path)
+    for seed in (1, 2):
+        _write_leaf(_leaf_of(manifest.groups[0], seed))
+    excluded = C.expand_jobs(manifest, exclude_strategies=("MarginSampling",))
+    statuses = [C.verify_job(j) for j in excluded]
+    assert all(s.status == "OK" for s in statuses) and len(statuses) == 2
+    assert C.verify_exit_code(statuses, C.audit_seed_consistency(excluded)) == 0
+
+
+def test_cli_broken_pipe_is_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(_args) -> int:
+        raise BrokenPipeError
+
+    monkeypatch.setattr(C, "_dispatch", boom)
+    monkeypatch.setattr(C.os, "dup2", lambda *a, **k: None)
+    monkeypatch.setattr(C.sys, "stdout", type("S", (), {"fileno": lambda self: 1})())
+    assert C.main(["list"]) == 0

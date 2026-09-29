@@ -152,8 +152,11 @@ def write_report(result: RunResult, path_logger: str) -> None:
         extra=_build_checkpoint_extra(result),
     )
 
-    json_path = _write_results_json(result, dir_results)
     predictions_csv_path = _write_predictions_csv(result, dir_results)
+    # `results.json` is written LAST: it is the "run finished" marker that
+    # `dalmax.campaign.job_done` (skip-existing/resume) relies on, so a run
+    # killed mid-report can never look complete.
+    json_path = _write_results_json(result, dir_results)
 
     print(f"Dados salvos em {json_path}")
     print(f"Predictions saved in {predictions_csv_path}")

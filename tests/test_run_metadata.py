@@ -154,7 +154,7 @@ def _fake_cuda(monkeypatch):
     props = SimpleNamespace(total_memory=42505207808, major=8, minor=0, multi_processor_count=108)
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
-    monkeypatch.setattr(torch.cuda, "get_device_name", lambda i=0: "NVIDIA A100-SXM4-40GB")
+    monkeypatch.setattr(torch.cuda, "get_device_name", lambda i=0: "NVIDIA Fake GPU 40GB")
     monkeypatch.setattr(torch.cuda, "get_device_properties", lambda i=0: props)
     monkeypatch.setattr(torch.cuda, "current_device", lambda: 0)
 
@@ -165,21 +165,21 @@ def test_environment_fake_gpu_with_nvidia_smi(monkeypatch):
     def fake_run(cmd, **kwargs):
         assert cmd[0] == "nvidia-smi"
         return subprocess.CompletedProcess(
-            cmd, 0, stdout="0, NVIDIA A100-SXM4-40GB, 535.104.05, 40960\n", stderr=""
+            cmd, 0, stdout="0, NVIDIA Fake GPU 40GB, 535.104.05, 40960\n", stderr=""
         )
 
     monkeypatch.setattr(env_mod.subprocess, "run", fake_run)
     env = env_mod.collect_environment()
     gpu = env["gpus"][0]
-    assert gpu["name"] == "NVIDIA A100-SXM4-40GB"
+    assert gpu["name"] == "NVIDIA Fake GPU 40GB"
     assert gpu["total_memory_gb"] == round(42505207808 / 1024**3, 2)
     assert gpu["compute_capability"] == "8.0"
     assert gpu["multi_processor_count"] == 108
     assert gpu["driver_version"] == "535.104.05"
     assert gpu["memory_total_mib"] == 40960
-    assert gpu["nvidia_smi_name"] == "NVIDIA A100-SXM4-40GB"
+    assert gpu["nvidia_smi_name"] == "NVIDIA Fake GPU 40GB"
     assert env["current_device"] == 0
-    assert "A100" in env_mod.summarize_environment(env)
+    assert "Fake GPU" in env_mod.summarize_environment(env)
     json.dumps(env)
 
 
@@ -193,4 +193,17 @@ def test_environment_fake_gpu_without_nvidia_smi(monkeypatch):
     gpu = env_mod.collect_environment()["gpus"][0]
     assert gpu["driver_version"] is None
     assert gpu["memory_total_mib"] is None
-    assert gpu["name"] == "NVIDIA A100-SXM4-40GB"
+    assert gpu["name"] == "NVIDIA Fake GPU 40GB"
+
+
+def test_record_nondeterministic_ops_updates_determinism_block(tmp_path):
+    from dalmax.experiment.run_metadata import record_nondeterministic_ops_in_metadata
+
+    write_run_metadata(tmp_path, snapshot(_make_config()))
+    before = json.loads((tmp_path / "run_metadata.json").read_text())
+    assert before["determinism"]["nondeterministic_op_warnings"] == []
+
+    record_nondeterministic_ops_in_metadata(tmp_path, ["cumsum_cuda_kernel"])
+    after = json.loads((tmp_path / "run_metadata.json").read_text())
+    assert after["determinism"]["nondeterministic_op_warnings"] == ["cumsum_cuda_kernel"]
+    assert after["config"] == before["config"] and after["environment"] == before["environment"]

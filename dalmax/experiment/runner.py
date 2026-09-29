@@ -27,11 +27,15 @@ import numpy as np
 from dalmax.config.schema import FULL_SUPERVISED_STRATEGY, ExperimentConfig
 from dalmax.data.registry import get_dataset
 from dalmax.experiment.environment import summarize_environment
-from dalmax.experiment.run_metadata import snapshot, write_run_metadata
+from dalmax.experiment.run_metadata import (
+    record_nondeterministic_ops_in_metadata,
+    snapshot,
+    write_run_metadata,
+)
 from dalmax.models.registry import get_network
 from dalmax.query_strategies.base import Strategy
 from dalmax.query_strategies.registry import build_strategy
-from dalmax.seeding import seed_everything
+from dalmax.seeding import record_nondeterministic_ops, seed_everything
 
 
 @dataclass
@@ -95,6 +99,17 @@ class ExperimentRunner:
         self.logger = logger
 
     def run(self) -> RunResult:
+        """Run the experiment; any op that torch flags as non-deterministic
+        (`warn_only` mode) is recorded into `run_metadata.json`'s
+        `determinism.nondeterministic_op_warnings` when the run ends."""
+        with record_nondeterministic_ops() as ops:
+            result = self._run()
+        record_nondeterministic_ops_in_metadata(result.dir_results, ops)
+        if ops:
+            self.logger.warning(f"Non-deterministic ops used (best-effort determinism only): {ops}")
+        return result
+
+    def _run(self) -> RunResult:
         config = self.config
         logger = self.logger
 

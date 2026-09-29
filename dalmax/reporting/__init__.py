@@ -1,8 +1,8 @@
 """Reporting utilities for DalMax experiments.
 
-`dalmax.reporting.ablation_report` aggregates the Phase 3 ablation sweep's
-`results/ablations/<study>/<config>/...` trees (see
-`.specs/experiments/ablation-study.md`) into the paper's macro-F1 tables.
+`dalmax.reporting.campaign_report` builds the per-paper tables and mean confusion matrices of
+the campaign (`.specs/experiments/campaign.md`); `dalmax.reporting.leaf_check` is the artifact-completeness
+check of one run directory.
 
 The rest of this package (`extract_confusion_matrices.py`, `chunk_results.py`,
 `average_confusion_matrices.py`, `average_results.py`, `build_method_metrics.py`,

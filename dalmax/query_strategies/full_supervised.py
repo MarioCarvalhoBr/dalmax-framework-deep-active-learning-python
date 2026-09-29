@@ -14,6 +14,9 @@ Contract (enforced elsewhere, see `dalmax.experiment.runner`):
   the real pool size (logging a warning if the user passed another value) so
   the results directory reads `NIL_<pool>` and `run_metadata.json` records
   the truth;
+- `n_query` plays no role for this strategy (nothing is ever queried); the
+  campaign still passes the paper-1 primary budget only so the results
+  directory keeps the uniform `NQ_<n>_...` layout;
 - `query()` must never be called -- it raises.
 """
 
@@ -25,7 +28,7 @@ from dalmax.query_strategies.base import Strategy
 class FullSupervised(Strategy):
     """Upper bound: all pool labels, one training round, no query."""
 
-    def query(self, n: int):
+    def query(self, n: int):  # `n` is intentionally ignored: see the module docstring
         raise RuntimeError(
             "FullSupervised is the full-pool upper bound, not an active-learning strategy: "
             "query() must never be called (n_round must be 0)."

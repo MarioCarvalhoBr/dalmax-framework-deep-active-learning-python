@@ -22,6 +22,10 @@ from __future__ import annotations
 import hashlib
 import os
 import random
+import re
+import warnings
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 import numpy as np
 import torch
@@ -59,18 +63,69 @@ def seed_everything(seed: int) -> np.random.Generator:
     # deterministic kernel warns instead of crashing a long run.
     os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", CUBLAS_WORKSPACE_CONFIG)
     torch.use_deterministic_algorithms(True, warn_only=True)
+    # Without this, torch.empty & co. are filled with garbage on some builds,
+    # which would make "uninitialized" reads a hidden source of run-to-run drift.
+    if hasattr(torch.utils, "deterministic"):
+        torch.utils.deterministic.fill_uninitialized_memory = False
     return np.random.default_rng(seed)
 
 
+def _deterministic_algorithms_mode() -> str:
+    """`"off"`, `"warn_only"` or `"strict"` -- what torch is currently set to."""
+    if not torch.are_deterministic_algorithms_enabled():
+        return "off"
+    return "warn_only" if torch.is_deterministic_algorithms_warn_only_enabled() else "strict"
+
+
 def determinism_state(seed: int | None = None) -> dict:
-    """The determinism-relevant global state, for `run_metadata.json`."""
+    """The determinism-relevant global state, for `run_metadata.json`.
+
+    `deterministic_algorithms` is `"warn_only"` on purpose: an op without a
+    deterministic kernel warns instead of aborting a long run, so a run is
+    only *best-effort* deterministic on GPU. The ops that actually warned are
+    appended (as `nondeterministic_op_warnings`) when the run ends -- see
+    `record_nondeterministic_ops`.
+    """
+    fill = getattr(getattr(torch.utils, "deterministic", None), "fill_uninitialized_memory", None)
     return {
         "seed": seed,
-        "deterministic_algorithms": bool(torch.are_deterministic_algorithms_enabled()),
+        "deterministic_algorithms": _deterministic_algorithms_mode(),
         "cudnn_deterministic": bool(torch.backends.cudnn.deterministic),
         "cudnn_benchmark": bool(torch.backends.cudnn.benchmark),
         "cublas_workspace_config": os.environ.get("CUBLAS_WORKSPACE_CONFIG"),
+        "fill_uninitialized_memory": fill,
+        "nondeterministic_op_warnings": [],
     }
+
+
+_NONDETERMINISTIC_WARNING_RE = re.compile(r"^(?P<op>.+?) does not have a deterministic implementation")
+
+
+@contextmanager
+def record_nondeterministic_ops() -> Iterator[list[str]]:
+    """Collect the ops torch warns about under `warn_only` deterministic mode.
+
+    Yields a list that is filled (unique, in first-seen order) with the op
+    names of every "... does not have a deterministic implementation" warning
+    raised inside the block. Other warnings are forwarded untouched to the
+    previous `warnings.showwarning`.
+    """
+    seen: list[str] = []
+    with warnings.catch_warnings():
+        warnings.filterwarnings("always", message=r".*does not have a deterministic implementation")
+        previous = warnings.showwarning
+
+        def _hook(message, category, filename, lineno, file=None, line=None):  # noqa: ANN001
+            match = _NONDETERMINISTIC_WARNING_RE.match(str(message))
+            if match is None:
+                previous(message, category, filename, lineno, file, line)
+                return
+            op = match.group("op")
+            if op not in seen:
+                seen.append(op)
+
+        warnings.showwarning = _hook
+        yield seen
 
 
 def derive_seed(seed: int, tag: str) -> int:

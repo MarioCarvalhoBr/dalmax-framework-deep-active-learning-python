@@ -123,10 +123,12 @@ def test_seed_everything_enables_deterministic_algorithms_warn_only(monkeypatch)
         assert torch.backends.cudnn.deterministic and not torch.backends.cudnn.benchmark
         assert determinism_state(7) == {
             "seed": 7,
-            "deterministic_algorithms": True,
+            "deterministic_algorithms": "warn_only",
             "cudnn_deterministic": True,
             "cudnn_benchmark": False,
             "cublas_workspace_config": ":4096:8",
+            "fill_uninitialized_memory": False,
+            "nondeterministic_op_warnings": [],
         }
     finally:
         torch.use_deterministic_algorithms(previous)
@@ -147,3 +149,19 @@ def test_seed_everything_does_not_clobber_an_operator_set_cublas_config(monkeypa
         assert os.environ["CUBLAS_WORKSPACE_CONFIG"] == ":16:8"
     finally:
         torch.use_deterministic_algorithms(previous)
+
+
+def test_record_nondeterministic_ops_collects_unique_op_names_and_forwards_others() -> None:
+    import warnings
+
+    from dalmax.seeding import record_nondeterministic_ops
+
+    with warnings.catch_warnings(record=True) as outer:
+        warnings.simplefilter("always")
+        with record_nondeterministic_ops() as ops:
+            for _ in range(2):
+                warnings.warn("cumsum_cuda_kernel does not have a deterministic implementation, but", UserWarning, stacklevel=1)
+            warnings.warn("index_add_cuda_ does not have a deterministic implementation, but", UserWarning, stacklevel=1)
+            warnings.warn("something unrelated", UserWarning, stacklevel=1)
+    assert ops == ["cumsum_cuda_kernel", "index_add_cuda_"]
+    assert [str(w.message) for w in outer] == ["something unrelated"]

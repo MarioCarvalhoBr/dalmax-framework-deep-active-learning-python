@@ -1,7 +1,7 @@
 """Report generator for the single campaign (`files_config/campaign/manifest.json`).
 
-    python -m dalmax.reporting.campaign_report --root results/campaign_a100 \
-        --out docs/results/campaign_a100
+    python -m dalmax.reporting.campaign_report --root results/campaign \
+        --out docs/results/campaign
 
 Reads the manifest's `tables` section (rows -> run ids; aliased rows resolve to
 the ONE canonical run, so a value such as "TexHAL full" is identical in every
@@ -12,8 +12,8 @@ table of every paper) and writes, under `--out`:
   macro F1) with the upper-bound row; papers 2/3: the 6.1/6.2/6.3 ablation
   tables (weighted + macro F1) and a comparison table. Values are the
   final-round mean (+/- population std) across seeds; a row with no runs is
-  `TBD`. The LaTeX uses the same booktabs / `($\\pm$...)` style as
-  `dalmax.reporting.ablation_report`.
+  `TBD`. The LaTeX uses the same booktabs / `($\\pm$...)` style of the
+  thesis ablation tables.
 - `summary.csv` -- one row per (paper, table, row) with every metric.
 - `seed_audit.md` -- the seed-consistency audit (`campaign verify`'s check).
 - `confusion_matrices/<run id>.csv|pdf` -- the mean confusion matrix across
@@ -263,9 +263,10 @@ def read_confusion_counts(predictions_csv: Path) -> dict[tuple[str, str], int]:
     return counts
 
 
-def mean_confusion_matrix(runs: list[RunData]) -> tuple[list[str], np.ndarray] | None:
+def mean_confusion_matrix(runs: list[RunData]) -> tuple[list[str], np.ndarray, int] | None:
     """Mean (over the runs that have a `predictions.csv`) confusion matrix of counts,
-    rows = real class, columns = predicted class, classes = sorted union."""
+    rows = real class, columns = predicted class, classes = sorted union.
+    Also returns how many runs actually contributed (for honest plot titles)."""
     per_run = [read_confusion_counts(r.leaf / "predictions.csv") for r in runs if (r.leaf / "predictions.csv").is_file()]
     if not per_run:
         return None
@@ -275,14 +276,14 @@ def mean_confusion_matrix(runs: list[RunData]) -> tuple[list[str], np.ndarray] |
     for counts in per_run:
         for (real, pred), n in counts.items():
             total[index[real], index[pred]] += n
-    return labels, total / len(per_run)
+    return labels, total / len(per_run), len(per_run)
 
 
 def write_confusion_matrix(group_id: str, runs: list[RunData], out_dir: Path) -> bool:
     result = mean_confusion_matrix(runs)
     if result is None:
         return False
-    labels, matrix = result
+    labels, matrix, n_used = result
     out_dir.mkdir(parents=True, exist_ok=True)
     stem = group_id.replace("/", "__")
     with open(out_dir / f"{stem}.csv", "w", newline="") as fh:
@@ -299,7 +300,7 @@ def write_confusion_matrix(group_id: str, runs: list[RunData], out_dir: Path) ->
     ax.set_yticks(range(len(labels)), labels)
     ax.set_xlabel("Predicted class")
     ax.set_ylabel("Real class")
-    ax.set_title(f"{group_id}\nmean over {len(runs)} seed(s) (cell = mean count)", fontsize=9)
+    ax.set_title(f"{group_id}\nmean over {n_used} seed(s) (cell = mean count)", fontsize=9)
     for i in range(len(labels)):
         for j in range(len(labels)):
             ax.text(j, i, f"{matrix[i, j]:.1f}", ha="center", va="center", fontsize=8,
@@ -350,7 +351,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--manifest", default=None, help=f"default {DEFAULT_MANIFEST}")
     parser.add_argument("--micro", action="store_true", help=f"use {DEFAULT_MICRO_MANIFEST}")
     parser.add_argument("--root", default=None, help="results root (default: the manifest's results_root)")
-    parser.add_argument("--out", default="docs/results/campaign_a100")
+    parser.add_argument("--out", default="docs/results/campaign")
     return parser
 
 

@@ -88,3 +88,13 @@ def write_run_metadata(dir_results: str | Path, metadata: dict) -> Path:
     out_path = dir_path / "run_metadata.json"
     out_path.write_text(json.dumps(metadata, indent=2))
     return out_path
+
+
+def record_nondeterministic_ops_in_metadata(dir_results: str | Path, ops: list[str]) -> Path:
+    """Store the ops that warned about a missing deterministic kernel in the
+    already-written `run_metadata.json` (`determinism.nondeterministic_op_warnings`)."""
+    path = Path(dir_results) / "run_metadata.json"
+    metadata = json.loads(path.read_text())
+    metadata.setdefault("determinism", {})["nondeterministic_op_warnings"] = list(ops)
+    path.write_text(json.dumps(metadata, indent=2))
+    return path

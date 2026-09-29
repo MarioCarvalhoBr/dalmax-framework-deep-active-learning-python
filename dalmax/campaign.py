@@ -1,8 +1,8 @@
 """Single-campaign manifest: load, validate, expand to jobs, run, verify.
 
 `files_config/campaign/manifest.json` is the single source of truth for the
-one-shot Colab A100 re-execution of everything the three papers need (see
-`.specs/experiments/campaign-a100.md` and ADR 0008). Each *run group* is one
+one-shot single-environment re-execution of everything the three papers need (see
+`.specs/experiments/campaign.md` and ADR 0008). Each *run group* is one
 distinct computation (params JSON + strategy + n_query + n_init_labeled +
 n_round) swept over the manifest's seeds; a table row of any paper that needs
 the same computation points to that one group (directly, or through an
@@ -14,11 +14,16 @@ CLI (`python -m dalmax.campaign <cmd>`):
 - `list`: print the job table (counts per part and in total).
 - `run --part {paper1,upper_bound,rnhal,texhal,all}[,...] [--micro] [--dry-run]
   [--skip-existing|--no-skip-existing] [--device cuda]`: execute the jobs
-  sequentially through `trainer.py` (subprocess), logging to
+  sequentially through `tools/trainer.py` (subprocess), logging to
   `<results_root>/campaign.log` and `<results_root>/failures.log`, continuing
   after a failure.
 - `verify [--part ...] [--micro]`: per job OK / INCOMPLETE / MISSING, reusing
-  `dalmax.reporting.results_doctor.check_leaf`.
+  `dalmax.reporting.leaf_check.check_leaf`, plus the seed-consistency audit.
+  Exit code: 0 all OK; 1 an incomplete/missing job or a FAIL audit; 2 only
+  audit WARNs (a run whose initial-labeled-set log line is missing/unreadable).
+- Every subcommand accepts `--exclude-strategy A,B` (e.g. the two adversarial
+  baselines, far too slow for a CPU smoke run): jobs of those strategies are
+  dropped from the list/run/verify/audit. The full manifest still contains them.
 
 Execution order (fixed, independent of `--part`): paper 1 at n_query=100
 first (the shared canonical runs -- KMH and RandomSampling, which papers 2/3 reuse --
@@ -36,7 +41,7 @@ import re
 import subprocess
 import sys
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -49,12 +54,13 @@ from dalmax.query_strategies.registry import (
     REPRESENTATION_PRESET_Q,
     REPRESENTATION_PRESETS,
 )
-from dalmax.reporting.results_doctor import check_leaf
+from dalmax.reporting.leaf_check import check_leaf
 from dalmax.seeding import CUBLAS_WORKSPACE_CONFIG
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_MANIFEST = "files_config/campaign/manifest.json"
 DEFAULT_MICRO_MANIFEST = "files_config/campaign/manifest_micro.json"
+TRAINER_SCRIPT = "tools/trainer.py"
 
 # Layout/ownership rule: a run group lives under the FIRST paper that consumes
 # it (paper 1 < 2 < 3) and its `used_by` lists every consumer; e.g. paper 1's
@@ -450,13 +456,29 @@ def parse_parts(spec: str) -> tuple[str, ...]:
     return tuple(n for n in PARTS if n in names)
 
 
+def parse_exclude_strategies(spec: str | None, manifest: Manifest) -> frozenset[str]:
+    """Comma-separated strategy names to drop; each must exist in the manifest (fail fast)."""
+    names = frozenset(s.strip() for s in (spec or "").split(",") if s.strip())
+    known = {g.strategy_name for g in manifest.groups}
+    bad = sorted(names - known)
+    if bad:
+        raise CampaignError(f"--exclude-strategy: unknown strategy {bad}; manifest has: {sorted(known)}")
+    return names
+
+
 def expand_jobs(
-    manifest: Manifest, parts: Sequence[str] = PARTS, seeds: Sequence[int] | None = None
+    manifest: Manifest,
+    parts: Sequence[str] = PARTS,
+    seeds: Sequence[int] | None = None,
+    exclude_strategies: Collection[str] = (),
 ) -> list[Job]:
     """All `(group, seed)` jobs of `parts`, in execution order. `seeds`
-    restricts to a subset of each group's seeds (smoke runs; default: all)."""
+    restricts to a subset of each group's seeds (smoke runs; default: all);
+    groups whose `strategy_name` is in `exclude_strategies` are dropped."""
     indexed = [
-        (phase_index(g, manifest.primary_nq), i, g) for i, g in enumerate(manifest.groups) if g.part in parts
+        (phase_index(g, manifest.primary_nq), i, g)
+        for i, g in enumerate(manifest.groups)
+        if g.part in parts and g.strategy_name not in exclude_strategies
     ]
     indexed.sort(key=lambda t: (t[0], t[1]))
     return [
@@ -496,8 +518,14 @@ def find_leaf(group: RunGroup, seed: int, *, base: Path | None = None) -> Path |
 
 
 def job_done(job: Job) -> bool:
+    """True iff the job's leaf carries the FULL artifact set (`check_leaf`), so a
+    run killed mid-report is re-run on resume instead of being skipped.
+    (`results.json` is written last by the reporter.)"""
     leaf = find_leaf(job.group, job.seed)
-    return leaf is not None and (leaf / "results.json").is_file()
+    if leaf is None:
+        return False
+    missing, _warnings = check_leaf(leaf)
+    return not missing
 
 
 # --- running ------------------------------------------------------------------
@@ -507,7 +535,7 @@ def build_command(job: Job, manifest: Manifest, device: str, python: str | None 
     g = job.group
     return [
         python or sys.executable,
-        "trainer.py",
+        TRAINER_SCRIPT,
         "--params_json", g.params_json,
         "--dataset_name", manifest.dataset_name,
         "--strategy_name", g.strategy_name,
@@ -521,7 +549,7 @@ def build_command(job: Job, manifest: Manifest, device: str, python: str | None 
 
 
 def build_env(device: str) -> dict[str, str]:
-    """Same env handling as scripts/ablations/run_ablation_gpu_*.sh."""
+    """Environment of every trainer subprocess (headless matplotlib, cuBLAS determinism, device pin)."""
     env = dict(os.environ)
     env["MPLBACKEND"] = "Agg"
     # Determinism: seed_everything also sets this default inside the run; setting
@@ -583,7 +611,7 @@ def run_jobs(
         head = f"[{n}/{total}] {job.label()}"
         if skip_existing and job_done(job):
             summary.skipped += 1
-            log(f"{head} SKIP (results.json exists)")
+            log(f"{head} SKIP (complete leaf exists)")
             continue
         cmd = build_command(job, manifest, device)
         if dry_run:
@@ -642,7 +670,7 @@ class SeedAudit:
     """Initial-labeled-set consistency of every run of one seed."""
 
     seed: int
-    status: str  # PASS | FAIL | NO_DATA
+    status: str  # PASS | WARN | FAIL | NO_DATA
     n_runs: int
     reference: str | None = None
     offenders: tuple[str, ...] = ()
@@ -678,13 +706,14 @@ def audit_seed_consistency(jobs: Sequence[Job], *, base: Path | None = None) -> 
         readable = [(rid, idxs) for rid, idxs in runs if idxs is not None]
         unreadable = tuple(rid for rid, idxs in runs if idxs is None)
         if not readable:
-            audits.append(SeedAudit(seed, "NO_DATA", len(runs), unreadable=unreadable))
+            # Runs exist but none can be compared (missing/unreadable log): WARN, not silence.
+            status = "WARN" if unreadable else "NO_DATA"
+            audits.append(SeedAudit(seed, status, len(runs), unreadable=unreadable))
             continue
         reference_id, reference = readable[0]
         offenders = tuple(rid for rid, idxs in readable if idxs != reference)
-        audits.append(SeedAudit(
-            seed, "FAIL" if offenders else "PASS", len(readable), reference_id, offenders, unreadable,
-        ))
+        status = "FAIL" if offenders else ("WARN" if unreadable else "PASS")
+        audits.append(SeedAudit(seed, status, len(readable), reference_id, offenders, unreadable))
     return audits
 
 
@@ -746,14 +775,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
         p.add_argument("--micro", action="store_true", help=f"use {DEFAULT_MICRO_MANIFEST} (CPU smoke)")
         p.add_argument("--part", default="all", help="paper1,upper_bound,rnhal,texhal (comma-separated) or all")
         p.add_argument("--seeds", default=None, help="comma-separated subset of the seeds (smoke); default all")
+        p.add_argument(
+            "--exclude-strategy", default=None,
+            help="comma-separated strategy names to drop (e.g. AdversarialBIM,AdversarialDeepFool for CPU smoke)",
+        )
 
     common(sub.add_parser("list", help="print the job table and counts"))
-    run_p = sub.add_parser("run", help="execute jobs sequentially via trainer.py")
+    run_p = sub.add_parser("run", help="execute jobs sequentially via tools/trainer.py")
     common(run_p)
     run_p.add_argument("--dry-run", action="store_true", help="echo commands, execute nothing")
     run_p.add_argument(
         "--skip-existing", action=argparse.BooleanOptionalAction, default=True,
-        help="skip jobs whose leaf results.json exists (default on)",
+        help="skip jobs whose leaf is complete (all artifacts present; default on)",
     )
     run_p.add_argument("--device", default=None, choices=["cuda", "cpu", "auto"],
                        help="default: cuda (cpu with --micro)")
@@ -761,20 +794,29 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
-    args = build_arg_parser().parse_args(argv)
+def verify_exit_code(statuses: Sequence[JobStatus], audits: Sequence[SeedAudit]) -> int:
+    """0: everything OK; 1: an incomplete/missing job or a FAILed audit; 2: only audit WARNs."""
+    if any(s.status != "OK" for s in statuses) or any(a.status in ("FAIL", "NO_DATA") for a in audits):
+        return 1
+    return 2 if any(a.status == "WARN" for a in audits) else 0
+
+
+def _dispatch(args: argparse.Namespace) -> int:
     try:
         manifest_path = args.manifest or (DEFAULT_MICRO_MANIFEST if args.micro else DEFAULT_MANIFEST)
         manifest = load_manifest(manifest_path)
         parts = parse_parts(args.part)
+        excluded = parse_exclude_strategies(args.exclude_strategy, manifest)
     except CampaignError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
     seeds = [int(s) for s in args.seeds.split(",")] if args.seeds else None
-    jobs = expand_jobs(manifest, parts, seeds)
+    jobs = expand_jobs(manifest, parts, seeds, excluded)
     if args.command == "list":
         print(f"manifest: {manifest.path}  results_root: {manifest.results_root}")
+        if excluded:
+            print(f"excluded strategies: {', '.join(sorted(excluded))}")
         print(render_job_table(jobs, manifest.primary_nq))
         return 0
     if args.command == "verify":
@@ -783,15 +825,24 @@ def main(argv: list[str] | None = None) -> int:
         audits = audit_seed_consistency(jobs)
         print()
         print(render_seed_audit(audits))
-        artifacts_ok = all(s.status == "OK" for s in statuses)
-        seeds_ok = all(a.status == "PASS" for a in audits)
-        return 0 if artifacts_ok and seeds_ok else 1
+        return verify_exit_code(statuses, audits)
 
     device = args.device or ("cpu" if args.micro else "cuda")
     summary = run_jobs(
         jobs, manifest, device=device, skip_existing=args.skip_existing, dry_run=args.dry_run
     )
     return 1 if summary.failed else 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_arg_parser().parse_args(argv)
+    try:
+        code = _dispatch(args)
+        sys.stdout.flush()  # a closed pipe can also surface here, not only inside print()
+        return code
+    except BrokenPipeError:  # e.g. `campaign list | head`: exit quietly
+        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        return 0
 
 
 if __name__ == "__main__":
