@@ -20,11 +20,13 @@ see `.claude/rules/reproducibility.md`).
 from __future__ import annotations
 
 import hashlib
+import os
 import random
 
 import numpy as np
 import torch
 
+CUBLAS_WORKSPACE_CONFIG = ":4096:8"
 _MAX_SUB_SEED = 2**32 - 1  # inclusive upper bound accepted by numpy/sklearn/torch
 
 
@@ -51,7 +53,24 @@ def seed_everything(seed: int) -> np.random.Generator:
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+    # cuBLAS needs a fixed workspace config to be deterministic on CUDA >= 10.2;
+    # it must be set before the first cuBLAS call (setdefault: never clobber a
+    # value the operator set deliberately). `warn_only=True`: an op without a
+    # deterministic kernel warns instead of crashing a long run.
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", CUBLAS_WORKSPACE_CONFIG)
+    torch.use_deterministic_algorithms(True, warn_only=True)
     return np.random.default_rng(seed)
+
+
+def determinism_state(seed: int | None = None) -> dict:
+    """The determinism-relevant global state, for `run_metadata.json`."""
+    return {
+        "seed": seed,
+        "deterministic_algorithms": bool(torch.are_deterministic_algorithms_enabled()),
+        "cudnn_deterministic": bool(torch.backends.cudnn.deterministic),
+        "cudnn_benchmark": bool(torch.backends.cudnn.benchmark),
+        "cublas_workspace_config": os.environ.get("CUBLAS_WORKSPACE_CONFIG"),
+    }
 
 
 def derive_seed(seed: int, tag: str) -> int:

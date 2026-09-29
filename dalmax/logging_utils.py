@@ -12,7 +12,9 @@ PATH_LOGS = 'results/logs/'
 if not os.path.exists(PATH_LOGS):
     os.makedirs(PATH_LOGS)
 
-PATH_LOG_FINAL = PATH_LOGS + text_time_log + '-log-dalmax.log'
+# The PID keeps two runs started within the same second (two GPUs launched together)
+# from sharing -- and then fighting over the rename of -- one log file (KI-35).
+PATH_LOG_FINAL = PATH_LOGS + text_time_log + f'-{os.getpid()}' + '-log-dalmax.log'
 
 
 def get_logger():

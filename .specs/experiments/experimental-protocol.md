@@ -115,7 +115,8 @@ Full `--strategy_name` choice list (from `demo.py` (historical) → `dalmax/cli.
 `KMeansSampling`, `KCenterGreedy`, `BALDDropout`, `AdversarialBIM`,
 `AdversarialDeepFool`, `SSRAEKmeansSampling`, `VCTexKmeansSampling`,
 `SSRAEKmeansHCSampling`, `VCTexKmeansHCSampling`, **`RepresentationStrategy`
-(NEW, Phase 2)**. The last four legacy names plus the new
+(NEW, Phase 2)**, **`FullSupervised`** (2026-09-29, the paper-1 upper bound — *not* active
+learning, see "Upper bound" below). The last four legacy names plus the new
 `RepresentationStrategy` are all served by
 `dalmax.query_strategies.representation.RepresentationStrategy` under the
 hood (`.specs/architecture/target-architecture.md` §6,
@@ -196,6 +197,20 @@ keys above), `predictions.csv` (per-test-image prediction record),
 `f1_score.pdf`, `log-dalmax.log`, the saved model (`saved_model.pth`), and
 **`run_metadata.json` (NEW, Phase 2)** — see below.
 
+## Upper bound: `FullSupervised` (2026-09-29)
+
+Paper 1's upper bound is "a full training session using the entire pool of images" (thesis
+chapter 2). It is the registered strategy `FullSupervised`: every training image is labeled at
+initialization (`n_init_labeled` is forced to the pool size — 8,086 for `daninhas_full`; a different
+CLI value is overridden with a logged warning, and `run_metadata.json`/the results dir carry the real
+size, `NIL_8086`), only round 0 runs (`--n_round` must be 0, else `ConfigError`), `query()` raises,
+`n_epoch=10` as every other run, evaluation on the fixed test set, seeds {1,2,3}; the normal
+artifacts are written (`results.json` with one round). **There is no validation split** in this
+project's protocol (pool/test only, as in the thesis) and none is invented for the upper bound.
+Results leaf: `.../NQ_100_NIL_8086_NR_0_NE_10/FullSupervised/`. Run by the campaign
+(`.specs/experiments/campaign-a100.md`); CLI form:
+`--strategy_name FullSupervised --n_query 100 --n_init_labeled 8086 --n_round 0`.
+
 ## Run metadata (NEW, Phase 2)
 
 Every leaf results directory now also contains `run_metadata.json`
@@ -203,7 +218,8 @@ Every leaf results directory now also contains `run_metadata.json`
 with: the fully-resolved config as loaded (including the new `embedding`/
 `selection`/`device` fields, and `params_json_path`), `git_commit`
 (best-effort `git rev-parse HEAD`, `None` if unavailable), `python_version`,
-`torch_version`, `cuda_available`, and `started_at` (UTC ISO-8601). This is
+`torch_version`, `cuda_available`, `started_at` (UTC ISO-8601), and (2026-09-29) `determinism` (`seed`,
+`deterministic_algorithms`, `cudnn_deterministic`, `cudnn_benchmark`, `cublas_workspace_config`). This is
 what makes `.claude/rules/reproducibility.md`'s "(params JSON + CLI args +
 seed + git commit) fully determine a run" verifiable after the fact — see
 `research-rules/reproducibility.md`.

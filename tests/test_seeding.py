@@ -101,3 +101,49 @@ def test_derive_seed_returns_a_valid_uint32_range_int():
     value = derive_seed(1, "some_tag")
     assert isinstance(value, int)
     assert 0 <= value <= 2**32 - 1
+
+
+# --- GPU determinism settings (2026-09-29) --------------------------------------
+
+
+def test_seed_everything_enables_deterministic_algorithms_warn_only(monkeypatch) -> None:
+    import os
+
+    import torch
+
+    from dalmax.seeding import CUBLAS_WORKSPACE_CONFIG, determinism_state, seed_everything
+
+    monkeypatch.delenv("CUBLAS_WORKSPACE_CONFIG", raising=False)
+    previous = torch.are_deterministic_algorithms_enabled()
+    try:
+        seed_everything(7)
+        assert torch.are_deterministic_algorithms_enabled()
+        assert torch.is_deterministic_algorithms_warn_only_enabled()
+        assert os.environ["CUBLAS_WORKSPACE_CONFIG"] == CUBLAS_WORKSPACE_CONFIG == ":4096:8"
+        assert torch.backends.cudnn.deterministic and not torch.backends.cudnn.benchmark
+        assert determinism_state(7) == {
+            "seed": 7,
+            "deterministic_algorithms": True,
+            "cudnn_deterministic": True,
+            "cudnn_benchmark": False,
+            "cublas_workspace_config": ":4096:8",
+        }
+    finally:
+        torch.use_deterministic_algorithms(previous)
+        os.environ.pop("CUBLAS_WORKSPACE_CONFIG", None)
+
+
+def test_seed_everything_does_not_clobber_an_operator_set_cublas_config(monkeypatch) -> None:
+    import os
+
+    import torch
+
+    from dalmax.seeding import seed_everything
+
+    previous = torch.are_deterministic_algorithms_enabled()
+    monkeypatch.setenv("CUBLAS_WORKSPACE_CONFIG", ":16:8")
+    try:
+        seed_everything(1)
+        assert os.environ["CUBLAS_WORKSPACE_CONFIG"] == ":16:8"
+    finally:
+        torch.use_deterministic_algorithms(previous)

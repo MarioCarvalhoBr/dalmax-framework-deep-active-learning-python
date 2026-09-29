@@ -37,6 +37,19 @@ locations.
   same seed — cuDNN's deterministic kernels differ from the non-deterministic ones used previously.
   CPU runs (the golden-run fixtures) are unaffected.
 
+- **GPU determinism settings (2026-09-29)**: `seed_everything` additionally sets
+  `CUBLAS_WORKSPACE_CONFIG=:4096:8` (`os.environ.setdefault`, an operator-set value is kept; the
+  campaign runner also exports it into the `trainer.py` subprocess) and
+  `torch.use_deterministic_algorithms(True, warn_only=True)` (ops without a deterministic kernel warn
+  instead of crashing a long run). `run_metadata.json` records a `determinism` block
+  (`dalmax/seeding.py::determinism_state`): `seed`, `deterministic_algorithms`, `cudnn_deterministic`,
+  `cudnn_benchmark`, `cublas_workspace_config`. **Honest caveat**: identical seeds give identical
+  initial labeled sets, selection randomness and data order everywhere; bit-identical metrics are
+  guaranteed on CPU (golden tests) and on the same GPU model/driver with deterministic algorithms; they
+  are **not** guaranteed across different GPU models. The campaign's `verify` runs a seed-consistency
+  audit (every run of a seed starts from the identical initial labeled set) — see
+  `.specs/experiments/campaign-a100.md`.
+
 ## Config snapshot
 
 - **Resolved (2026-08-23, Phase 2).** `dalmax/experiment/run_metadata.py::write_run_metadata`

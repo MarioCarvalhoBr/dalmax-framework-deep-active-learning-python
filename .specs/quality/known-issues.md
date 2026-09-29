@@ -169,3 +169,14 @@ run-to-run variance" from `run_metadata.json` alone is a genuine reproducibility
 
 **Severity**: Low-Medium — does not affect correctness of any result, only the ability to audit
 *why* two nominally-identical runs differ after the fact. | Resolved 2026-09-29 | Fixed (`environment` block, see above).
+
+### KI-35 — two runs started in the same second shared one `results/logs/<timestamp>-log-dalmax.log` (FIXED 2026-09-29)
+
+**Symptom**: found while testing the campaign: two `trainer.py` processes started within the same
+wall-clock second (e.g. two GPU panes launched together, or the preset-vs-generic equivalence check run
+concurrently) got the identical log path `results/logs/YYYY-mm-dd-HH-MM-SS-log-dalmax.log`
+(`dalmax/logging_utils.py`, second granularity); the first to finish moved it into its results dir and
+the other died in `write_report` with `FileNotFoundError` on the `os.rename` — and the surviving
+`log-dalmax.log` interleaved both runs' lines (which would also corrupt the campaign's seed-consistency
+audit, which parses `Initial labeled idxs` from that file). **Fix**: the PID is now part of the file name.
+Severity: Low (needs a same-second start), Resolved 2026-09-29.

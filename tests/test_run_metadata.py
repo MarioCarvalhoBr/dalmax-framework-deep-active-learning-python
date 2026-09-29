@@ -66,7 +66,9 @@ def test_snapshot_contains_expected_top_level_keys():
         "cuda_available",
         "started_at",
         "environment",
+        "determinism",
     }
+    assert metadata["determinism"]["seed"] == 1
     assert metadata["config"]["dataset"]["name"] == "DANINHAS"
     assert isinstance(metadata["cuda_available"], bool)
     assert isinstance(metadata["python_version"], str)
