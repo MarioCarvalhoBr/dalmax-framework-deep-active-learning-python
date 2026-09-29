@@ -313,6 +313,20 @@ every other run.
 
 ---
 
+## Running from VS Code (Colab extension)
+
+You can also open a notebook locally in VS Code with the official **Google Colab**
+extension and pick a Colab GPU server as the kernel (Select Kernel -> Colab). Whether
+`drive.mount` works from that setup is **not confirmed yet**; that uncertainty is exactly
+what [`notebooks/colab_local_test.ipynb`](notebooks/colab_local_test.ipynb) measures. It is a
+short diagnostic (runtime, GPU, Drive mount, repo + Poetry, CUDA, data wiring, one tiny
+1-round run) that prints `PASS`/`FAIL`/`SKIP` per check plus a recommendation. If Drive
+passes, run `notebooks/colab_runbook.ipynb` with the same kernel; if not, use the Colab web
+UI, or the notebook's Fallback A (Drive-free dataset; results then stay on the ephemeral
+disk and must be downloaded before the runtime ends).
+
+---
+
 ## 7. Troubleshooting
 
 - **`ValueError: Key backend: 'module://matplotlib_inline.backend_inline' is not a valid value`**
