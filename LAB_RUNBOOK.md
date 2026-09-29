@@ -180,10 +180,12 @@ the same `results/campaign/` tree; groups never overlap between the two commands
   ```bash
   make lab-check GPU=0
   ```
-  which runs (parametrize `GPU=1` to check the other card):
+  which runs (parametrize `GPU=1` to check the other card; it uses the campaign's own paper-1
+  params, `files_config/campaign/params_paper1.json`, which carries the `config_kmh` hierarchy
+  `SSRAEKmeansHCSampling` needs):
   ```bash
   CUDA_VISIBLE_DEVICES=0 poetry run python tools/trainer.py \
-      --params_json files_config/benchmark/params_df_gpu_0.json \
+      --params_json files_config/campaign/params_paper1.json \
       --dataset_name DANINHAS --strategy_name SSRAEKmeansHCSampling \
       --n_query 100 --n_init_labeled 100 --n_round 1 --seed 1 \
       --device cuda --dir_results results/lab_check/

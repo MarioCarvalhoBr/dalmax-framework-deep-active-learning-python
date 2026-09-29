@@ -2,7 +2,7 @@
 	lab-setup lab-check colab-setup colab-check \
 	campaign-list campaign-run campaign-verify campaign-report campaign-smoke campaign-manifest
 
-# GPU index used by `lab-check` (0 or 1, matching files_config/benchmark/params_df_gpu_{0,1}.json).
+# GPU index used by `lab-check` (sets CUDA_VISIBLE_DEVICES).
 # Override on the command line, e.g. `make lab-check GPU=1`.
 GPU ?= 0
 
@@ -72,10 +72,12 @@ lab-setup:
 	poetry run python -c "import torch; print(torch.cuda.is_available(), torch.cuda.device_count())"
 
 # One short real-data GPU run (n_round=1) into results/lab_check/ before a full
-# batch. `GPU` selects CUDA_VISIBLE_DEVICES and which per-GPU params JSON to use.
+# batch. `GPU` selects CUDA_VISIBLE_DEVICES. Uses the campaign's own paper-1 params
+# (files_config/campaign/params_paper1.json, which carries the config_kmh
+# hierarchy SSRAEKmeansHCSampling needs), so the check exercises the same config.
 lab-check:
 	CUDA_VISIBLE_DEVICES=$(GPU) poetry run python tools/trainer.py \
-		--params_json files_config/benchmark/params_df_gpu_$(GPU).json \
+		--params_json files_config/campaign/params_paper1.json \
 		--dataset_name DANINHAS --strategy_name SSRAEKmeansHCSampling \
 		--n_query 100 --n_init_labeled 100 --n_round 1 --seed 1 \
 		--device cuda --dir_results results/lab_check/
@@ -91,7 +93,7 @@ colab-setup:
 # pinned to GPU 0. Run once per session, right after `colab-setup`.
 colab-check:
 	CUDA_VISIBLE_DEVICES=0 poetry run python tools/trainer.py \
-		--params_json files_config/benchmark/params_df_gpu_0.json \
+		--params_json files_config/campaign/params_paper1.json \
 		--dataset_name DANINHAS --strategy_name SSRAEKmeansHCSampling \
 		--n_query 100 --n_init_labeled 100 --n_round 1 --seed 1 \
 		--device cuda --dir_results results/colab_check/

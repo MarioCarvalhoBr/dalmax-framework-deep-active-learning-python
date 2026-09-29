@@ -1,7 +1,7 @@
 """Tests for `dalmax.config.schema` and `dalmax.config.loader`.
 
 Covers: parsing the two existing on-disk params JSON files
-(`files_config/benchmark/params_df_gpu_0.json`, `files_config/params_micro.json`) unmodified,
+(`files_config/campaign/params_paper1.json`, `files_config/benchmark/params_df_gpu_0.json` for its CIFAR10 block, `files_config/params_micro.json`) unmodified,
 backward-compat `config_kmh` -> hierarchical `selection`, the
 no-`config_kmh`-no-`selection` -> `flat_closest` default (so a dataset like
 `CIFAR10` never gets an invalid `hierarchical`/`hierarchy=None` combination),
@@ -31,6 +31,7 @@ from dalmax.config.schema import (
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PARAMS_GPU_0 = REPO_ROOT / "files_config" / "benchmark" / "params_df_gpu_0.json"
+PARAMS_PAPER1 = REPO_ROOT / "files_config" / "campaign" / "params_paper1.json"
 PARAMS_MICRO = REPO_ROOT / "files_config" / "params_micro.json"
 
 
@@ -51,12 +52,12 @@ def _load(params_json: Path, dataset_name: str, **overrides) -> ExperimentConfig
 # --- Parsing existing on-disk params files, unmodified -----------------------
 
 
-def test_loads_daninhas_from_params_df_gpu_0_without_modifying_the_file():
-    original_text = PARAMS_GPU_0.read_text()
+def test_loads_daninhas_from_params_paper1_without_modifying_the_file():
+    original_text = PARAMS_PAPER1.read_text()
 
-    config = _load(PARAMS_GPU_0, "DANINHAS")
+    config = _load(PARAMS_PAPER1, "DANINHAS")
 
-    assert PARAMS_GPU_0.read_text() == original_text
+    assert PARAMS_PAPER1.read_text() == original_text
     assert config.dataset.name == "DANINHAS"
     assert config.dataset.data_dir == "DATA/daninhas_full/"
     assert config.dataset.n_classes == 5
@@ -73,7 +74,7 @@ def test_loads_daninhas_from_params_df_gpu_0_without_modifying_the_file():
     # No "embedding" key in the file -> defaults.
     assert config.dataset.embedding == EmbeddingConfig(extractor="ssrae", q=13, variant="full")
     assert config.device == "cpu"
-    assert config.params_json_path == str(PARAMS_GPU_0)
+    assert config.params_json_path == str(PARAMS_PAPER1)
 
 
 def test_loads_cifar10_from_params_df_gpu_0_defaults_selection_to_flat_closest():

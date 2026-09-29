@@ -93,6 +93,6 @@ scripts removed, hardware-agnostic (2026-09-29, ADR 0010). Details:
   the params JSON's `"embedding"`/`"selection"` blocks).
 - `--device {auto,cuda,cpu}` and `--embedding_variant {full,spatial,spectral}`
   are additional CLI flags on top of the original set.
-- One params JSON per lab GPU (`files_config/benchmark/params_df_gpu_0.json`,
-  `files_config/benchmark/params_df_gpu_1.json`),
+- `make lab-check`/`colab-check` use `files_config/campaign/params_paper1.json`; the legacy
+  `files_config/benchmark/params_df_gpu_{0,1}.json` are kept only for their CIFAR10 block (tests),
   used by `make lab-check`/`colab-check` (the reference sweep scripts were retired, ADR 0010).
