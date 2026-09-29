@@ -17,6 +17,8 @@ session must be captured here in the same task, not deferred.
 | [0005](0005-representation-strategy-and-registries.md) | One generic `RepresentationStrategy` + dict registries replacing the four fixed embedding-based strategy classes and the (now-deleted) `utils/orchestrator.py`'s if/elif chains | Accepted |
 | [0006](0006-checkpoint-format-and-inference-tools.md) | Self-describing `dalmax-checkpoint` format fixing the historical save/load bug, plus standalone inference tools (`predict.py`, `loader.py`, `gui.py`) and the `demo.py` → `trainer.py` rename | Accepted |
 | [0007](0007-per-method-ablation-layout.md) | Organize ablation configs/scripts/results by method (RNHAL vs. TexHAL) via a `METHOD` variable | Accepted |
+| [0008](0008-single-campaign-manifest-dedup.md) | One campaign manifest drives a single, deduplicated re-execution of all three papers (aliases, redundancy checker, `used_by`) | Accepted |
+| [0009](0009-shared-no-representation-run.md) | One shared "w/o representation module" run for papers 2 and 3 (and paper 1's KMH@100); supersedes the 2026-09-01 per-paper decision | Accepted |
 
 ## When to add a new ADR
 

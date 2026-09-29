@@ -22,6 +22,12 @@ EXPECTED_COMMAND_ORDER = [
     "poetry install",
     "make colab-setup",
     "make colab-check",
+    # 2026-09-29: the A100 full campaign (section 5b) is the recommended path and comes
+    # before the ablation-only section 6.
+    "make campaign-list",
+    "make campaign-run",
+    "make campaign-verify",
+    "make campaign-report",
     "make ablations-colab",
     "make ablation-report",
 ]
@@ -65,6 +71,20 @@ def test_parameters_cell_defines_drive_root() -> None:
     assert "DRIVE_ROOT" in first_source
 
 
+def test_parameters_cell_defines_campaign_part() -> None:
+    nb = _load_notebook()
+    code_cells = [c for c in nb["cells"] if c["cell_type"] == "code"]
+    first_source = "".join(code_cells[0]["source"])
+    assert 'PART = "all"' in first_source
+
+
+def test_campaign_cells_use_the_part_parameter() -> None:
+    nb = _load_notebook()
+    sources = ["".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "code"]
+    assert any("make campaign-run PART={PART}" in s for s in sources)
+    assert any("make campaign-verify PART={PART}" in s for s in sources)
+
+
 def test_key_commands_appear_in_expected_order() -> None:
     nb = _load_notebook()
     full_source = "\n".join(
@@ -88,5 +108,5 @@ def test_key_commands_appear_in_expected_order() -> None:
 def test_notebook_has_colab_gpu_metadata() -> None:
     nb = _load_notebook()
     assert nb["metadata"]["accelerator"] == "GPU"
-    assert nb["metadata"]["colab"]["gpuType"] == "T4"
+    assert nb["metadata"]["colab"]["gpuType"] == "A100"
     assert nb["metadata"]["kernelspec"]["name"] == "python3"

@@ -15,6 +15,34 @@ explicitly says "local notebook" (`.claude/rules/data-safety.md`,
 
 ---
 
+## Full campaign on the lab machine (2026-09-29)
+
+The A100 campaign (`files_config/campaign/manifest.json`, ADR 0008/0009,
+[`.specs/experiments/campaign-a100.md`](.specs/experiments/campaign-a100.md)) is the recommended
+way to (re-)execute everything the three papers need (192 runs / 64 groups: `paper1` 117,
+`upper_bound` 3, `rnhal` 42, `texhal` 30) on ONE environment; see `COLAB_RUNBOOK.md`'s "A100 full
+campaign" section for the step list (`make campaign-list` / `campaign-run` / `campaign-verify` /
+`campaign-report`). The lab machine has two GPUs, so the parts can run concurrently, one process per
+GPU (the runner reads `CUDA_VISIBLE_DEVICES`, default 0):
+
+```bash
+# tmux pane 1 (GPU 0): paper 1 (117 runs + upper bound)
+CUDA_VISIBLE_DEVICES=0 make campaign-run PART=paper1,upper_bound
+# tmux pane 2 (GPU 1): papers 2 and 3
+CUDA_VISIBLE_DEVICES=1 make campaign-run PART=rnhal,texhal
+# then, from either shell:
+make campaign-verify && make campaign-report
+```
+
+Papers 2/3's comparison tables read paper 1's `shared/*` runs (KMH@100, RandomSampling@100), so the
+report needs both panes finished. Each pane logs to its own `results/campaign_a100/campaign.log` (append)
+-- both processes share that file and the same `results/campaign_a100/` tree; groups never overlap
+between the two commands. **OOM note (10 GB GPUs)**: the same batch size (256) as every other run is
+used, including the `FullSupervised` upper bound (all 8,086 images, batch 256); if a job OOMs it is
+logged to `failures.log` and the batch continues -- do not lower the batch size silently (it would
+change the protocol); report it. `campaign-run` skips completed jobs, so a relaunch resumes.
+Wall-clock on the lab GPUs: TBD (unmeasured).
+
 ## 0. Prerequisites & one-time setup
 
 - [ ] **Check the GPUs are visible to the OS:**
@@ -240,7 +268,7 @@ three-paper plan):
   below documents that run.
 - **`METHOD=texhal`** — paper 2, VCTex + hierarchical k-means. Not yet run;
   12 configs (§6.1 has a 4th row, `rep_q13`, added 2026-08-30 per the VCTex
-  method authors — see `files_config/ablations/README.md`). Its own table is
+  method authors — see `files_config/ablations/README.md`; its "w/o representation" row is the campaign's shared run, ADR 0009, so the ablation scripts run 11). Its own table is
   in the "TexHAL (METHOD=texhal)" subsection below.
 
 Every `make ablations-gpu0`/`ablations-gpu1`/`ablations-all`/`ablations-colab`/
@@ -274,7 +302,7 @@ split across the two GPUs by `scripts/ablations/run_ablation_gpu_{0,1}.sh`:
 | 6.2 | L=3, k=[300,100,50] | `files_config/ablations/rnhal/hier_L3.json` | GPU 1 |
 | 6.2 | L=4, k=[300,100,50,25] | `files_config/ablations/rnhal/hier_L4.json` | GPU 1 |
 | 6.3 | RNHAL (full) | `files_config/ablations/rnhal/stage_full.json` | GPU 1 |
-| 6.3 | w/o representation module | `files_config/ablations/rnhal/stage_no_representation.json` | GPU 0 |
+| 6.3 | w/o representation module | `files_config/campaign/params_kmh.json` (shared run, ADR 0009 — campaign only, not in `run_ablation_gpu_*.sh`) | campaign |
 | 6.3 | w/o hierarchical module | `files_config/ablations/rnhal/stage_no_hierarchy.json` | GPU 1 |
 
 **IMPORTANT**: this executed batch's results live at the LEGACY root
@@ -292,7 +320,7 @@ ablation-report`.
 
 Same three sub-studies, but §6.1 sweeps VCTex's own multi-scale
 hyperparameter `Q` instead of an SSRAE spatial/spectral split (`slice_embedding`
-is SSRAE-only) — 4 rows instead of 3, so **12 configs / 36 runs** total. See
+is SSRAE-only) — 4 rows instead of 3, so 12 table rows (11 configs / 33 runs by the ablation scripts + the shared "w/o representation" run). See
 `.specs/experiments/ablation-study-texhal.md` and
 `files_config/ablations/README.md` for the full rationale.
 
@@ -308,10 +336,10 @@ is SSRAE-only) — 4 rows instead of 3, so **12 configs / 36 runs** total. See
 | 6.2 | L=3, k=[300,100,50] | `files_config/ablations/texhal/hier_L3.json` | GPU 1 |
 | 6.2 | L=4, k=[300,100,50,25] | `files_config/ablations/texhal/hier_L4.json` | GPU 1 |
 | 6.3 | TexHAL (full) | `files_config/ablations/texhal/stage_full.json` | GPU 1 |
-| 6.3 | w/o representation module | `files_config/ablations/texhal/stage_no_representation.json` | GPU 0 |
+| 6.3 | w/o representation module | `files_config/campaign/params_kmh.json` (the same shared run as RNHAL's, ADR 0009) | campaign |
 | 6.3 | w/o hierarchical module | `files_config/ablations/texhal/stage_no_hierarchy.json` | GPU 1 |
 
-GPU 0 gets 5 configs, GPU 1 gets 7 (the two extra §6.1 rows both land on
+GPU 0 gets 4 configs (5 before ADR 0009 removed `stage_no_representation`), GPU 1 gets 7 (the two extra §6.1 rows both land on
 GPU 1 — see `scripts/ablations/run_ablation_gpu_1.sh`'s header). VCTex
 per-run wall-clock is **unmeasured (TBD)** — VCTex's RAE extraction cost
 differs from SSRAE's (different input dimensionality: 27 vs 9 per patch, see
@@ -325,7 +353,7 @@ The rest of this section documents the executed RNHAL batch's numbers
 apply verbatim to `METHOD=texhal`, just with different expected wall-clock
 (TBD, see above) and, obviously, different (unexecuted) results.
 
-GPU 0 gets 5 configs, GPU 1 gets 6 — balanced by *expected relative cost*, not
+GPU 0 gets 4 configs (5 before ADR 0009 moved `stage_no_representation` to the campaign), GPU 1 gets 6 — balanced by *expected relative cost*, not
 raw count: hierarchical selection over a large/multi-level hierarchy dominates
 runtime, not training, so GPU 0's 5 configs include 3 of the heaviest
 (large/shared reference hierarchy) configs to offset having fewer configs

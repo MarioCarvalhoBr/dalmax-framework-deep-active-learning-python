@@ -26,6 +26,67 @@ and `METHOD=texhal` (paper 2, VCTex — not yet run, see
 accepts `METHOD` as an environment override; see §6's "Choosing the method"
 note.
 
+## A100 full campaign (2026-09-29) -- the recommended path for the final re-execution
+
+One manifest (`files_config/campaign/manifest.json`, see
+[`.specs/experiments/campaign-a100.md`](.specs/experiments/campaign-a100.md) and ADR 0008/0009)
+drives the single, deduplicated re-execution of **everything the three papers need** -- paper 1
+(12 classical strategies + KMH x n_query {10,50,100} + the `FullSupervised` upper bound), paper 2
+(TexHAL ablations, nq=100), paper 3 (RNHAL ablations incl. 5 new hierarchy rows, nq=100) -- with
+the same seeds (1,2,3) and protocol in one environment. **Use this instead of the ablation-only
+`make ablations-colab` (sections 6/7 below, kept for partial runs) for the final re-execution.**
+Sections 0-5 (runtime, Drive, clone, Poetry, `make colab-setup`, sanity checks) apply unchanged;
+then:
+
+1. **Select an A100 runtime** (Runtime -> Change runtime type -> GPU -> A100; Colab Pro). Section 0's
+   `!nvidia-smi` must list an A100.
+2. `!make campaign-list` -- prints the job table and the counts. Real numbers (full scale):
+
+   | Part | Runs | Run groups |
+   |---|---|---|
+   | `paper1` | 117 | 39 |
+   | `upper_bound` | 3 | 1 |
+   | `rnhal` | 42 | 14 |
+   | `texhal` | 30 | 10 |
+   | **Total** | **192** | **64** |
+
+3. **Check the environment before leaving it unattended**: the very first job of `PART=all` is the
+   cheapest one (RandomSampling, nq=100, seed 1, group `shared/random_nq100`). Start step 4 and, once
+   that first job has finished, verify that its `run_metadata.json` reports the A100:
+   ```
+   !python -c "import json,glob; m=json.load(open(glob.glob('results/campaign_a100/shared/random_nq100/*/SEED_1/*/RandomSampling/run_metadata.json')[0])); print(m['environment']['gpus'][0]['name'], m['determinism'])"
+   ```
+   `run_metadata.json` now records OS, CPU/RAM, GPU model/memory/driver, CUDA/cuDNN captured at
+   runtime (`environment.gpus[0].name`) plus a `determinism` block. It must say A100 (and
+   `deterministic_algorithms: true`) -- otherwise stop and fix the runtime.
+4. **Run everything**: `!make campaign-run PART=all`. Jobs run sequentially, skip-existing
+   (`results.json` present), logging to `results/campaign_a100/campaign.log` and failures to
+   `results/campaign_a100/failures.log` (the batch continues after a failure). **Resume after a
+   disconnect = redo sections 0-4 and re-run the same command** (`results/` is the Drive symlink of
+   `make colab-setup`). Order: paper 1 at nq100 first (shared runs land early), then rnhal, texhal,
+   paper 1 at nq50 and nq10, then the upper bound.
+5. **Per-part launches** to split across sessions: `!make campaign-run PART=paper1`,
+   `PART=rnhal`, `PART=texhal`, `PART=upper_bound` (comma-separated works: `PART=rnhal,texhal`).
+   Papers 2/3 comparison tables need paper 1's `shared/*` runs and `shared/texhal_full`, so run
+   `paper1` and `texhal` before reporting.
+6. **Monitor**: `!tail -n 30 results/campaign_a100/campaign.log` and
+   `!cat results/campaign_a100/failures.log`.
+7. **Verify**: `!make campaign-verify` -- OK/INCOMPLETE/MISSING per job with the same artifact checks
+   as `results_doctor`, plus the **seed-consistency audit** (for every seed, all runs must have
+   started from the identical initial labeled set; PASS/FAIL per seed, offenders listed).
+   `!make campaign-verify PART=rnhal` restricts to one part. Re-run failed jobs by re-running
+   `campaign-run` (only missing ones execute).
+8. **Report**: `!make campaign-report` writes `docs/results/campaign_a100/` (per-paper tables in md/tex,
+   `summary.csv`, `seed_audit.md`, mean confusion matrices under `confusion_matrices/`), then copy to
+   Drive: `!cp -r docs/results/campaign_a100 "$DRIVE_ROOT/results/campaign_a100_tables"`.
+
+**Wall-clock: TBD** (A100 unmeasured; the T4 reference is about 9-10 min per ablation-config run;
+the adversarial/dropout baselines are likely slower -- unmeasured). Record the measured hours here
+after the first full run.
+
+The upper bound (`FullSupervised`) trains once on all 8,086 pool images (ResNet-50, 10 epochs, batch
+256) -- if Colab OOMs, lower nothing silently: report it, it is the same batch size as every other run.
+
 ## Architecture decision: hybrid local-disk + Drive-symlink layout
 
 Colab Pro gives one GPU per session (T4/L4/A100, varies) and **no guaranteed
@@ -250,7 +311,7 @@ Only proceed to §6 once all of the above pass.
 
 Two suites, same as `LAB_RUNBOOK.md` §2: `METHOD=rnhal` (default, paper 3,
 SSRAE — **already executed**, 11 configs / 33 runs) and `METHOD=texhal`
-(paper 2, VCTex — not yet run, 12 configs / 36 runs, §6.1 has a 4th row
+(paper 2, VCTex — not yet run, 11 configs / 33 runs by these scripts (the "w/o representation" row is the campaign's shared run, ADR 0009), §6.1 has a 4th row
 `rep_q13` per the VCTex method authors). Pass `METHOD` as an environment
 variable to every cell below, e.g. `!METHOD=texhal make ablations-colab`.
 Results land under `results/ablations/${METHOD}/`, logs under

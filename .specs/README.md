@@ -43,12 +43,15 @@ decisions** (ADRs) about the codebase supporting that research. Hence:
 │   ├── 0003-embedding-provider-abstraction.md              # [owned elsewhere]
 │   ├── 0004-micro-dataset-and-golden-run.md                # [owned elsewhere]
 │   ├── 0005-representation-strategy-and-registries.md      # [owned elsewhere]
+│   ├── 0008-single-campaign-manifest-dedup.md              # one manifest, aliases, redundancy checker
+│   ├── 0009-shared-no-representation-run.md                # one shared "w/o representation" run (supersedes 2026-09-01)
 │   └── template.md                       # [owned elsewhere]
 ├── experiments/
 │   ├── experimental-protocol.md          # datasets, splits, seeds, budgets, metrics, results layout
 │   ├── ablation-study.md                 # RNHAL (paper 3) ablation spec (representation / hierarchy / stage-contribution) — EXECUTED
 │   ├── ablation-study-texhal.md          # TexHAL (paper 2) ablation spec, same structure — materialized, not yet run
 │   ├── papers-roadmap.md                 # the three-paper plan (DAL benchmark / TexHAL / RNHAL) and how it maps onto the codebase
+│   ├── campaign-a100.md                  # the single deduplicated A100 re-execution of all three papers (manifest, dedup table, counts, commands)
 │   └── baseline-results.md               # where existing results/ runs live, what they cover
 ├── research-rules/
 │   ├── reproducibility.md                # seed policy, cache policy, config snapshot per run
