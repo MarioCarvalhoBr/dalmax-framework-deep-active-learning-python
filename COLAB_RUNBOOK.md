@@ -211,8 +211,10 @@ tree living on Drive):
 ```python
 !make colab-check
 ```
-This is the same check as `LAB_RUNBOOK.md` §1's `make lab-check`, pinned to
-Colab's single GPU 0. Expect artifacts under
+This is the same check as `LAB_RUNBOOK.md` §1's `make lab-check` (both use
+`files_config/campaign/params_paper1.json`), pinned to Colab's single GPU 0. The notebook's
+next cell prints the GPU name/memory/driver/CUDA from that run's `run_metadata.json`:
+**confirm it is the GPU you intended before launching the campaign.** Expect artifacts under
 `results/colab_check/daninhas_full/SEED_1/NQ_100_NIL_100_NR_1_NE_10/SSRAEKmeansHCSampling/`
 (`results.json`, `predictions.csv`, `run_metadata.json`, plots,
 `saved_model.pth`, `log-dalmax.log`) — see `LAB_RUNBOOK.md` §1 for the full
@@ -260,29 +262,29 @@ seeds (1,2,3) and one protocol in one environment. Sections 0-5 (runtime, Drive,
    | `texhal` | 30 | 10 |
    | **Total** | **192** | **64** |
 
-2. **Run everything**: `!make campaign-run PART=all`. Jobs run sequentially, skip-existing (a job is
+2. **Run a part** (or everything with `PART=all`): `!make campaign-run PART=paper1`. Jobs run sequentially, skip-existing (a job is
    done only when its leaf holds the **full** artifact set; `results.json` is written last),
    logging to `results/campaign/campaign.log` and failures to `results/campaign/failures.log`
    (the batch continues after a failure). **Resume after a disconnect = redo sections 0-4 and
    re-run the same command** (`results/` is the Drive symlink of `make colab-setup`). Order: paper 1
    at nq100 first (shared runs land early), then rnhal, texhal, paper 1 at nq50 and nq10, then the
    upper bound.
-3. **Check the environment before leaving it unattended**: the very first job of `PART=all` is the
-   cheapest one (RandomSampling, nq=100, seed 1, group `shared/random_nq100`). Once it has finished,
-   verify that its `run_metadata.json` reports the GPU you expect:
-   ```
-   !python -c "import json,glob; m=json.load(open(glob.glob('results/campaign/shared/random_nq100/*/SEED_1/*/RandomSampling/run_metadata.json')[0])); print(m['environment']['gpus'][0]['name'], m['determinism'])"
-   ```
-   It prints `<gpu-name>` (whatever Colab assigned; `environment.gpus[0].name`) and the `determinism`
-   block (`deterministic_algorithms: "warn_only"`, cuDNN flags, cuBLAS workspace,
-   `nondeterministic_op_warnings`). If `gpus` is empty, the runtime has no GPU -- stop and fix it.
-   Determinism is best-effort: an op without a deterministic kernel only warns and is listed in
-   `nondeterministic_op_warnings`; re-runs on a different GPU model are not bit-identical.
-4. **Per-part launches** to split across sessions: `!make campaign-run PART=paper1`,
-   `PART=rnhal`, `PART=texhal`, `PART=upper_bound` (comma-separated works: `PART=rnhal,texhal`).
+3. **Check the environment before leaving it unattended**: the notebook prints the GPU identity
+   right after `!make colab-check` (section 5), from that run's `run_metadata.json`
+   (`environment.gpus[0]`: name, `total_memory_gb`, `driver_version`; `environment.torch.cuda`; the
+   `determinism` block). Confirm it is the GPU you intended **before launching the campaign**. If
+   `gpus` is empty, the runtime has no GPU -- stop and fix it. Every campaign run records the same
+   block, so the GPU used is always recoverable per run. Determinism is best-effort: an op without a
+   deterministic kernel only warns and is listed in `nondeterministic_op_warnings`; re-runs on a
+   different GPU model are not bit-identical.
+4. **Per-part launches** to split across sessions (the notebook defaults to `PART = "paper1"`).
+   Recommended order: `PART=paper1` (117 runs), `PART=rnhal` (42), `PART=texhal` (30),
+   `PART=upper_bound` (3); comma-separated works (`PART=rnhal,texhal`). Re-running the same `PART`
+   resumes (completed runs are skipped), so a disconnect loses at most the run in progress.
    Papers 2/3 comparison tables need paper 1's `shared/*` runs and `shared/texhal_full`, so run
    `paper1` and `texhal` before reporting.
-5. **Monitor**: `!tail -n 30 results/campaign/campaign.log` and `!cat results/campaign/failures.log`.
+5. **Progress / monitor** (the notebook's Progress cell): `!make campaign-verify PART=...` plus
+   `!tail -n 20 results/campaign/campaign.log`; failures go to `results/campaign/failures.log`.
 6. **Verify**: `!make campaign-verify` -- OK/INCOMPLETE/MISSING per job with the artifact checks of
    `dalmax/reporting/leaf_check.py`, plus the **seed-consistency audit** (for every seed, all runs
    must have started from the identical initial labeled set; PASS/WARN/FAIL per seed, offenders

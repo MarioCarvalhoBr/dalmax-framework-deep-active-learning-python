@@ -72,7 +72,8 @@ def test_parameters_cell_defines_campaign_part() -> None:
     nb = _load_notebook()
     code_cells = [c for c in nb["cells"] if c["cell_type"] == "code"]
     first_source = "".join(code_cells[0]["source"])
-    assert 'PART = "all"' in first_source
+    assert 'PART = "paper1"' in first_source
+    assert "resumes" in first_source
 
 
 def test_campaign_cells_use_the_part_parameter() -> None:
@@ -80,6 +81,36 @@ def test_campaign_cells_use_the_part_parameter() -> None:
     sources = ["".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "code"]
     assert any("make campaign-run PART={PART}" in s for s in sources)
     assert any("make campaign-verify PART={PART}" in s for s in sources)
+
+
+def test_gpu_identity_check_runs_right_after_colab_check() -> None:
+    nb = _load_notebook()
+    sources = ["".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "code"]
+    check_idx = next(i for i, s in enumerate(sources) if "make colab-check" in s)
+    run_idx = next(i for i, s in enumerate(sources) if "make campaign-run" in s)
+    gpu_idx = next(i for i, s in enumerate(sources) if "results/colab_check/" in s and "run_metadata.json" in s)
+    assert check_idx < gpu_idx < run_idx
+    # The old post-campaign check assumed a specific run group existed.
+    assert not any("shared/random_nq100" in s for s in sources)
+
+
+def test_progress_cell_present() -> None:
+    nb = _load_notebook()
+    sources = ["".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "code"]
+    assert any("campaign.log" in s and "campaign-verify PART={PART}" in s for s in sources)
+
+
+def test_every_make_target_in_notebook_exists() -> None:
+    import re
+
+    makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    targets = set(re.findall(r"^([A-Za-z0-9_-]+):", makefile, flags=re.M))
+    nb = _load_notebook()
+    for cell in nb["cells"]:
+        if cell["cell_type"] != "code":
+            continue
+        for target in re.findall(r"!make ([A-Za-z0-9_-]+)", "".join(cell["source"])):
+            assert target in targets, f"notebook uses missing make target {target!r}"
 
 
 def test_key_commands_appear_in_expected_order() -> None:
