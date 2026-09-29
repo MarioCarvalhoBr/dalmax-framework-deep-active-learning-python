@@ -23,6 +23,7 @@ import torch
 
 from dalmax.config.loader import to_dict
 from dalmax.config.schema import ExperimentConfig
+from dalmax.experiment.environment import collect_environment
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -68,6 +69,7 @@ def snapshot(config: ExperimentConfig, *, started_at: str | None = None) -> dict
         "torch_version": torch.__version__,
         "cuda_available": torch.cuda.is_available(),
         "started_at": started_at or datetime.now(timezone.utc).isoformat(),
+        "environment": collect_environment(),
     }
 
 

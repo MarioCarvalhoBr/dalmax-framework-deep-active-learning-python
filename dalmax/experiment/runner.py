@@ -26,6 +26,7 @@ import numpy as np
 
 from dalmax.config.schema import ExperimentConfig
 from dalmax.data.registry import get_dataset
+from dalmax.experiment.environment import summarize_environment
 from dalmax.experiment.run_metadata import snapshot, write_run_metadata
 from dalmax.models.registry import get_network
 from dalmax.query_strategies.base import Strategy
@@ -86,7 +87,9 @@ class ExperimentRunner:
         os.makedirs(dir_results, exist_ok=True)
         logger.warning(f"Results directory: {dir_results}")
 
-        write_run_metadata(dir_results, snapshot(config))
+        metadata = snapshot(config)
+        write_run_metadata(dir_results, metadata)
+        logger.warning(summarize_environment(metadata["environment"]))
 
         # Seed every global RNG source exactly once, before any
         # dataset/model/strategy object is constructed (`dalmax.seeding`
@@ -136,13 +139,13 @@ class ExperimentRunner:
         logger.warning(f"Round 0 f1_score: {result.all_f1_score[-1]}")
 
         for rd in range(1, config.n_round + 1):
-            logger.warning("==========================================================================>")
+            logger.warning(
+                "==========================================================================>"
+            )
             logger.warning(f"Round {rd}")
 
             query_idxs = strategy.query(config.n_query)
-            logger.warning(
-                f"Round {rd} query_idxs (sorted): {sorted(int(i) for i in query_idxs)}"
-            )
+            logger.warning(f"Round {rd} query_idxs (sorted): {sorted(int(i) for i in query_idxs)}")
 
             strategy.update(query_idxs)
             strategy.info()

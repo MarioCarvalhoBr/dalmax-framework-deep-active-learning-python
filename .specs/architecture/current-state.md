@@ -207,4 +207,4 @@ The naming convention and file set are byte-for-byte unchanged from the pre-refa
 results directory (via `ExperimentRunner.run`, before the round loop starts) containing: the
 fully-resolved `ExperimentConfig` as a JSON-serializable dict (`to_dict`), `git_commit`
 (best-effort `git rev-parse HEAD`, `None` if unavailable), `python_version`, `torch_version`,
-`cuda_available`, and `started_at` (UTC ISO-8601). See `research-rules/reproducibility.md`.
+`cuda_available`, `started_at` (UTC ISO-8601), and `environment` (from `dalmax/experiment/environment.py::collect_environment`: `os`, `machine`, `python`, `torch`, `gpus[]`, `cuda_visible_devices`, `current_device`, `runtime`; best-effort, null on probe failure, no hostname). See `research-rules/reproducibility.md`.

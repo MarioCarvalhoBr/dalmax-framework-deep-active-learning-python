@@ -102,8 +102,7 @@ KI-10, KI-13 through KI-20, KI-22, KI-24 through KI-29, and KI-33 (KI-22 fixed 2
 `dalmax/models/checkpoint.py`, ADR 0006 — see that row for why every checkpoint saved before this
 fix is unrecoverable, not just the ones affected by a bug that is still open; KI-33 fixed
 2026-08-25, `dalmax/__init__.py::_ensure_matplotlib_backend()`). The remaining **8 are open**:
-KI-11, KI-12 (partially — comments/type hints), KI-21, KI-23, KI-30, KI-31, KI-32, and the new
-KI-34 (`run_metadata.json` missing the GPU model). Treat the per-row tables above as the source of
+KI-11, KI-12 (partially — comments/type hints), KI-21, KI-23, KI-30, KI-31, and KI-32 (KI-34, the missing GPU model, was resolved 2026-09-29). Treat the per-row tables above as the source of
 truth over this summary if they ever disagree after future edits.
 
 **Phase 4 resolution summary (2026-08-23, this docs-sync batch)**: Phase 4's physical move-and-delete
@@ -140,7 +139,9 @@ configured `module://` backend is unimportable; valid/absent values untouched) +
 in the ablation/Colab batch scripts. Regression test: `tests/test_matplotlib_backend.py` (subprocess
 reproduction of the Colab environment). Documented in `COLAB_RUNBOOK.md` §8.
 
-### KI-34 — `run_metadata.json` does not record the GPU model (OPEN)
+### KI-34 — `run_metadata.json` does not record the GPU model (RESOLVED 2026-09-29)
+
+**Resolved 2026-09-29**: `snapshot()` now adds a top-level `environment` block from `dalmax/experiment/environment.py::collect_environment()` (best-effort, runtime-probed, failures -> null): `os` (system/release/version/platform/distro), `machine` (arch/cpu_model/cpu_count/ram_total_gb), `python`, `torch` (version/cuda/cudnn/cuda_available), `gpus[]` (index/name/total_memory_gb/compute_capability/multi_processor_count/driver_version/nvidia_smi_name/memory_total_mib), `cuda_visible_devices`, `current_device`, `runtime` (is_colab/colab_release_tag). Hostname is deliberately not recorded. A one-line summary is also logged at run start. Original report follows.
 
 **Found**: 2026-08-26, while reconciling the Phase 3 ablation batch (executed on a Google Colab Pro
 T4) against the pre-Phase-2 lab-machine reference runs and the same-config re-run across two
@@ -167,5 +168,4 @@ run-to-run variance" from `run_metadata.json` alone is a genuine reproducibility
 `implementer` the next time `dalmax/experiment/run_metadata.py` is touched.
 
 **Severity**: Low-Medium — does not affect correctness of any result, only the ability to audit
-*why* two nominally-identical runs differ after the fact. | Open | Planned (one-line addition to
-`dalmax/experiment/run_metadata.py::write_run_metadata`, not yet implemented).
+*why* two nominally-identical runs differ after the fact. | Resolved 2026-09-29 | Fixed (`environment` block, see above).

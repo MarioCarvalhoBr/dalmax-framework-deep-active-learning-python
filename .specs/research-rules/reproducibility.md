@@ -109,7 +109,7 @@ Each is written **only if the file does not already exist**
 writes `run_metadata.json` into every results directory (called from `ExperimentRunner.run()` before
 the round loop starts), containing the fully-resolved config (`to_dict(config)` — every field, not
 just the subset `results.json` records), a best-effort `git_commit` (`git rev-parse HEAD`, `None` if
-unavailable), Python/torch versions, CUDA availability, and the UTC start timestamp. This closes
+unavailable), Python/torch versions, CUDA availability, the UTC start timestamp, and (2026-09-29, KI-34) a top-level `environment` block (`dalmax/experiment/environment.py`): `os`, `machine` (CPU model/count, RAM GB), `python`, `torch` (version/CUDA/cuDNN), `gpus[]` (name, memory GB, compute capability, SM count, driver, nvidia-smi name/MiB), `cuda_visible_devices`, `current_device`, `runtime.is_colab`; hostname is never recorded. This closes
 every gap the original text below (kept for historical context) described. `results.json` itself is
 also more complete now: it gained `all_precision_macro`/`all_recall_macro`/`all_f1_macro` (additive,
 see `research-rules/metrics.md`), though it still does not duplicate the full params JSON —

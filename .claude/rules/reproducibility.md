@@ -43,7 +43,7 @@ locations.
   writes `run_metadata.json` into every results directory
   (`{dir_results}/{dataset}/SEED_{seed}/NQ_{n_query}_NIL_{n_init}_NR_{n_round}_NE_{n_epoch}/{strategy}/`),
   containing the fully-resolved config (`to_dict(config)`), a best-effort `git_commit`, Python/torch
-  versions, CUDA availability, and start timestamp — called from `ExperimentRunner.run()` before the
+  versions, CUDA availability, start timestamp, and an `environment` block (OS, CPU/RAM, GPU model/memory/driver, CUDA/cuDNN, Colab flag; `dalmax/experiment/environment.py`, KI-34; never the hostname) — called from `ExperimentRunner.run()` before the
   round loop starts. `results.json`, `predictions.csv`, plots, and `log-dalmax.log` are unchanged;
   `run_metadata.json` is the new artifact that closes the gap this section originally flagged (see
   `.specs/quality/known-issues.md` KI-1, and `current-state.md` §8 for the exact field list).
