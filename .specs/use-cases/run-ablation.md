@@ -1,79 +1,48 @@
 # Use case: run the ablation study
 
-Full specification: `experiments/ablation-study.md` — read it first, including its "Materialized
-files" section mapping every run-table row to its actual params JSON and GPU script.
+Full specification: `experiments/ablation-study.md` (RNHAL, paper 3) and
+`experiments/ablation-study-texhal.md` (TexHAL, paper 2) -- read the relevant one first, including its
+"Materialized files" section mapping every run-table row to its params JSON.
 
-**Status update (2026-08-23, Phase 3 landed): every config and script is materialized, not just
-JSON snippets in a spec file.** `files_config/ablations/*.json` (11 files, one per run-table row)
-plus `files_config/ablations/micro/*.json` (CPU smoke mirrors) exist on disk, validated by
-`tests/test_ablation_configs.py` and smoke-tested end-to-end by `make smoke-ablations` (11/11
-passing on the local CPU-only dev notebook against `DATA/daninhas_micro/`).
-`scripts/ablations/run_ablation_gpu_0.sh` / `run_ablation_gpu_1.sh` are the actual lab-machine
-entry points (mirroring `scripts/benchmark/run_pipe_gpu_0.sh`/`scripts/benchmark/run_pipe_gpu_1.sh`'s style), splitting the 11 configs
-across the two GPUs by expected cost. This use case is now purely operational: what remains is
-running these two scripts on the lab machine (never locally — no GPU here, per
-`.specs/infrastructure/execution-environments.md`) and aggregating with
-`dalmax.reporting.ablation_report`.
+**Since 2026-09-29 (ADR 0010) the ablations run only through the campaign** (`experiments/campaign.md`);
+the per-GPU ablation scripts, `make ablations-*`/`ablation-report*`/`smoke-ablations` and
+`dalmax.reporting.ablation_report` were removed. The configs are unchanged and still live in
+`files_config/ablations/{rnhal,texhal}/` (+ `micro/` CPU mirrors, validated by
+`tests/test_ablation_configs.py`); the manifest references them.
 
 ## Order of operations
 
-1. **Pre-flight: smoke-test locally first.** `make smoke-ablations` (or `bash
-   scripts/ablations/smoke_ablations.sh`) runs all 11 configs against `DATA/daninhas_micro/` in
-   under two minutes on CPU. Always green this before touching the lab machine — it exercises the
-   exact same `RepresentationStrategy` code path (embedding provider, selection strategy, hierarchy
-   depth) each full-scale config uses, just at micro scale.
-2. **Metrics — already correct.** Every run through `dalmax.cli`/`demo.py` (historical) writes both weighted and
-   macro F1 into `results.json` (`all_f1_score`/`all_f1_macro`) — see `research-rules/metrics.md`.
-   The one remaining offline step: **pre-Phase-2 reference runs** (`results/dalmax{1,2}/`, an
-   alternative source for §6.3's "RNHAL (full)" row if `stage_full.json`'s own re-run is not used)
-   predate this fix and only have weighted F1 — recompute macro F1 for those specific runs offline
-   from their `predictions.csv`, do not re-run them.
-3. **Run the two lab scripts** (one per GPU, both survive an individual config's failure and log it
-   instead of aborting the batch — check `results/ablations/gpu{0,1}_failures.log` afterward):
+1. **Pre-flight: smoke-test locally first.** `make campaign-smoke` runs every campaign group once on
+   `DATA/daninhas_micro/` (CPU, seed 1; the two adversarial baselines are skipped by default), including
+   all ablation configs through the same `RepresentationStrategy` code path as the full-scale runs.
+   Confirm with `make campaign-verify MICRO=1 SEEDS=1`.
+2. **Run on a GPU machine** (never locally -- no GPU here, `infrastructure/execution-environments.md`):
    ```bash
-   # GPU 0: rep_full, rep_spatial, hier_L1, hier_L2b (4 configs; stage_no_representation is the campaign's shared run, ADR 0009)
-   bash scripts/ablations/run_ablation_gpu_0.sh
-
-   # GPU 1: rep_spectral, stage_full, stage_no_hierarchy, hier_L2a, hier_L3, hier_L4 (6 configs)
-   bash scripts/ablations/run_ablation_gpu_1.sh
+   make campaign-run PART=rnhal      # paper 3: 14 groups x 3 seeds = 42 runs
+   make campaign-run PART=texhal     # paper 2: 10 groups x 3 seeds = 30 runs
    ```
-   Both sweep `SEEDS=(1 2 3)`, `n_query=100`, `n_round=8`, `n_init_labeled` left at the CLI default
-   (100, per `experimental-protocol.md`), `--device cuda`, `--strategy_name RepresentationStrategy`.
-   Each config writes to its own `results/ablations/<study>/<config>/` subtree (11 × 3 = 33 total
-   runs), so `dalmax.reporting.ablation_report` can walk it directly — see
-   `run_ablation_gpu_0.sh`'s header comment for the full GPU-split cost rationale (hierarchical
-   selection with large/multi-level hierarchies dominates runtime, not training).
-4. **Aggregate**:
-   ```bash
-   poetry run python -m dalmax.reporting.ablation_report \
-     --root results/ablations --out paper_drafts/ablation_tables
-   ```
-   Writes `ablation_summary.csv` (final-round and across-rounds-mean macro/weighted F1, mean ± std
-   across seeds, per config) and one booktabs `ablation_6_{1,2,3}.tex` / `.md` per sub-study — a
-   config with zero discovered runs renders `TBD` rather than being silently dropped, so partial
-   lab-machine progress is always visible in the table shape. `paper_drafts/` is gitignored, so
-   re-running this after each lab-machine batch is safe and idempotent.
+   Skip-existing makes a relaunch resume (a job is done only when its leaf holds every artifact;
+   `results.json` is written last). Failures go to `results/campaign/failures.log` and the batch continues.
+3. **Verify**: `make campaign-verify PART=rnhal` (per-job OK/INCOMPLETE/MISSING + seed audit; exit 0/1/2).
+4. **Report**: `make campaign-report` writes `docs/results/campaign/paper{2,3}/` tables (md/tex, weighted
+   and macro F1, `TBD` for missing rows) plus `summary.csv` and mean confusion matrices. Papers 2/3
+   comparison tables also need paper 1's `shared/*` runs (`make campaign-run PART=paper1`).
 
 ## Verification before trusting results
 
-Before treating any ablation run's F1 as final, an `experiment-auditor`-style pass
-(`.claude/agents/experiment-auditor.md`) should check: (a) `run_metadata.json` in the results
-directory actually shows the intended `embedding`/`selection` config (not just the CLI args — the
-full resolved config is right there now, no need to infer it from the params JSON filename), (b)
-the cache file actually used (`results/cache/embeddings/{dataset}__{extractor}__Q{q}__{variant}__{split}__pool{hash}.pkl`,
-visible in the run log via `RepresentationStrategy`'s "Embedding matrix shape" log line) matches the
-intended `Q`/`embedding_variant`/dataset combination, (c) the `hierarchy` used matches the intended
-row of the §6.2 table exactly (`n_levels`, `n_clusters`, `sample_sizes` — also visible in
-`run_metadata.json`'s `config.dataset.selection.hierarchy`), (d) `all_f1_macro` (not
-`all_f1_score`, which stays weighted) is what gets reported — see `research-rules/metrics.md`, and
-(e) `results/ablations/gpu{0,1}_failures.log` is empty (or every failure logged there has been
-re-run and now succeeded) for the batch being reported on.
+Check per run (`.claude/agents/experiment-auditor.md`): (a) `run_metadata.json` shows the intended
+`embedding`/`selection` config, (b) the embedding cache file actually used
+(`results/cache/embeddings/{dataset}__{extractor}__Q{q}__{variant}__{split}__pool{hash}.pkl`) matches the
+intended `Q`/variant/dataset, (c) the hierarchy matches the §6.2 row (`config.dataset.selection.hierarchy`),
+(d) `all_f1_macro` (not the weighted `all_f1_score`) is what gets reported -- `research-rules/metrics.md`,
+(e) `results/campaign/failures.log` is empty or every failure has been re-run, and (f)
+`determinism.nondeterministic_op_warnings` in `run_metadata.json` is understood (GPU determinism is
+best-effort, `research-rules/reproducibility.md`).
 
 ## Aggregation and paper hand-off
 
-`dalmax.reporting.ablation_report` (step 4 above) is the current tool for this sweep specifically —
-it supersedes `dalmax/reporting/chunk_results.py` /
-`average_results.py` for the ablation family (those remain the tool for the main
-`results/dalmax{1,2}/` sweeps, per `use-cases/generate-report.md`). Map the resulting
-`ablation_6_{1,2,3}.tex` tables to the correct paper location per
-`experiments/ablation-study.md`'s "Mapping to the paper's `\subsubsection`s" table.
+`dalmax.reporting.campaign_report` supersedes the old ablation reporter. Map the resulting
+`docs/results/campaign/paper{2,3}/6_{1,2,3}.tex` tables to the paper per
+`experiments/ablation-study.md`'s "Mapping to the paper's `\subsubsection`s" table. The 2026-08-26
+RNHAL batch (33 runs, legacy `results/ablations/`) and its tables in `docs/results/ablation_tables/`
+remain as history.

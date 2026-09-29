@@ -8,15 +8,15 @@ is available locally.
 For the lab machine, this file is the architecture/decision-matrix source of
 truth; **[`LAB_RUNBOOK.md`](../../LAB_RUNBOOK.md)** (repo root) is the
 operator-facing step-by-step guide built on top of it — one-time setup,
-dataset transfer, sanity checks, the Phase 3 ablation batch launch/monitoring,
-and results collection, all via the `make lab-setup`/`lab-check`/
-`ablations-gpu{0,1}`/`ablations-all`/`ablation-report`/`benchmark-gpu{0,1}`/
-`micro-dataset` targets.
+dataset transfer, sanity checks, the campaign launch/monitoring,
+and results collection, via the `make lab-setup`/`lab-check`/`campaign-*`/
+`micro-dataset` targets (the per-GPU ablation/benchmark scripts and targets were removed on
+2026-09-29, ADR 0010: the campaign is the only run path).
 
 For Google Colab Pro, **[`COLAB_RUNBOOK.md`](../../COLAB_RUNBOOK.md)** (repo
 root) is the equivalent operator-facing guide (numbered notebook cells), built
 on top of the "Colab: hybrid local-disk + Drive-symlink layout" section below,
-via the `make colab-setup`/`colab-check`/`ablations-colab` targets.
+via the `make colab-setup`/`colab-check`/`campaign-run` targets.
 [`notebooks/colab_runbook.ipynb`](../../notebooks/colab_runbook.ipynb) is the
 runnable notebook generated to mirror `COLAB_RUNBOOK.md` cell-for-cell (that
 file stays the source of truth).
@@ -29,8 +29,8 @@ Read this before the first lab-machine run after pulling Phase 2 (`refactor/phas
   which resolves to `"cuda"` iff `torch.cuda.is_available()` — this should always be true on the lab
   machine, but do not rely on `auto` silently doing the right thing during a batch you cannot watch
   live (e.g. if CUDA drivers are misconfigured, `auto` would silently fall back to `cpu` and the run
-  would be extremely slow rather than failing loudly). Add `--device cuda` to
-  `scripts/benchmark/run_pipe_gpu_0.sh`/`scripts/benchmark/run_pipe_gpu_1.sh` (and any new ablation run scripts) explicitly.
+  would be extremely slow rather than failing loudly). `dalmax.campaign run` passes `--device cuda` by default (cpu with `--micro`); pass it explicitly to any
+  hand-written `tools/trainer.py` invocation.
 - **`num_workers`/`worker_init_fn` landmine if augmentation is re-enabled.** `dalmax/data/handlers.py`
   (was `utils/dataset.py`) currently has every stochastic `transforms.Random*` augmentation commented
   out, so `train_args`/`test_args`' `num_workers=4` (DANINHAS) / `num_workers=1` (CIFAR10) is safe
@@ -61,8 +61,8 @@ Read this before the first lab-machine run after pulling Phase 2 (`refactor/phas
 | Environment | Hardware | Role | Allowed operations |
 |---|---|---|---|
 | **Local dev notebook** (this machine) | 16 GB RAM, **no GPU**, Python 3.12, Poetry 2.2.1 | Coding, code review, spec/doc authoring, smoke tests on tiny subsets, report generation from results already copied back | `poetry` commands, `ruff`, `pytest` (fast tests only), `python -c` import checks, `dalmax/reporting/*.py` against already-present `results/` data, `make smoke` (see below). **Never** a real training run — no GPU, and a full `daninhas_full` epoch would be impractically slow on CPU. |
-| **Lab machine** (primary training) | 2× NVIDIA GPUs, **10 GB VRAM each** | All real experiment execution: baseline sweeps, RNHAL reference runs, and (once implemented) the ablation study runs | `scripts/benchmark/run_pipe_gpu_0.sh` (GPU 0, `files_config/benchmark/params_df_gpu_0.json` → `results/dalmax1/`), `scripts/benchmark/run_pipe_gpu_1.sh` (GPU 1, `files_config/benchmark/params_df_gpu_1.json` → `results/dalmax2/`), long-lived via `tmux`/`nohup`; `ExperimentNotifier/main.py` sends an email after each script's full battery completes. |
-| **Google Colab Pro** | Single GPU (T4/L4/A100, varies; **measured on a T4, 2026-08-25/26**), session-limited, no guaranteed background execution, burst/secondary | One-off runs, retries of a specific config, or running the full Phase 3 ablation sweep sequentially on one GPU when the lab machine is busy | `make colab-setup` (repo/`.venv`/`DATA/daninhas_full` on the runtime's local disk for fast reads and a normal `poetry install`; `results/` replaced by a symlink to Drive so artifacts survive a disconnect — see "Colab: hybrid local-disk + Drive-symlink layout" below), then `make colab-check` / `make ablations-colab` (both scripts/ablations/run_ablation_gpu_{0,1}.sh halves, `SKIP_EXISTING=1` by default so a relaunch after a disconnect only re-runs incomplete `(study, config, seed)` triples). See [`COLAB_RUNBOOK.md`](../../COLAB_RUNBOOK.md). **Measured timing (Phase 3 ablation batch, one T4, 33 runs)**: ~5 h 15 min total wall-clock including one disconnect/relaunch, ~9-10 min/run, ~10 GB VRAM at `batch_size=256` — this is close to the 10 GB lab GPUs' full capacity, so a Colab-sized batch run on the lab machine carries real **OOM risk** and should not be assumed to fit headroom-free alongside another job on the same GPU. |
+| **Lab machine** (primary training) | One or more GPUs (count/model not assumed; recorded per run in `run_metadata.json`) | All real experiment execution: the campaign (paper-1 benchmark, upper bound, RNHAL/TexHAL ablations) | `make campaign-run PART=...` (one process per GPU with `CUDA_VISIBLE_DEVICES`, disjoint `PART`s), long-lived via `tmux`/`nohup`. |
+| **Google Colab Pro** | Single GPU (model varies per session and is recorded in each run's `run_metadata.json`; see the 2026-08-25/26 measured record below), session-limited, no guaranteed background execution, burst/secondary | One-off runs, retries of a specific job, or the whole campaign sequentially on one GPU when the lab machine is busy | `make colab-setup` (repo/`.venv`/`DATA/daninhas_full` on the runtime's local disk for fast reads and a normal `poetry install`; `results/` replaced by a symlink to Drive so artifacts survive a disconnect — see "Colab: hybrid local-disk + Drive-symlink layout" below), then `make colab-check` / `make campaign-run` (skip-existing: a relaunch after a disconnect only re-runs incomplete jobs). See [`COLAB_RUNBOOK.md`](../../COLAB_RUNBOOK.md). **Measured timing (Phase 3 ablation batch, one T4, 33 runs)**: ~5 h 15 min total wall-clock including one disconnect/relaunch, ~9-10 min/run, ~10 GB VRAM at `batch_size=256` — this is close to the 10 GB lab GPUs' full capacity, so a Colab-sized batch run on the lab machine carries real **OOM risk** and should not be assumed to fit headroom-free alongside another job on the same GPU. |
 
 ## Local smoke testing: the micro dataset
 
@@ -104,10 +104,9 @@ deterministic **10%-stratified replica of `daninhas_full`**, generated by
 
 1. Code changes are made and reviewed on the local notebook.
 2. `git push` from local; `git pull` on the lab machine.
-3. Run the appropriate `scripts/benchmark/run_pipe_gpu_{0,1}.sh` on the lab machine (one
-   script per GPU — each has its own params JSON, so the two GPUs can run
-   different hierarchy/model configs concurrently without file contention).
-4. Results (`results/dalmax{1,2}/...`) come back to the local machine via
+3. Run `make campaign-run PART=...` on the machine (with two GPUs, one process per GPU via
+   `CUDA_VISIBLE_DEVICES`, disjoint `PART` values, both writing the shared `results/campaign/` tree).
+4. Results (`results/campaign/...`) come back to the local machine via
    `git` (if ever tracked — currently `results/` is gitignored, see
    `experiments/baseline-results.md`) or a manual copy
    (`scp`/`rsync`/shared drive) — **TBD**: no committed convention for this
@@ -116,10 +115,9 @@ deterministic **10%-stratified replica of `daninhas_full`**, generated by
    polluting the git history with large binary artifacts).
 5. `ExperimentNotifier/` (a separate, gitignored repo:
    `ExperimentNotifier/main.py --dir_results=... --args=...`) emails a
-   notification once a `scripts/benchmark/run_pipe_gpu_*.sh` battery finishes — used as the
-   lab-machine-to-human handoff signal; not inspected beyond its CLI
-   invocation in the run scripts in this batch (its own README, if any, is
-   the source of truth — TBD read it in a future pass).
+   notification when wrapped around a launch command (the retired benchmark scripts used to call it;
+   the campaign runner does not) — a lab-machine-to-human handoff signal (its own README, if any, is
+   the source of truth — TBD).
 6. **KNOWN EXTERNAL REFERENCE (Phase 4 follow-up, non-blocking)**:
    `ExperimentNotifier/main.py` calls `utils/report/build_method_metrics.py`
    in a legacy CIFAR10-only email branch. Refactor Phase 4
@@ -168,11 +166,9 @@ and `trainer.py` already writes `results.json` + `saved_model.pth` per
 strategy leaf directory (not just at the end of a whole sweep), a dropped
 Colab session loses at most the one `(study, config, seed)` triple that was
 mid-run — nothing already written is lost, because it was never only on the
-ephemeral `/content` disk in the first place. `scripts/ablations/
-run_ablation_gpu_{0,1}.sh`'s `SKIP_EXISTING=1` default (see this file's
-"Phase 2 lab-handoff hazards" note above, which the same scripts also serve
-on the lab machine) makes relaunching a batch after a disconnect skip every
-already-completed triple automatically — see `COLAB_RUNBOOK.md` §6.
+ephemeral `/content` disk in the first place. `dalmax.campaign run`'s skip-existing default (a job is
+done only when its leaf holds the full artifact set) makes relaunching after a disconnect skip every
+already-completed job automatically — see `COLAB_RUNBOOK.md` §6.
 
 **Poetry/torch pin**: `pipx install poetry`/`pip install poetry` then
 `poetry install`, same as every other environment — DalMax is Poetry-only,
@@ -194,8 +190,7 @@ GPU access this environment does not have). TBD: measure and record actual
 peak VRAM for `batch_size=256` at 128×128 the next time a lab-machine
 session is available; also record CIFAR10's smaller `batch_size=64`
 (32×32 images) memory footprint for comparison, and whether the two GPUs
-running concurrently (one job per GPU, per `scripts/benchmark/run_pipe_gpu_0.sh` /
-`scripts/benchmark/run_pipe_gpu_1.sh`) share any resource (e.g. shared dataset loading, disk
+running concurrently (one job per GPU, one `dalmax.campaign` process each) share any resource (e.g. shared dataset loading, disk
 I/O) that could bottleneck parallel throughput even with `CUDA_VISIBLE_DEVICES`
 correctly isolating compute.
 
@@ -209,27 +204,19 @@ comfortable" — see the environment comparison table above and
 `.specs/quality/known-issues.md` for any issue this implies for concurrent multi-job scheduling on
 the lab machine.
 
-## Lab handoff — Phase 3 ablation batch (pre-flighted 2026-08-23, verdict GO)
+## Lab handoff — the campaign (2026-09-29, supersedes the Phase 3 ablation-batch handoff)
 
 ```bash
-git fetch origin && git checkout refactor/phase-3-ablations && git pull
-poetry install                            # lab env, same as local dev — Poetry only
-# ExperimentNotifier/.env must exist on the lab machine (gitignored)
-tmux new -s gpu0   # poetry run bash scripts/ablations/run_ablation_gpu_0.sh   (5 configs)
-tmux new -s gpu1   # poetry run bash scripts/ablations/run_ablation_gpu_1.sh   (6 configs)
-# check results/ablations/gpu{0,1}_failures.log afterwards (should be empty)
-poetry run python -m dalmax.reporting.ablation_report --root results/ablations --out docs/results/ablation_tables
-git add docs/results/ablation_tables/ && git commit -m "Add Phase 3 ablation study results" && git push
+git pull
+poetry install                            # same as local dev — Poetry only
+make lab-check GPU=0                      # one short real-data sanity run
+make campaign-list                        # 192 runs / 64 groups
+make campaign-run PART=all                # or one process per GPU: PART=paper1,upper_bound | PART=rnhal,texhal
+make campaign-verify && make campaign-report
 ```
 
-Audit facts: expected embedding recomputes = 3 SSRAE + 3 ResNet (one per seed; all SSRAE configs
-share one cache per pool); SSRAE extraction ~2 min CPU per pool (measured 12.13 ms/image);
-GPU load split ratio ~1.1x; no VRAM/MEMORY_LIMIT concern at ~10k x 756-d/2048-d scale.
-Non-blocking: ExperimentNotifier email shows a generic message for these runs (no STRATEGY_1 token).
-
-The block above is equivalent to `make lab-setup`, `tmux new -s gpu0` / `make
-ablations-gpu0`, `tmux new -s gpu1` / `make ablations-gpu1`, and `make
-ablation-report` — see `LAB_RUNBOOK.md` §0/§3/§4 for the fuller step-by-step
-version (dataset-arrival verification, a `make lab-check` real-data sanity
-run before committing to the full batch, monitoring, and the single-run
-re-run command pattern for a failed `(study, config, seed)` triple).
+See `LAB_RUNBOOK.md` and `COLAB_RUNBOOK.md` for the step-by-step versions. The Phase 3 ablation batch
+handoff (per-GPU scripts, `make ablations-*`) was retired by ADR 0010; its audit facts still hold:
+expected embedding recomputes = 3 SSRAE + 3 ResNet per config family (one per seed; all SSRAE configs
+share one cache per pool); SSRAE extraction ~2 min CPU per pool (measured 12.13 ms/image); no
+VRAM/MEMORY_LIMIT concern at ~10k x 756-d/2048-d scale.

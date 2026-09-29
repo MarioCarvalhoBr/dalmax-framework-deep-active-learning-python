@@ -7,7 +7,7 @@ Operational guide for Claude Code sessions in this repository.
 DalMax is a PhD research lab (UFMS) for **Deep Active Learning applied to UAV
 weed recognition**. The main contribution is **RNHAL**: a randomized-network
 spatio-spectral representation (SSRAE) plus hierarchical k-means batch selection.
-Entry point: `trainer.py` (a thin shim calling `dalmax.cli.main()`, renamed from the historical `demo.py` on 2026-08-23; since Phase 2 —
+Entry point: `tools/trainer.py` (a thin shim calling `dalmax.cli.main()`; moved from the repo root into `tools/` on 2026-09-29, ADR 0010; renamed from the historical `demo.py` on 2026-08-23; since Phase 2 —
 see below). All Python source lives in one package, `dalmax/` — `core/` and
 `utils/` (the old two-package split) no longer exist, having been fully
 consolidated in Phase 4 (see `.specs/architecture/current-state.md` and ADR
@@ -25,8 +25,8 @@ drift (see spec-sync rule below) rather than trusting stale prose here.
 
 ## Setup & commands
 
-For the lab machine specifically (one-time setup, dataset transfer, ablation
-batch launch/monitoring, results collection), see
+For the lab machine specifically (one-time setup, dataset transfer, campaign
+launch/monitoring, results collection), see
 [`LAB_RUNBOOK.md`](LAB_RUNBOOK.md) — the commands below are the quick
 reference; that file is the step-by-step operator guide. For Google Colab Pro
 (single GPU, session-limited; hybrid local-disk + Drive-symlink layout), see
@@ -39,52 +39,44 @@ poetry install       # or: make setup — Poetry-only; the pip/requirements.txt 
 make lint             # ruff check
 make format           # ruff format
 make test             # pytest, fast tests only
-make smoke            # true end-to-end micro-dataset run (trainer.py, CPU) + fast tests
+make smoke            # true end-to-end micro-dataset run (tools/trainer.py, CPU) + fast tests
 
 # Example run (unchanged CLI, now routed through dalmax.cli):
-poetry run python trainer.py --dir_results results/dalmax1/ --params_json files_config/benchmark/params_df_gpu_0.json \
+poetry run python tools/trainer.py --dir_results results/dalmax1/ --params_json files_config/benchmark/params_df_gpu_0.json \
     --dataset_name DANINHAS --strategy_name SSRAEKmeansHCSampling \
     --n_query 100 --n_init_labeled 100 --n_round 8 --seed 1 --device cuda
 
 # Example run using the new generic RepresentationStrategy + embedding/selection config
 # (see .specs/experiments/ablation-study.md for the exact params JSON syntax):
-poetry run python trainer.py --dir_results results/ablation/ --params_json params_ablation_6_1_spatial.json \
+poetry run python tools/trainer.py --dir_results results/scratch/ --params_json files_config/ablations/rnhal/rep_spatial.json \
     --dataset_name DANINHAS --strategy_name RepresentationStrategy \
     --n_query 100 --n_init_labeled 100 --n_round 8 --seed 1 --device cuda
 
 # Inference tools (new 2026-08-23, ADR 0006), consuming a trainer.py-written
 # saved_model.pth (dalmax-checkpoint format, dalmax/models/checkpoint.py):
-poetry run python loader.py --model results/dalmax1/.../saved_model.pth       # inspect a checkpoint
-poetry run python predict.py --model results/dalmax1/.../saved_model.pth \
+poetry run python tools/loader.py --model results/dalmax1/.../saved_model.pth       # inspect a checkpoint
+poetry run python tools/predict.py --model results/dalmax1/.../saved_model.pth \
     --dir DATA/daninhas_full/test/DATASET_GRAMINEA --out results/predictions/ # batch prediction
-poetry run python predict.py --model results/dalmax1/.../saved_model.pth \
+poetry run python tools/predict.py --model results/dalmax1/.../saved_model.pth \
     --image path/to/one_image.jpg                                            # single-image prediction
-poetry run python gui.py                                                     # tkinter mini-app
+poetry run python tools/gui.py                                                     # tkinter mini-app
 
-# Lab-machine targets (see LAB_RUNBOOK.md for the full operator guide):
+# Environment checks (see LAB_RUNBOOK.md / COLAB_RUNBOOK.md; hardware-agnostic, ADR 0010):
 make lab-setup                        # poetry install + torch/CUDA visibility check
 make lab-check GPU=0                  # one short real-data GPU run (n_round=1) before a full batch
-make ablations-gpu0                   # this GPU's half of the ablation batch, METHOD?=rnhal (4 configs either method; `stage_no_representation` is the campaign's shared run, ADR 0009)
-make ablations-gpu1                   # this GPU's half of the ablation batch, METHOD?=rnhal (6 configs rnhal / 7 texhal)
-make ablation-report                  # aggregate results/ablations/$(METHOD)/ -> docs/results/ablation_tables/$(METHOD)/
-make ablation-report-legacy           # report on the already-executed legacy RNHAL tree (results/ablations/, no method segment)
-make benchmark-gpu0 / benchmark-gpu1  # re-run the reference RNHAL sweep (scripts/benchmark/run_pipe_gpu_*.sh)
-# Pass METHOD=texhal to any ablations-*/ablation-report target above to run/report the TexHAL
-# (paper 2, VCTex) suite instead of the default rnhal (paper 3, SSRAE) one, e.g.
-# `METHOD=texhal make ablations-gpu0`. See files_config/ablations/README.md.
 
-# A100 full campaign (2026-09-29) -- the RECOMMENDED path for the final re-execution of all three papers
-# (one manifest, no redundant runs; see .specs/experiments/campaign-a100.md and COLAB_RUNBOOK.md):
+# The campaign (2026-09-29) -- the ONLY path for the final execution of all three papers
+# (one manifest, no redundant runs; see .specs/experiments/campaign.md and COLAB_RUNBOOK.md):
 make campaign-list                    # job table + run counts per part (192 runs / 64 groups)
 make campaign-run PART=all            # PART=paper1|upper_bound|rnhal|texhal (comma-separated ok); resume = re-run
-make campaign-verify                  # OK/INCOMPLETE/MISSING per job + seed-consistency audit
-make campaign-report                  # docs/results/campaign_a100/ (tables md/tex/csv, mean confusion matrices)
-make campaign-smoke                   # micro campaign on CPU (seed 1, 64 jobs) -> results/smoke_campaign/
+make campaign-verify                  # OK/INCOMPLETE/MISSING per job + seed audit (exit 0 ok / 1 fail / 2 warn)
+make campaign-report                  # docs/results/campaign/ (tables md/tex/csv, mean confusion matrices)
+make campaign-smoke                   # micro campaign on CPU (seed 1) -> results/smoke_campaign/;
+                                      # skips AdversarialBIM/AdversarialDeepFool by default (58 of 64 jobs; SMOKE_EXCLUDE= to include)
 
 # Colab targets (see COLAB_RUNBOOK.md for the full notebook-cell guide):
 make colab-setup                      # verify Drive mount, build/reuse dataset zip, symlink results/ -> Drive
 make colab-check                      # one short real-data GPU run into results/colab_check/ (GPU 0)
-make ablations-colab                  # both ablation-script halves sequentially on Colab's single GPU, METHOD?=rnhal (SKIP_EXISTING=1 default makes relaunch after a disconnect safe)
 ```
 
 ## Working mode: multi-agent with model delegation (standing policy)
@@ -128,7 +120,7 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   (`dalmax/selection/`), strategy/dataset/model registries (`dalmax/{query_strategies,
   data,models}/registry.py`), seed-propagation audit (`dalmax/seeding.py`), macro-F1
   metrics, `run_metadata.json`. `trainer.py` (historical `demo.py`) now routes through `dalmax.cli.main()`.
-- **Phase 3 — Ablations** (executed 2026-08-26, on Google Colab Pro — one NVIDIA T4, not the lab
+- **Phase 3 — Ablations** (executed 2026-08-26, on Google Colab Pro (one GPU; the GPU model is in each run's `run_metadata.json`), not the lab
   machine): all 33 runs (11 configs × 3 seeds) completed, zero failures, ~5h15 wall-clock. Weighted
   and macro F1 recorded in `.specs/experiments/ablation-study.md`'s §6.1/§6.2/§6.3 run tables and
   "Execution record" section; aggregated tables committed at `docs/results/ablation_tables/`; paper
@@ -148,15 +140,19 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   `results/dalmax1/`/`results/dalmax2/`, is unrecoverable, see
   [`.specs/quality/known-issues.md`](.specs/quality/known-issues.md) KI-22) via a new
   `dalmax-checkpoint` format (`dalmax/models/checkpoint.py`); added `dalmax/inference/`
-  (`predict.py`/`loader.py`/`gui.py` at the repo root); renamed the historical `demo.py` → `trainer.py`
+  (`predict.py`/`loader.py`/`gui.py`, since 2026-09-29 in `tools/`); renamed the historical `demo.py` → `trainer.py`
   (pure rename, `git mv`, no behavior change).
+- **Cleanup + hardware-agnostic** (2026-09-29, branch `chore/cleanup-tools`, ADR 0010): CLIs moved to
+  `tools/`, legacy ablation/benchmark scripts and Makefile targets removed (the campaign is the only
+  run path), campaign renamed to a hardware-neutral `campaign`, no GPU model named anywhere in code/docs
+  (only captured at runtime in `run_metadata.json`), review follow-ups (best-effort determinism
+  record, complete-leaf resume, seed-audit WARN, `--exclude-strategy`).
 
 Next milestone: advisor review of the ablation section (`paper_drafts/ablation_section.tex`,
 including the weighted-primary/macro-secondary framing pending confirmation — see
-`.specs/experiments/ablation-study.md`), and, optionally, a lab-machine re-run of the reference
-benchmark checkpoints (the Phase 3 ablation batch ran on Colab, not the lab machine; a
-lab-machine smoke run confirming Phase 4's move didn't break anything there is still separately
-outstanding).
+`.specs/experiments/ablation-study.md`), and the full campaign execution on a GPU machine (Colab or
+lab; `make campaign-run PART=all`); a lab-machine smoke run confirming the Phase 4 move and the
+`tools/` move didn't break anything there is still separately outstanding.
 
 ## Never do
 
@@ -198,50 +194,28 @@ outstanding).
   **`RepresentationStrategy`** (NEW — generic, driven
   by the params JSON's `"embedding"`/`"selection"` blocks; see
   `.specs/experiments/ablation-study.md` for exact syntax).
-- **Ablation scripts are now idempotent (2026-08-25, `docs/colab-runbook`)**:
-  `scripts/ablations/run_ablation_gpu_{0,1}.sh` read `GPU_NUMBER` (default 0/1),
-  `SKIP_EXISTING` (default `1` — skips a `(study, config, seed)` triple whose
-  `results.json` already exists instead of re-running it), `DRY_RUN` (default
-  `0` — echoes commands instead of executing them), and `RESULTS_ROOT`
-  (default `results/ablations/${METHOD}`) from the environment; the `ExperimentNotifier`
-  call is now guarded by `[ -f ExperimentNotifier/main.py ]` (absent on
-  Colab). This is what makes `scripts/colab/run_ablations_colab.sh` (both
-  scripts pinned to `GPU_NUMBER=0`) safe to relaunch after a Colab disconnect.
-  See `tests/test_ablation_scripts.py` and `COLAB_RUNBOOK.md`.
-- **Per-method ablation layout + `METHOD` variable (2026-08-30)**: two ablation
-  suites now exist side by side — `files_config/ablations/rnhal/` (paper 3,
-  SSRAE, **executed** 2026-08-26) and `files_config/ablations/texhal/` (paper
-  2, VCTex, materialized, not yet run; 12 configs, one more §6.1 row than
-  rnhal's 11 since VCTex sweeps its own `Q` scale instead of an SSRAE
-  spatial/spectral split). Every ablation script/Makefile target reads
-  `METHOD` (`rnhal` default, or `texhal`), selecting
-  `files_config/ablations/${METHOD}/` as the config source and
-  `results/ablations/${METHOD}/` as the results root. **The already-executed
-  RNHAL batch lives at the LEGACY root `results/ablations/{6_1,6_2,6_3}/`**
-  (no method segment) — append-only, unaffected by this reorganization; a new
-  `METHOD=rnhal` run writes to `results/ablations/rnhal/` instead (use
-  `RESULTS_ROOT=results/ablations` to extend the legacy tree, or
-  `make ablation-report-legacy` to report on it). See
-  `files_config/ablations/README.md`, `.specs/experiments/ablation-study-texhal.md`,
-  and `.specs/experiments/papers-roadmap.md` (the three-paper plan: 1 — DAL
-  benchmark comparison; 2 — TexHAL; 3 — RNHAL).
+- **Ablation scripts, `METHOD` variable and legacy tree (retired 2026-09-29, ADR 0010)**: the
+  per-GPU ablation scripts (`scripts/ablations/`, `scripts/colab/run_ablations_colab.sh`), the
+  reference-benchmark scripts (`scripts/benchmark/`), `make ablations-*`/`ablation-report*`/
+  `benchmark-*`/`smoke-ablations`, `dalmax/reporting/ablation_report.py` and `results_doctor` were
+  deleted: the campaign manifest is the only way to run and report. The per-method configs still
+  live in `files_config/ablations/{rnhal,texhal}/` (+ `micro/`) because the manifest references them
+  (`files_config/ablations/README.md`); the executed 2026-08-26 RNHAL batch remains on disk at the
+  legacy `results/ablations/{6_1,6_2,6_3}/` (append-only) with its committed tables under
+  `docs/results/ablation_tables/`. The leaf completeness check survives as
+  `dalmax/reporting/leaf_check.py::check_leaf`. Three-paper plan: `.specs/experiments/papers-roadmap.md`.
 - One params JSON per lab GPU: `files_config/benchmark/params_df_gpu_0.json`,
   `files_config/benchmark/params_df_gpu_1.json`, run
-  via `scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh` (`QUERIES=(10 50 100)`,
-  `SEEDS=(1 2 3)`, `n_round 8`, results into `results/dalmax1/`) — unchanged, still
+  (used by `make lab-check`/`colab-check`; the historical reference sweep scripts were retired
+  2026-09-29, the campaign supersedes them) — still
   works via the legacy `config_kmh` key (Phase 2's loader reads it as
   `selection = {method: "hierarchical", hierarchy: config_kmh}` automatically).
-- **`results_doctor` (2026-09-01)**: `python -m dalmax.reporting.results_doctor
-  {verify,migrate-legacy}` (notebook: `notebooks/results_doctor.ipynb`) checks a
-  `results/ablations/` tree against the expected `(study, config, seed)` grid and, once
-  approved, moves the legacy no-method-segment RNHAL tree into `results/ablations/rnhal/`
-  — see `COLAB_RUNBOOK.md` §9 / `LAB_RUNBOOK.md` §6.
-- **A100 campaign (2026-09-29, ADR 0008/0009)**: `files_config/campaign/manifest.json` (generated by
+- **Campaign (2026-09-29, ADR 0008/0009/0010)**: `files_config/campaign/manifest.json` (generated by
   `scripts/campaign/build_manifest.py`, mirror `manifest_micro.json`) is the single source of truth for
   the one-shot re-execution of everything the three papers need: paper 1 = 12 classical strategies +
   **KMH** (hierarchical k-means over ImageNet ResNet-50 features, confirmed by the user) x nq {10,50,100}
   + the `FullSupervised` upper bound; papers 2/3 = TexHAL/RNHAL ablations at nq100 (+ 5 new RNHAL
-  hierarchy rows). 192 runs / 64 groups, results under `results/campaign_a100/`; groups consumed by
+  hierarchy rows). 192 runs / 64 groups, results under `results/campaign/`; groups consumed by
   several papers live under `shared/` (`shared/kmh_nq100`, `shared/random_nq100`,
   `shared/texhal_full`) and every alias row points to the one run. `stage_no_representation` is ONE
   shared run (2026-09-01 per-paper decision superseded by ADR 0009; its only config is

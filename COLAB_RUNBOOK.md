@@ -1,95 +1,30 @@
 # Google Colab Pro runbook
 
-Step-by-step notebook guide for running DalMax on Google Colab Pro (single
+Step-by-step notebook guide for running the DalMax **campaign** (the single
+manifest that executes everything papers 1-3 need) on Google Colab Pro (single
 GPU, session-limited). This is the Colab companion to
 [`LAB_RUNBOOK.md`](LAB_RUNBOOK.md) (the lab-machine equivalent) and
-[`.specs/infrastructure/execution-environments.md`](.specs/infrastructure/execution-environments.md)
-(architecture/decision-matrix source of truth, Colab section). Every command
-below is copy-pasteable into a notebook cell in order and either exists
-verbatim in this repo or is a plain `pip`/`git`/`poetry`/shell invocation —
-nothing here is invented.
+[`.specs/infrastructure/execution-environments.md`](.specs/infrastructure/execution-environments.md).
+Every command below is copy-pasteable into a notebook cell in order and either
+exists verbatim in this repo or is a plain `pip`/`git`/`poetry`/shell
+invocation.
 
 **Never run any of these on the local no-GPU dev notebook**
 (`.claude/rules/data-safety.md`).
 
-A runnable notebook that mirrors every cell below already exists —
-[`notebooks/colab_runbook.ipynb`](notebooks/colab_runbook.ipynb) — so you
-don't need to copy-paste each command by hand; open it directly in Colab and
-run it top to bottom. **This file stays the source of truth**: the notebook
-is generated to match it, not the other way around, so if they ever
-disagree, trust this file and regenerate the notebook.
+The runnable notebook [`notebooks/colab_runbook.ipynb`](notebooks/colab_runbook.ipynb)
+mirrors every cell below -- open it in Colab and run it top to bottom.
+**This file stays the source of truth**; if they disagree, trust this file and
+re-sync the notebook.
 
-**This runbook covers both ablation suites** (§6/§7): `METHOD=rnhal`
-(paper 3, SSRAE — already executed, see `.specs/experiments/ablation-study.md`)
-and `METHOD=texhal` (paper 2, VCTex — not yet run, see
-`.specs/experiments/ablation-study-texhal.md`). Every ablation command below
-accepts `METHOD` as an environment override; see §6's "Choosing the method"
-note.
-
-## A100 full campaign (2026-09-29) -- the recommended path for the final re-execution
-
-One manifest (`files_config/campaign/manifest.json`, see
-[`.specs/experiments/campaign-a100.md`](.specs/experiments/campaign-a100.md) and ADR 0008/0009)
-drives the single, deduplicated re-execution of **everything the three papers need** -- paper 1
-(12 classical strategies + KMH x n_query {10,50,100} + the `FullSupervised` upper bound), paper 2
-(TexHAL ablations, nq=100), paper 3 (RNHAL ablations incl. 5 new hierarchy rows, nq=100) -- with
-the same seeds (1,2,3) and protocol in one environment. **Use this instead of the ablation-only
-`make ablations-colab` (sections 6/7 below, kept for partial runs) for the final re-execution.**
-Sections 0-5 (runtime, Drive, clone, Poetry, `make colab-setup`, sanity checks) apply unchanged;
-then:
-
-1. **Select an A100 runtime** (Runtime -> Change runtime type -> GPU -> A100; Colab Pro). Section 0's
-   `!nvidia-smi` must list an A100.
-2. `!make campaign-list` -- prints the job table and the counts. Real numbers (full scale):
-
-   | Part | Runs | Run groups |
-   |---|---|---|
-   | `paper1` | 117 | 39 |
-   | `upper_bound` | 3 | 1 |
-   | `rnhal` | 42 | 14 |
-   | `texhal` | 30 | 10 |
-   | **Total** | **192** | **64** |
-
-3. **Check the environment before leaving it unattended**: the very first job of `PART=all` is the
-   cheapest one (RandomSampling, nq=100, seed 1, group `shared/random_nq100`). Start step 4 and, once
-   that first job has finished, verify that its `run_metadata.json` reports the A100:
-   ```
-   !python -c "import json,glob; m=json.load(open(glob.glob('results/campaign_a100/shared/random_nq100/*/SEED_1/*/RandomSampling/run_metadata.json')[0])); print(m['environment']['gpus'][0]['name'], m['determinism'])"
-   ```
-   `run_metadata.json` now records OS, CPU/RAM, GPU model/memory/driver, CUDA/cuDNN captured at
-   runtime (`environment.gpus[0].name`) plus a `determinism` block. It must say A100 (and
-   `deterministic_algorithms: true`) -- otherwise stop and fix the runtime.
-4. **Run everything**: `!make campaign-run PART=all`. Jobs run sequentially, skip-existing
-   (`results.json` present), logging to `results/campaign_a100/campaign.log` and failures to
-   `results/campaign_a100/failures.log` (the batch continues after a failure). **Resume after a
-   disconnect = redo sections 0-4 and re-run the same command** (`results/` is the Drive symlink of
-   `make colab-setup`). Order: paper 1 at nq100 first (shared runs land early), then rnhal, texhal,
-   paper 1 at nq50 and nq10, then the upper bound.
-5. **Per-part launches** to split across sessions: `!make campaign-run PART=paper1`,
-   `PART=rnhal`, `PART=texhal`, `PART=upper_bound` (comma-separated works: `PART=rnhal,texhal`).
-   Papers 2/3 comparison tables need paper 1's `shared/*` runs and `shared/texhal_full`, so run
-   `paper1` and `texhal` before reporting.
-6. **Monitor**: `!tail -n 30 results/campaign_a100/campaign.log` and
-   `!cat results/campaign_a100/failures.log`.
-7. **Verify**: `!make campaign-verify` -- OK/INCOMPLETE/MISSING per job with the same artifact checks
-   as `results_doctor`, plus the **seed-consistency audit** (for every seed, all runs must have
-   started from the identical initial labeled set; PASS/FAIL per seed, offenders listed).
-   `!make campaign-verify PART=rnhal` restricts to one part. Re-run failed jobs by re-running
-   `campaign-run` (only missing ones execute).
-8. **Report**: `!make campaign-report` writes `docs/results/campaign_a100/` (per-paper tables in md/tex,
-   `summary.csv`, `seed_audit.md`, mean confusion matrices under `confusion_matrices/`), then copy to
-   Drive: `!cp -r docs/results/campaign_a100 "$DRIVE_ROOT/results/campaign_a100_tables"`.
-
-**Wall-clock: TBD** (A100 unmeasured; the T4 reference is about 9-10 min per ablation-config run;
-the adversarial/dropout baselines are likely slower -- unmeasured). Record the measured hours here
-after the first full run.
-
-The upper bound (`FullSupervised`) trains once on all 8,086 pool images (ResNet-50, 10 epochs, batch
-256) -- if Colab OOMs, lower nothing silently: report it, it is the same batch size as every other run.
+**Hardware-agnostic.** Select a GPU runtime (any). Nothing in the repo assumes a
+GPU model: the GPU actually used is captured at runtime into every run's
+`run_metadata.json` (`environment.gpus`), and that record is the only place a GPU
+name lives. Placeholder used below: `<gpu-name>`.
 
 ## Architecture decision: hybrid local-disk + Drive-symlink layout
 
-Colab Pro gives one GPU per session (T4/L4/A100, varies) and **no guaranteed
+Colab Pro gives one GPU per session (the model varies) and **no guaranteed
 background execution** — a session can disconnect mid-batch. This runbook
 uses a **hybrid layout**, decided as follows:
 
@@ -105,7 +40,7 @@ uses a **hybrid layout**, decided as follows:
   `log-dalmax.log`, plots, and the `results/cache/embeddings/` SSRAE cache —
   persists on Drive across a disconnect instead of vanishing with the
   ephemeral `/content` disk. This is what makes relaunching a batch after a
-  disconnect cheap (see §6's `SKIP_EXISTING` behavior) rather than starting
+  disconnect cheap (see §6's skip-existing behavior) rather than starting
   over.
 - **Dataset transfer avoids reading `daninhas_full`'s ~10,193 individual
   files through Drive's FUSE mount** (a well-known slow path — one-file-at-
@@ -127,8 +62,8 @@ Cell:
 ```python
 !nvidia-smi
 ```
-Expect one GPU listed (T4, L4, or A100 depending on what Colab Pro assigns
-this session).
+Expect one GPU listed (whichever model Colab Pro assigns this session; it is
+recorded automatically in each run's `run_metadata.json`).
 
 Cell:
 ```python
@@ -159,7 +94,7 @@ later step assumes it.
 
 Set `DRIVE_ROOT` once for the rest of this notebook session (`%env` persists
 it as a shell environment variable for every later `!`-cell, including
-`scripts/colab/setup_colab.sh`'s own `DRIVE_ROOT` override and §7's `cp`):
+`scripts/colab/setup_colab.sh`'s own `DRIVE_ROOT` override and §6's `cp`):
 ```python
 %env DRIVE_ROOT=/content/drive/MyDrive/UFMS/Pós-graduação/Doutorado/FINAL/PROJETO/DALMAX
 ```
@@ -214,7 +149,7 @@ Cell (confirm the GPU is visible to torch):
 ```python
 !poetry run python -c "import torch; print(torch.cuda.is_available(), torch.cuda.device_count(), torch.cuda.get_device_name(0))"
 ```
-Expect `True 1 <gpu-name>` (e.g. `True 1 Tesla T4`). If this prints
+Expect `True 1 <gpu-name>`. If this prints
 `False ...`, stop — check the Colab runtime type is set to a GPU runtime
 (Runtime → Change runtime type → GPU) and re-run from §0.
 
@@ -271,8 +206,8 @@ Cell (CPU smoke test — generates the micro dataset from the local
 ```
 
 Cell (first real-data GPU check on Colab this session, into
-`results/colab_check/` so it never collides with the real ablation/benchmark
-trees living on Drive):
+`results/colab_check/` so it never collides with the real campaign
+tree living on Drive):
 ```python
 !make colab-check
 ```
@@ -287,151 +222,96 @@ one the first time this actually runs on Colab).
 
 Cell (verify the checkpoint is real and loadable, same as `LAB_RUNBOOK.md` §1):
 ```python
-!poetry run python loader.py --model results/colab_check/daninhas_full/SEED_1/NQ_100_NIL_100_NR_1_NE_10/SSRAEKmeansHCSampling/saved_model.pth
+!poetry run python tools/loader.py --model results/colab_check/daninhas_full/SEED_1/NQ_100_NIL_100_NR_1_NE_10/SSRAEKmeansHCSampling/saved_model.pth
 ```
 Expect `format: dalmax-checkpoint`, a nonzero param count, and
 `forward pass OK`.
 
 Cell (single-image prediction, path adjusted to the local dataset copy):
 ```python
-!poetry run python predict.py \
+!poetry run python tools/predict.py \
     --model results/colab_check/daninhas_full/SEED_1/NQ_100_NIL_100_NR_1_NE_10/SSRAEKmeansHCSampling/saved_model.pth \
     --image DATA/daninhas_full/test/DATASET_GRAMINEA/<some_image>.jpg
 ```
 (substitute any real file under that test folder). Expect a predicted class
 + confidence line and a `predictions.csv` written alongside the image.
 
-Only proceed to §6 once all of the above pass.
+Only proceed to §6 (the campaign) once all of the above pass.
 
 ---
 
-## 6. Run the ablation study
+## 6. The campaign
 
-### Choosing the method (METHOD=rnhal | texhal)
+One manifest (`files_config/campaign/manifest.json`, see
+[`.specs/experiments/campaign.md`](.specs/experiments/campaign.md) and ADR 0008/0009)
+drives the single, deduplicated execution of **everything the three papers need** -- paper 1
+(12 classical strategies + KMH x n_query {10,50,100} + the `FullSupervised` upper bound), paper 2
+(TexHAL ablations, nq=100), paper 3 (RNHAL ablations incl. 5 new hierarchy rows, nq=100) -- with
+seeds (1,2,3) and one protocol in one environment. Sections 0-5 (runtime, Drive, clone, Poetry,
+`make colab-setup`, sanity checks) come first; then:
 
-Two suites, same as `LAB_RUNBOOK.md` §2: `METHOD=rnhal` (default, paper 3,
-SSRAE — **already executed**, 11 configs / 33 runs) and `METHOD=texhal`
-(paper 2, VCTex — not yet run, 11 configs / 33 runs by these scripts (the "w/o representation" row is the campaign's shared run, ADR 0009), §6.1 has a 4th row
-`rep_q13` per the VCTex method authors). Pass `METHOD` as an environment
-variable to every cell below, e.g. `!METHOD=texhal make ablations-colab`.
-Results land under `results/ablations/${METHOD}/`, logs under
-`results/ablations/${METHOD}/colab.log`. See `LAB_RUNBOOK.md` §2 for the
-full per-config GPU-split tables (identical split logic applies here, just
-both halves run on Colab's one GPU 0 sequentially).
+1. `!make campaign-list` -- prints the job table and the counts. Real numbers (full scale):
 
-**What will run**: the same ablation batch as `LAB_RUNBOOK.md` §2 (11 or 12
-configs depending on `METHOD`), but sequentially on Colab's **one** GPU
-instead of split across two lab GPUs — expect roughly **2x** the per-GPU lab
-wall-clock time as a rough estimate for a suite with no measured Colab
-number yet.
+   | Part | Runs | Run groups |
+   |---|---|---|
+   | `paper1` | 117 | 39 |
+   | `upper_bound` | 3 | 1 |
+   | `rnhal` | 42 | 14 |
+   | `texhal` | 30 | 10 |
+   | **Total** | **192** | **64** |
 
-**Measured RNHAL (2026-08-26, Colab Pro, NVIDIA T4, batch_size 256, ~10 GB VRAM in use):** the full 33-run sweep took **~5 h 15 min wall-clock** including one disconnect/relaunch (the `SKIP_EXISTING` resume worked as designed: 35 completed triples were skipped on relaunch), i.e. **~9–10 min per run**. A100 would cut the GPU part but not the CPU-bound SSRAE extraction; T4 is the cost-effective choice.
+2. **Run everything**: `!make campaign-run PART=all`. Jobs run sequentially, skip-existing (a job is
+   done only when its leaf holds the **full** artifact set; `results.json` is written last),
+   logging to `results/campaign/campaign.log` and failures to `results/campaign/failures.log`
+   (the batch continues after a failure). **Resume after a disconnect = redo sections 0-4 and
+   re-run the same command** (`results/` is the Drive symlink of `make colab-setup`). Order: paper 1
+   at nq100 first (shared runs land early), then rnhal, texhal, paper 1 at nq50 and nq10, then the
+   upper bound.
+3. **Check the environment before leaving it unattended**: the very first job of `PART=all` is the
+   cheapest one (RandomSampling, nq=100, seed 1, group `shared/random_nq100`). Once it has finished,
+   verify that its `run_metadata.json` reports the GPU you expect:
+   ```
+   !python -c "import json,glob; m=json.load(open(glob.glob('results/campaign/shared/random_nq100/*/SEED_1/*/RandomSampling/run_metadata.json')[0])); print(m['environment']['gpus'][0]['name'], m['determinism'])"
+   ```
+   It prints `<gpu-name>` (whatever Colab assigned; `environment.gpus[0].name`) and the `determinism`
+   block (`deterministic_algorithms: "warn_only"`, cuDNN flags, cuBLAS workspace,
+   `nondeterministic_op_warnings`). If `gpus` is empty, the runtime has no GPU -- stop and fix it.
+   Determinism is best-effort: an op without a deterministic kernel only warns and is listed in
+   `nondeterministic_op_warnings`; re-runs on a different GPU model are not bit-identical.
+4. **Per-part launches** to split across sessions: `!make campaign-run PART=paper1`,
+   `PART=rnhal`, `PART=texhal`, `PART=upper_bound` (comma-separated works: `PART=rnhal,texhal`).
+   Papers 2/3 comparison tables need paper 1's `shared/*` runs and `shared/texhal_full`, so run
+   `paper1` and `texhal` before reporting.
+5. **Monitor**: `!tail -n 30 results/campaign/campaign.log` and `!cat results/campaign/failures.log`.
+6. **Verify**: `!make campaign-verify` -- OK/INCOMPLETE/MISSING per job with the artifact checks of
+   `dalmax/reporting/leaf_check.py`, plus the **seed-consistency audit** (for every seed, all runs
+   must have started from the identical initial labeled set; PASS/WARN/FAIL per seed, offenders
+   listed). Exit code 0 = all OK, 1 = an incomplete/missing job or a FAIL audit, 2 = only audit
+   WARNs (a run whose log lacks the initial-labeled-set line). `!make campaign-verify PART=rnhal`
+   restricts to one part. Re-run failed jobs by re-running `campaign-run`.
+7. **Report**: `!make campaign-report` writes `docs/results/campaign/` (per-paper tables in md/tex,
+   `summary.csv`, `seed_audit.md`, mean confusion matrices under `confusion_matrices/`), then copy to
+   Drive: `!cp -r docs/results/campaign "$DRIVE_ROOT/results/campaign_tables"`.
 
-**TexHAL wall-clock: TBD (unmeasured).** VCTex's RAE extraction operates on a
-27-dim per-patch input (vs. SSRAE's 9-dim), so its per-image extraction cost
-is expected to differ from SSRAE's — not assumed to be faster or slower
-without a measurement. Record it after the first `METHOD=texhal` run here
-and feed it back into this section and `LAB_RUNBOOK.md`.
+**CPU smoke (not on Colab).** The micro campaign (`make campaign-smoke`, local CPU, seed 1) skips
+the two adversarial baselines (`AdversarialBIM`, `AdversarialDeepFool`) because they are far too slow on
+CPU; it runs 58 of the 64 micro jobs. The real GPU campaign above runs them (`--exclude-strategy`
+is only passed by the smoke targets).
 
-Cell (launch):
-```python
-!make ablations-colab                    # rnhal (default)
-!METHOD=texhal make ablations-colab      # texhal
-```
-This runs `scripts/colab/run_ablations_colab.sh`, which is just
-`METHOD=${METHOD} GPU_NUMBER=0 bash scripts/ablations/run_ablation_gpu_0.sh`
-followed by `METHOD=${METHOD} GPU_NUMBER=0 bash scripts/ablations/run_ablation_gpu_1.sh`
-— i.e. both lab scripts' config lists for the chosen method, both pinned to
-GPU 0 — logging combined output to `results/ablations/${METHOD}/colab.log`.
+**Wall-clock: TBD.** Record the measured hours (and the `<gpu-name>` from step 3) here after the
+first full run; the adversarial/dropout baselines are likely the slowest jobs (unmeasured).
 
-**Disconnect policy**: since `results/` is symlinked to Drive and both
-underlying scripts default to `SKIP_EXISTING=1`, a disconnect loses at most
-the one `(study, config, seed)` triple that was mid-run when it happened.
-To resume:
-1. Re-run cells in §0–§4 (all idempotent — `colab-setup` detects the dataset
-   and symlink are already in place and does the minimal work).
-2. Re-run `!make ablations-colab` (with the same `METHOD` as before). Every
-   triple with an existing `results.json` under
-   `results/ablations/${METHOD}/<study>/<config>/.../results.json` is logged
-   as `SKIP (already completed)` and skipped; only the incomplete or
-   not-yet-run triples actually execute.
+**Drive quota.** Every run writes a `saved_model.pth` checkpoint (ResNet-50, ~95 MB): 192 runs is
+about **18 GB** on Drive, plus the embedding caches and logs/plots. Check your Drive quota before
+starting `PART=all` (or split by part across sessions).
 
-**Running a single triple manually** (e.g. to retry one that failed — see
-monitoring below), same CLI pattern as `LAB_RUNBOOK.md` §3, pinned to GPU 0:
-```python
-!CUDA_VISIBLE_DEVICES=0 poetry run python trainer.py \
-    --params_json files_config/ablations/{METHOD}/<config>.json \
-    --dataset_name=DANINHAS \
-    --strategy_name RepresentationStrategy \
-    --n_query 100 \
-    --seed <seed> \
-    --n_round 8 \
-    --dir_results=results/ablations/{METHOD}/<study>/<config>/ \
-    --device cuda
-```
-
-**Monitoring** (from a separate cell while the sweep cell above is still
-running — or after a disconnect, to see how far it got):
-```python
-!tail -n 30 results/ablations/{METHOD}/colab.log
-!cat results/ablations/{METHOD}/gpu0_failures.log results/ablations/{METHOD}/gpu1_failures.log
-```
-An empty (or missing, before any run finishes) failures file means no
-failures so far.
-
-**Keeping the tab alive**: Colab Pro can still disconnect an idle browser
-tab even mid-run; keep the tab focused/active, or use a keep-alive browser
-extension, to reduce (not eliminate) the chance of a disconnect — either
-way, the `SKIP_EXISTING` resume flow above is what actually makes a
-disconnect non-fatal, not tab-keep-alive tricks.
-
-**Drive quota note**: 33 runs x one `saved_model.pth` checkpoint each,
-plus the SSRAE/ResNet embedding caches (shared across configs at the same
-seed, per `LAB_RUNBOOK.md` §2's "expected embedding recomputes" note) and
-logs/plots — budget roughly a few GB of Drive space for this batch (**TBD**:
-no measured total exists yet; `LAB_RUNBOOK.md`'s own checkpoint-size
-estimate is itself unmeasured, so treat any specific number here as a rough
-planning figure, not a verified one).
+The upper bound (`FullSupervised`) trains once on all 8,086 pool images (ResNet-50, 10 epochs, batch
+256) -- if the GPU runs out of memory, lower nothing silently: report it, it is the same batch size as
+every other run.
 
 ---
 
-## 7. Collect results
-
-Cell:
-```python
-!make ablation-report                    # rnhal (default) -> docs/results/ablation_tables/rnhal/
-!make ablation-report METHOD=texhal      # texhal -> docs/results/ablation_tables/texhal/
-```
-Same as `LAB_RUNBOOK.md` §4 — aggregates every discovered
-`results/ablations/${METHOD}/<study>/<config>/.../results.json` into
-`docs/results/ablation_tables/${METHOD}/` (`ablation_summary.csv` plus
-`ablation_6_{1,2,3}.md`/`.tex`). For the already-executed legacy RNHAL batch
-(no `rnhal/` segment in its results tree), use `!make ablation-report-legacy`
-instead — see `LAB_RUNBOOK.md` §4.
-
-**Committing from Colab requires git credentials** (a GitHub token or SSH
-key configured in this ephemeral runtime), which this runbook does not set
-up by default. Two options:
-
-- **Recommended**: copy the tables to Drive, then commit from your local
-  notebook after downloading/syncing them there:
-  ```python
-  !cp -r docs/results/ablation_tables/{METHOD} "$DRIVE_ROOT/results/ablation_tables/{METHOD}"
-  ```
-  Then, on the local notebook: pull the tables down from Drive (or however
-  you sync), `git add docs/results/ablation_tables/`, and commit/push per
-  `.claude/rules/git-workflow.md` (push requires your explicit confirmation).
-- **Alternative**: configure a GitHub personal access token in this Colab
-  session (`!git config user.email ...`, `!git config user.name ...`, and
-  either `gh auth login` or a token-embedded remote URL) and commit/push
-  directly from the notebook. Only do this if you're comfortable putting a
-  token into a Colab runtime for the session's lifetime; the Drive-copy
-  path above avoids that entirely, which is why it's the default
-  recommendation.
-
----
-
-## 8. Troubleshooting
+## 7. Troubleshooting
 
 - **`ValueError: Key backend: 'module://matplotlib_inline.backend_inline' is not a valid value`**
   (seen on Colab, 2026-08-25, on every `trainer.py` launch). The notebook
@@ -440,8 +320,7 @@ up by default. Two options:
   in the Poetry `.venv`, so `import matplotlib` failed at import time. Fixed
   in `dalmax/__init__.py` (`_ensure_matplotlib_backend` falls back to the
   headless `Agg` backend when the configured module is unimportable) and
-  belt-and-braces `export MPLBACKEND=Agg` in `scripts/colab/run_ablations_colab.sh`
-  / `scripts/ablations/run_ablation_gpu_{0,1}.sh`. If you see it again, you are
+  `MPLBACKEND=Agg` is exported into every `dalmax.campaign` subprocess (`dalmax/campaign.py::build_env`). If you see it again, you are
   running a checkout older than that fix: `git pull origin main`.
 - **Drive FUSE slowness.** Never read `daninhas_full`'s individual files
   directly from `/content/drive/...` during training — that's exactly why
@@ -458,15 +337,15 @@ up by default. Two options:
   the script's error message — it tells you the exact conflicting path;
   resolve manually (e.g. `mv results results_local_backup` if you really
   want to switch to the Drive symlink) and re-run.
-- **OOM on a T4** (10-16 GB VRAM depending on which GPU Colab assigns).
+- **Out of GPU memory** (VRAM depends on which GPU Colab assigns).
   Copy the relevant params JSON into the gitignored `files_config/local/`
   directory and lower `batch_size` there — same procedure as
-  `LAB_RUNBOOK.md` §6's OOM entry; never edit a file under
-  `files_config/ablations/`/`files_config/benchmark/` in place.
+  `LAB_RUNBOOK.md`'s OOM entry; never edit a committed file under
+  `files_config/` in place.
 - **Session limit reached** (Colab Pro sessions have a maximum runtime and
-  can be reclaimed). This is exactly what §6's `SKIP_EXISTING`-based resume
+  can be reclaimed). This is exactly what the campaign's skip-existing resume
   flow is for — re-run §0–§4 in a fresh runtime, then re-run
-  `!make ablations-colab`.
+  `!make campaign-run PART=all`.
 - **Python 3.13+ runtime.** Do not attempt to force-install an older Python
   inside the Colab image (not a supported/tested path for this repo — do
   not invent a workaround). If Colab's default runtime has moved to 3.13,
@@ -476,40 +355,3 @@ up by default. Two options:
   change, not something to patch around in a notebook cell.
 
 ---
-
-## 9. Verifying and migrating existing results (results_doctor)
-
-A CPU-only companion tool, `dalmax/reporting/results_doctor.py`
-(`python -m dalmax.reporting.results_doctor`), checks a `results/ablations/`
-tree against the expected `(study, config, seed)` grid and, once, migrates
-the already-executed legacy RNHAL tree into the per-method layout. Runnable
-form: [`notebooks/results_doctor.ipynb`](notebooks/results_doctor.ipynb)
-(same construction style as `colab_runbook.ipynb`, but CPU-only — no GPU
-accelerator needed).
-
-**The executed RNHAL batch does NOT need re-running.** It already lives at
-the legacy no-method-segment root `results/ablations/{6_1,6_2,6_3}/` (see
-§6/§7 above and `CLAUDE.md`'s "Per-method ablation layout" note) —
-`migrate-legacy` just moves those directories (plus the batch-level
-`gpu{0,1}_failures.log`/`colab.log` files) into `results/ablations/rnhal/`,
-byte-for-byte, so that `SKIP_EXISTING` and `make ablation-report
-METHOD=rnhal` see them as already-completed runs under the new layout. This
-is a `results/`-internal move, not an edit or delete
-(`.claude/rules/data-safety.md`'s append-only policy is unaffected — file
-contents never change, only their parent directory).
-
-Quick reference:
-```bash
-# Dry run (default) -- prints the exact moves, changes nothing:
-poetry run python -m dalmax.reporting.results_doctor migrate-legacy --root results/ablations
-
-# Apply, once reviewed:
-poetry run python -m dalmax.reporting.results_doctor migrate-legacy --root results/ablations --apply
-
-# Verify a tree (works before OR after migration -- rnhal transparently
-# checks the legacy layout too):
-poetry run python -m dalmax.reporting.results_doctor verify --root results/ablations --method rnhal
-```
-See `notebooks/results_doctor.ipynb` for the guided, cell-by-cell version
-(dry run first, then an explicit `APPLY_MIGRATION` opt-in flag before
-anything moves).

@@ -1,5 +1,12 @@
 # Ablation study specification — TexHAL (paper 2)
 
+> **Tooling note (2026-09-29, ADR 0010).** References below to `scripts/ablations/*`, `scripts/benchmark/*`,
+> `make ablations-*`/`ablation-report*`/`smoke-ablations`, `dalmax/reporting/ablation_report.py`,
+> `results_doctor` or a `METHOD` variable describe tooling that was **removed**; these configs now run
+> and report only through the campaign (`make campaign-run PART=rnhal|texhal`, `make campaign-report`,
+> `make campaign-smoke`; `experiments/campaign.md`). The configs, protocol, run tables and the
+> execution records are unchanged. CLI entry points live in `tools/` (`tools/trainer.py`).
+
 Status: **materialized and CPU-smoke-tested (2026-08-30, 12/12 passing, ~3m24s local CPU) — not
 yet run on real hardware.** This is the TexHAL analog of
 [`ablation-study.md`](ablation-study.md) (the RNHAL/paper-3 spec) — see
@@ -113,7 +120,7 @@ One params JSON per variant, differing only in `embedding.q` (`Q=5` shown; swap 
 ```
 
 ```bash
-CUDA_VISIBLE_DEVICES=<gpu> poetry run python trainer.py \
+CUDA_VISIBLE_DEVICES=<gpu> poetry run python tools/trainer.py \
     --params_json files_config/ablations/texhal/rep_q5.json --dataset_name DANINHAS \
     --strategy_name RepresentationStrategy --n_query 100 --seed <1|2|3> \
     --n_round 8 --dir_results results/ablations/texhal/6_1/rep_q5/ --device cuda
@@ -159,7 +166,7 @@ at VCTex multi-scale (`q: [5, 17]`, `variant: "full"`) instead of SSRAE full.
 ```
 
 ```bash
-CUDA_VISIBLE_DEVICES=<gpu> poetry run python trainer.py \
+CUDA_VISIBLE_DEVICES=<gpu> poetry run python tools/trainer.py \
     --params_json files_config/ablations/texhal/hier_L3.json --dataset_name DANINHAS \
     --strategy_name RepresentationStrategy --n_query 100 --seed <1|2|3> \
     --n_round 8 --dir_results results/ablations/texhal/6_2/hier_L3/ --device cuda
@@ -188,7 +195,7 @@ CUDA_VISIBLE_DEVICES=<gpu> poetry run python trainer.py \
 **Superseded by ADR 0009 (2026-09-29)** -- ~~Confirmed (2026-09-01): `stage_no_representation` is NOT
 shared between the RNHAL and TexHAL papers; each paper runs its own independently, with separate copies
 (`files_config/ablations/{rnhal,texhal}/stage_no_representation.json`).~~ The 2026-09-01 decision is
-reversed: the config is byte-identical, running it twice wastes A100 time and yields two numbers for
+reversed: the config is byte-identical, running it twice wastes GPU time and yields two numbers for
 one computation. It is now ONE run (`shared/kmh_nq100` in the campaign manifest) consumed by paper 1's
 KMH row and by the 6.3 tables of papers 2 and 3; the redundant copies were removed.
 
@@ -211,7 +218,7 @@ KMH row and by the 6.3 tables of papers 2 and 3; the redundant copies were remov
 ```
 
 ```bash
-CUDA_VISIBLE_DEVICES=<gpu> poetry run python trainer.py \
+CUDA_VISIBLE_DEVICES=<gpu> poetry run python tools/trainer.py \
     --params_json files_config/ablations/texhal/stage_no_hierarchy.json --dataset_name DANINHAS \
     --strategy_name RepresentationStrategy --n_query 100 --seed <1|2|3> \
     --n_round 8 --dir_results results/ablations/texhal/6_3/stage_no_hierarchy/ --device cuda

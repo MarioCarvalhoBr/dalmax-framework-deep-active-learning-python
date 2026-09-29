@@ -1,5 +1,14 @@
 # Experimental protocol
 
+> **Update 2026-09-29 (ADR 0008/0009/0010).** The batch scripts this document describes
+> (`scripts/benchmark/run_pipe_gpu_{0,1}.sh`, `run_pipline.sh`, `params_dnf.json`-based sweeps) were
+> **removed**; everything now runs through the campaign manifest (`experiments/campaign.md`):
+> paper-1 = 12 classical strategies + KMH x `n_query` {10,50,100} x seeds {1,2,3}, `n_round 8`,
+> `n_init_labeled 100`, `n_epoch 10`, batch 256, plus the `FullSupervised` upper bound; papers 2/3 =
+> the ablation configs at `n_query 100`. The CLI entry point is `tools/trainer.py`. Script names below
+> are kept as the historical record of what produced `results/dalmax{1,2}/`; the flags, defaults,
+> seeds, results layout and `results.json` schema they describe are unchanged.
+
 This describes the active-learning experiment protocol as it exists in code
 today (`demo.py` (historical) → `dalmax/cli.py`, `dalmax/data/datasets.py`, `dalmax/data/handlers.py`
 — Phase 4 moved these from `utils/data.py`/`utils/dataset.py`, both now deleted) and
@@ -208,7 +217,7 @@ size, `NIL_8086`), only round 0 runs (`--n_round` must be 0, else `ConfigError`)
 artifacts are written (`results.json` with one round). **There is no validation split** in this
 project's protocol (pool/test only, as in the thesis) and none is invented for the upper bound.
 Results leaf: `.../NQ_100_NIL_8086_NR_0_NE_10/FullSupervised/`. Run by the campaign
-(`.specs/experiments/campaign-a100.md`); CLI form:
+(`.specs/experiments/campaign.md`); CLI form:
 `--strategy_name FullSupervised --n_query 100 --n_init_labeled 8086 --n_round 0`.
 
 ## Run metadata (NEW, Phase 2)

@@ -23,7 +23,7 @@ debt, works today but limits scalability), **Low** (cosmetic/mechanical).
 > **entirely unaffected** — they were never on the buggy code path — only the weight checkpoint
 > itself is lost.
 
-## Seed list from `prompt-master.md` §8.5 — verification status
+## Seed list from `.specs/history/prompt-master.md` §8.5 — verification status
 
 | # | Issue | Verified? | Evidence | Severity | Fixed in |
 |---|---|---|---|---|---|
@@ -130,7 +130,7 @@ this same resolution story, and ADR 0002's final amendment for the full move/del
 
 ### KI-33 — Colab-exported `MPLBACKEND` broke every CLI launch inside the `.venv` (FIXED 2026-08-25)
 
-**Symptom**: on Colab, every `poetry run python trainer.py ...` died at `import matplotlib` with
+**Symptom**: on Colab, every `poetry run python tools/trainer.py ...` died at `import matplotlib` with
 `ValueError: Key backend: 'module://matplotlib_inline.backend_inline' is not a valid value`.
 **Cause**: Colab sets `MPLBACKEND=module://matplotlib_inline.backend_inline` process-wide;
 `matplotlib_inline` is not a dependency of this project, so the `.venv` matplotlib cannot import it.
@@ -144,14 +144,14 @@ reproduction of the Colab environment). Documented in `COLAB_RUNBOOK.md` §8.
 **Resolved 2026-09-29**: `snapshot()` now adds a top-level `environment` block from `dalmax/experiment/environment.py::collect_environment()` (best-effort, runtime-probed, failures -> null): `os` (system/release/version/platform/distro), `machine` (arch/cpu_model/cpu_count/ram_total_gb), `python`, `torch` (version/cuda/cudnn/cuda_available), `gpus[]` (index/name/total_memory_gb/compute_capability/multi_processor_count/driver_version/nvidia_smi_name/memory_total_mib), `cuda_visible_devices`, `current_device`, `runtime` (is_colab/colab_release_tag). Hostname is deliberately not recorded. A one-line summary is also logged at run start. Original report follows.
 
 **Found**: 2026-08-26, while reconciling the Phase 3 ablation batch (executed on a Google Colab Pro
-T4) against the pre-Phase-2 lab-machine reference runs and the same-config re-run across two
+GPU session) against the pre-Phase-2 lab-machine reference runs and the same-config re-run across two
 ablation sub-studies (`6_1/rep_full` vs. `6_3/stage_full`, both the identical `RepresentationStrategy`
 config at `n_query=100`, differing by 0.0032 weighted F1 — see
 `.specs/experiments/ablation-study.md`'s "Execution record" section). `run_metadata.json`
 (`dalmax/experiment/run_metadata.py::write_run_metadata`) records Python/torch versions, CUDA
 availability, `git_commit`, and the resolved config, but **not the GPU model/name**
 (`torch.cuda.get_device_name(0)`) actually used for the run — so a `results/` tree mixing lab-machine
-and Colab runs (or different Colab session GPU classes — T4/L4/A100, which Colab does not let the
+and Colab runs (or different Colab session GPU classes, which Colab does not let the
 user pin) cannot be told apart by inspecting `run_metadata.json` alone; only the run's containing
 directory path or a memory of which environment executed it distinguishes them.
 
@@ -180,3 +180,16 @@ the other died in `write_report` with `FileNotFoundError` on the `os.rename` —
 `log-dalmax.log` interleaved both runs' lines (which would also corrupt the campaign's seed-consistency
 audit, which parses `Initial labeled idxs` from that file). **Fix**: the PID is now part of the file name.
 Severity: Low (needs a same-second start), Resolved 2026-09-29.
+
+### KI-36 — campaign resume trusted `results.json` alone; seed audit was silent on a missing log; GPU determinism over-claimed (FIXED 2026-09-29, ADR 0010)
+
+Found in the review of the campaign (verdict APPROVE, follow-ups). (1) `campaign.job_done` treated a leaf
+as finished as soon as `results.json` existed, but the reporter wrote `results.json` before the
+predictions file, so a run killed mid-report was skipped on resume. **Fix**: `job_done` requires the full
+artifact set (`dalmax/reporting/leaf_check.py::check_leaf`) and the reporter writes `results.json` last
+(`tests/test_campaign.py`). (2) A run with a missing/unreadable `log-dalmax.log` simply dropped out of the
+seed audit. **Fix**: the audit reports WARN, and `campaign verify` exits 0/1/2 (ok / FAIL or incomplete /
+WARN only). (3) `run_metadata.json` recorded `deterministic_algorithms: true` although
+`warn_only=True` allows non-deterministic kernels. **Fix**: it records `"warn_only"`, the ops that warned
+(`determinism.nondeterministic_op_warnings`) and `fill_uninitialized_memory=False`; the reproducibility
+docs now call GPU determinism best-effort. Severity: Low-Medium, Resolved 2026-09-29.

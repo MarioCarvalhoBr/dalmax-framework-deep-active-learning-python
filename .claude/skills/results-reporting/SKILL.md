@@ -80,8 +80,8 @@ prefixes are gone, since a name starting with a digit can't be used with
   treats `results/` as append-only. Check each script's `argparse` defaults for
   where it writes derived output before running it against a shared results
   tree.
-- There is also `dalmax/reporting/ablation_report.py`, a separate script that
-  aggregates `results/ablations/` for the Phase 3 ablation studies — see
-  `.specs/experiments/ablation-study.md`, not part of this numbered pipeline.
+- There is also `dalmax/reporting/campaign_report.py` (`make campaign-report`), which builds the
+  per-paper tables/confusion matrices for the campaign from `results/campaign/` — see
+  `.specs/experiments/campaign.md`, not part of this numbered pipeline.
 - `.claude/commands/results-report.md` wraps steps 2-4 (and optionally 5) as a
   single command for a given results directory.

@@ -11,9 +11,9 @@ and in the cross-paper comparison; TexHAL "full" the same in paper 2 (and in pap
 comparison); `RandomSampling` @ n_query=100 is the baseline of all three papers; the
 "w/o representation module" row (ImageNet ResNet-50 features + hierarchical k-means) is identical
 for papers 2 and 3 and is also paper 1's KMH baseline. The previous execution was split across
-environments (paper-1 benchmark on the lab machine, ablations on Colab T4), so tables of
+environments (paper-1 benchmark on the lab machine, ablations on Colab), so tables of
 different papers mixed numbers from different hardware. The user asked (2026-09-29) for one clean
-re-execution on a Colab Pro A100, same seeds {1,2,3}, same protocol, with **no redundant runs**:
+re-execution on a single GPU environment, same seeds {1,2,3}, same protocol, with **no redundant runs**:
 every distinct configuration runs exactly once and every table that needs it points to that run.
 
 ## Decision
@@ -46,6 +46,6 @@ then the upper bound.
 - Papers 2/3 comparison tables depend on paper-1 runs (KMH@100, RandomSampling@100) -- the parts are
   not independent; split sessions must still run `paper1` before reporting.
 - The already-executed trees (`results/ablations/`, `results/dalmax{1,2}/`) stay untouched
-  (append-only); the campaign writes a new root, `results/campaign_a100/`.
+  (append-only); the campaign writes a new root, `results/campaign/`.
 - Related: ADR 0007 (per-method ablation layout, still valid for the ablation-only scripts) and
   ADR 0009 (single shared "no representation" run).

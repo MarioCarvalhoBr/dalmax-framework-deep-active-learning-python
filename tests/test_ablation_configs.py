@@ -43,7 +43,7 @@ EXPECTED_RNHAL: dict[str, tuple[str, int | None, str, str, tuple[int, ...] | Non
     "hier_L3": ("ssrae", 13, "full", "hierarchical", (300, 100, 50)),
     "hier_L4": ("ssrae", 13, "full", "hierarchical", (300, 100, 50, 25)),
     # 5 advisor-requested hierarchy rows (2026-09-29, paper 3 only) -- see
-    # files_config/ablations/README.md and .specs/experiments/campaign-a100.md.
+    # files_config/ablations/README.md and .specs/experiments/campaign.md.
     "hier_L1_k100": ("ssrae", 13, "full", "hierarchical", (100,)),
     "hier_L1_k200": ("ssrae", 13, "full", "hierarchical", (200,)),
     "hier_L1_k600": ("ssrae", 13, "full", "hierarchical", (600,)),

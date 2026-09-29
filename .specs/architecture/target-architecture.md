@@ -39,7 +39,7 @@ old `--strategy_name` values keep working, not explicitly sketched in §2's orig
 See `current-state.md` for the live module map and `refactor-plan.md` Phase 4 for the executed
 move/delete list.
 
-## 1. Goals (traced to `prompt-master.md` §4.3 / `.claude/rules/code-quality.md`)
+## 1. Goals (traced to `.specs/history/prompt-master.md` §4.3 / `.claude/rules/code-quality.md`)
 
 - Single responsibility per module; no duplicated strategy boilerplate.
 - Registry pattern over `if/elif` chains, for datasets, models, and strategies.
@@ -153,7 +153,7 @@ dalmax/
 │   ├── average_results.py
 │   ├── build_method_metrics.py             # (moved in from repo root; not in the original sketch)
 │   ├── plot_results_dir.py                  # (moved in from repo root; not in the original sketch)
-│   └── ablation_report.py                    # NEW (Phase 3): ablation-specific aggregation
+│   └── campaign_report.py / leaf_check.py    # campaign tables + run-directory completeness check (ablation_report.py removed, ADR 0010)
 └── tools/                                 # vendored/adapted third-party code, contents unchanged since Phase 2-3
     ├── SSRAE/                              # was core/tools/SSRAE/ — mixed-case dir name kept, not lowercased
     ├── VCTex/                               # was core/tools/VCTex/ — mixed-case dir name kept, not lowercased

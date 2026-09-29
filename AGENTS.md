@@ -8,7 +8,7 @@ For full detail, always defer to `.specs/` and `.claude/`.
 DalMax — a PhD research lab (UFMS) for Deep Active Learning applied to UAV weed
 recognition. Main contribution: **RNHAL**, combining a randomized-network
 spatio-spectral representation (SSRAE) with hierarchical k-means batch selection.
-Entry point: `trainer.py` (a thin shim calling `dalmax.cli.main()`; renamed from the historical `demo.py` on 2026-08-23, see ADR 0006). All Python
+Entry point: `tools/trainer.py` (a thin shim calling `dalmax.cli.main()`; moved into `tools/` on 2026-09-29, ADR 0010; renamed from the historical `demo.py` on 2026-08-23, see ADR 0006). All Python
 source lives in one package, `dalmax/` — the old `core/`/`utils/` split no
 longer exists (consolidated in Phase 4).
 
@@ -27,14 +27,16 @@ poetry install     # or: make setup — Poetry-only; the pip/requirements.txt fa
 make lint            # ruff check
 make format          # ruff format
 make test            # pytest, fast tests only
-make smoke           # true end-to-end micro-dataset run (trainer.py, CPU) + fast tests
+make smoke           # true end-to-end micro-dataset run (tools/trainer.py, CPU) + fast tests
+make campaign-list / campaign-run / campaign-verify / campaign-report   # the single manifest-driven campaign (ADR 0008/0009)
+make campaign-smoke  # micro campaign on CPU (skips the two adversarial baselines)
 
 # Inference tools (new 2026-08-23, ADR 0006), consuming a trainer.py-written
 # saved_model.pth (dalmax-checkpoint format):
-poetry run python loader.py --model <path/to/saved_model.pth>
-poetry run python predict.py --model <path/to/saved_model.pth> --dir <folder> --out <out_dir>
-poetry run python predict.py --model <path/to/saved_model.pth> --image <file>
-poetry run python gui.py
+poetry run python tools/loader.py --model <path/to/saved_model.pth>
+poetry run python tools/predict.py --model <path/to/saved_model.pth> --dir <folder> --out <out_dir>
+poetry run python tools/predict.py --model <path/to/saved_model.pth> --image <file>
+poetry run python tools/gui.py
 ```
 
 Recommended install (any machine — dev, lab, or Colab): `pipx install poetry`
@@ -63,10 +65,11 @@ decisions get an ADR under `.specs/adr/`.
 
 Phase 1 (safety net: tests, golden run, CI — done) → Phase 2 (core refactor:
 config layer, embedding provider abstraction, registries — done) → Phase 3
-(ablation study: config/code done, lab-machine runs outstanding) → Phase 4
+(ablation study: executed 2026-08-26; the campaign now supersedes the ablation scripts) → Phase 4
 (polish: package consolidated into `dalmax/`, dead code deleted — done) → checkpoint
 fix + inference tools (`dalmax/models/checkpoint.py`, `dalmax/inference/`,
-historical `demo.py` → `trainer.py` rename — done, ADR 0006). Details:
+historical `demo.py` → `trainer.py` rename — done, ADR 0006) → cleanup: CLIs in `tools/`, legacy
+scripts removed, hardware-agnostic (2026-09-29, ADR 0010). Details:
 [`.specs/architecture/refactor-plan.md`](.specs/architecture/refactor-plan.md).
 
 ## Never do
@@ -92,4 +95,4 @@ historical `demo.py` → `trainer.py` rename — done, ADR 0006). Details:
   are additional CLI flags on top of the original set.
 - One params JSON per lab GPU (`files_config/benchmark/params_df_gpu_0.json`,
   `files_config/benchmark/params_df_gpu_1.json`),
-  run via `scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh`.
+  used by `make lab-check`/`colab-check` (the reference sweep scripts were retired, ADR 0010).

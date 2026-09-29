@@ -45,20 +45,21 @@ decisions** (ADRs) about the codebase supporting that research. Hence:
 │   ├── 0005-representation-strategy-and-registries.md      # [owned elsewhere]
 │   ├── 0008-single-campaign-manifest-dedup.md              # one manifest, aliases, redundancy checker
 │   ├── 0009-shared-no-representation-run.md                # one shared "w/o representation" run (supersedes 2026-09-01)
+│   ├── 0010-cleanup-tools-and-hardware-agnostic.md         # tools/ CLIs, campaign as the only run path, hardware-agnostic repo
 │   └── template.md                       # [owned elsewhere]
 ├── experiments/
 │   ├── experimental-protocol.md          # datasets, splits, seeds, budgets, metrics, results layout
 │   ├── ablation-study.md                 # RNHAL (paper 3) ablation spec (representation / hierarchy / stage-contribution) — EXECUTED
 │   ├── ablation-study-texhal.md          # TexHAL (paper 2) ablation spec, same structure — materialized, not yet run
 │   ├── papers-roadmap.md                 # the three-paper plan (DAL benchmark / TexHAL / RNHAL) and how it maps onto the codebase
-│   ├── campaign-a100.md                  # the single deduplicated A100 re-execution of all three papers (manifest, dedup table, counts, commands)
+│   ├── campaign.md                       # the single deduplicated re-execution of all three papers (manifest, dedup table, counts, commands)
 │   └── baseline-results.md               # where existing results/ runs live, what they cover
 ├── research-rules/
 │   ├── reproducibility.md                # seed policy, cache policy, config snapshot per run
 │   ├── metrics.md                        # exact metric definitions (sklearn averaging actually used)
 │   └── dataset-protocol.md               # daninhas_full layout, per-class counts, imbalance notes
 ├── infrastructure/
-│   ├── execution-environments.md         # local / lab (2×10GB) / Colab Pro decision matrix
+│   ├── execution-environments.md         # local / lab / Colab Pro decision matrix (hardware-agnostic)
 │   └── environment-setup.md              # Poetry install, .venv, lab/Colab pip fallback, CUDA notes
 ├── quality/
 │   ├── code-standards.md                 # [owned elsewhere]
@@ -72,6 +73,8 @@ decisions** (ADRs) about the codebase supporting that research. Hence:
 │   ├── run-full-benchmark.md             # all strategies × seeds × budgets on the lab machine
 │   ├── run-ablation.md                   # how to execute the three ablation studies
 │   └── generate-report.md                # dalmax/reporting/ pipeline, raw results → averaged tables
+├── history/
+│   └── prompt-master.md                  # the original scaffolding master prompt (historical record; moved 2026-09-29)
 └── future/
     └── ideas.md                          # backlog (package rename, config layer, tracking, DVC, ...)
 ```

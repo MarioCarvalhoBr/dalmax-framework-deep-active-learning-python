@@ -59,7 +59,7 @@ f1        = f1_score(self.Y_test, preds, average='weighted', zero_division=0)
 ## Macro F1 is now computed (resolved 2026-08-23, Phase 2) — which metric to report
 
 `experiments/ablation-study.md` (per the advisor's request, and per
-`prompt-master.md` §6) specifies **macro F1** as the ablation metric. Since
+`.specs/history/prompt-master.md` §6) specifies **macro F1** as the ablation metric. Since
 `calc_metrics_sklearn` uses `average='weighted'`, this was a real
 discrepancy, not a naming nuance: macro F1 weights every class equally
 regardless of support, so on this imbalanced test set (`BRACHIARIA`,

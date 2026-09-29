@@ -3,23 +3,23 @@
 This folder is the **only** place experiment numbers come back into git. Raw runs stay
 machine-local under `results/` (gitignored).
 
-Workflow (lab machine, after an ablation batch — see `scripts/ablations/`):
+Workflow (any GPU machine, after a campaign batch -- see `.specs/experiments/campaign.md`):
 
 ```bash
-python -m dalmax.reporting.ablation_report --root results/ablations --out docs/results/ablation_tables
-git add docs/results/ablation_tables/
-git commit -m "Add Phase 3 ablation study results"
-git push
+make campaign-verify
+make campaign-report               # writes docs/results/campaign/ (tables md/tex/csv, seed audit, confusion matrices)
+git add docs/results/campaign/
+git commit -m "exp: campaign results tables"
 ```
 
-Contents committed here: `ablation_summary.csv` + `ablation_6_{1,2,3}.{md,tex}` (small, text-only).
-The paper skeleton that consumes these tables lives in `paper_drafts/ablation_section.tex`
-(gitignored; see `paper_drafts/README.md`).
+`docs/results/campaign/` holds, per paper, the md/tex tables (`paper1/`, `paper2/`, `paper3/`),
+`summary.csv`, `seed_audit.md` and `confusion_matrices/` (small, text/PDF only). Never commit `.pkl`/`.pth`.
 
-## Layout by method (since 2026-08-26, ADR 0007)
+## Legacy (history)
 
-- **Top-level files** (`ablation_summary.csv`, `ablation_6_*.{md,tex}`): the executed
-  **RNHAL** ablation batch of 2026-08-26 (Colab T4, legacy layout) — kept as-is.
-- **New runs** land in per-method subfolders: `ablation_tables/rnhal/` and
-  `ablation_tables/texhal/` (`make ablation-report METHOD=rnhal|texhal`).
-  The legacy top-level path can be regenerated with `make ablation-report-legacy`.
+`ablation_tables/` (`ablation_summary.csv` + `ablation_6_{1,2,3}.{md,tex}`) is the record of the executed
+2026-08-26 RNHAL ablation batch (Colab, legacy layout `results/ablations/{6_1,6_2,6_3}/`). It is kept
+as-is and never regenerated: the tool that produced it (`ablation_report.py`) was removed by ADR 0010,
+and the campaign's `docs/results/campaign/paper3/` supersedes it once run. The paper skeleton that
+consumed these tables lives in `paper_drafts/ablation_section.tex` (gitignored; see
+`paper_drafts/README.md`).

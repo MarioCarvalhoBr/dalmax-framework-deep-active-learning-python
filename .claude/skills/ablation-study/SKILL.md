@@ -5,12 +5,19 @@ description: Operational guide for the three ablation studies (representation, h
 
 # Ablation study
 
+> **Execution tooling retired 2026-09-29 (ADR 0010).** The per-GPU ablation scripts, `make ablations-*`
+> / `ablation-report*` / `smoke-ablations` and `dalmax/reporting/ablation_report.py` no longer exist:
+> these configs now run only through the campaign manifest (`make campaign-run PART=rnhal|texhal`,
+> report via `make campaign-report`, CPU smoke via `make campaign-smoke`; see
+> `.specs/experiments/campaign.md`). The conceptual content below (what each ablation isolates,
+> embedding layout, configs under `files_config/ablations/{rnhal,texhal}/`) is still valid; where it
+> mentions the removed scripts/targets or a `METHOD` variable, read it as history.
+
 This mirrors `.specs/experiments/ablation-study.md` — the advisor-requested
 ablation section for the paper's `\subsection{Ablation study}`. All three
 sub-studies are evaluated with **macro F1** on the held-out split, dataset
 `daninhas_full`, using the seeds and budgets from
-`.specs/experiments/experimental-protocol.md` (seeds 1-3, matching
-`scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh`).
+`.specs/experiments/experimental-protocol.md` (seeds 1-3).
 
 **Method-aware since 2026-08-30**: there are now TWO ablation suites, selected by a `METHOD`
 environment variable (`rnhal` default, or `texhal`) threaded through every script/Makefile target —
@@ -26,9 +33,7 @@ texhal.md` mirrors this file's structure.
 11/11, not yet run on the lab machine.** All 11 run-table rows are now real files, not just JSON
 snippets in this spec: `files_config/ablations/*.json` (+ `files_config/ablations/micro/*.json` CPU
 mirrors, validated by `tests/test_ablation_configs.py`, smoke-tested by
-`scripts/ablations/smoke_ablations.sh` / `make smoke-ablations`), and
-`scripts/ablations/run_ablation_gpu_0.sh` / `run_ablation_gpu_1.sh` (mirroring `scripts/benchmark/run_pipe_gpu_*.sh`,
-splitting the 11 configs across the two lab GPUs by expected hierarchical-clustering cost). See
+`make campaign-smoke`), run through the campaign manifest. See
 `.specs/experiments/ablation-study.md`'s "Materialized files" section for the exact mapping and
 `.specs/use-cases/run-ablation.md` for the operational run order. This file's content
 below is kept as the conceptual/background reference (embedding layout, what each ablation isolates)
@@ -125,7 +130,7 @@ row are in `.specs/experiments/ablation-study.md` §6.2's run table (derived pro
 Three conditions, all macro F1 on `daninhas_full`:
 
 1. **RNHAL (full)** — F1 taken from the already-executed reference experiments
-   (`SSRAEKmeansHCSampling`, the current `scripts/benchmark/run_pipe_gpu_*.sh` sweeps). No new
+   (`SSRAEKmeansHCSampling`, the historical reference sweeps). No new
    run needed; pull the number from existing `results/` via
    `.claude/skills/results-reporting/SKILL.md`. Their `results.json` predates the Phase 2 macro-F1
    addition (weighted F1 only) — recompute macro F1 offline from `predictions.csv` for these
@@ -167,24 +172,9 @@ machine and recording the resulting macro-F1 numbers.
 
 ## Running and reporting
 
-On the lab machine (never locally, no GPU here): `METHOD=rnhal bash scripts/ablations/run_ablation_gpu_0.sh`
-and `METHOD=rnhal bash scripts/ablations/run_ablation_gpu_1.sh` (`METHOD` defaults to `rnhal` if
-omitted; one per GPU, `SEEDS=(1 2 3)`, `n_query=100`, `n_round=8`, `--device cuda`; pass
-`METHOD=texhal` for the TexHAL suite instead) run all configs (11 for rnhal, 12 for texhal) into
-`results/ablations/<method>/<study>/<config>/daninhas_full/SEED_<seed>/NQ_.../RepresentationStrategy/`.
-Both scripts keep going past a failing config (logging it to
-`results/ablations/<method>/gpu{0,1}_failures.log`) rather than aborting the whole batch — check
-that file before trusting a "done" run. Locally, `make smoke-ablations` (`scripts/ablations/
-smoke_ablations.sh`, `METHOD` defaults to `both`) CPU-smoke-tests every config against
-`DATA/daninhas_micro/` first — always green this before a lab-machine run.
-
-Aggregate with `poetry run python -m dalmax.reporting.ablation_report --root
-results/ablations/<method> --out docs/results/ablation_tables/<method> --method <method>`
-(`make ablation-report METHOD=<method>` wraps this) — writes `ablation_summary.csv` (mean ± std
-across seeds, final-round and across-rounds-mean, both macro and weighted F1) plus one booktabs
-`ablation_6_{1,2,3}.tex` / `.md` table per sub-study (missing configs render as `TBD`, never
-silently omitted). For the already-executed legacy RNHAL batch (no `rnhal/` segment in its results
-tree), use `make ablation-report-legacy` instead. This supersedes `.claude/skills/results-reporting/
-SKILL.md`'s `dalmax/reporting/*.py` scripts for the ablation sweep specifically (those remain the
-tool for the main `results/dalmax{1,2}/` sweeps). Track progress with
-`.claude/commands/ablation-status.md`.
+Run the configs through the campaign only: `make campaign-run PART=rnhal` (or `texhal`) on a GPU machine,
+`make campaign-verify PART=rnhal`, then `make campaign-report` (tables in `docs/results/campaign/`, missing
+runs render as `TBD`). Locally, `make campaign-smoke` CPU-smoke-tests every config on
+`DATA/daninhas_micro/` (skipping the two adversarial baselines) -- always green this before a GPU run.
+The already-executed 2026-08-26 RNHAL batch lives at the legacy `results/ablations/{6_1,6_2,6_3}/` with
+its tables under `docs/results/ablation_tables/`. Track progress with `.claude/commands/campaign-status.md`.

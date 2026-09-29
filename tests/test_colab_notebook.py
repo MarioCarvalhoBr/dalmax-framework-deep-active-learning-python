@@ -16,20 +16,17 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 NOTEBOOK_PATH = REPO_ROOT / "notebooks" / "colab_runbook.ipynb"
 
 # The runbook commands that must appear, in this relative order, somewhere
-# across the notebook's code cells (COLAB_RUNBOOK.md sections 1, 3, 4, 6, 7).
+# across the notebook's code cells (COLAB_RUNBOOK.md sections 1, 3, 4, 5, 6).
 EXPECTED_COMMAND_ORDER = [
     "drive.mount",
     "poetry install",
     "make colab-setup",
     "make colab-check",
-    # 2026-09-29: the A100 full campaign (section 5b) is the recommended path and comes
-    # before the ablation-only section 6.
+    # The campaign (section 6) is the only execution path.
     "make campaign-list",
     "make campaign-run",
     "make campaign-verify",
     "make campaign-report",
-    "make ablations-colab",
-    "make ablation-report",
 ]
 
 
@@ -108,5 +105,6 @@ def test_key_commands_appear_in_expected_order() -> None:
 def test_notebook_has_colab_gpu_metadata() -> None:
     nb = _load_notebook()
     assert nb["metadata"]["accelerator"] == "GPU"
-    assert nb["metadata"]["colab"]["gpuType"] == "A100"
+    # Hardware-agnostic: no specific GPU model is pinned in the notebook metadata.
+    assert "gpuType" not in nb["metadata"]["colab"]
     assert nb["metadata"]["kernelspec"]["name"] == "python3"

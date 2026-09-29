@@ -20,16 +20,15 @@ files_config/ablations/
     ├── stage_full.json / stage_no_hierarchy.json               (§6.3)
     └── micro/           # CPU smoke mirrors of the 11 files above
 
-files_config/campaign/   # the A100 campaign (manifest + params_paper1/params_kmh); see its README
+files_config/campaign/   # the campaign (manifest + params_paper1/params_kmh); see its README
 ```
 
 **2026-09-29 (ADR 0009)**: `stage_no_representation.json` no longer exists in `rnhal/` or `texhal/`. The
 ResNet-ImageNet + hierarchical configuration is **one run shared by papers 1 (KMH@100), 2 and 3**; its
 only config is `files_config/campaign/params_kmh.json` (run as the campaign's `shared/kmh_nq100`). The
-ablation-only scripts (`run_ablation_gpu_*.sh`, `smoke_ablations.sh`) therefore no longer include it
-(rnhal: 10 configs, texhal: 11), and `ablation_report`/`results_doctor` resolve the texhal 6.3 row to
-the rnhal results tree. The campaign (`make campaign-run`) is the recommended path for the final
-re-execution and also covers the five new rows; the ablation-only scripts remain for partial runs.
+campaign runs it once (rnhal: 10 configs, texhal: 11 here). Since 2026-09-29 (ADR 0010) the
+ablation-only scripts and reporter were removed: these configs are executed ONLY through the campaign
+(`make campaign-run PART=rnhal|texhal`), which also covers the five new rows.
 
 Each method's `.json` files load via `dalmax.config.loader.load_experiment_config`, using the
 Phase 2 `"embedding"`/`"selection"` config syntax; see `tests/test_ablation_configs.py`
@@ -102,15 +101,14 @@ TexHAL fixes VCTex multi-scale (`q: [5, 17]`, `variant: "full"`).
 
 ## `micro/` (both methods)
 
-Same 11 basenames per method, mirrored for `make smoke-ablations` /
-`scripts/ablations/smoke_ablations.sh`: `data_dir` -> `DATA/daninhas_micro/`, `n_classes: 5`,
+Same 11 basenames per method, mirrored for the CPU smoke (`make campaign-smoke`): `data_dir` -> `DATA/daninhas_micro/`, `n_classes: 5`,
 `n_epoch: 1`, batch size 16, `num_workers: 0`. TexHAL's micro hierarchies are copied verbatim from
 RNHAL's micro hierarchy choices (same `n_clusters`/`sample_sizes` values — see
 `rnhal/micro/README` derivation below), since both suites share the same ~796-image
 `DATA/daninhas_micro/` unlabeled pool and the same k-means machinery; only the embedding block
 differs (vctex `q=[5,17]` vs ssrae `q=13`, per method).
 
-`make smoke-ablations` was the **first real execution of VCTex through the generic
+The ablation CPU smoke (now `make campaign-smoke`) was the **first real execution of VCTex through the generic
 `RepresentationStrategy` path** — previously VCTex only ran through the legacy
 `VCTexKmeansSampling`/`VCTexKmeansHCSampling` presets. Result (2026-08-30): **12/12 passed, no
 `VCTexProvider` bug found** — see `.specs/experiments/ablation-study-texhal.md`'s
@@ -162,8 +160,7 @@ tolerates (ignores) extra dict keys before constructing it — verified empirica
 `_comment` key safely; the full-scale files keep the rule documented here instead.
 
 All 44 configs (22 per method) load via `dalmax.config.loader.load_experiment_config` —
-`tests/test_ablation_configs.py`. `bash scripts/ablations/smoke_ablations.sh` (default: both
-methods) end-to-end smoke-tests every config against the real, regenerated
+`tests/test_ablation_configs.py`. `make campaign-smoke` end-to-end smoke-tests every config against the real, regenerated
 `DATA/daninhas_micro/`.
 
 ## Five new RNHAL hierarchy rows (advisor request, 2026-09-29)
@@ -182,4 +179,4 @@ Identical to the existing `hier_*` files except the hierarchy; `sample_sizes` by
 Micro mirrors (table above) use `k/10` with floor 2 and the same rule for `sample_sizes`; none has
 equal-sized clusters by construction (KI-30 trap is data-dependent, not config-dependent, and is
 exercised by the campaign smoke). They are executed only by the campaign
-(`.specs/experiments/campaign-a100.md`), not by `run_ablation_gpu_*.sh`.
+(`.specs/experiments/campaign.md`), (the per-GPU ablation scripts no longer exist).

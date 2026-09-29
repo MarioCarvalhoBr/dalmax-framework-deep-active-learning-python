@@ -50,7 +50,7 @@ For the project's specifications, architecture, and experiment protocols, see
 
 ## Implemented query strategies
 
-These are the exact `--strategy_name` choices exposed by `trainer.py`.
+These are the exact `--strategy_name` choices exposed by `tools/trainer.py`.
 
 **Uncertainty-based**
 - **Random Sampling** — select samples randomly (baseline).
@@ -146,7 +146,7 @@ download (~2.5 GB total). Dependency versions are exact-pinned in
 ### 4. Run
 
 ```bash
-poetry run python trainer.py --dir_results results/dalmax1/ \
+poetry run python tools/trainer.py --dir_results results/dalmax1/ \
     --params_json files_config/benchmark/params_df_gpu_0.json \
     --dataset_name DANINHAS --strategy_name SSRAEKmeansHCSampling \
     --n_query 100 --n_init_labeled 100 --n_round 8 --seed 1 --device cuda
@@ -164,35 +164,30 @@ in-project, `source .venv/bin/activate`.
 make setup            # poetry install
 make lint             # ruff check
 make test             # pytest (fast tests only)
-make smoke            # true end-to-end micro-dataset run (trainer.py, CPU) + fast tests
-make smoke-ablations  # CPU smoke test for all 11 Phase 3 ablation configs
+make smoke            # true end-to-end micro-dataset run (tools/trainer.py, CPU) + fast tests
+make campaign-smoke   # micro campaign on CPU (skips the two adversarial baselines)
 ```
 
-### 6. Lab machine
+### 6. Lab machine / Colab: the campaign
 
 Same Poetry steps as above (`pipx install poetry` once per machine, then
-`poetry install` after each `git pull`), then run the benchmark/ablation
-scripts through `poetry run`:
+`poetry install` after each `git pull`). Everything the three papers need runs
+from ONE manifest (`files_config/campaign/manifest.json`, 192 runs / 64 run
+groups, ADR 0008/0009, [`.specs/experiments/campaign.md`](.specs/experiments/campaign.md)):
 
 ```bash
-poetry run bash scripts/benchmark/run_pipe_gpu_0.sh   # GPU 0, results/dalmax1/
-poetry run bash scripts/benchmark/run_pipe_gpu_1.sh   # GPU 1, results/dalmax2/
-poetry run bash scripts/ablations/run_ablation_gpu_0.sh
-poetry run bash scripts/ablations/run_ablation_gpu_1.sh
+make campaign-list                 # job table + counts
+make campaign-run PART=all         # sequential, skip-existing (re-run to resume)
+make campaign-verify               # per-job OK/INCOMPLETE/MISSING + seed audit
+make campaign-report               # tables + mean confusion matrices -> docs/results/campaign/
+make campaign-smoke                # CPU micro campaign (skips AdversarialBIM/AdversarialDeepFool)
 ```
 
-(The scripts themselves already invoke `poetry run python` internally, so
-`bash scripts/benchmark/run_pipe_gpu_0.sh` also works — the `poetry run bash`
-wrapper above is shown for consistency with "everything through `poetry
-run`".)
-
-For the full step-by-step operator guide (one-time setup, dataset transfer,
-sanity checks, `tmux` launch, monitoring, failure re-runs, and results
-collection), see **[`LAB_RUNBOOK.md`](LAB_RUNBOOK.md)**. It is also wired into
-`make` as a handful of dedicated targets: `make lab-setup`, `make lab-check`,
-`make ablations-gpu0`/`make ablations-gpu1`/`make ablations-all`,
-`make ablation-report`, `make benchmark-gpu0`/`make benchmark-gpu1`, and
-`make micro-dataset`.
+The repo is hardware-agnostic: the GPU actually used is recorded at runtime in
+each run's `run_metadata.json` (`environment.gpus`). Step-by-step operator
+guides: **[`LAB_RUNBOOK.md`](LAB_RUNBOOK.md)** and **[`COLAB_RUNBOOK.md`](COLAB_RUNBOOK.md)**;
+other `make` targets: `make lab-setup`, `make lab-check`, `make colab-setup`,
+`make colab-check`, `make micro-dataset`.
 
 ### CUDA
 
@@ -251,13 +246,13 @@ DATA/
 
 ## Usage
 
-Entry point: `trainer.py` (renamed from the historical `demo.py` on 2026-08-23) — as of the Phase 2 core refactor, a thin shim that calls
+Entry point: `tools/trainer.py` (moved from the repo root 2026-09-29, ADR 0010; renamed from the historical `demo.py` on 2026-08-23) — as of the Phase 2 core refactor, a thin shim that calls
 `dalmax.cli.main()` (see [`.specs/architecture/refactor-plan.md`](.specs/architecture/refactor-plan.md)
 Phase 2); every flag and results-directory convention below is unchanged, plus two additive flags.
 Example (RNHAL / SSRAE hierarchical strategy on the weed dataset):
 
 ```bash
-poetry run python trainer.py \
+poetry run python tools/trainer.py \
     --dir_results results/dalmax1/ \
     --params_json files_config/benchmark/params_df_gpu_0.json \
     --dataset_name DANINHAS \
@@ -315,10 +310,10 @@ weights + `model_name`/`n_classes`/`class_names`/`img_size`/provenance), and thr
 consume it — all preprocessing (resize, normalization) is read from the same code training used,
 never re-derived, so predictions here always match what a real run would have recorded.
 
-### `loader.py` — inspect a checkpoint
+### `tools/loader.py` — inspect a checkpoint
 
 ```bash
-poetry run python loader.py --model results/dalmax1/.../saved_model.pth
+poetry run python tools/loader.py --model results/dalmax1/.../saved_model.pth
 ```
 
 Prints format/version, `model_name`/`n_classes`/`class_names`/`img_size`, provenance (strategy,
@@ -326,15 +321,15 @@ seed, dataset, git commit, torch version, save timestamp), total/trainable param
 per-top-level-module parameter breakdown, file size, and a CPU dummy-forward sanity check. On a
 legacy pre-2026-08-23 checkpoint, prints a clear error instead of a raw unpickling traceback.
 
-### `predict.py` — run a checkpoint on image(s)
+### `tools/predict.py` — run a checkpoint on image(s)
 
 ```bash
 # One image:
-poetry run python predict.py --model results/dalmax1/.../saved_model.pth \
+poetry run python tools/predict.py --model results/dalmax1/.../saved_model.pth \
     --image DATA/daninhas_full/test/DATASET_GRAMINEA/some_image.jpg
 
 # A whole folder (searched recursively):
-poetry run python predict.py --model results/dalmax1/.../saved_model.pth \
+poetry run python tools/predict.py --model results/dalmax1/.../saved_model.pth \
     --dir DATA/daninhas_full/test/DATASET_GRAMINEA --out results/predictions/
 ```
 
@@ -343,10 +338,10 @@ column per class) and a `<stem>.pred.json` sidecar per image (full per-class pro
 checkpoint metadata) into `--out` (default: alongside the input). `--device {auto,cpu,cuda}`
 mirrors `trainer.py`'s flag.
 
-### `gui.py` — interactive mini-app
+### `tools/gui.py` — interactive mini-app
 
 ```bash
-poetry run python gui.py
+poetry run python tools/gui.py
 ```
 
 A `tkinter` app: load a model, select image(s) or a folder, run prediction into a results table,
@@ -457,13 +452,13 @@ DalMax is developed and run across three environments:
 
 1. **Local dev notebook** — 16 GB RAM, no GPU, Python 3.12, Poetry. Used for coding,
    CPU smoke tests on tiny subsets, and report generation.
-2. **Lab machine (primary training)** — 2× NVIDIA GPUs, 10 GB each. Workflow: push
-   from the notebook, pull on the lab machine, run `scripts/benchmark/run_pipe_gpu_0.sh` /
-   `scripts/benchmark/run_pipe_gpu_1.sh` (one params JSON per GPU), results come back via git or copy.
+2. **Lab machine (primary training)** — one or more GPUs. Workflow: push
+   from the notebook, pull on the lab machine, run the campaign
+   (`make campaign-run`), results come back via git or copy.
 3. **Google Colab Pro (secondary/burst)** — single GPU, session-limited; a hybrid
    layout (repo + `.venv` + dataset on the runtime's local disk, `results/`
    symlinked to Drive so artifacts survive a disconnect) via `make colab-setup` /
-   `make ablations-colab`.
+   `make campaign-run`.
 
 Details, decision matrix, and the Colab checklist:
 [`.specs/infrastructure/execution-environments.md`](.specs/infrastructure/execution-environments.md).
@@ -487,18 +482,15 @@ make setup         # poetry install
 make lint          # ruff check
 make format        # ruff format
 make test          # pytest (fast tests only)
-make smoke         # true end-to-end micro-dataset run (trainer.py, CPU) + fast tests
-make smoke-ablations  # CPU smoke test for all 11 Phase 3 ablation configs
+make smoke         # true end-to-end micro-dataset run (tools/trainer.py, CPU) + fast tests
+make campaign-smoke   # micro campaign on CPU (skips the two adversarial baselines)
 ```
 
 ## Repository layout
 
 ```
 dalmax-deep-active-learning-python/
-├── trainer.py                 # training CLI entry point — thin shim, calls dalmax.cli.main()
-├── predict.py                 # inference CLI: run a saved_model.pth on image(s)
-├── loader.py                  # inference CLI: inspect a saved_model.pth checkpoint
-├── gui.py                     # inference tkinter mini-app — thin shim, calls dalmax.inference.gui.main()
+├── tools/                     # CLI entry points (ADR 0010): trainer.py, predict.py, loader.py, gui.py + README
 ├── dalmax/                    # the ONE package — all Python source lives here (Phase 4 complete)
 │   ├── cli.py                 # argparse -> ExperimentConfig -> ExperimentRunner.run()
 │   ├── config/                # schema.py (typed dataclasses), loader.py (params JSON -> config)
@@ -519,24 +511,20 @@ dalmax-deep-active-learning-python/
 │   ├── experiment/            # runner.py (round loop), reporter.py (plots/JSON/CSV), run_metadata.py
 │   ├── reporting/              # cross-run aggregation: extract_confusion_matrices.py, chunk_results.py,
 │   │                          #   average_confusion_matrices.py, average_results.py,
-│   │                          #   build_method_metrics.py, plot_results_dir.py, ablation_report.py
+│   │                          #   build_method_metrics.py, plot_results_dir.py, campaign_report.py, leaf_check.py
 │   └── tools/                 # vendored third-party code (unchanged contents, Meta-licensed for SSL/)
 │       ├── SSRAE/             # randomized-network spatio-spectral extractor
 │       ├── VCTex/              # alternative color-texture representation
 │       └── SSL/                # hierarchical k-means selection
 ├── files_config/
 │   ├── params_micro.json      # CPU smoke-test params (make smoke)
-│   ├── ablations/              # Phase 3 ablation-study params (6.1/6.2/6.3 + micro/ variants)
-│   └── benchmark/              # RNHAL reference-benchmark params (one file per lab GPU)
-│       ├── params_df_gpu_0.json
-│       └── params_df_gpu_1.json
+│   ├── campaign/              # manifest.json (+ micro), params_paper1/params_kmh (+ micro): the campaign
+│   ├── ablations/             # per-method ablation params (rnhal/, texhal/, + micro/), referenced by the manifest
+│   └── benchmark/             # reference params (one file per lab GPU), used by `make lab-check`/`colab-check`
 ├── scripts/
 │   ├── make_micro_dataset.py  # generates DATA/daninhas_micro/ for make smoke
-│   ├── ablations/              # Phase 3 ablation run/smoke scripts (poetry run python)
-│   └── benchmark/              # RNHAL reference-benchmark batch runners (poetry run python)
-│       ├── run_pipe_gpu_0.sh
-│       ├── run_pipe_gpu_1.sh
-│       └── ...                 # older baseline-strategy scripts, kept for history
+│   ├── campaign/build_manifest.py  # generates the two committed manifests
+│   └── colab/setup_colab.sh   # Colab Drive/dataset/results wiring
 ├── DATA/                      # datasets (gitignored, immutable)
 ├── results/                   # experiment outputs (gitignored)
 ├── phd_files/                 # PhD documents, paper LaTeX sources, references

@@ -18,9 +18,9 @@ pre-Phase-2 state for context, but the actual seeding code they refer to no long
 locations.
 
 - The historical `demo.py` used to seed `np.random.seed(args.seed)` and `torch.manual_seed(args.seed)`
-  from the `--seed` CLI argument (see `scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh`,
-  which sweep `SEEDS=(1 2 3)`, still valid — the CLI flag and sweep are unchanged, only where the
-  seeding happens moved to `dalmax/seeding.py`).
+  from the `--seed` CLI argument (the campaign manifest sweeps seeds `(1, 2, 3)`, as the retired
+  `scripts/benchmark/run_pipe_gpu_*.sh` did — the CLI flag is unchanged, only where the seeding
+  happens moved to `dalmax/seeding.py`).
 - **Known violation, now fixed**: the now-deleted `core/query_strategies/ssrae_kmeans_sampling.py`
   used to instantiate `KMeans(n_clusters=n, random_state=3, n_init=10)` — the `3` was a
   literal, completely ignoring `--seed`. That file (and its bug) was deleted in Phase 4, having been
@@ -31,24 +31,40 @@ locations.
   Any new strategy code must follow this pattern, not the legacy literal.
 - `torch.backends.cudnn.enabled = False` was used as a determinism
   shortcut in the historical `demo.py:59` (line no longer exists); it globally disabled cuDNN and cost performance on the
-  10 GB lab GPUs. **Now uses** `torch.backends.cudnn.deterministic = True` +
+  the lab GPUs. **Now uses** `torch.backends.cudnn.deterministic = True` +
   `torch.backends.cudnn.benchmark = False` instead (`dalmax/seeding.py::seed_everything`).
   Deliberate consequence: post-refactor GPU runs are not bit-identical to historical GPU runs at the
   same seed — cuDNN's deterministic kernels differ from the non-deterministic ones used previously.
   CPU runs (the golden-run fixtures) are unaffected.
 
-- **GPU determinism settings (2026-09-29)**: `seed_everything` additionally sets
+- **GPU determinism settings (2026-09-29, honest version 2026-09-29b)**: `seed_everything` additionally sets
   `CUBLAS_WORKSPACE_CONFIG=:4096:8` (`os.environ.setdefault`, an operator-set value is kept; the
-  campaign runner also exports it into the `trainer.py` subprocess) and
+  campaign runner also exports it into the `trainer.py` subprocess),
   `torch.use_deterministic_algorithms(True, warn_only=True)` (ops without a deterministic kernel warn
-  instead of crashing a long run). `run_metadata.json` records a `determinism` block
-  (`dalmax/seeding.py::determinism_state`): `seed`, `deterministic_algorithms`, `cudnn_deterministic`,
-  `cudnn_benchmark`, `cublas_workspace_config`. **Honest caveat**: identical seeds give identical
-  initial labeled sets, selection randomness and data order everywhere; bit-identical metrics are
-  guaranteed on CPU (golden tests) and on the same GPU model/driver with deterministic algorithms; they
-  are **not** guaranteed across different GPU models. The campaign's `verify` runs a seed-consistency
-  audit (every run of a seed starts from the identical initial labeled set) — see
-  `.specs/experiments/campaign-a100.md`.
+  instead of crashing a long run) and `torch.utils.deterministic.fill_uninitialized_memory = False`.
+  `run_metadata.json` records a `determinism` block (`dalmax/seeding.py::determinism_state`): `seed`,
+  `deterministic_algorithms` (the string `"warn_only"`, not a bool), `cudnn_deterministic`,
+  `cudnn_benchmark`, `cublas_workspace_config`, `fill_uninitialized_memory`, and
+  `nondeterministic_op_warnings` -- the unique ops torch warned about during the run
+  (`dalmax/seeding.py::record_nondeterministic_ops`, filled by `ExperimentRunner.run()` when the run
+  ends). **Honest caveat**: `warn_only` means determinism on GPU is **best-effort**, not guaranteed:
+  identical seeds give identical initial labeled sets, selection randomness and data order everywhere
+  (checked by the campaign's seed audit), and bit-identical metrics are guaranteed only on CPU (golden
+  tests); on GPU a non-empty `nondeterministic_op_warnings` list means some op had no deterministic
+  kernel, and results may differ run to run and across GPU models/drivers. Papers must report the
+  seed-averaged numbers, not claim bit-reproducibility on GPU. The campaign's `verify` runs the
+  seed-consistency audit (every run of a seed starts from the identical initial labeled set; missing or
+  unreadable log = WARN, mismatch = FAIL) -- see `.specs/experiments/campaign.md`.
+
+- **Hardware-agnostic (2026-09-29, ADR 0010)**: no GPU model name (nor a GPU-specific results directory
+  or config name) may appear in code, configs, scripts, Makefile, tests, notebooks, runbooks,
+  README/CLAUDE/AGENTS, `.claude/` or `.specs/` (except clearly past-tense execution-history records).
+  The GPU actually used is recorded only at runtime, in each run's `run_metadata.json`
+  `environment.gpus[*].name` (`dalmax/experiment/environment.py`, no hardcoded defaults); docs use the
+  placeholder `<gpu-name>` and tell the operator to check `environment.gpus[0].name` in the first
+  run. Tests that need a GPU name use a fake one (`"NVIDIA Fake GPU 40GB"`). Gate: `tests/test_hardware_agnostic.py` greps every tracked file (excluding `poetry.lock`,
+  `phd_files/`, `paper_drafts/`, `docs/results/`, `results/`, and past-tense records under `.specs/`) for
+  the common GPU model names and fails on any hit.
 
 ## Config snapshot
 

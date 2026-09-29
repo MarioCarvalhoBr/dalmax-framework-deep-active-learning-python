@@ -3,7 +3,7 @@
 The `dalmax/reporting/` pipeline (moved and renamed from `utils/report/`'s numbered `1_` through
 `4_` scripts in Phase 4) turns raw per-run `results.json`/`predictions.csv` output into
 seed-averaged tables and plots, plus two standalone helpers (`build_method_metrics.py`,
-`plot_results_dir.py`) and the Phase 3 `ablation_report.py`. Only script **headers/signatures**
+`plot_results_dir.py`) and `campaign_report.py` (`make campaign-report`; `ablation_report.py` was removed in ADR 0010). Only script **headers/signatures**
 (first ~40 lines each) were read for this batch — bodies beyond that were not fully traced; treat
 the ordering and I/O below as verified only to that depth, and confirm exact CSV/plot schemas
 before depending on them for the paper.

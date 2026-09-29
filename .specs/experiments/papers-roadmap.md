@@ -1,5 +1,12 @@
 # Papers roadmap
 
+> **Tooling note (2026-09-29, ADR 0010).** References below to `scripts/ablations/*`, `scripts/benchmark/*`,
+> `make ablations-*`/`ablation-report*`/`smoke-ablations`, `dalmax/reporting/ablation_report.py`,
+> `results_doctor` or a `METHOD` variable describe tooling that was **removed**; these configs now run
+> and report only through the campaign (`make campaign-run PART=rnhal|texhal`, `make campaign-report`,
+> `make campaign-smoke`; `experiments/campaign.md`). The configs, protocol, run tables and the
+> execution records are unchanged. CLI entry points live in `tools/` (`tools/trainer.py`).
+
 Three-paper plan for this PhD's active-learning-for-UAV-weed-recognition work, as stated by the
 user (Mário Carvalho) and recorded here per `.claude/rules/spec-sync.md` ("new rules or conventions
 that emerge in conversation must be persisted"). This is the authoritative index of what each paper
@@ -73,10 +80,10 @@ method segment, is append-only and left in place) and
 committed top-level `docs/results/ablation_tables/*.{csv,md,tex}` files are unaffected — see
 `docs/results/README.md`).
 
-## Campaign: single A100 re-execution (2026-09-29)
+## Campaign: single re-execution (2026-09-29)
 
-All three papers are re-executed **once**, together, on Colab Pro A100 from one manifest
-(`files_config/campaign/manifest.json`; `.specs/experiments/campaign-a100.md`, ADR 0008/0009):
+All three papers are re-executed **once**, together, on one GPU environment from one manifest
+(`files_config/campaign/manifest.json`; `.specs/experiments/campaign.md`, ADR 0008/0009):
 
 - **Paper 1** = 12 classical strategies + KMH x n_query {10,50,100} x seeds {1,2,3} (117 runs) + the
   `FullSupervised` upper bound (3 runs). RNHAL/TexHAL are not in paper 1; the SSRAE/VCTex preset runs

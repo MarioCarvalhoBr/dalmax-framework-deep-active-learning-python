@@ -1,5 +1,12 @@
 # Ablation study specification — RNHAL (paper 3)
 
+> **Tooling note (2026-09-29, ADR 0010).** References below to `scripts/ablations/*`, `scripts/benchmark/*`,
+> `make ablations-*`/`ablation-report*`/`smoke-ablations`, `dalmax/reporting/ablation_report.py`,
+> `results_doctor` or a `METHOD` variable describe tooling that was **removed**; these configs now run
+> and report only through the campaign (`make campaign-run PART=rnhal|texhal`, `make campaign-report`,
+> `make campaign-smoke`; `experiments/campaign.md`). The configs, protocol, run tables and the
+> execution records are unchanged. CLI entry points live in `tools/` (`tools/trainer.py`).
+
 **This file is the RNHAL (paper 3, SSRAE) suite.** TexHAL (paper 2, VCTex) has its own spec,
 [`ablation-study-texhal.md`](ablation-study-texhal.md) — not yet run. See
 [`papers-roadmap.md`](papers-roadmap.md) for the full three-paper plan. Configs for this suite
@@ -24,7 +31,7 @@ is unchanged by execution, only the "not yet run" qualifier is now stale.
 
 Previous status: **implementable via config as of 2026-08-23 (Phase 2 landed) — not yet run.** This is the
 advisor-requested ablation section for the paper's `\subsection{Ablation study}`. It was originally
-copied faithfully from `prompt-master.md` §6; the "Code capabilities" section's requirements are now
+copied faithfully from `.specs/history/prompt-master.md` §6; the "Code capabilities" section's requirements are now
 all implemented (`dalmax/embeddings/`, `dalmax/selection/`, `dalmax.query_strategies.
 RepresentationStrategy` — see `.specs/architecture/refactor-plan.md` Phase 2's "ablation enablers
 checklist", fully checked off). Every run table below now has exact params-JSON snippets and CLI
@@ -276,9 +283,9 @@ docstring):
 **Five new hierarchy rows (advisor request, 2026-09-29)** -- `hier_L1_k100.json`, `hier_L1_k200.json`,
 `hier_L1_k600.json`, `hier_L2_k200_100.json`, `hier_L4_k800_600_200_100.json` under
 `files_config/ablations/rnhal/` (micro mirrors at `k/10`). `sample_sizes = round_half_up(0.05*k)`,
-floor 2 (the rule of `files_config/ablations/README.md`). They are executed by the A100 campaign
-(`.specs/experiments/campaign-a100.md`), which also re-executes the whole §6 (the values above are
-the earlier T4 execution; the campaign's `docs/results/campaign_a100/paper3/6_2.md` supersedes them
+floor 2 (the rule of `files_config/ablations/README.md`). They are executed by the campaign
+(`.specs/experiments/campaign.md`), which also re-executes the whole §6 (the values above are
+the earlier Colab execution; the campaign's `docs/results/campaign/paper3/6_2.md` supersedes them
 once run). Their values are TBD until then.
 
 Final-round F1, mean ± std across seeds 1-3, from

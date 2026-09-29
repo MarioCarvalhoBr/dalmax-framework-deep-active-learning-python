@@ -33,8 +33,8 @@ LaTeX drafts.
 - **Reported configurations**: cross-check any hyperparameter table in the paper
   against the actual `files_config/benchmark/params_df_gpu_*.json` used for the reference runs
   (`n_epoch`, `batch_size`, `lr`, `momentum`, `n_classes`, `config_kmh`) and the
-  sweep in `scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh` (`QUERIES=(10 50 100)`,
-  `SEEDS=(1 2 3)`, `n_round 8`).
+  campaign manifest `files_config/campaign/manifest.json` (n_query 10/50/100,
+  seeds 1-3, `n_round 8`).
 - **Draft LaTeX skeletons from `results/*/results.json`**: when asked to produce
   a table or text skeleton, read the relevant `results.json` files (and/or the
   output of `dalmax/reporting/` scripts — see `.claude/skills/results-reporting/SKILL.md`)

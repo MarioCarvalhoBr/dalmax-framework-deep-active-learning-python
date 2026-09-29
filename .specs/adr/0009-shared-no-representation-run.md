@@ -12,7 +12,7 @@
 `files_config/ablations/texhal/stage_no_representation.json` (both now removed) were byte-for-byte identical: the
 ImageNet ResNet-50 embedding (`resnet_imagenet`, `q: null`) plus hierarchical k-means with the
 reference hierarchy `[600,200,100]` / `[30,15,2]` involves neither SSRAE nor VCTex. On 2026-09-01
-the user decided each paper would nevertheless run its own copy. Running it twice costs A100 time
+the user decided each paper would nevertheless run its own copy. Running it twice costs GPU time
 and yields two different numbers for the same computation across two papers. In the 2026-09-29
 scope change, paper 1 also gained a "KMH" baseline (hierarchical k-means over ImageNet ResNet-50
 features, no SSRAE/VCTex), whose n_query=100 instance is the same computation as well.

@@ -38,8 +38,7 @@ session: silent misconfiguration that only shows up after hours of training.
 3. **Results directory naming.** Confirm the expected output path matches
    `dalmax/experiment/runner.py`'s convention:
    `{dir_results}/{dataset_folder}/SEED_{seed}/NQ_{n_query}_NIL_{n_init_labeled}_NR_{n_round}_NE_{n_epoch}/{strategy_name}/`
-   and that `--dir_results` in the run script (e.g. `results/dalmax1/` in
-   `scripts/benchmark/run_pipe_gpu_0.sh`, `results/dalmax2/` in `scripts/benchmark/run_pipe_gpu_1.sh`) does not
+   and that `--dir_results` in the run script (e.g. the campaign's `results/campaign/`) does not
    collide with an existing run whose results must not be overwritten
    (`.claude/rules/data-safety.md`: `results/` is append-only).
 
@@ -57,7 +56,7 @@ session: silent misconfiguration that only shows up after hours of training.
    authorized to do it.
 
 5. **Run script matches `.specs/experiments/`.** Diff the actual shell command
-   about to run (`scripts/benchmark/run_pipe_gpu_0.sh` / `scripts/benchmark/run_pipe_gpu_1.sh` / `scripts/benchmark/run_pipline.sh`)
+   about to run (`python -m dalmax.campaign list`, i.e. `files_config/campaign/manifest.json`)
    against what `.specs/experiments/experimental-protocol.md` (and
    `ablation-study.md` if relevant) documents as the intended protocol —
    `QUERIES`, `SEEDS`, `n_round`, strategy name, dataset.

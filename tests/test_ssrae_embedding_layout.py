@@ -10,7 +10,7 @@ per cross-channel/spectral pair R->G, G->B, B->R), each of shape
 
     beta = torch.hstack([beta_R, beta_G, beta_B, beta_S_R, beta_S_G, beta_S_B]).reshape((1, -1))
 
-`prompt-master.md` (Deliverable A/§6.1) and the shared scaffolding context
+`.specs/history/prompt-master.md` (Deliverable A/§6.1) and the shared scaffolding context
 describe this as a block-contiguous concatenation: "first half = spatial
 signatures (R,G,B), second half = spectral signatures (RG,GB,BR)", i.e. the
 documented expectation is that ``emb[:len//2] == concat(beta_R, beta_G, beta_B)``.

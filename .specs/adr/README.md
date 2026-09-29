@@ -19,6 +19,7 @@ session must be captured here in the same task, not deferred.
 | [0007](0007-per-method-ablation-layout.md) | Organize ablation configs/scripts/results by method (RNHAL vs. TexHAL) via a `METHOD` variable | Accepted |
 | [0008](0008-single-campaign-manifest-dedup.md) | One campaign manifest drives a single, deduplicated re-execution of all three papers (aliases, redundancy checker, `used_by`) | Accepted |
 | [0009](0009-shared-no-representation-run.md) | One shared "w/o representation module" run for papers 2 and 3 (and paper 1's KMH@100); supersedes the 2026-09-01 per-paper decision | Accepted |
+| [0010](0010-cleanup-tools-and-hardware-agnostic.md) | `tools/` for CLIs, the campaign as the only run path (legacy scripts/reporters removed), hardware-agnostic repository (no GPU model names; GPU recorded at runtime), determinism/resume/seed-audit follow-ups, `--exclude-strategy` | Accepted |
 
 ## When to add a new ADR
 

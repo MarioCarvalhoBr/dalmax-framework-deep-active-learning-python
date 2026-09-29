@@ -36,8 +36,8 @@ you never edit files, you report findings.
      (`{dir_results}/{dataset}/SEED_{seed}/NQ_{n_query}_NIL_{n_init}_NR_{n_round}_NE_{n_epoch}/{strategy}/`)
      without an accompanying `.specs/experiments/experimental-protocol.md` update.
 
-3. **Performance on 10 GB GPUs.** The lab machine has 2x 10 GB GPUs
-   (`scripts/benchmark/run_pipe_gpu_0.sh`, `scripts/benchmark/run_pipe_gpu_1.sh`, `CUDA_VISIBLE_DEVICES=0|1`). Flag:
+3. **Performance on modest-memory GPUs.** Runs must fit a ~10 GB GPU (never name a GPU model in
+   code/docs; `CUDA_VISIBLE_DEVICES` selects the device, see `dalmax/campaign.py`). Flag:
    batch sizes or model changes that would plausibly exceed ~10 GB (current
    `files_config/benchmark/params_df_gpu_*.json` uses `batch_size: 256` for DANINHAS ResNet50 training
    and moves hierarchical k-means data to a configurable device — default

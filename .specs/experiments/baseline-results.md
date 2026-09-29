@@ -1,5 +1,12 @@
 # Baseline results — where they live
 
+> **Tooling note (2026-09-29, ADR 0010).** References below to `scripts/ablations/*`, `scripts/benchmark/*`,
+> `make ablations-*`/`ablation-report*`/`smoke-ablations`, `dalmax/reporting/ablation_report.py`,
+> `results_doctor` or a `METHOD` variable describe tooling that was **removed**; these configs now run
+> and report only through the campaign (`make campaign-run PART=rnhal|texhal`, `make campaign-report`,
+> `make campaign-smoke`; `experiments/campaign.md`). The configs, protocol, run tables and the
+> execution records are unchanged. CLI entry points live in `tools/` (`tools/trainer.py`).
+
 `results/` is **gitignored and local-only** (0 files under `results/` are
 tracked in git as of this writing). This file documents, read-only, what was
 observed on disk in this environment on 2026-08-23; it is not a substitute
