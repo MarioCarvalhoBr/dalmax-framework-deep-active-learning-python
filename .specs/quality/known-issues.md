@@ -182,6 +182,16 @@ the other died in `write_report` with `FileNotFoundError` on the `os.rename` —
 audit, which parses `Initial labeled idxs` from that file). **Fix**: the PID is now part of the file name.
 Severity: Low (needs a same-second start), Resolved 2026-09-29.
 
+### KI-37 — Colab system Python is 3.13; `poetry install` failed on it (FIXED 2026-09-29)
+
+Verified on a real Colab runtime: the system Python moved to 3.13.x, but the project requires
+`>=3.10,<3.13` (`torch==2.5.0` has no 3.13 wheels), so the runbook's `poetry install` could not work and
+the old notebook check stopped the run. **Fix**: keep the pinned stack and install a separate
+uv-managed Python 3.12 (`uv python install 3.12`, `poetry env use "$(uv python find 3.12)"`) in
+`notebooks/colab_runbook.ipynb`, `notebooks/colab_local_test.ipynb`, `COLAB_RUNBOOK.md`; the notebook
+checks now validate the Poetry venv interpreter, not the kernel's. `LAB_RUNBOOK.md` notes the same fix.
+Severity: Medium (blocked Colab runs), Resolved 2026-09-29.
+
 ### KI-36 — campaign resume trusted `results.json` alone; seed audit was silent on a missing log; GPU determinism over-claimed (FIXED 2026-09-29, ADR 0010)
 
 Found in the review of the campaign (verdict APPROVE, follow-ups). (1) `campaign.job_done` treated a leaf

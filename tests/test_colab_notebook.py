@@ -19,6 +19,8 @@ NOTEBOOK_PATH = REPO_ROOT / "notebooks" / "colab_runbook.ipynb"
 # across the notebook's code cells (COLAB_RUNBOOK.md sections 1, 3, 4, 5, 6).
 EXPECTED_COMMAND_ORDER = [
     "drive.mount",
+    "uv python install 3.12",
+    "poetry env use",
     "poetry install",
     "make colab-setup",
     "make colab-check",
@@ -139,3 +141,10 @@ def test_notebook_has_colab_gpu_metadata() -> None:
     # Hardware-agnostic: no specific GPU model is pinned in the notebook metadata.
     assert "gpuType" not in nb["metadata"]["colab"]
     assert nb["metadata"]["kernelspec"]["name"] == "python3"
+
+
+def test_kernel_python_version_is_not_forced_to_3_12() -> None:
+    sources = ["".join(c["source"]) for c in _load_notebook()["cells"] if c["cell_type"] == "code"]
+    assert not any("sys.version_info" in s and "raise" in s for s in sources)
+    # The venv interpreter is what gets asserted.
+    assert any('startswith("3.12")' in s and "poetry" in s for s in sources)

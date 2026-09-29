@@ -69,9 +69,10 @@ Cell:
 ```python
 !python3 --version
 ```
-**Must print 3.10, 3.11, or 3.12** — `torch==2.5.0` (pinned in
-`poetry.lock`) has no wheels for 3.13+. If this prints 3.13 or higher, **stop**
-here; see §8's Python-version troubleshooting entry before proceeding.
+This is the **system** Python and may be anything: since 2026-09-29 Colab ships
+3.13.x, which is expected. `torch==2.5.0` (pinned in `poetry.lock`) has no
+3.13 wheels, so §3 installs a separate uv-managed Python 3.12 for the Poetry
+venv; that venv interpreter (3.10-3.12) is what actually gets validated.
 
 ---
 
@@ -123,10 +124,19 @@ usually fresh each session, but harmless to check):
 
 ## 3. Install dependencies with Poetry
 
-Cell:
+Colab's system Python is 3.13, so `poetry install` cannot use it (the project
+requires `>=3.10,<3.13`). Install Python 3.12 with `uv` and point Poetry at it.
+Cells (run from the repo root; each step is idempotent on re-run):
 ```python
-!pip install -q poetry
+!pip install -q uv poetry
+!uv python install 3.12
+%cd /content/dalmax
+!poetry env use "$(uv python find 3.12)"
 !poetry install
+```
+Then verify the venv interpreter (must start with `3.12`):
+```python
+!poetry run python -c "import sys, torch; print(sys.version.split()[0], torch.__version__, torch.cuda.is_available())"
 ```
 This is a **fresh runtime each session**, so `poetry install` re-downloads
 the pinned `torch==2.5.0`/`torchvision==0.20.0` CUDA wheels every time —
@@ -362,7 +372,16 @@ disk and must be downloaded before the runtime ends).
   can be reclaimed). This is exactly what the campaign's skip-existing resume
   flow is for — re-run §0–§4 in a fresh runtime, then re-run
   `!make campaign-run PART=all`.
-- **Python 3.13+ runtime.** Do not attempt to force-install an older Python
+- **Python 3.13 system runtime (Colab default since 2026-09-29).** Expected, not
+  an error: `poetry install` fails on the system interpreter because
+  `torch==2.5.0` has no 3.13 wheels. Fix (already in §3 and the notebooks):
+  `!pip install -q uv poetry`, `!uv python install 3.12`, then
+  `!poetry env use "$(uv python find 3.12)"` and `!poetry install`. If the
+  venv check still reports a non-3.12 Python, re-run `poetry env use` and
+  `poetry install` (or `poetry env remove --all` first). The old guidance below
+  is superseded and kept only for a future 3.14+ runtime where uv 3.12 is
+  unavailable:
+  Do not attempt to force-install an older Python
   inside the Colab image (not a supported/tested path for this repo — do
   not invent a workaround). If Colab's default runtime has moved to 3.13,
   the `torch==2.5.0` pin in `pyproject.toml`/`poetry.lock` has no 3.13

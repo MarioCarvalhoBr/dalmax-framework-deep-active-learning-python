@@ -74,6 +74,8 @@ the same `results/campaign/` tree; groups never overlap between the two commands
   ```bash
   python3 --version   # must be 3.10, 3.11, or 3.12
   ```
+  If the system Python is 3.13+, the same fix as on Colab works:
+  `pip install uv && uv python install 3.12 && poetry env use "$(uv python find 3.12)"`, then `poetry install`.
 
 - [ ] **Install Poetry** (once per machine), via `pipx`:
   ```bash

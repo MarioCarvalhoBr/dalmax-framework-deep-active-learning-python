@@ -51,3 +51,16 @@ def test_summary_cell_is_last() -> None:
     last = _load()["cells"][-1]
     assert last["cell_type"] == "code"
     assert "RECOMMENDATION" in "".join(last["source"])
+
+
+def test_poetry_env_uses_uv_python_312_before_install() -> None:
+    src = next(s for s in _code_sources() if '"poetry", "install"' in s)
+    assert src.index('"uv", "python", "install", "3.12"') < src.index('"poetry", "env", "use"')
+    assert src.index('"poetry", "env", "use"') < src.index('"poetry", "install"')
+
+
+def test_python_version_probe_checks_venv_not_kernel() -> None:
+    sources = _code_sources()
+    assert not any("py_ok" in s for s in sources)
+    src = next(s for s in sources if 'record("python_version"' in s)
+    assert "venv_py" in src and "kernel_py" in src

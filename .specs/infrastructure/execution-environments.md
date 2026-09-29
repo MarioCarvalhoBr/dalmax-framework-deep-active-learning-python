@@ -159,7 +159,11 @@ already-completed job automatically — see `COLAB_RUNBOOK.md` §6.
 and `pyproject.toml`/`poetry.lock` exact-pin `torch`/`torchvision`, so this
 does not depend on whatever torch build a given Colab image ships
 preinstalled. Requires Python 3.10-3.12 (the `torch==2.5.0` pin has no 3.13
-wheels) — `COLAB_RUNBOOK.md` §0 checks this before proceeding.
+wheels). **Update 2026-09-29 (verified on a real Colab runtime)**: Colab's *system* Python is now
+3.13.x, so `poetry install` cannot use it. Fix (option A, keep the pinned stack): `pip install uv poetry`,
+`uv python install 3.12`, `poetry env use "$(uv python find 3.12)"`, `poetry install`; the notebooks then
+validate the Poetry venv interpreter (3.12), not the kernel's `sys.version_info`. See KI-37 and
+`COLAB_RUNBOOK.md` §3/§7.
 
 ## GPU memory guidance
 
