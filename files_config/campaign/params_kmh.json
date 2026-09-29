@@ -1,0 +1,42 @@
+{
+    "_comment": "KMH = hierarchical k-means selection over ImageNet-pretrained ResNet-50 features (resnet_imagenet, q null) with the reference hierarchy [600,200,100]/[30,15,2]; otherwise identical to params_paper1.json. ONE computation consumed by paper 1 (KMH row), paper 2 (6.3 'w/o representation module') and paper 3 (6.3) -- ADR 0009, run once as shared/kmh_nq100 (n_query=100); paper 1 also runs it at n_query 50 and 10.",
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_full/",
+        "n_epoch": 10,
+        "n_drop": 10,
+        "n_classes": 5,
+        "train_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "test_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "optimizer_args": {
+            "lr": 0.05,
+            "momentum": 0.3
+        },
+        "embedding": {
+            "extractor": "resnet_imagenet",
+            "q": null,
+            "variant": "full"
+        },
+        "selection": {
+            "method": "hierarchical",
+            "hierarchy": {
+                "n_clusters": [
+                    600,
+                    200,
+                    100
+                ],
+                "n_levels": 3,
+                "sample_sizes": [
+                    30,
+                    15,
+                    2
+                ]
+            }
+        }
+    }
+}

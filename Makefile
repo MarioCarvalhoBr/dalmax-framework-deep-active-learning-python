@@ -1,4 +1,5 @@
 .PHONY: setup lint format test test-all smoke smoke-ablations clean \
+	campaign-list campaign-run campaign-verify campaign-report campaign-smoke campaign-manifest \
 	lab-setup lab-check micro-dataset \
 	ablations-gpu0 ablations-gpu1 ablations-all ablation-report ablation-report-legacy \
 	benchmark-gpu0 benchmark-gpu1 \
@@ -237,3 +238,42 @@ colab-check:
 		--dataset_name DANINHAS --strategy_name SSRAEKmeansHCSampling \
 		--n_query 100 --n_init_labeled 100 --n_round 1 --seed 1 \
 		--device cuda --dir_results results/colab_check/
+
+# --- A100 full campaign (2026-09-29; ADR 0008/0009) --------------------------
+# One manifest (files_config/campaign/manifest.json) drives the single clean
+# re-execution of everything papers 1-3 need -- no redundant runs. See
+# .specs/experiments/campaign-a100.md, COLAB_RUNBOOK.md ("A100 full campaign")
+# and LAB_RUNBOOK.md. Variables (all optional):
+#   PART=all|paper1|upper_bound|rnhal|texhal (comma-separated allowed; default all)
+#   MICRO=1   -> use files_config/campaign/manifest_micro.json (CPU smoke, results/smoke_campaign/)
+#   SEEDS=1   -> restrict to a subset of the seeds (smoke)
+#   DEVICE=cuda|cpu|auto, default cuda (cpu with MICRO=1)
+#   RUN_ARGS='--no-skip-existing' / '--dry-run' -> extra flags for `campaign-run`
+PART ?= all
+CAMPAIGN_FLAGS = --part $(PART) $(if $(MICRO),--micro) $(if $(SEEDS),--seeds $(SEEDS))
+
+# Print the job table and the run counts per part/total.
+campaign-list:
+	poetry run python -m dalmax.campaign list $(CAMPAIGN_FLAGS)
+
+# Execute the jobs sequentially (skip-existing: re-running resumes after a disconnect).
+campaign-run:
+	poetry run python -m dalmax.campaign run $(CAMPAIGN_FLAGS) $(if $(DEVICE),--device $(DEVICE)) $(RUN_ARGS)
+
+# Per-job OK/INCOMPLETE/MISSING + the seed-consistency audit; non-zero exit if anything is not OK.
+campaign-verify:
+	poetry run python -m dalmax.campaign verify $(CAMPAIGN_FLAGS)
+
+# Tables (md/tex/csv), seed audit and mean confusion matrices from results/campaign_a100/
+# into docs/results/campaign_a100/ (MICRO=1: results/smoke_campaign/ -> results/smoke_campaign/report/).
+campaign-report:
+	poetry run python -m dalmax.reporting.campaign_report $(if $(MICRO),--micro --root results/smoke_campaign --out results/smoke_campaign/report,--root results/campaign_a100 --out docs/results/campaign_a100)
+
+# Micro campaign on CPU, seed 1 only (every run group once, 64 jobs) into results/smoke_campaign/.
+# Verify afterwards with `make campaign-verify MICRO=1 SEEDS=1`.
+campaign-smoke:
+	poetry run python -m dalmax.campaign run --part all --micro --seeds 1
+
+# Regenerate the two committed manifests from scripts/campaign/build_manifest.py.
+campaign-manifest:
+	poetry run python scripts/campaign/build_manifest.py

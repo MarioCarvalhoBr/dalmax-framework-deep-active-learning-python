@@ -1,0 +1,34 @@
+{
+    "_comment": "Paper-1 (DAL benchmark) params for the single A100 campaign: identical to files_config/benchmark/params_df_gpu_0.json's DANINHAS block (n_epoch 10, batch 256, lr 0.05, momentum 0.3, config_kmh [600,200,100]/[30,15,2]); the DANINHAS-only subset. One file for all 14 strategies -- the legacy strategies ignore config_kmh, the SSRAE/VCTex presets read it (dalmax.query_strategies.registry). See .specs/experiments/campaign-a100.md.",
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_full/",
+        "n_epoch": 10,
+        "n_drop": 10,
+        "n_classes": 5,
+        "train_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "test_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "optimizer_args": {
+            "lr": 0.05,
+            "momentum": 0.3
+        },
+        "config_kmh": {
+            "n_clusters": [
+                600,
+                200,
+                100
+            ],
+            "n_levels": 3,
+            "sample_sizes": [
+                30,
+                15,
+                2
+            ]
+        }
+    }
+}

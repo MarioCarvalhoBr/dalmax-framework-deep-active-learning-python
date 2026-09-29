@@ -1,0 +1,35 @@
+{
+    "_comment": "Micro (CPU smoke) mirror of params_paper1.json, for files_config/campaign/manifest_micro.json. n_drop is 2 instead of 10 (smoke speed: the *Dropout/BALD strategies do n_drop forward passes over the unlabeled pool on CPU).",
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_micro/",
+        "n_epoch": 1,
+        "n_drop": 2,
+        "n_classes": 5,
+        "train_args": {
+            "batch_size": 16,
+            "num_workers": 0
+        },
+        "test_args": {
+            "batch_size": 16,
+            "num_workers": 0
+        },
+        "optimizer_args": {
+            "lr": 0.05,
+            "momentum": 0.3
+        },
+        "config_kmh": {
+            "_comment": "Micro analog of config_kmh [600,200,100]/[30,15,2] (same as files_config/ablations/*/micro/stage_full.json's hierarchy), so the paper-1 SSRAE/VCTex presets and the ablation 'full' rows are the same computation in the micro smoke too.",
+            "n_clusters": [
+                60,
+                20,
+                10
+            ],
+            "n_levels": 3,
+            "sample_sizes": [
+                3,
+                2,
+                2
+            ]
+        }
+    }
+}
