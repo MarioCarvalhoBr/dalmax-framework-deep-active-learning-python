@@ -267,6 +267,19 @@ docstring):
 | L=3     | 3                            | [300, 100, 50]                    | [15, 5, 3]                           | 100     | 1,2,3 | RepresentationStrategy | 0.8608 (±0.0183) | 0.8116 (±0.0187) |
 | L=4     | 4                            | [300, 100, 50, 25]                | [15, 5, 3, 2]                        | 100     | 1,2,3 | RepresentationStrategy | 0.8567 (±0.0125) | 0.8076 (±0.0163) |
 | Reference (`scripts/benchmark`-style, §6.1's "Full" row) | 3 | [600, 200, 100] | [30, 15, 2] | 100 | 1,2,3 | RepresentationStrategy | **0.8917 (±0.0209)** | **0.8446 (±0.0220)** |
+| L=1 (new, k=100) | 1 | [100] | [5] | 100 | 1,2,3 | RepresentationStrategy | TBD | TBD |
+| L=1 (new, k=200) | 1 | [200] | [10] | 100 | 1,2,3 | RepresentationStrategy | TBD | TBD |
+| L=1 (new, k=600) | 1 | [600] | [30] | 100 | 1,2,3 | RepresentationStrategy | TBD | TBD |
+| L=2 (new, c) | 2 | [200, 100] | [10, 5] | 100 | 1,2,3 | RepresentationStrategy | TBD | TBD |
+| L=4 (new, b) | 4 | [800, 600, 200, 100] | [40, 30, 10, 5] | 100 | 1,2,3 | RepresentationStrategy | TBD | TBD |
+
+**Five new hierarchy rows (advisor request, 2026-09-29)** -- `hier_L1_k100.json`, `hier_L1_k200.json`,
+`hier_L1_k600.json`, `hier_L2_k200_100.json`, `hier_L4_k800_600_200_100.json` under
+`files_config/ablations/rnhal/` (micro mirrors at `k/10`). `sample_sizes = round_half_up(0.05*k)`,
+floor 2 (the rule of `files_config/ablations/README.md`). They are executed by the A100 campaign
+(`.specs/experiments/campaign-a100.md`), which also re-executes the whole §6 (the values above are
+the earlier T4 execution; the campaign's `docs/results/campaign_a100/paper3/6_2.md` supersedes them
+once run). Their values are TBD until then.
 
 Final-round F1, mean ± std across seeds 1-3, from
 `docs/results/ablation_tables/ablation_summary.csv` (rows `6_2/hier_L1` .. `6_2/hier_L4`; the
@@ -516,7 +529,7 @@ each resolves to the extractor/variant/method/hierarchy its filename implies.
 | 6.2 | L=3, k=[300,100,50] | `files_config/ablations/rnhal/hier_L3.json` | `run_ablation_gpu_1.sh` |
 | 6.2 | L=4, k=[300,100,50,25] | `files_config/ablations/rnhal/hier_L4.json` | `run_ablation_gpu_1.sh` |
 | 6.3 | RNHAL (full) | `files_config/ablations/rnhal/stage_full.json` | `run_ablation_gpu_1.sh` |
-| 6.3 | w/o representation module | `files_config/ablations/rnhal/stage_no_representation.json` | `run_ablation_gpu_0.sh` |
+| 6.3 | w/o representation module | `files_config/campaign/params_kmh.json` (moved 2026-09-29, ADR 0009: one shared run, the campaign's `shared/kmh_nq100`; no longer in `files_config/ablations/`) | campaign only |
 | 6.3 | w/o hierarchical module | `files_config/ablations/rnhal/stage_no_hierarchy.json` | `run_ablation_gpu_1.sh` |
 
 (`scripts/ablations/run_ablation_gpu_0.sh` = 5 configs, `run_ablation_gpu_1.sh` = 6 configs, split

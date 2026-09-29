@@ -171,12 +171,9 @@ CUDA_VISIBLE_DEVICES=<gpu> poetry run python trainer.py \
   `stage_full.json`.
 - **Without representation module**: keep hierarchical selection, replace VCTex embeddings with
   **ImageNet-pretrained ResNet embeddings** (`dalmax/embeddings/resnet_imagenet_provider.py`) —
-  `stage_no_representation.json`. **This file is byte-for-byte identical to
-  `files_config/ablations/rnhal/stage_no_representation.json`** (see that folder's README.md) —
-  neither method's representation module is involved in this row, so its result should numerically
-  match RNHAL's own `stage_no_representation` run within ordinary GPU/cuDNN run-to-run variance
-  (`.claude/rules/reproducibility.md`); this is a useful sanity cross-check once both are run, not
-  a hard requirement enforced by any test.
+  `files_config/campaign/params_kmh.json` (the former `stage_no_representation.json`; neither
+  method's representation module is involved in this row, so **it is one run shared by papers 1
+  (KMH@100), 2 and 3** -- ADR 0009, 2026-09-29; the campaign's `shared/kmh_nq100`).
 - **Without hierarchical module**: VCTex embeddings + `flat_proportional` (flat k-means,
   proportional-random per cluster) — `stage_no_hierarchy.json`.
 
@@ -185,13 +182,15 @@ CUDA_VISIBLE_DEVICES=<gpu> poetry run python trainer.py \
 | Variant | Representation | Selection | strategy_name / config | F1 (weighted, mean±std) | F1 (macro, mean±std) |
 |---|---|---|---|---|---|
 | TexHAL (full)             | VCTex, Q=[5,17]           | Hierarchical k-means | `RepresentationStrategy`, `stage_full.json` | TBD | TBD |
-| w/o representation module | ImageNet ResNet50 penult. | Hierarchical k-means | `RepresentationStrategy`, `stage_no_representation.json` | TBD | TBD |
+| w/o representation module | ImageNet ResNet50 penult. | Hierarchical k-means | `RepresentationStrategy`, `files_config/campaign/params_kmh.json` (shared run) | TBD | TBD |
 | w/o hierarchical module   | VCTex, Q=[5,17]           | Flat k-means, proportional-random | `RepresentationStrategy`, `stage_no_hierarchy.json` | TBD | TBD |
 
-**Confirmed (2026-09-01)**: `stage_no_representation` is NOT shared between the RNHAL and TexHAL papers.
-Each paper runs its own independently (confirmed 2026-09-01 by user), even though the config is identical
-and the row measures a representation-agnostic condition. Both papers maintain separate copies
-(`files_config/ablations/{rnhal,texhal}/stage_no_representation.json`), one per-method results tree.
+**Superseded by ADR 0009 (2026-09-29)** -- ~~Confirmed (2026-09-01): `stage_no_representation` is NOT
+shared between the RNHAL and TexHAL papers; each paper runs its own independently, with separate copies
+(`files_config/ablations/{rnhal,texhal}/stage_no_representation.json`).~~ The 2026-09-01 decision is
+reversed: the config is byte-identical, running it twice wastes A100 time and yields two numbers for
+one computation. It is now ONE run (`shared/kmh_nq100` in the campaign manifest) consumed by paper 1's
+KMH row and by the 6.3 tables of papers 2 and 3; the redundant copies were removed.
 
 ### 6.3 exact params JSON + CLI
 
@@ -271,10 +270,10 @@ docs/results/ablation_tables/texhal --method texhal` (`make ablation-report METH
 | 6.2 | L=3, k=[300,100,50] | `files_config/ablations/texhal/hier_L3.json` | `run_ablation_gpu_1.sh` |
 | 6.2 | L=4, k=[300,100,50,25] | `files_config/ablations/texhal/hier_L4.json` | `run_ablation_gpu_1.sh` |
 | 6.3 | TexHAL (full) | `files_config/ablations/texhal/stage_full.json` | `run_ablation_gpu_1.sh` |
-| 6.3 | w/o representation module | `files_config/ablations/texhal/stage_no_representation.json` | `run_ablation_gpu_0.sh` |
+| 6.3 | w/o representation module | `files_config/campaign/params_kmh.json` (shared run, ADR 0009) | campaign only |
 | 6.3 | w/o hierarchical module | `files_config/ablations/texhal/stage_no_hierarchy.json` | `run_ablation_gpu_1.sh` |
 
-12 configs / 36 runs total (`SEEDS=(1 2 3)`), GPU 0 = 5 configs, GPU 1 = 7 configs — see
+11 configs / 33 runs by the ablation-only scripts (`SEEDS=(1 2 3)`), GPU 0 = 4 configs, GPU 1 = 7 configs (the 12th row, "w/o representation module", is the campaign's shared run, ADR 0009) — see
 `scripts/ablations/run_ablation_gpu_{0,1}.sh`'s headers for the split rationale.
 `files_config/ablations/texhal/micro/` mirrors all 12 for `make smoke-ablations`, validated by
 `tests/test_ablation_configs.py` (parametrized over both `rnhal/` and `texhal/`, 46 files total).

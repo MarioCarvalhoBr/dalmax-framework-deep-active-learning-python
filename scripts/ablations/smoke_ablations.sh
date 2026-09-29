@@ -14,8 +14,9 @@
 # survive one bad config across a multi-hour lab run and therefore do NOT use
 # set -e.
 #
-# `METHOD=both` (default) runs rnhal's 11 configs then texhal's 12 configs
-# sequentially, 23 total. `METHOD=rnhal` or `METHOD=texhal` restricts to one
+# `METHOD=both` (default) runs rnhal's 10 configs then texhal's 11 configs
+# (`stage_no_representation` is the campaign's shared run, ADR 0009 -- smoke it with
+# `make campaign-smoke`) sequentially, 21 total. `METHOD=rnhal` or `METHOD=texhal` restricts to one
 # suite -- see files_config/ablations/README.md for what each config's
 # embedding/selection block is. This is also the first place VCTex actually
 # runs through the generic RepresentationStrategy path (previously only
@@ -65,7 +66,6 @@ CONFIGS_RNHAL=(
     "6_2:hier_L3"
     "6_2:hier_L4"
     "6_3:stage_full"
-    "6_3:stage_no_representation"
     "6_3:stage_no_hierarchy"
 )
 CONFIGS_TEXHAL=(
@@ -79,7 +79,6 @@ CONFIGS_TEXHAL=(
     "6_2:hier_L3"
     "6_2:hier_L4"
     "6_3:stage_full"
-    "6_3:stage_no_representation"
     "6_3:stage_no_hierarchy"
 )
 

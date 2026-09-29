@@ -31,7 +31,7 @@ running these two scripts on the lab machine (never locally — no GPU here, per
 3. **Run the two lab scripts** (one per GPU, both survive an individual config's failure and log it
    instead of aborting the batch — check `results/ablations/gpu{0,1}_failures.log` afterward):
    ```bash
-   # GPU 0: rep_full, rep_spatial, stage_no_representation, hier_L1, hier_L2b (5 configs)
+   # GPU 0: rep_full, rep_spatial, hier_L1, hier_L2b (4 configs; stage_no_representation is the campaign's shared run, ADR 0009)
    bash scripts/ablations/run_ablation_gpu_0.sh
 
    # GPU 1: rep_spectral, stage_full, stage_no_hierarchy, hier_L2a, hier_L3, hier_L4 (6 configs)

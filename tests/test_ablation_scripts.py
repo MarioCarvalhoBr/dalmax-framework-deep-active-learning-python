@@ -41,8 +41,8 @@ N_SEEDS = 3
 # stay correct. texhal has one more §6.1 row (rep_q13) than rnhal, and it
 # lives on GPU 1 -- see scripts/ablations/run_ablation_gpu_{0,1}.sh headers.
 N_CONFIGS = {
-    ("run_ablation_gpu_0.sh", "rnhal"): 5,
-    ("run_ablation_gpu_0.sh", "texhal"): 5,
+    ("run_ablation_gpu_0.sh", "rnhal"): 4,
+    ("run_ablation_gpu_0.sh", "texhal"): 4,
     ("run_ablation_gpu_1.sh", "rnhal"): 6,
     ("run_ablation_gpu_1.sh", "texhal"): 7,
 }

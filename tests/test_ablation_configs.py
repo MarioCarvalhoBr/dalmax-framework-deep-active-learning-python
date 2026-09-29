@@ -42,8 +42,14 @@ EXPECTED_RNHAL: dict[str, tuple[str, int | None, str, str, tuple[int, ...] | Non
     "hier_L2b": ("ssrae", 13, "full", "hierarchical", (100, 50)),
     "hier_L3": ("ssrae", 13, "full", "hierarchical", (300, 100, 50)),
     "hier_L4": ("ssrae", 13, "full", "hierarchical", (300, 100, 50, 25)),
+    # 5 advisor-requested hierarchy rows (2026-09-29, paper 3 only) -- see
+    # files_config/ablations/README.md and .specs/experiments/campaign-a100.md.
+    "hier_L1_k100": ("ssrae", 13, "full", "hierarchical", (100,)),
+    "hier_L1_k200": ("ssrae", 13, "full", "hierarchical", (200,)),
+    "hier_L1_k600": ("ssrae", 13, "full", "hierarchical", (600,)),
+    "hier_L2_k200_100": ("ssrae", 13, "full", "hierarchical", (200, 100)),
+    "hier_L4_k800_600_200_100": ("ssrae", 13, "full", "hierarchical", (800, 600, 200, 100)),
     "stage_full": ("ssrae", 13, "full", "hierarchical", (600, 200, 100)),
-    "stage_no_representation": ("resnet_imagenet", None, "full", "hierarchical", (600, 200, 100)),
     "stage_no_hierarchy": ("ssrae", 13, "full", "flat_proportional", None),
 }
 
@@ -65,7 +71,7 @@ EXPECTED_TEXHAL: dict[str, tuple[str, tuple[int, ...] | None, str, str, tuple[in
     "hier_L3": ("vctex", (5, 17), "full", "hierarchical", (300, 100, 50)),
     "hier_L4": ("vctex", (5, 17), "full", "hierarchical", (300, 100, 50, 25)),
     "stage_full": ("vctex", (5, 17), "full", "hierarchical", (600, 200, 100)),
-    "stage_no_representation": ("resnet_imagenet", None, "full", "hierarchical", (600, 200, 100)),
+    # No texhal `stage_no_representation`: one shared run, files_config/ablations/rnhal/ (ADR 0009).
     "stage_no_hierarchy": ("vctex", (5, 17), "full", "flat_proportional", None),
 }
 
@@ -81,8 +87,12 @@ EXPECTED_MICRO_N_CLUSTERS_RNHAL: dict[str, tuple[int, ...] | None] = {
     "hier_L2b": (10, 5),
     "hier_L3": (30, 10, 5),
     "hier_L4": (30, 10, 5, 2),
+    "hier_L1_k100": (10,),
+    "hier_L1_k200": (20,),
+    "hier_L1_k600": (60,),
+    "hier_L2_k200_100": (20, 10),
+    "hier_L4_k800_600_200_100": (80, 60, 20, 10),
     "stage_full": (60, 20, 10),
-    "stage_no_representation": (60, 20, 10),
     "stage_no_hierarchy": None,
 }
 
@@ -97,7 +107,6 @@ EXPECTED_MICRO_N_CLUSTERS_TEXHAL: dict[str, tuple[int, ...] | None] = {
     "hier_L3": (30, 10, 5),
     "hier_L4": (30, 10, 5, 2),
     "stage_full": (60, 20, 10),
-    "stage_no_representation": (60, 20, 10),
     "stage_no_hierarchy": None,
 }
 
@@ -110,7 +119,7 @@ MICRO_EXPECTED: dict[str, dict[str, tuple[int, ...] | None]] = {
     "texhal": EXPECTED_MICRO_N_CLUSTERS_TEXHAL,
 }
 
-# (method, name) pairs for parametrization -- 11 per method, 22 total.
+# (method, name) pairs for parametrization -- 15 rnhal + 11 texhal.
 METHOD_NAME_PAIRS = [(method, name) for method, rows in METHODS.items() for name in sorted(rows)]
 
 
@@ -191,7 +200,7 @@ def test_micro_ablation_config_loads_and_matches_spec(method: str, name: str) ->
 
 
 @pytest.mark.parametrize("method", sorted(METHODS))
-def test_ablation_folder_has_exactly_the_eleven_run_table_rows(method: str) -> None:
+def test_ablation_folder_has_exactly_the_run_table_rows(method: str) -> None:
     on_disk = {p.stem for p in (ABLATIONS_DIR / method).glob("*.json")}
     assert on_disk == set(METHODS[method])
 
@@ -212,16 +221,17 @@ def test_texhal_variant_is_always_full() -> None:
             assert config.dataset.embedding.variant == "full"
 
 
-def test_stage_no_representation_is_identical_across_methods() -> None:
-    """rnhal/stage_no_representation.json and texhal/stage_no_representation.json
-    are deliberately byte-for-byte identical (see files_config/ablations/README.md's
-    sanity-cross-check note): neither method's representation module is involved
-    in this row.
-    """
-    rnhal_text = (ABLATIONS_DIR / "rnhal" / "stage_no_representation.json").read_text()
-    texhal_text = (ABLATIONS_DIR / "texhal" / "stage_no_representation.json").read_text()
-    assert rnhal_text == texhal_text
-
-    rnhal_micro_text = (ABLATIONS_DIR / "rnhal" / "micro" / "stage_no_representation.json").read_text()
-    texhal_micro_text = (ABLATIONS_DIR / "texhal" / "micro" / "stage_no_representation.json").read_text()
-    assert rnhal_micro_text == texhal_micro_text
+def test_no_ablation_folder_carries_stage_no_representation() -> None:
+    """ADR 0009 (2026-09-29): the ResNet-ImageNet + hierarchical row is ONE run shared by
+    papers 1 (KMH@100), 2 and 3; its only config lives in files_config/campaign/."""
+    for method in ("rnhal", "texhal"):
+        assert not (ABLATIONS_DIR / method / "stage_no_representation.json").exists()
+        assert not (ABLATIONS_DIR / method / "micro" / "stage_no_representation.json").exists()
+    for name in ("params_kmh.json", "params_kmh_micro.json"):
+        config = _load(ABLATIONS_DIR.parent / "campaign" / name)
+        assert config.dataset.embedding.extractor == "resnet_imagenet"
+        assert config.dataset.embedding.q is None
+        assert config.dataset.selection.method == "hierarchical"
+    full = _load(ABLATIONS_DIR.parent / "campaign" / "params_kmh.json")
+    assert full.dataset.selection.hierarchy.n_clusters == (600, 200, 100)
+    assert full.dataset.selection.hierarchy.sample_sizes == (30, 15, 2)

@@ -1,0 +1,38 @@
+{
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_micro/",
+        "n_epoch": 1,
+        "n_drop": 10,
+        "n_classes": 5,
+        "train_args": {
+            "batch_size": 16,
+            "num_workers": 0
+        },
+        "test_args": {
+            "batch_size": 16,
+            "num_workers": 0
+        },
+        "optimizer_args": {
+            "lr": 0.05,
+            "momentum": 0.3
+        },
+        "embedding": {
+            "extractor": "ssrae",
+            "q": 13,
+            "variant": "full"
+        },
+        "selection": {
+            "method": "hierarchical",
+            "hierarchy": {
+                "_comment": "Micro-scaled analog (k/10, sample_sizes = round(0.05*k) floor 2) of the full-scale hierarchy of the same name; see files_config/ablations/README.md.",
+                "n_clusters": [
+                    10
+                ],
+                "n_levels": 1,
+                "sample_sizes": [
+                    2
+                ]
+            }
+        }
+    }
+}

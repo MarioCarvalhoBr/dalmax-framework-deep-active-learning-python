@@ -1,6 +1,7 @@
 #!/bin/bash
 # Lab-machine batch run for the ablation configs, GPU 1's half of the split
-# (11 configs for METHOD=rnhal, 12 for METHOD=texhal). See
+# (the suite is 10 configs for METHOD=rnhal, 11 for METHOD=texhal; `stage_no_representation`
+# is the campaign's shared run, ADR 0009). See
 # run_ablation_gpu_0.sh's header for the full split rationale (by expected
 # relative cost, hierarchical selection dominates runtime, not training) and
 # .specs/experiments/ablation-study.md / ablation-study-texhal.md's

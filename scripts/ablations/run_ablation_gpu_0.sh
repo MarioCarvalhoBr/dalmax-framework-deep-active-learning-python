@@ -1,6 +1,7 @@
 #!/bin/bash
 # Lab-machine batch run for the ablation configs, GPU 0's half of the split
-# (11 configs for METHOD=rnhal, 12 for METHOD=texhal -- see the split
+# (10 configs for METHOD=rnhal, 11 for METHOD=texhal, `stage_no_representation`
+# excluded from both -- ADR 0009 -- see the split
 # rationale below and .specs/experiments/ablation-study.md /
 # ablation-study-texhal.md's "Materialized files" sections).
 # Mirrors scripts/benchmark/run_pipe_gpu_0.sh's style (SEEDS sweep, one dir per config,
@@ -33,16 +34,17 @@
 #     rather than stacking the heavy ones together.
 # This GPU (0) gets, per METHOD:
 #   rnhal:  rep_full, rep_spatial (2 of 6.1's 3 heavy-hierarchy configs),
-#           stage_no_representation (heavy hierarchy + ResNet50 forward
-#           pass), hier_L1 (cheapest 6.2 row), hier_L2b (light-medium 6.2
-#           row) -- 5 configs.
+#           hier_L1 (cheapest 6.2 row), hier_L2b (light-medium 6.2 row) --
+#           4 configs (`stage_no_representation` is the campaign's shared run,
+#           ADR 0009, no longer an ablation-script config).
 #   texhal: rep_full, rep_q5 (2 of 6.1's 4 heavy-hierarchy configs, same
-#           shape as rnhal's rep_full/rep_spatial), stage_no_representation,
-#           hier_L1, hier_L2b -- 5 configs; the other two 6.1 rows
+#           shape as rnhal's rep_full/rep_spatial), hier_L1, hier_L2b --
+#           4 configs;
+#           the other two 6.1 rows
 #           (rep_q13, rep_q17, added 2026-08-30 per the VCTex method
 #           authors -- see files_config/ablations/README.md) both go to
 #           GPU 1 (run_ablation_gpu_1.sh), which therefore carries 7
-#           texhal configs to this GPU's 5.
+#           texhal configs to this GPU's 4.
 # a comparable total load to GPU 1's rnhal half (6 configs), which
 # gets fewer heavy-hierarchy configs (2 vs this GPU's 3) to compensate for
 # having more configs overall.
@@ -132,17 +134,19 @@ FAILURE_LOG="${RESULTS_ROOT}/gpu0_failures.log"
 # arrays because §6.1's basenames differ between rnhal and texhal (see
 # files_config/ablations/README.md's naming-convention table); §6.2/§6.3
 # basenames are identical across methods.
+# `stage_no_representation` is in NEITHER list: it is one run shared by papers
+# 1 (KMH@100), 2 and 3 (ADR 0009, 2026-09-29), executed by the campaign
+# (`make campaign-run`, group `shared/kmh_nq100`, files_config/campaign/params_kmh.json).
+# The RNHAL result of the 2026-08-26 batch stays in the legacy tree, append-only.
 CONFIGS_RNHAL=(
     "6_1:rep_full"
     "6_1:rep_spatial"
-    "6_3:stage_no_representation"
     "6_2:hier_L1"
     "6_2:hier_L2b"
 )
 CONFIGS_TEXHAL=(
     "6_1:rep_full"
     "6_1:rep_q5"
-    "6_3:stage_no_representation"
     "6_2:hier_L1"
     "6_2:hier_L2b"
 )

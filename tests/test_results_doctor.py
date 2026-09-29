@@ -380,3 +380,20 @@ def test_verify_real_local_legacy_rnhal_tree_is_fully_ok() -> None:
 
     assert not_ok == [], f"expected the legacy batch to be fully complete, found: {not_ok}"
     assert len(legacy_ok) == 33
+
+
+def test_verify_method_texhal_no_representation_row_resolves_to_the_rnhal_tree(tmp_path: Path) -> None:
+    # ADR 0009: one shared run; texhal has no results of its own for that row.
+    _write_leaf(tmp_path / "rnhal" / "6_3" / "stage_no_representation", seed=1)
+
+    statuses = verify_method(tmp_path, "texhal")
+
+    hit = next(
+        s for s in statuses
+        if s.study == "6_3" and s.config == "stage_no_representation" and s.seed == 1
+    )
+    assert hit.status == "OK"
+    assert hit.layout == "shared"
+    assert hit.method == "texhal"
+    miss = next(s for s in statuses if s.config == "stage_no_representation" and s.seed == 2)
+    assert miss.status == "MISSING"

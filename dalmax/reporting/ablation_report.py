@@ -111,6 +111,15 @@ STUDY_CONFIGS_BY_METHOD: dict[str, dict[str, list[tuple[str, str]]]] = {
 # 2026-08-30) import `STUDY_CONFIGS` directly, always meaning the rnhal suite.
 STUDY_CONFIGS: dict[str, list[tuple[str, str]]] = STUDY_CONFIGS_RNHAL
 
+# ADR 0009 (2026-09-29): `stage_no_representation` is ONE run shared by both
+# papers (byte-identical config), executed under the rnhal tree only. The
+# texhal suite therefore has no results of its own for that row; it is
+# resolved from the sibling rnhal tree instead:
+# (method, study, config) -> method whose results tree holds the run.
+SHARED_RUN_SOURCE: dict[tuple[str, str, str], str] = {
+    ("texhal", "6_3", "stage_no_representation"): "rnhal",
+}
+
 STUDY_TITLES: dict[str, str] = {
     "6_1": "6.1 Representation ablation",
     "6_2": "6.2 Hierarchy ablation",
@@ -227,7 +236,9 @@ def summarize_config(study: str, config: str, label: str, runs: list[RunRecord])
 
 
 def build_summaries(
-    root: Path, study_configs: dict[str, list[tuple[str, str]]] = STUDY_CONFIGS
+    root: Path,
+    study_configs: dict[str, list[tuple[str, str]]] = STUDY_CONFIGS,
+    shared_roots: dict[tuple[str, str], Path] | None = None,
 ) -> dict[str, list[ConfigSummary]]:
     """Build every `ConfigSummary` for every `(study, config)` in
     `study_configs` (default: `STUDY_CONFIGS`, i.e. the rnhal suite -- pass
@@ -239,7 +250,8 @@ def build_summaries(
     for study, rows in study_configs.items():
         study_summaries = []
         for config, label in rows:
-            run_paths = find_run_results(root, study, config)
+            config_root = (shared_roots or {}).get((study, config), root)
+            run_paths = find_run_results(config_root, study, config)
             runs = [load_run(p) for p in run_paths]
             study_summaries.append(summarize_config(study, config, label, runs))
         summaries[study] = study_summaries
@@ -384,7 +396,12 @@ def main(argv: list[str] | None = None) -> None:
     out_dir = Path(args.out)
     study_configs = STUDY_CONFIGS_BY_METHOD[args.method]
 
-    summaries = build_summaries(root, study_configs)
+    shared_roots = {
+        (study, config): root.parent / source
+        for (method, study, config), source in SHARED_RUN_SOURCE.items()
+        if method == args.method
+    }
+    summaries = build_summaries(root, study_configs, shared_roots)
     write_summary_csv(summaries, out_dir / "ablation_summary.csv")
     write_study_tables(summaries, out_dir)
 

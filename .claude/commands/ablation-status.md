@@ -32,7 +32,7 @@ Steps:
      `[5,17]`, same reference hierarchy.
    - **§6.2 Hierarchy ablation** (`hier_L1.json` .. `hier_L4.json`, identical basenames for both
      methods): method's own full-scale embedding, `n_query=100`, hierarchy per the spec's run table.
-   - **§6.3 Stage contribution** (`stage_full.json`, `stage_no_representation.json`,
+   - **§6.3 Stage contribution** (`stage_full.json`, the shared "w/o representation" run `files_config/campaign/params_kmh.json` (ADR 0009, campaign only),
      `stage_no_hierarchy.json`, identical basenames for both methods): full method vs.
      ResNet-ImageNet + hierarchical vs. method's embedding + `flat_proportional`.
 2. For each config, check two things:

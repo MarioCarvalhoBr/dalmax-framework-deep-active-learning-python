@@ -259,3 +259,18 @@ def test_main_cli_default_method_is_rnhal() -> None:
     args = build_arg_parser().parse_args([])
     assert args.method == "rnhal"
     assert STUDY_CONFIGS_BY_METHOD[args.method] is STUDY_CONFIGS
+
+
+def test_texhal_no_representation_row_resolves_to_the_sibling_rnhal_tree(tmp_path: Path) -> None:
+    """ADR 0009: the "w/o representation module" run is shared; the texhal report reads it
+    from the sibling rnhal tree (`--root` is `<parent>/texhal`)."""
+    parent = tmp_path / "ablations"
+    for seed in (1, 2, 3):
+        _write_run(parent / "rnhal", "6_3", "stage_no_representation", seed,
+                   all_f1_macro=[0.1, 0.6], all_f1_score=[0.2, 0.7])
+    out = tmp_path / "out"
+
+    main(["--root", str(parent / "texhal"), "--out", str(out), "--method", "texhal"])
+
+    md = (out / "ablation_6_3.md").read_text()
+    assert "| w/o representation module | 0.6000 (+/-0.0000) | 0.7000 (+/-0.0000) | 3 |" in md

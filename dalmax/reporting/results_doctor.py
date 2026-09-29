@@ -39,7 +39,7 @@ import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from dalmax.reporting.ablation_report import STUDY_CONFIGS_BY_METHOD
+from dalmax.reporting.ablation_report import SHARED_RUN_SOURCE, STUDY_CONFIGS_BY_METHOD
 
 # Seeds every ablation triple is swept over (see LAB_RUNBOOK.md / COLAB_RUNBOOK.md).
 SEEDS: tuple[int, ...] = (1, 2, 3)
@@ -231,8 +231,18 @@ def verify_method(root: Path, method: str) -> list[TripleStatus]:
     statuses: list[TripleStatus] = []
     for study, rows in STUDY_CONFIGS_BY_METHOD[method].items():
         for config, _label in rows:
+            # ADR 0009: a row that is one run shared across methods is looked up
+            # in the source method's tree, then reported under this method.
+            source = SHARED_RUN_SOURCE.get((method, study, config))
             for seed in SEEDS:
-                statuses.append(_check_triple(root, method, study, config, seed))
+                if source is None:
+                    statuses.append(_check_triple(root, method, study, config, seed))
+                    continue
+                shared = _check_triple(root, source, study, config, seed)
+                shared.method = method
+                if shared.status == "OK":
+                    shared.layout = "shared" if shared.layout == "current" else shared.layout
+                statuses.append(shared)
     return statuses
 
 
@@ -255,7 +265,7 @@ class MethodCounts:
 def _count(statuses: list[TripleStatus]) -> MethodCounts:
     counts = MethodCounts()
     for s in statuses:
-        if s.status == "OK" and s.layout == "current":
+        if s.status == "OK" and s.layout in ("current", "shared"):
             counts.ok += 1
         elif s.status == "OK" and s.layout == "legacy":
             counts.legacy += 1
@@ -285,6 +295,8 @@ def render_verify_report(all_statuses: dict[str, list[TripleStatus]]) -> str:
                 for s in sorted(by_config[config], key=lambda x: x.seed):
                     if s.status == "OK" and s.layout == "legacy":
                         cells.append(f"seed{s.seed}: OK (legacy layout)")
+                    elif s.status == "OK" and s.layout == "shared":
+                        cells.append(f"seed{s.seed}: OK (shared run, rnhal tree)")
                     elif s.status == "OK":
                         cells.append(f"seed{s.seed}: OK")
                     elif s.status == "INCOMPLETE":
