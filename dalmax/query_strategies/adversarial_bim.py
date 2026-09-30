@@ -20,20 +20,41 @@ class AdversarialBIM(PerSampleAdversarialStrategy):
     prediction). The distance is `(eta * eta).sum()`; the `n` smallest are
     queried.
 
-    As in the original, the `while` loop has NO iteration cap by default.
-    `max_iter` (default None = original behaviour) is an optional safety cap
-    that is not part of the original algorithm. A single `logger.warning` is
-    emitted the first time any sample exceeds 1000 iterations so a
-    pathological sample is visible in the log instead of silently hanging.
+    Deviations from the original DeepAL algorithm (both are required for
+    termination, observed on the real campaign on 2026-09-30, KI-39):
+
+    * The original loop is uncapped. For a sample predicted with probability
+      ~1.0 in float32 the cross-entropy gradient w.r.t. the input is exactly
+      zero, so `sign(0) = 0`, `eta` never changes, the prediction never flips
+      and the loop never ends. Here `max_iter` defaults to 50 (the cap the
+      original DeepFool uses) and the loop also stops as soon as the gradient
+      is all zeros (no progress possible).
+    * A sample whose loop ends WITHOUT flipping the prediction (cap reached or
+      zero gradient) could not reach the decision boundary within the budget,
+      so it returns `float("inf")` (maximally far, never queried before a
+      converged sample). Samples that flip return `(eta * eta).sum()` as in
+      the original.
+
+    One `logger.warning` summary per query reports how many samples did not
+    flip (capped / zero-gradient).
     """
 
-    _WARN_AFTER_ITERS = 1000
-
-    def __init__(self, dataset, net, logger, eps: float = 0.05, max_iter: int | None = None) -> None:
+    def __init__(self, dataset, net, logger, eps: float = 0.05, max_iter: int = 50) -> None:
         super().__init__(dataset, net, logger)
         self.eps = eps
         self.max_iter = max_iter
-        self._warned_long = False
+        self._n_capped = 0
+        self._n_zero_grad = 0
+
+    def _begin_query(self) -> None:
+        self._n_capped = 0
+        self._n_zero_grad = 0
+
+    def _query_summary(self) -> str:
+        return (
+            f"{self._n_capped} hit the {self.max_iter}-iteration cap, "
+            f"{self._n_zero_grad} had a zero gradient (saturated prediction)"
+        )
 
     def cal_dis(self, x: torch.Tensor) -> float:
         device = self._device()
@@ -46,23 +67,21 @@ class AdversarialBIM(PerSampleAdversarialStrategy):
         ny = out.max(1)[1]
         n_iter = 0
         while py.item() == ny.item():
+            if n_iter >= self.max_iter:
+                self._n_capped += 1
+                return float("inf")
             loss = F.cross_entropy(out, ny)
             loss.backward()
+
+            if nx.grad is None or not bool(nx.grad.data.any()):
+                self._n_zero_grad += 1
+                return float("inf")
 
             eta += self.eps * torch.sign(nx.grad.data)
             nx.grad.data.zero_()
 
             out, e1 = self.net.clf(nx + eta)
             py = out.max(1)[1]
-
             n_iter += 1
-            if n_iter > self._WARN_AFTER_ITERS and not self._warned_long:
-                self._warned_long = True
-                self.logger.warning(
-                    f"AdversarialBIM: a sample exceeded {self._WARN_AFTER_ITERS} iterations "
-                    "without flipping its prediction (loop is uncapped unless max_iter is set)"
-                )
-            if self.max_iter is not None and n_iter >= self.max_iter:
-                break
 
         return (eta * eta).sum().item()

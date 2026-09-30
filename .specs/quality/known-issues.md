@@ -205,6 +205,21 @@ WARN only). (3) `run_metadata.json` recorded `deterministic_algorithms: true` al
 (`determinism.nondeterministic_op_warnings`) and `fill_uninitialized_memory=False`; the reproducibility
 docs now call GPU determinism best-effort. Severity: Low-Medium, Resolved 2026-09-29.
 
+### KI-39 — AdversarialBIM infinite loop on saturated predictions (FIXED 2026-09-30)
+
+Found on the real Colab campaign (2026-09-30): `AdversarialBIM.cal_dis` hung forever on the daninhas pool
+(progress stuck at 3553/7786 after the ">1000 iterations" warning). Cause: for a sample predicted with
+probability ~1.0 in float32 the cross-entropy gradient w.r.t. the input is exactly zero, so `sign(0) = 0`,
+`eta` never changes, the prediction never flips and the uncapped `while` never ends. The original DeepAL
+code has the same defect. **Fix** (`dalmax/query_strategies/adversarial_bim.py`, `adversarial_deepfool.py`,
+`adversarial_base.py`): BIM `max_iter` defaults to 50 and the loop also stops on an all-zero gradient; a
+sample that does not flip returns `float("inf")` (maximally far, ranked last by `argsort`; if fewer than
+`n` finite distances exist the rest of the picks come from the `inf` samples). DeepFool keeps
+`max_iter=50` and the original return value, but skips classes with a zero/NaN `||w_k||` and returns `inf`
+if no usable class exists in an iteration. One warning per query reports how many samples did not converge.
+Covered by `tests/test_adversarial_strategies.py`. Any BIM/DeepFool result produced before this fix is
+not comparable for non-converged samples. Severity: High (blocked the campaign), Resolved 2026-09-30.
+
 ### KI-38 — batched AdversarialBIM/AdversarialDeepFool deviated from the original DeepAL algorithm (FIXED 2026-09-29)
 
 The earlier implementations batched samples, capped BIM at 10 iterations and stopped only when ALL samples
@@ -212,6 +227,6 @@ of a batch had flipped, so per-sample distances no longer matched the original a
 2021). **Fix**: faithful per-sample ports (`dalmax/query_strategies/adversarial_bim.py`,
 `adversarial_deepfool.py`, shared loop in `adversarial_base.py`): the loop runs on the model's own device
 (the original's hardcoded CPU/`.cuda()` round trip is gone), the model's train/eval mode is restored, BIM
-is uncapped by default (optional `max_iter`, plus a one-time warning after 1000 iterations). Covered by
+was uncapped by default (superseded by KI-39: it hung on the real campaign; now capped at 50 iterations, non-converged samples get distance `inf`). Covered by
 `tests/test_adversarial_strategies.py`. Any result produced with the earlier batched version is invalid.
 These two baselines are the slowest campaign groups. Severity: Medium, Resolved 2026-09-29.
