@@ -1,69 +1,68 @@
-import numpy as np
+"""AdversarialBIM: faithful per-sample port of the original DeepAL strategy.
+
+Source: DeepAL (Huang, 2021), https://github.com/ej0cl6/deep-active-learning.
+Method: Basic Iterative Method (Kurakin et al., 2016) used as an
+active-learning distance as in DFAL (Ducoffe & Precup, 2018).
+"""
+
 import torch
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
-from tqdm import tqdm
 
-from .base import Strategy
+from .adversarial_base import PerSampleAdversarialStrategy
 
 
-class AdversarialBIM(Strategy):
-    def __init__(self, dataset, net, logger, eps=0.05, max_iter=10, batch_size=64, device=None):
+class AdversarialBIM(PerSampleAdversarialStrategy):
+    """Query the samples closest to the decision boundary under BIM.
+
+    For each unlabeled sample, `eta` starts at 0 and, while the predicted
+    class still equals the original prediction, takes a step
+    `eta += eps * sign(grad)` of the cross-entropy (w.r.t. the original
+    prediction). The distance is `(eta * eta).sum()`; the `n` smallest are
+    queried.
+
+    As in the original, the `while` loop has NO iteration cap by default.
+    `max_iter` (default None = original behaviour) is an optional safety cap
+    that is not part of the original algorithm. A single `logger.warning` is
+    emitted the first time any sample exceeds 1000 iterations so a
+    pathological sample is visible in the log instead of silently hanging.
+    """
+
+    _WARN_AFTER_ITERS = 1000
+
+    def __init__(self, dataset, net, logger, eps: float = 0.05, max_iter: int | None = None) -> None:
         super().__init__(dataset, net, logger)
         self.eps = eps
         self.max_iter = max_iter
-        self.batch_size = batch_size
-        self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self._warned_long = False
 
-    def _bim_distance_batch(self, x_batch):
-        """Compute BIM perturbation L2 distance for a batch."""
-        x_batch = x_batch.to(self.device)
+    def cal_dis(self, x: torch.Tensor) -> float:
+        device = self._device()
+        nx = torch.unsqueeze(x, 0).to(device)
+        nx.requires_grad_()
+        eta = torch.zeros(nx.shape, device=device)
 
-        with torch.no_grad():
-            out0, _ = self.net.clf(x_batch)
-            y0 = out0.argmax(dim=1)
+        out, e1 = self.net.clf(nx + eta)
+        py = out.max(1)[1]
+        ny = out.max(1)[1]
+        n_iter = 0
+        while py.item() == ny.item():
+            loss = F.cross_entropy(out, ny)
+            loss.backward()
 
-        eta = torch.zeros_like(x_batch, requires_grad=True)
+            eta += self.eps * torch.sign(nx.grad.data)
+            nx.grad.data.zero_()
 
-        for _ in range(self.max_iter):
-            out, _ = self.net.clf(x_batch + eta)
-            loss = F.cross_entropy(out, y0, reduction="sum")
-            grad = torch.autograd.grad(loss, eta, retain_graph=False, create_graph=False)[0]
-            eta = (eta + self.eps * grad.sign()).detach().requires_grad_(True)
+            out, e1 = self.net.clf(nx + eta)
+            py = out.max(1)[1]
 
-            with torch.no_grad():
-                preds = out.argmax(dim=1)
-                if (preds != y0).all():
-                    break
+            n_iter += 1
+            if n_iter > self._WARN_AFTER_ITERS and not self._warned_long:
+                self._warned_long = True
+                self.logger.warning(
+                    f"AdversarialBIM: a sample exceeded {self._WARN_AFTER_ITERS} iterations "
+                    "without flipping its prediction (loop is uncapped unless max_iter is set)"
+                )
+            if self.max_iter is not None and n_iter >= self.max_iter:
+                break
 
-        with torch.no_grad():
-            dis = (eta * eta).flatten(start_dim=1).sum(dim=1)
-        return dis.cpu().numpy()
-
-    def query(self, n):
-        unlabeled_idxs, unlabeled_data = self.dataset.get_unlabeled_data()
-
-        self.net.clf.to(self.device)
-        self.net.clf.eval()
-
-        loader = DataLoader(
-            unlabeled_data,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=0,
-            pin_memory=torch.cuda.is_available(),
-        )
-
-        dis = np.zeros(len(unlabeled_idxs), dtype=np.float32)
-        offset = 0
-
-        for batch in tqdm(loader, total=len(loader), ncols=100):
-            x_batch, _, idx_batch = batch
-            dis_batch = self._bim_distance_batch(x_batch)
-            bsz = len(dis_batch)
-            dis[offset : offset + bsz] = dis_batch
-            offset += bsz
-
-        return unlabeled_idxs[dis.argsort()[:n]]
-
-
+        return (eta * eta).sum().item()

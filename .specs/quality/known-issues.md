@@ -204,3 +204,14 @@ WARN only). (3) `run_metadata.json` recorded `deterministic_algorithms: true` al
 `warn_only=True` allows non-deterministic kernels. **Fix**: it records `"warn_only"`, the ops that warned
 (`determinism.nondeterministic_op_warnings`) and `fill_uninitialized_memory=False`; the reproducibility
 docs now call GPU determinism best-effort. Severity: Low-Medium, Resolved 2026-09-29.
+
+### KI-38 — batched AdversarialBIM/AdversarialDeepFool deviated from the original DeepAL algorithm (FIXED 2026-09-29)
+
+The earlier implementations batched samples, capped BIM at 10 iterations and stopped only when ALL samples
+of a batch had flipped, so per-sample distances no longer matched the original algorithm (DeepAL, Huang
+2021). **Fix**: faithful per-sample ports (`dalmax/query_strategies/adversarial_bim.py`,
+`adversarial_deepfool.py`, shared loop in `adversarial_base.py`): the loop runs on the model's own device
+(the original's hardcoded CPU/`.cuda()` round trip is gone), the model's train/eval mode is restored, BIM
+is uncapped by default (optional `max_iter`, plus a one-time warning after 1000 iterations). Covered by
+`tests/test_adversarial_strategies.py`. Any result produced with the earlier batched version is invalid.
+These two baselines are the slowest campaign groups. Severity: Medium, Resolved 2026-09-29.

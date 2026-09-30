@@ -149,6 +149,8 @@ resolved run.
 
 ## Wall-clock
 
+The paper-1 `AdversarialBIM`/`AdversarialDeepFool` baselines use the original per-sample DeepAL semantics (one sample at a time, uncapped BIM loop; KI-38) and are the slowest groups; they are excluded from `make campaign-smoke` by default.
+
 TBD (unmeasured; record it together with the `environment.gpus[0].name` of the run). The earlier
 Colab ablation batch took about 9-10 min per ablation-config run; the adversarial/dropout baselines are likely slower (unmeasured). Micro CPU
 smoke: see the report of the implementing session (~18-40 s per micro run).

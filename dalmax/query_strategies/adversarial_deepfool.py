@@ -1,85 +1,68 @@
+"""AdversarialDeepFool: faithful per-sample port of the original DeepAL strategy.
+
+Source: DeepAL (Huang, 2021), https://github.com/ej0cl6/deep-active-learning.
+Method: DeepFool (Moosavi-Dezfooli et al., 2016) used as an active-learning
+distance as in DFAL (Ducoffe & Precup, 2018).
+"""
+
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
-from tqdm import tqdm
 
-from .base import Strategy
+from .adversarial_base import PerSampleAdversarialStrategy
 
 
-class AdversarialDeepFool(Strategy):
-    def __init__(self, dataset, net, logger, max_iter=10, batch_size=16, device=None, eps=1e-12):
+class AdversarialDeepFool(PerSampleAdversarialStrategy):
+    """Query the samples closest to the decision boundary under DeepFool.
+
+    For each unlabeled sample, up to `max_iter` multi-class DeepFool steps:
+    for every non-predicted class `k`, `w_k = grad_k - grad_py`,
+    `f_k = out_k - out_py`; the class with minimal `|f_k| / ||w_k||` gives the
+    step `r = value / ||w|| * w`. The distance is `(eta * eta).sum()`; the `n`
+    smallest are queried.
+    """
+
+    def __init__(self, dataset, net, logger, max_iter: int = 50) -> None:
         super().__init__(dataset, net, logger)
         self.max_iter = max_iter
-        self.batch_size = batch_size
-        self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.eps = eps
 
-    def _deepfool_distance_batch(self, x_batch):
-        """Compute DeepFool perturbation L2 distance for a batch on GPU (top-2 approximation)."""
-        x_batch = x_batch.to(self.device)
+    def cal_dis(self, x: torch.Tensor) -> float:
+        device = self._device()
+        nx = torch.unsqueeze(x, 0).to(device)
+        nx.requires_grad_()
+        eta = torch.zeros(nx.shape, device=device)
 
-        with torch.no_grad():
-            logits0, _ = self.net.clf(x_batch)
-            y0 = logits0.argmax(dim=1)
+        out, e1 = self.net.clf(nx + eta)
+        n_class = out.shape[1]
+        py = out.max(1)[1].item()
+        ny = out.max(1)[1].item()
 
-        eta = torch.zeros_like(x_batch)
+        i_iter = 0
+        while py == ny and i_iter < self.max_iter:
+            out[0, py].backward(retain_graph=True)
+            grad_np = nx.grad.data.clone()
+            value_l = np.inf
+            ri = None
 
-        for _ in range(self.max_iter):
-            adv = (x_batch + eta).detach().requires_grad_(True)
-            logits, _ = self.net.clf(adv)
+            for i in range(n_class):
+                if i == py:
+                    continue
 
-            # competitor class: second-best logit per sample
-            top2 = logits.topk(2, dim=1).indices
-            comp = top2[:, 1]
+                nx.grad.data.zero_()
+                out[0, i].backward(retain_graph=True)
+                grad_i = nx.grad.data.clone()
 
-            grad_y0 = torch.autograd.grad(
-                logits.gather(1, y0.view(-1, 1)).sum(), adv, retain_graph=True, create_graph=False
-            )[0]
-            grad_comp = torch.autograd.grad(
-                logits.gather(1, comp.view(-1, 1)).sum(), adv, retain_graph=True, create_graph=False
-            )[0]
+                wi = grad_i - grad_np
+                fi = out[0, i] - out[0, py]
+                norm_wi = wi.detach().cpu().flatten().norm().item()
+                value_i = np.abs(fi.item()) / norm_wi
+                if value_i < value_l:
+                    ri = value_i / norm_wi * wi
+                    value_l = value_i
 
-            wi = grad_comp - grad_y0
-            wi_flat = wi.flatten(start_dim=1)
-            fi = logits[torch.arange(logits.shape[0]), comp] - logits[torch.arange(logits.shape[0]), y0]
+            eta += ri.clone()
+            nx.grad.data.zero_()
+            out, e1 = self.net.clf(nx + eta)
+            py = out.max(1)[1].item()
+            i_iter += 1
 
-            wi_norm = wi_flat.norm(dim=1) + self.eps
-            step = (torch.abs(fi) / wi_norm / wi_norm).view(-1, 1, 1, 1)
-            eta = eta + step * wi
-
-            with torch.no_grad():
-                preds = logits.argmax(dim=1)
-                if (preds != y0).all():
-                    break
-
-        with torch.no_grad():
-            dis = (eta * eta).flatten(start_dim=1).sum(dim=1)
-        return dis.cpu().numpy()
-
-    def query(self, n):
-        unlabeled_idxs, unlabeled_data = self.dataset.get_unlabeled_data()
-
-        self.net.clf.to(self.device)
-        self.net.clf.eval()
-
-        loader = DataLoader(
-            unlabeled_data,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=0,
-            pin_memory=torch.cuda.is_available(),
-        )
-
-        dis = np.zeros(len(unlabeled_idxs), dtype=np.float32)
-        offset = 0
-
-        for batch in tqdm(loader, total=len(loader), ncols=100):
-            x_batch, _, idx_batch = batch
-            dis_batch = self._deepfool_distance_batch(x_batch)
-            bsz = len(dis_batch)
-            dis[offset : offset + bsz] = dis_batch
-            offset += bsz
-
-        return unlabeled_idxs[dis.argsort()[:n]]
-
-
+        return (eta * eta).sum().item()
