@@ -242,6 +242,8 @@ TexHAL's canonical configuration becomes `Q=17` (ADR 0011). **Open**: the 6.2/6.
 valid for the new canonical configuration; a re-run with `Q=17` (24 runs: 8 groups x 3 seeds) is
 **proposed, not yet approved** and would need manifest and dedup-table changes
 (`scripts/campaign/build_manifest.py`, `campaign.md`). Until then paper 2's 6.2/6.3 tables must be
-labelled as `Q=[5,17]` results. Severity: Medium (scientific consistency of paper 2, not a code bug).
+labelled as `Q=[5,17]` results. **Update 2026-11-01**: campaign part `texhal_q17` now exists (18 runs, aliases
+for the reference/full rows; 210 runs / 70 groups total); runs are pending
+(`make campaign-run PART=texhal_q17`), still subject to advisor confirmation. Severity: Medium (scientific consistency of paper 2, not a code bug).
 Status: Open. Related note (no action): the RNHAL pending decision on whether the canonical hierarchy
 becomes `L=4 [800,600,200,100]` is tracked in `papers-roadmap.md`.

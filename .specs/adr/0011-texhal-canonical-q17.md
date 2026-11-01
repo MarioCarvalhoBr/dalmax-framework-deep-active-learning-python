@@ -23,6 +23,16 @@ campaign numbers are reported as they are, with the 6.2/6.3 tables labelled `Q=[
 (not yet approved) re-running the TexHAL hierarchy and stage ablations with `Q=17`: 24 runs, with the
 new full run replacing `shared/texhal_full` as the canonical TexHAL run in the manifest.
 
+## Implementation (2026-11-01)
+
+The re-run is implemented as campaign part `texhal_q17` (18 runs = 6 groups x 3 seeds: 6.2 L1/L2a/L2b/L3/L4 and
+6.3 w/o hierarchical, `files_config/ablations/texhal_q17/`, VCTex `q=[17]`), not the 24 runs first proposed:
+the reference hierarchy with Q=17 and the "full" stage are the already-executed `texhal/6_1/rep_q17` (aliases),
+and "w/o representation" is the shared KMH run. Totals become 210 runs / 70 groups. Paper 2's 6.2/6.3 tables
+use the new groups, the paper-2/3 comparison tables use `texhal/6_1/rep_q17`, and the executed Q=[5,17]
+6.2/6.3 stay as tables `6_2_q5_17`/`6_3_q5_17` (nothing deleted). **Status stays Proposed** until the
+advisor confirms; the runs are pending (`make campaign-run PART=texhal_q17`).
+
 ## Consequences
 
 - Paper 2 narrative: the headline TexHAL number becomes 0.8745 weighted F1 (Q=17) instead of 0.8259;

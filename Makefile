@@ -103,7 +103,7 @@ colab-check:
 # execution of everything papers 1-3 need -- no redundant runs. See
 # .specs/experiments/campaign.md, COLAB_RUNBOOK.md and LAB_RUNBOOK.md.
 # Variables (all optional):
-#   PART=all|paper1|upper_bound|rnhal|texhal (comma-separated allowed; default all)
+#   PART=all|paper1|upper_bound|rnhal|texhal|texhal_q17 (comma-separated allowed; default all)
 #   MICRO=1     -> files_config/campaign/manifest_micro.json (CPU smoke, results/smoke_campaign/)
 #   SEEDS=1     -> restrict to a subset of the seeds (smoke)
 #   EXCLUDE=... -> comma-separated strategies to drop (default: none; with MICRO=1 the

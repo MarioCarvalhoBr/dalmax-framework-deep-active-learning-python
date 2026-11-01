@@ -3,13 +3,13 @@ description: Report campaign progress (files_config/campaign/manifest.json vs re
 ---
 
 Report the state of the campaign (ADR 0008/0009/0010, `.specs/experiments/campaign.md`). Treat `$ARGUMENTS`
-as `[part]` (optional; `all` | `paper1` | `upper_bound` | `rnhal` | `texhal`, comma-separated allowed;
+as `[part]` (optional; `all` | `paper1` | `upper_bound` | `rnhal` | `texhal` | `texhal_q17`, comma-separated allowed;
 default `all`). This command is read-only: it never runs training and never writes under `results/`.
 
 Steps:
 
 1. `poetry run python -m dalmax.campaign list --part <part>` -- the expected job table and the counts
-   (full scale: 192 runs / 64 groups: `paper1` 117, `upper_bound` 3, `rnhal` 42, `texhal` 30).
+   (full scale: 210 runs / 70 groups: `paper1` 117, `upper_bound` 3, `rnhal` 42, `texhal` 30, `texhal_q17` 18).
 2. `poetry run python -m dalmax.campaign verify --part <part>` -- per job OK / INCOMPLETE / MISSING
    (`dalmax/reporting/leaf_check.py` artifact check) plus the seed-consistency audit. Exit code:
    0 all OK, 1 an incomplete/missing job or a FAIL audit, 2 only audit WARNs.

@@ -19,6 +19,10 @@ files_config/ablations/
     ├── hier_L1.json .. hier_L4.json                              (§6.2)
     ├── stage_full.json / stage_no_hierarchy.json               (§6.3)
     └── micro/           # CPU smoke mirrors of the 11 files above
+└── texhal_q17/          # paper 2, canonical Q=17 re-run of 6.2/6.3 (ADR 0011; campaign part `texhal_q17`, pending)
+    ├── hier_L1.json / hier_L2a.json / hier_L2b.json / hier_L3.json / hier_L4.json   (§6.2)
+    ├── stage_no_hierarchy.json                                   (§6.3)
+    └── micro/           # CPU smoke mirrors of the 6 files above
 
 files_config/campaign/   # the campaign (manifest + params_paper1/params_kmh); see its README
 ```
@@ -180,3 +184,14 @@ Micro mirrors (table above) use `k/10` with floor 2 and the same rule for `sampl
 equal-sized clusters by construction (KI-30 trap is data-dependent, not config-dependent, and is
 exercised by the campaign smoke). They are executed only by the campaign
 (`.specs/experiments/campaign.md`), (the per-GPU ablation scripts no longer exist).
+
+## `texhal_q17/` (2026-11-01, ADR 0011)
+
+TexHAL's canonical configuration is VCTex `Q=17` (single RAE). The six files are copies of the matching
+`texhal/*.json` with only `"embedding": {"extractor": "vctex", "q": [17], "variant": "full"}` changed
+(selection blocks identical; micro mirrors in `texhal_q17/micro/`). There is deliberately **no**
+`rep_*` and no `stage_full` here: the reference hierarchy (L=3 k=[600,200,100]) with Q=17 IS
+`texhal/rep_q17.json` (campaign run `texhal/6_1/rep_q17`), and "full" is that same run (aliases
+`texhal_q17/6_2/hier_ref`, `texhal_q17/6_3/stage_full`); "w/o representation" stays the shared KMH run.
+Run with `make campaign-run PART=texhal_q17` (18 runs). Validated by
+`tests/test_ablation_configs.py` (`q == [17]`, selection equal to the `texhal/` twin).

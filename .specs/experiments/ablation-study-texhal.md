@@ -62,6 +62,15 @@ they describe the old configuration; a re-run of those with Q=17 (24 runs) is **
 approved**. Until then the numbers above are the authoritative executed record and the row
 labelled "full" in this file still means Q=[5,17].
 
+**Q=17 re-run defined (2026-11-01)**: §6.2 and §6.3 are now defined with `embedding = {extractor: vctex, q: [17], variant: full}`
+as campaign part `texhal_q17` (18 runs = 6 groups x 3 seeds; configs `files_config/ablations/texhal_q17/`,
+micro mirrors in `texhal_q17/micro/`). The reference hierarchy (L=3 k=[600,200,100]) and the "full" stage
+are **not** re-run: they are the already-executed `texhal/6_1/rep_q17` (aliases `texhal_q17/6_2/hier_ref`,
+`texhal_q17/6_3/stage_full`); "w/o representation" stays the shared KMH run. Runs are **pending**; the
+Q=[5,17] 6.2/6.3 numbers above stay as the history record (campaign tables `6_2_q5_17`/`6_3_q5_17`).
+The tables and `*.json` named below under "6.2"/"6.3" still describe the Q=[5,17] execution unless
+they say `texhal_q17`.
+
 ## VCTex background (verified 2026-08-26/30)
 
 **Provenance**: per the VCTex method authors (Ricardo T. Fares and Lucas C. Ribas, São Paulo State
@@ -168,7 +177,9 @@ embedding; see `files_config/ablations/README.md`.
 
 Identical structure and run-table shape to RNHAL's §6.2 (`ablation-study.md`) — same
 `n_clusters`/`n_levels`/`sample_sizes` grid, `n_query=100` for every row — with `embedding` fixed
-at VCTex multi-scale (`q: [5, 17]`, `variant: "full"`) instead of SSRAE full.
+at VCTex multi-scale (`q: [5, 17]`, `variant: "full"`) instead of SSRAE full. **Since 2026-11-01 (ADR 0011) the
+canonical 6.2 is the same grid with `q: [17]`** (part `texhal_q17`, `files_config/ablations/texhal_q17/`; the
+Q=[5,17] execution is kept as history).
 
 ### 6.2 run table
 
@@ -210,7 +221,7 @@ CUDA_VISIBLE_DEVICES=<gpu> poetry run python tools/trainer.py \
 ## 6.3 Contribution of the two TexHAL stages
 
 - **TexHAL (full)**: VCTex `q=[5,17]` + hierarchical selection, reference hierarchy —
-  `stage_full.json`.
+  `stage_full.json` (Q=17 canonical since ADR 0011: `texhal/rep_q17.json`, same run as campaign `texhal/6_1/rep_q17`).
 - **Without representation module**: keep hierarchical selection, replace VCTex embeddings with
   **ImageNet-pretrained ResNet embeddings** (`dalmax/embeddings/resnet_imagenet_provider.py`) —
   `files_config/campaign/params_kmh.json` (the former `stage_no_representation.json`; neither

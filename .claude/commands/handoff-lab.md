@@ -23,7 +23,7 @@ Steps:
    git pull
    make lab-setup                 # poetry install + torch/CUDA visibility check
    make lab-check GPU=0           # one short real-data sanity run before committing to the campaign
-   make campaign-list             # expect 192 runs / 64 groups
+   make campaign-list             # expect 210 runs / 70 groups
    make campaign-run PART=all     # or one process per GPU: CUDA_VISIBLE_DEVICES=0 ... PART=paper1,upper_bound
                                   #                          CUDA_VISIBLE_DEVICES=1 ... PART=rnhal,texhal
    make campaign-verify && make campaign-report

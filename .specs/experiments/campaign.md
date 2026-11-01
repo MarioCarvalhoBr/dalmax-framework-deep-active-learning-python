@@ -17,7 +17,11 @@ SSRAE `q=13`, VCTex `q=(5,17)`. Fixed test set; the pool is the 8,086 training i
 **no validation split** in this project's protocol (pool/test only, as in the thesis) and none is
 invented here, including for the upper bound.
 
-## What runs (192 runs, 64 run groups)
+## What runs (210 runs, 70 run groups)
+
+> **2026-11-01 (ADR 0011, KI-40)**: the first 192 runs (the 64 groups before the `texhal_q17` row below)
+> were executed 2026-09-30 to 2026-10-05; part `texhal_q17` (18 runs, 6 groups) was added afterwards and
+> is **pending** (`make campaign-run PART=texhal_q17`, resume-safe).
 
 | Part | Groups x seeds | Runs | Content |
 |---|---|---|---|
@@ -25,7 +29,8 @@ invented here, including for the upper bound.
 | `upper_bound` | 1 x 3 | 3 | `FullSupervised`: train once on the entire pool (8,086), evaluate on the test set |
 | `rnhal` | 14 x 3 | 42 | paper 3 ablations at nq=100: 6.1 spatial/spectral; 6.2 five existing + five new hierarchy rows; 6.3 full + w/o hierarchical |
 | `texhal` | 10 x 3 | 30 | paper 2 ablations at nq=100: 6.1 q5/q13/q17; 6.2 L1/L2a/L2b/L3/L4; 6.3 w/o hierarchical; plus `shared/texhal_full` |
-| **Total** | **64 x 3** | **192** | |
+| `texhal_q17` | 6 x 3 | 18 | paper 2, TexHAL canonical `Q=17` (ADR 0011, status proposed): 6.2 L1/L2a/L2b/L3/L4 and 6.3 w/o hierarchical re-run with VCTex `q=[17]` (`files_config/ablations/texhal_q17/`) |
+| **Total** | **70 x 3** | **210** | |
 
 Paper 1 = the 12 classical strategies (RandomSampling, LeastConfidence, MarginSampling,
 EntropySampling, LeastConfidenceDropout, MarginSamplingDropout, EntropySamplingDropout,
@@ -51,8 +56,9 @@ round.
 | Canonical run (id) | Also serves as (aliases) | Consumers |
 |---|---|---|
 | `shared/random_nq100` (RandomSampling, nq100) | `p1/RandomSampling/nq100` | paper 1 nq100 table; paper 2 and paper 3 comparison |
-| `shared/kmh_nq100` (KMH, nq100; resnet_imagenet + hierarchical) | `p1/KMH/nq100`, `rnhal/6_3/stage_no_representation`, `texhal/6_3/stage_no_representation` | paper 1 nq100 table (KMH row); paper 2 6.3; paper 3 6.3 |
+| `shared/kmh_nq100` (KMH, nq100; resnet_imagenet + hierarchical) | `p1/KMH/nq100`, `rnhal/6_3/stage_no_representation`, `texhal/6_3/stage_no_representation`, `texhal_q17/6_3/stage_no_representation` | paper 1 nq100 table (KMH row); paper 2 6.3; paper 3 6.3 |
 | `shared/texhal_full` (VCTex q=[5,17] + reference hierarchy) | `texhal/6_1/rep_full`, `texhal/6_2/ref`, `texhal/6_3/stage_full` | paper 2 6.1/6.2/6.3/comparison; paper 3 comparison |
+| `texhal/6_1/rep_q17` (VCTex q=[17] + reference hierarchy; executed in part `texhal`, left in place) | `texhal_q17/6_2/hier_ref`, `texhal_q17/6_3/stage_full` | paper 2 6.1/6.2/6.3/comparison; paper 3 comparison (the only multi-paper group not under `shared/`) |
 | `rnhal/6_3/stage_full` (SSRAE q=13 full + reference hierarchy) | `rnhal/6_1/rep_full`, `rnhal/6_2/ref` | paper 3 6.1/6.2/6.3/comparison |
 
 Ownership rule: a group consumed by **more than one paper lives under `shared/`**; every other
@@ -102,11 +108,11 @@ results/campaign/
 ```bash
 make campaign-list                        # job table + counts per part
 make campaign-run PART=all                # everything, skip-existing (re-run = resume)
-make campaign-run PART=paper1|upper_bound|rnhal|texhal   # or comma-separated
+make campaign-run PART=paper1|upper_bound|rnhal|texhal|texhal_q17   # or comma-separated
 make campaign-verify                      # OK/INCOMPLETE/MISSING per job + seed-consistency audit
 make campaign-report                      # docs/results/campaign/ (tables md/tex/csv, confusion matrices)
 make campaign-smoke                       # micro campaign on CPU (seed 1) -> results/smoke_campaign/;
-                                          # skips AdversarialBIM/AdversarialDeepFool (58 of 64 jobs)
+                                          # skips AdversarialBIM/AdversarialDeepFool (64 of 70 jobs)
 ```
 
 `python -m dalmax.campaign {list,run,verify} --part ... [--micro] [--seeds 1] [--exclude-strategy A,B]
@@ -116,7 +122,7 @@ changed, so the GPU campaign still runs them. `make campaign-smoke` (and `MICRO=
 `AdversarialBIM,AdversarialDeepFool` by default because they are far too slow on CPU
 (`SMOKE_EXCLUDE=` includes them); with the same exclusion `verify` does not report them MISSING.
 Execution order (independent of `--part`): paper 1 at nq100
-first (the shared canonical runs land early), then rnhal, texhal, then paper 1 at nq50 and nq10,
+first (the shared canonical runs land early), then rnhal, texhal, texhal_q17, then paper 1 at nq50 and nq10,
 then the upper bound -- what is missing if a budget runs out is the least reusable part. Papers 2/3
 comparison tables need paper 1's `shared/*` runs and `shared/texhal_full`: run those parts before
 reporting.
@@ -145,7 +151,7 @@ mid-report is re-run, not skipped.
 Exactly the manifest's `tables` section (paper 1: one table per nq with the 12 + KMH + upper-bound
 rows; papers 2/3: 6.1/6.2/6.3 + comparison; paper 2 comparison = TexHAL-full vs best paper-1 method
 @100 (12 classical + KMH, computed, name printed) vs RandomSampling@100; paper 3 comparison =
-RNHAL-full vs TexHAL-full vs RandomSampling@100 + best paper-1 @100 as context). Rows without runs
+RNHAL-full vs TexHAL-full vs RandomSampling@100 + best paper-1 @100 as context). Since ADR 0011 "TexHAL-full" = `texhal/6_1/rep_q17` (VCTex Q=17 + hierarchical); paper 2's 6.2/6.3 tables are built from the `texhal_q17` groups (reference/full rows are aliases of `texhal/6_1/rep_q17`; w/o representation = shared KMH), and the executed Q=[5,17] 6.2/6.3 stay reachable as tables `6_2_q5_17`/`6_3_q5_17` (history, groups unchanged in part `texhal`); 6.1 labels are `Q=[5,17]` and `Q=17 (TexHAL)`. Rows without runs
 render `TBD`. `docs/results/campaign/summary.csv` lists every (paper, table, row) with its
 resolved run.
 
@@ -181,7 +187,7 @@ group is `FullSupervised`, excluded by design). `determinism.nondeterministic_op
 `cumsum_cuda_kernel` in 75 runs (an op with no deterministic CUDA kernel; consistent with the
 documented best-effort GPU determinism).
 
-**Reports**: written by `make campaign-report` to `docs/results/campaign/` (`summary.csv`, 11 tables
+**Reports**: written by `make campaign-report` to `docs/results/campaign/` (`summary.csv`, 13 tables
 as `.md`/`.tex`/`.csv` under `paper1/`, `paper2/`, `paper3/`, `seed_audit.md`, 64 mean confusion
 matrices under `confusion_matrices/`). Since 2026-11-01 `docs/*` is gitignored, so these files are
 **local-only** (not in git). The thesis project keeps a copy under
