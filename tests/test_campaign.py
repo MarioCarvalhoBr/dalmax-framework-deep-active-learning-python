@@ -56,8 +56,8 @@ def test_committed_manifests_match_the_generator() -> None:
 def test_run_counts_per_part(which: str, request: pytest.FixtureRequest) -> None:
     manifest: C.Manifest = request.getfixturevalue(which)
     counts = C.count_by_part(C.expand_jobs(manifest))
-    assert counts == {"paper1": 117, "upper_bound": 3, "rnhal": 42, "texhal": 30}
-    assert sum(counts.values()) == 192
+    assert counts == {"paper1": 117, "upper_bound": 3, "rnhal": 42, "texhal": 30, "texhal_q17": 18}
+    assert sum(counts.values()) == 210
 
 
 def test_paper1_is_12_classical_plus_kmh_and_no_rnhal_texhal_presets(full_manifest: C.Manifest) -> None:
@@ -85,11 +85,16 @@ def test_dedup_aliases_point_at_single_canonical_runs(full_manifest: C.Manifest)
     assert {("paper1", "paper1_nq100"), ("paper2", "6_3"), ("paper3", "6_3")} <= kmh
     rnd = {u["paper"] for u in groups["shared/random_nq100"].used_by}
     assert rnd == {"paper1", "paper2", "paper3"}
-    tex = {u["paper"] for u in groups["shared/texhal_full"].used_by}
-    assert tex == {"paper2", "paper3"}
-    # every group consumed by more than one paper lives under shared/
+    # ADR 0011: TexHAL canonical Q=17; the reference-hierarchy run is the executed texhal/6_1/rep_q17
+    for row in ("6_2/hier_ref", "6_3/stage_full"):
+        assert aliases[f"texhal_q17/{row}"].canonical == "texhal/6_1/rep_q17"
+    assert aliases["texhal_q17/6_3/stage_no_representation"].canonical == "shared/kmh_nq100"
+    q17 = {u["paper"] for u in groups["texhal/6_1/rep_q17"].used_by}
+    assert q17 == {"paper2", "paper3"}
+    # every group consumed by more than one paper lives under shared/ (except the already-executed
+    # texhal/6_1/rep_q17, left in place so the finished runs stay resumable)
     for gid, g in groups.items():
-        if len({u["paper"] for u in g.used_by}) > 1:
+        if len({u["paper"] for u in g.used_by}) > 1 and gid != "texhal/6_1/rep_q17":
             assert gid.startswith("shared/") and "/shared/" in g.dir_results
 
 
@@ -170,12 +175,12 @@ def test_execution_order_paper1_nq100_first_upper_bound_last(full_manifest: C.Ma
     assert all(j.group.n_query == 100 for j in jobs[:39] if j.group.part == "paper1")
     assert jobs[-1].group.part == "upper_bound"
     assert [C.PHASE_LABELS[p] for p in dict.fromkeys(phases)] == [
-        "paper1_nq100", "rnhal", "texhal", "paper1_other_nq", "upper_bound"]
+        "paper1_nq100", "rnhal", "texhal", "texhal_q17", "paper1_other_nq", "upper_bound"]
 
 
 def test_parse_parts_and_seed_subset(full_manifest: C.Manifest) -> None:
     assert C.parse_parts("all") == C.PARTS
-    assert C.parse_parts("texhal,rnhal") == ("rnhal", "texhal")
+    assert C.parse_parts("texhal_q17,rnhal") == ("rnhal", "texhal_q17")
     with pytest.raises(C.CampaignError):
         C.parse_parts("paper9")
     jobs = C.expand_jobs(full_manifest, ("rnhal",), seeds=[2])
@@ -397,7 +402,7 @@ def test_exclude_strategy_filter_drops_only_those_groups(full_manifest: C.Manife
     dropped = [j for j in jobs if j not in kept]
     assert dropped and {j.group.strategy_name for j in dropped} == set(ADVERSARIAL)
     assert len(dropped) == 2 * 3 * 3  # 2 strategies x 3 n_query x 3 seeds
-    assert len(kept) == len(jobs) - len(dropped) == 192 - 18
+    assert len(kept) == len(jobs) - len(dropped) == 210 - 18
     assert all(j.group.strategy_name not in ADVERSARIAL for j in kept)
     assert [j for j in jobs if j in kept] == kept  # order preserved
 
@@ -414,7 +419,7 @@ def test_cli_exclude_strategy_applies_to_list(capsys: pytest.CaptureFixture[str]
     out = capsys.readouterr().out
     assert "excluded strategies: AdversarialBIM, AdversarialDeepFool" in out
     assert "Adversarial" not in out.split("excluded strategies:")[1].split("\n", 1)[1]
-    assert "TOTAL" in out and "58 runs" in out  # 64 micro seed-1 jobs - 2 strategies x 3 n_query
+    assert "TOTAL" in out and "64 runs" in out  # 70 micro seed-1 jobs - 2 strategies x 3 n_query
     assert C.main(["list", "--micro", "--exclude-strategy", "Nope"]) == 2
 
 

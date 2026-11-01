@@ -67,7 +67,7 @@ MICRO = Scale(
 
 # (id suffix, params basename, table label) -- ablation rows per study, per method.
 RNHAL_61 = [("rep_spatial", "Spatial-only"), ("rep_spectral", "Spectral-only")]
-TEXHAL_61 = [("rep_q5", "Q=5"), ("rep_q13", "Q=13"), ("rep_q17", "Q=17")]
+TEXHAL_61 = [("rep_q5", "Q=5"), ("rep_q13", "Q=13"), ("rep_q17", "Q=17 (TexHAL)")]
 HIER_COMMON = [
     ("hier_L1", "L=1, k=[50]"),
     ("hier_L2a", "L=2, k=[300,100]"),
@@ -149,10 +149,11 @@ def build(scale: Scale) -> dict[str, Any]:
               "(n_init_labeled == pool size, n_round 0), evaluate on the fixed test set.")
 
     # --- rnhal / texhal ablation groups (full rows are ONE canonical run) -----
-    def ablation_groups(method: str, study_rows: dict[str, list[str]]) -> None:
+    def ablation_groups(method: str, study_rows: dict[str, list[str]], part: str | None = None) -> None:
+        # `method` = config folder + results dir + group-id prefix; `part` defaults to it.
         for study, cfgs in study_rows.items():
             for cfg in cfgs:
-                add_group(f"{method}/{study}/{cfg}", method, (abl % method) + f"{cfg}.json",
+                add_group(f"{method}/{study}/{cfg}", part or method, (abl % method) + f"{cfg}.json",
                           "RepresentationStrategy", primary, scale.n_init, scale.n_round,
                           f"{root}/{method}/{study}/{cfg}/")
 
@@ -163,6 +164,12 @@ def build(scale: Scale) -> dict[str, Any]:
     })
     ablation_groups("texhal", {
         "6_1": [c for c, _ in TEXHAL_61],
+        "6_2": [c for c, _ in HIER_COMMON],
+        "6_3": ["stage_no_hierarchy"],
+    })
+    # TexHAL canonical Q=17 (ADR 0011): 6.2 hierarchy + 6.3 no-hierarchy re-run with a single RAE.
+    # The reference hierarchy with Q=17 IS texhal/6_1/rep_q17 (aliases below); nothing else is re-run.
+    ablation_groups("texhal_q17", {
         "6_2": [c for c, _ in HIER_COMMON],
         "6_3": ["stage_no_hierarchy"],
     })
@@ -189,6 +196,15 @@ def build(scale: Scale) -> dict[str, Any]:
                   "w/o representation module = ImageNet ResNet-50 features + reference hierarchy = "
                   "the shared KMH@100 run (byte-identical config; ADR 0009).")
 
+    q17_ref = "texhal/6_1/rep_q17"
+    q17_why = ("TexHAL canonical Q=17 (ADR 0011): the reference hierarchy L=3 k=[600,200,100] with VCTex "
+               "q=[17] IS the already-executed texhal/6_1/rep_q17 run (byte-identical config).")
+    add_alias("texhal_q17/6_2/hier_ref", q17_ref, (abl % "texhal") + "rep_q17.json", q17_why)
+    add_alias("texhal_q17/6_3/stage_full", q17_ref, (abl % "texhal") + "rep_q17.json", q17_why)
+    add_alias("texhal_q17/6_3/stage_no_representation", "shared/kmh_nq100", kmh_params,
+              "w/o representation module = ImageNet ResNet-50 features + reference hierarchy = "
+              "the shared KMH@100 run (byte-identical config; ADR 0009).")
+
     for g in groups:
         if g["id"] in alias_notes:
             extra = "Also serves as: " + ", ".join(alias_notes[g["id"]]) + "."
@@ -212,35 +228,56 @@ def build(scale: Scale) -> dict[str, Any]:
 
     hier_labels = dict(HIER_COMMON + HIER_NEW_RNHAL)
 
-    def hier_rows(method: str, order: list[str]) -> list[dict[str, str]]:
-        return [row(REF_LABEL, f"{method}/6_2/ref") if key == "ref"
+    def hier_rows(method: str, order: list[str], ref_id: str | None = None) -> list[dict[str, str]]:
+        ref = ref_id or f"{method}/6_2/ref"
+        return [row(REF_LABEL, ref) if key == "ref"
                 else row(hier_labels[key], f"{method}/6_2/{key}") for key in order]
 
-    def method_tables(method: str, tag: str, rep_rows: list[dict[str, str]], order: list[str]) -> list[dict]:
+    def stage_tables(method: str, tag: str, suffix: str = "") -> list[dict]:
         return [
-            {"id": "6_1", "kind": "ablation", "title": "6.1 Representation ablation", "rows": rep_rows},
-            {"id": "6_2", "kind": "ablation", "title": "6.2 Hierarchy ablation",
-             "rows": hier_rows(method, order)},
-            {"id": "6_3", "kind": "ablation", "title": "6.3 Contribution of the two stages", "rows": [
+            {"id": f"6_2{suffix}", "kind": "ablation", "title": f"6.2 Hierarchy ablation{suffix_title(suffix)}",
+             "rows": []},  # rows filled by the caller (hierarchy rows differ per variant)
+            {"id": f"6_3{suffix}", "kind": "ablation",
+             "title": f"6.3 Contribution of the two stages{suffix_title(suffix)}", "rows": [
                 row(f"{tag} (full)", f"{method}/6_3/stage_full"),
                 row("w/o representation module", f"{method}/6_3/stage_no_representation"),
                 row("w/o hierarchical module", f"{method}/6_3/stage_no_hierarchy"),
             ]},
         ]
 
+    def suffix_title(suffix: str) -> str:
+        return " (history, VCTex Q=[5,17])" if suffix == "_q5_17" else ""
+
+    def method_tables(method: str, tag: str, rep_rows: list[dict[str, str]], order: list[str],
+                      suffix: str = "") -> list[dict]:
+        t62, t63 = stage_tables(method, tag, suffix)
+        t62["rows"] = hier_rows(method, order)
+        return [{"id": "6_1", "kind": "ablation", "title": "6.1 Representation ablation", "rows": rep_rows},
+                t62, t63]
+
     best = {"label": "Best paper-1 method @ n_query=100 (computed)",
             "best_of": {"candidates": [{"run": f"p1/{m}/nq100", "name": m} for m in PAPER1_METHODS],
                        "metric": "f1_score"}}
     random_row = row("RandomSampling @ n_query=100", "p1/RandomSampling/nq100")
-    texhal_full = row("TexHAL (VCTex + hierarchical)", "shared/texhal_full")
+    texhal_full = row("TexHAL (VCTex Q=17 + hierarchical)", "texhal/6_1/rep_q17")
     rnhal_full = row("RNHAL (SSRAE + hierarchical)", "rnhal/6_3/stage_full")
 
     rnhal_rep = [row("Full", "rnhal/6_1/rep_full")] + [
         row(label, f"rnhal/6_1/{cfg}") for cfg, label in RNHAL_61]
     texhal_rep = [row(label, f"texhal/6_1/{cfg}") for cfg, label in TEXHAL_61] + [
-        row("Q=[5,17] (full)", "texhal/6_1/rep_full")]
+        row("Q=[5,17]", "texhal/6_1/rep_full")]
 
-    paper2 = method_tables("texhal", "TexHAL", texhal_rep, HIER_ORDER_TEXHAL) + [{
+    # Paper 2 (ADR 0011): 6.1 unchanged; 6.2/6.3 from the texhal_q17 groups; the executed Q=[5,17]
+    # 6.2/6.3 stay reachable as `6_2_q5_17` / `6_3_q5_17`.
+    q17_6_2 = {"id": "6_2", "kind": "ablation", "title": "6.2 Hierarchy ablation",
+               "rows": hier_rows("texhal_q17", HIER_ORDER_TEXHAL, "texhal_q17/6_2/hier_ref")}
+    q17_6_3 = {"id": "6_3", "kind": "ablation", "title": "6.3 Contribution of the two stages", "rows": [
+        row("TexHAL (full)", "texhal_q17/6_3/stage_full"),
+        row("w/o representation module", "texhal_q17/6_3/stage_no_representation"),
+        row("w/o hierarchical module", "texhal_q17/6_3/stage_no_hierarchy"),
+    ]}
+    legacy = method_tables("texhal", "TexHAL", texhal_rep, HIER_ORDER_TEXHAL, "_q5_17")
+    paper2 = [legacy[0], q17_6_2, q17_6_3, legacy[1], legacy[2]] + [{
         "id": "comparison", "kind": "comparison",
         "title": "Paper 2 -- TexHAL vs. paper-1 methods, n_query=100",
         "rows": [texhal_full, best, random_row],
