@@ -172,7 +172,7 @@ make campaign-smoke   # micro campaign on CPU (skips the two adversarial baselin
 
 Same Poetry steps as above (`pipx install poetry` once per machine, then
 `poetry install` after each `git pull`). Everything the three papers need runs
-from ONE manifest (`files_config/campaign/manifest.json`, 192 runs / 64 run
+from ONE manifest (`files_config/campaign/manifest.json`, 210 runs / 70 run
 groups, ADR 0008/0009, [`.specs/experiments/campaign.md`](.specs/experiments/campaign.md)):
 
 ```bash

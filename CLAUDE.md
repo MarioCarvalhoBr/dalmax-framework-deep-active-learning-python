@@ -67,12 +67,12 @@ make lab-check GPU=0                  # one short real-data GPU run (n_round=1) 
 
 # The campaign (2026-09-29) -- the ONLY path for the final execution of all three papers
 # (one manifest, no redundant runs; see .specs/experiments/campaign.md and COLAB_RUNBOOK.md):
-make campaign-list                    # job table + run counts per part (192 runs / 64 groups)
+make campaign-list                    # job table + run counts per part (210 runs / 70 groups)
 make campaign-run PART=all            # PART=paper1|upper_bound|rnhal|texhal (comma-separated ok); resume = re-run
 make campaign-verify                  # OK/INCOMPLETE/MISSING per job + seed audit (exit 0 ok / 1 fail / 2 warn)
 make campaign-report                  # docs/results/campaign/ (tables md/tex/csv, mean confusion matrices)
 make campaign-smoke                   # micro campaign on CPU (seed 1) -> results/smoke_campaign/;
-                                      # skips AdversarialBIM/AdversarialDeepFool by default (58 of 64 jobs; SMOKE_EXCLUDE= to include)
+                                      # skips AdversarialBIM/AdversarialDeepFool by default (64 of 70 jobs; SMOKE_EXCLUDE= to include)
 
 # Colab targets (see COLAB_RUNBOOK.md for the full notebook-cell guide):
 make colab-setup                      # verify Drive mount, build/reuse dataset zip, symlink results/ -> Drive
@@ -224,7 +224,7 @@ outstanding.
   the one-shot re-execution of everything the three papers need: paper 1 = 12 classical strategies +
   **KMH** (hierarchical k-means over ImageNet ResNet-50 features, confirmed by the user) x nq {10,50,100}
   + the `FullSupervised` upper bound; papers 2/3 = TexHAL/RNHAL ablations at nq100 (+ 5 new RNHAL
-  hierarchy rows). 192 runs / 64 groups, results under `results/campaign/`; groups consumed by
+  hierarchy rows). 210 runs / 70 groups (192 executed; the 18-run `texhal_q17` part is pending, ADR 0011), results under `results/campaign/`; groups consumed by
   several papers live under `shared/` (`shared/kmh_nq100`, `shared/random_nq100`,
   `shared/texhal_full`) and every alias row points to the one run. `stage_no_representation` is ONE
   shared run (2026-09-01 per-paper decision superseded by ADR 0009; its only config is

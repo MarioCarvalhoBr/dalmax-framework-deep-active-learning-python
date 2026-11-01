@@ -270,14 +270,15 @@ seeds (1,2,3) and one protocol in one environment. Sections 0-5 (runtime, Drive,
    | `upper_bound` | 3 | 1 |
    | `rnhal` | 42 | 14 |
    | `texhal` | 30 | 10 |
-   | **Total** | **192** | **64** |
+   | `texhal_q17` | 18 | 6 |
+   | **Total** | **210** | **70** |
 
 2. **Run a part** (or everything with `PART=all`): `!make campaign-run PART=paper1`. Jobs run sequentially, skip-existing (a job is
    done only when its leaf holds the **full** artifact set; `results.json` is written last),
    logging to `results/campaign/campaign.log` and failures to `results/campaign/failures.log`
    (the batch continues after a failure). **Resume after a disconnect = redo sections 0-4 and
    re-run the same command** (`results/` is the Drive symlink of `make colab-setup`). Order: paper 1
-   at nq100 first (shared runs land early), then rnhal, texhal, paper 1 at nq50 and nq10, then the
+   at nq100 first (shared runs land early), then rnhal, texhal, texhal_q17, paper 1 at nq50 and nq10, then the
    upper bound.
 3. **Check the environment before leaving it unattended**: the notebook prints the GPU identity
    right after `!make colab-check` (section 5), from that run's `run_metadata.json`
@@ -289,10 +290,10 @@ seeds (1,2,3) and one protocol in one environment. Sections 0-5 (runtime, Drive,
    different GPU model are not bit-identical.
 4. **Per-part launches** to split across sessions (the notebook defaults to `PART = "paper1"`).
    Recommended order: `PART=paper1` (117 runs), `PART=rnhal` (42), `PART=texhal` (30),
-   `PART=upper_bound` (3); comma-separated works (`PART=rnhal,texhal`). Re-running the same `PART`
+   `PART=texhal_q17` (18; TexHAL Q=17 re-run of 6.2/6.3, ADR 0011), `PART=upper_bound` (3); comma-separated works (`PART=rnhal,texhal`). Re-running the same `PART`
    resumes (completed runs are skipped), so a disconnect loses at most the run in progress.
    Papers 2/3 comparison tables need paper 1's `shared/*` runs and `shared/texhal_full`, so run
-   `paper1` and `texhal` before reporting.
+   `paper1` and `texhal` (and `texhal_q17` for the Q=17 6.2/6.3 rows) before reporting.
 5. **Progress / monitor** (the notebook's Progress cell): `!make campaign-verify PART=...` plus
    `!tail -n 20 results/campaign/campaign.log`; failures go to `results/campaign/failures.log`.
 6. **Verify**: `!make campaign-verify` -- OK/INCOMPLETE/MISSING per job with the artifact checks of
@@ -307,14 +308,14 @@ seeds (1,2,3) and one protocol in one environment. Sections 0-5 (runtime, Drive,
 
 **CPU smoke (not on Colab).** The micro campaign (`make campaign-smoke`, local CPU, seed 1) skips
 the two adversarial baselines (`AdversarialBIM`, `AdversarialDeepFool`) because they are far too slow on
-CPU; it runs 58 of the 64 micro jobs. The real GPU campaign above runs them (`--exclude-strategy`
+CPU; it runs 64 of the 70 micro jobs. The real GPU campaign above runs them (`--exclude-strategy`
 is only passed by the smoke targets).
 
 **Wall-clock: TBD.** Record the measured hours (and the `<gpu-name>` from step 3) here after the
 first full run; the adversarial/dropout baselines are likely the slowest jobs (unmeasured).
 
-**Drive quota.** Every run writes a `saved_model.pth` checkpoint (ResNet-50, ~95 MB): 192 runs is
-about **18 GB** on Drive, plus the embedding caches and logs/plots. Check your Drive quota before
+**Drive quota.** Every run writes a `saved_model.pth` checkpoint (ResNet-50, ~95 MB): 210 runs is
+about **20 GB** on Drive, plus the embedding caches and logs/plots. Check your Drive quota before
 starting `PART=all` (or split by part across sessions).
 
 The upper bound (`FullSupervised`) trains once on all 8,086 pool images (ResNet-50, 10 epochs, batch
