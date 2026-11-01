@@ -230,3 +230,18 @@ of a batch had flipped, so per-sample distances no longer matched the original a
 was uncapped by default (superseded by KI-39: it hung on the real campaign; now capped at 50 iterations, non-converged samples get distance `inf`). Covered by
 `tests/test_adversarial_strategies.py`. Any result produced with the earlier batched version is invalid.
 These two baselines are the slowest campaign groups. Severity: Medium, Resolved 2026-09-29.
+
+### KI-40 — TexHAL canonical `Q=[5,17]` underperforms single-Q VCTex; hierarchy/stage ablations ran with it (OPEN, found 2026-11-01)
+
+The campaign (`experiments/campaign.md`, executed 2026-09-30 to 2026-10-05) showed that the TexHAL
+"full" configuration `Q=[5,17]` (two RAEs, 648-d) scores 0.8259 weighted F1 / 0.7687 macro F1 at nq100,
+below `Q=5` (0.8382), `Q=13` (0.8557) and `Q=17` (0.8745 / 0.8262, std 0.0079), and below the best
+paper-1 method (LeastConfidence, 0.8716). All TexHAL 6.2 (hierarchy) and 6.3 (stage) rows, and the
+shared `shared/texhal_full` run, used `Q=[5,17]`. **Decision (user, 2026-11-01, pending advisor)**:
+TexHAL's canonical configuration becomes `Q=17` (ADR 0011). **Open**: the 6.2/6.3 ablations are not
+valid for the new canonical configuration; a re-run with `Q=17` (24 runs: 8 groups x 3 seeds) is
+**proposed, not yet approved** and would need manifest and dedup-table changes
+(`scripts/campaign/build_manifest.py`, `campaign.md`). Until then paper 2's 6.2/6.3 tables must be
+labelled as `Q=[5,17]` results. Severity: Medium (scientific consistency of paper 2, not a code bug).
+Status: Open. Related note (no action): the RNHAL pending decision on whether the canonical hierarchy
+becomes `L=4 [800,600,200,100]` is tracked in `papers-roadmap.md`.

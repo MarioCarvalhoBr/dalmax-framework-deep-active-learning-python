@@ -148,11 +148,21 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   (only captured at runtime in `run_metadata.json`), review follow-ups (best-effort determinism
   record, complete-leaf resume, seed-audit WARN, `--exclude-strategy`).
 
-Next milestone: advisor review of the ablation section (`paper_drafts/ablation_section.tex`,
-including the weighted-primary/macro-secondary framing pending confirmation — see
-`.specs/experiments/ablation-study.md`), and the full campaign execution on a GPU machine (Colab or
-lab; `make campaign-run PART=all`); a lab-machine smoke run confirming the Phase 4 move and the
-`tools/` move didn't break anything there is still separately outstanding.
+- **Campaign executed** (2026-09-30 to 2026-10-05 on Google Colab Pro, verified 2026-11-01): 192/192
+  runs OK, seed audit PASS for seeds 1-3; execution record and every result table in
+  [`.specs/experiments/campaign.md`](.specs/experiments/campaign.md); reports in
+  `docs/results/campaign/` (local-only since `docs/*` is gitignored; a copy is kept under
+  `thesis_drafts/final_thesis/context/campaign-results/`). Decisions of 2026-11-01 (pending advisor):
+  TexHAL's canonical config becomes `Q=17` (ADR 0011, KI-40; a 24-run re-run of its 6.2/6.3 ablations
+  is proposed, not approved); whether RNHAL's canonical hierarchy becomes `L=4 [800,600,200,100]` is open.
+- **Thesis writing** (started 2026-11-01): `thesis_drafts/final_thesis/` (gitignored, own git repo,
+  ReportBuilder harness), plan in `thesis_drafts/WRITING_PLAN.md`.
+
+Next milestone: write the thesis from the campaign results; advisor review of the ablation section
+(`paper_drafts/ablation_section.tex`, weighted-primary/macro-secondary framing still pending
+confirmation, see `.specs/experiments/ablation-study.md`), of the TexHAL `Q=17` decision and of the RNHAL
+`L=4` hierarchy; a lab-machine smoke run confirming the Phase 4 and `tools/` moves is still separately
+outstanding.
 
 ## Never do
 

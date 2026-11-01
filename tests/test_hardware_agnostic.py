@@ -26,6 +26,7 @@ HISTORY_ALLOWLIST = {
     ".specs/architecture/refactor-plan.md",
     ".specs/experiments/ablation-study.md",
     ".specs/experiments/baseline-results.md",
+    ".specs/experiments/campaign.md",  # past-tense campaign execution record (2026-09/10)
     ".specs/infrastructure/execution-environments.md",
 }
 

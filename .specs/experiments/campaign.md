@@ -80,7 +80,9 @@ query indices (`[34, 67, 119, 237, 522]`) and identical metrics; same for VCTex
 | `hier_L4_k800_600_200_100.json` | `[800,600,200,100]` | `[40,30,10,5]` |
 
 `sample_sizes` follow the README rule `round_half_up(0.05 * k)`, floor 2, same as the existing
-`hier_*` files. Micro mirrors use `k/10` (floor 2). Values TBD (not run yet).
+`hier_*` files. Micro mirrors use `k/10` (floor 2). **Executed in the campaign (2026-09/10)**; final-round
+F1 of each row is in the execution record below (best of all RNHAL hierarchies: `L=4 [800,600,200,100]`,
+0.8955 weighted / 0.8453 macro).
 
 ## Results layout (append-only; the old trees are untouched)
 
@@ -151,6 +153,153 @@ resolved run.
 
 The paper-1 `AdversarialBIM`/`AdversarialDeepFool` baselines use the original per-sample DeepAL semantics (one sample at a time; KI-38). BIM is capped at 50 iterations and samples that cannot reach the decision boundary (saturated float32 prediction, zero gradient) get distance `inf` and are never queried before converged ones; DeepFool has a matching zero-gradient guard (KI-39, found on the real campaign 2026-09-30) and are the slowest groups; they are excluded from `make campaign-smoke` by default.
 
-TBD (unmeasured; record it together with the `environment.gpus[0].name` of the run). The earlier
-Colab ablation batch took about 9-10 min per ablation-config run; the adversarial/dropout baselines are likely slower (unmeasured). Micro CPU
-smoke: see the report of the implementing session (~18-40 s per micro run).
+Measured by the real execution: the whole campaign (192 runs) spanned 2026-09-30T00:23Z to
+2026-10-05T15:04Z of wall-clock across several Colab sessions with resume (see the execution record
+below). Per-run durations are not aggregated here (TBD; derivable from each run's `run_metadata.json`
+start timestamp and `log-dalmax.log`). The earlier Colab ablation batch took about 9-10 min per
+ablation-config run. Micro CPU smoke: ~18-40 s per micro run.
+
+## Execution record (past tense; executed 2026-09-30 to 2026-10-05, verified 2026-11-01)
+
+**Where / when**: Google Colab Pro, several sessions with resume (complete-leaf skip, so each
+re-launch only ran what was missing). First run started 2026-09-30T00:23Z, last run finished
+2026-10-05T15:04Z. `make campaign-verify` and `make campaign-report` were re-run on 2026-11-01.
+
+**Hardware (from `environment.gpus[0].name` in each run's `run_metadata.json`)**: 183 runs on an
+NVIDIA A100-SXM4-80GB and 9 runs on an NVIDIA A100-SXM4-40GB (paper 1 nq10 `AdversarialDeepFool` x3
+seeds, paper 1 nq10 `KMH` (`RepresentationStrategy`) x3 seeds, and the upper bound x3 seeds). GPU
+non-determinism is best-effort (see "Seeds and determinism"); the two GPU memory sizes are recorded
+here so the 9 runs can be identified, not because any difference was observed.
+
+**Code commits**: 9128826 produced 30 runs (paper 1 nq100 non-adversarial strategies plus
+`shared/random_nq100`); 705b8e3 produced the other 162. The only code difference is the
+`AdversarialBIM` `max_iter` cap (KI-39), which does not affect the 30 earlier runs (none is a BIM run).
+
+**Verification**: `make campaign-verify`: **192/192 runs OK, 0 incomplete, 0 missing**. Seed audit
+**PASS for seeds 1, 2 and 3** (63 runs compared per seed, reference `shared/random_nq100`; the 64th
+group is `FullSupervised`, excluded by design). `determinism.nondeterministic_op_warnings` contained
+`cumsum_cuda_kernel` in 75 runs (an op with no deterministic CUDA kernel; consistent with the
+documented best-effort GPU determinism).
+
+**Reports**: written by `make campaign-report` to `docs/results/campaign/` (`summary.csv`, 11 tables
+as `.md`/`.tex`/`.csv` under `paper1/`, `paper2/`, `paper3/`, `seed_audit.md`, 64 mean confusion
+matrices under `confusion_matrices/`). Since 2026-11-01 `docs/*` is gitignored, so these files are
+**local-only** (not in git). The thesis project keeps a copy under
+`thesis_drafts/final_thesis/context/campaign-results/` (itself gitignored). Raw runs are under
+`results/campaign/` (gitignored, append-only).
+
+### Results (final round, mean +/- std over seeds 1-3, n=3 each; weighted F1 / macro F1)
+
+Paper 1, `n_query=100` (accuracy / precision / recall columns are in `docs/results/campaign/paper1/`):
+
+| Method | F1 weighted | F1 macro |
+|---|---|---|
+| RandomSampling | 0.8180 (0.0333) | 0.7658 (0.0349) |
+| LeastConfidence | **0.8716** (0.0237) | 0.8215 (0.0178) |
+| MarginSampling | 0.8306 (0.0218) | 0.7894 (0.0210) |
+| EntropySampling | 0.8468 (0.0375) | 0.7924 (0.0465) |
+| LeastConfidenceDropout | 0.7121 (0.0209) | 0.6597 (0.0151) |
+| MarginSamplingDropout | 0.7883 (0.0259) | 0.7322 (0.0203) |
+| EntropySamplingDropout | 0.7221 (0.0536) | 0.6570 (0.0502) |
+| KMeansSampling | 0.8166 (0.0167) | 0.7588 (0.0249) |
+| KCenterGreedy | 0.5277 (0.2541) | 0.4964 (0.2158) |
+| BALDDropout | 0.7883 (0.0421) | 0.7348 (0.0336) |
+| AdversarialBIM | 0.2844 (0.0330) | 0.3552 (0.0308) |
+| AdversarialDeepFool | 0.8441 (0.0083) | 0.7920 (0.0143) |
+| KMH (hierarchical k-means, ImageNet ResNet-50 features) | 0.8224 (0.0329) | 0.7566 (0.0311) |
+| Upper bound (full pool, `FullSupervised`) | 0.9157 (0.0022) | 0.8795 (0.0032) |
+
+Paper 1, `n_query=50`:
+
+| Method | F1 weighted | F1 macro |
+|---|---|---|
+| RandomSampling | 0.7256 (0.0353) | 0.6580 (0.0401) |
+| LeastConfidence | 0.7634 (0.0232) | 0.6991 (0.0318) |
+| MarginSampling | 0.7365 (0.1163) | 0.6969 (0.0915) |
+| EntropySampling | 0.7127 (0.0603) | 0.6277 (0.0702) |
+| LeastConfidenceDropout | 0.6610 (0.0910) | 0.5894 (0.0779) |
+| MarginSamplingDropout | 0.6925 (0.0552) | 0.6520 (0.0272) |
+| EntropySamplingDropout | 0.6347 (0.0350) | 0.5637 (0.0342) |
+| KMeansSampling | 0.6602 (0.0550) | 0.5992 (0.0254) |
+| KCenterGreedy | 0.6444 (0.0722) | 0.5362 (0.0966) |
+| BALDDropout | 0.6921 (0.0795) | 0.6362 (0.0636) |
+| AdversarialBIM | 0.3006 (0.0839) | 0.3079 (0.0376) |
+| AdversarialDeepFool | **0.7913** (0.0213) | 0.7309 (0.0189) |
+| KMH | 0.7833 (0.0132) | 0.7133 (0.0154) |
+
+Paper 1, `n_query=10`:
+
+| Method | F1 weighted | F1 macro |
+|---|---|---|
+| RandomSampling | 0.4636 (0.1006) | 0.3852 (0.1238) |
+| LeastConfidence | 0.5357 (0.0828) | 0.4850 (0.0650) |
+| MarginSampling | 0.5000 (0.0850) | 0.4338 (0.1106) |
+| EntropySampling | 0.5052 (0.0914) | 0.4858 (0.0424) |
+| LeastConfidenceDropout | 0.5279 (0.1088) | 0.4749 (0.0720) |
+| MarginSamplingDropout | 0.3955 (0.1879) | 0.3627 (0.1641) |
+| EntropySamplingDropout | 0.5153 (0.0982) | 0.4510 (0.0800) |
+| KMeansSampling | 0.5167 (0.1083) | 0.4514 (0.1111) |
+| KCenterGreedy | 0.4799 (0.0521) | 0.3890 (0.0224) |
+| BALDDropout | 0.4546 (0.2471) | 0.4133 (0.2137) |
+| AdversarialBIM | 0.4587 (0.1136) | 0.4231 (0.0686) |
+| AdversarialDeepFool | 0.5191 (0.1214) | 0.4539 (0.0893) |
+| KMH | **0.6466** (0.0435) | 0.5660 (0.0413) |
+
+(The upper bound is the same run in all three paper-1 tables: 0.9157 / 0.8795.) Observations: the
+best method by weighted F1 changes with the budget (nq100 LeastConfidence, nq50 AdversarialDeepFool
+with KMH close behind at 0.7833, nq10 KMH by a wide margin); `AdversarialBIM` collapses at nq 50/100
+(0.30 / 0.28 weighted F1, below `RandomSampling`; its non-converged samples are ranked last, KI-39);
+`KCenterGreedy` at nq100 has very high seed variance (std 0.25).
+
+Paper 3 (RNHAL, `n_query=100`):
+
+| Study | Row | F1 weighted | F1 macro |
+|---|---|---|---|
+| 6.1 | Full (reference, L=3 [600,200,100]) | 0.8805 (0.0084) | 0.8316 (0.0089) |
+| 6.1 | Spatial-only | 0.8644 (0.0069) | 0.8070 (0.0056) |
+| 6.1 | Spectral-only | 0.8646 (0.0119) | 0.8122 (0.0093) |
+| 6.2 | L=1 [50] | 0.8456 (0.0098) | 0.8022 (0.0039) |
+| 6.2 | L=1 [100] (new) | 0.8544 (0.0038) | 0.8082 (0.0035) |
+| 6.2 | L=1 [200] (new) | 0.8601 (0.0108) | 0.8081 (0.0102) |
+| 6.2 | L=1 [600] (new) | 0.8496 (0.0147) | 0.7979 (0.0191) |
+| 6.2 | L=2 [300,100] | 0.8531 (0.0240) | 0.7988 (0.0283) |
+| 6.2 | L=2 [100,50] | 0.8287 (0.0202) | 0.7814 (0.0135) |
+| 6.2 | L=2 [200,100] (new) | 0.8528 (0.0178) | 0.8006 (0.0209) |
+| 6.2 | L=3 [300,100,50] | 0.8622 (0.0269) | 0.8084 (0.0327) |
+| 6.2 | L=3 [600,200,100] (reference) | 0.8805 (0.0084) | 0.8316 (0.0089) |
+| 6.2 | L=4 [300,100,50,25] | 0.8612 (0.0233) | 0.8104 (0.0309) |
+| 6.2 | L=4 [800,600,200,100] (new) | **0.8955** (0.0103) | **0.8453** (0.0096) |
+| 6.3 | RNHAL (full) | 0.8805 (0.0084) | 0.8316 (0.0089) |
+| 6.3 | w/o representation module (= shared KMH) | 0.8224 (0.0329) | 0.7566 (0.0311) |
+| 6.3 | w/o hierarchical module | 0.8532 (0.0214) | 0.8050 (0.0297) |
+
+Paper 2 (TexHAL, `n_query=100`; **all TexHAL 6.2/6.3 rows use Q=[5,17]**, see KI-40 and ADR 0011):
+
+| Study | Row | F1 weighted | F1 macro |
+|---|---|---|---|
+| 6.1 | Q=5 | 0.8382 (0.0242) | 0.7843 (0.0294) |
+| 6.1 | Q=13 | 0.8557 (0.0152) | 0.8052 (0.0194) |
+| 6.1 | Q=17 | **0.8745** (0.0079) | **0.8262** (0.0115) |
+| 6.1 | Q=[5,17] (full) | 0.8259 (0.0284) | 0.7687 (0.0271) |
+| 6.2 | L=1 [50] | 0.8281 (0.0153) | 0.7779 (0.0127) |
+| 6.2 | L=2 [300,100] | 0.8587 (0.0224) | 0.8053 (0.0280) |
+| 6.2 | L=2 [100,50] | 0.8585 (0.0253) | 0.8028 (0.0285) |
+| 6.2 | L=3 [300,100,50] | 0.8226 (0.0259) | 0.7684 (0.0213) |
+| 6.2 | L=3 [600,200,100] (reference) | 0.8259 (0.0284) | 0.7687 (0.0271) |
+| 6.2 | L=4 [300,100,50,25] | 0.8381 (0.0207) | 0.7860 (0.0209) |
+| 6.3 | TexHAL (full) | 0.8259 (0.0284) | 0.7687 (0.0271) |
+| 6.3 | w/o representation module (= shared KMH) | 0.8224 (0.0329) | 0.7566 (0.0311) |
+| 6.3 | w/o hierarchical module | 0.8190 (0.0122) | 0.7735 (0.0176) |
+
+Comparison tables (nq100): paper 2 compares TexHAL-full (0.8259 / 0.7687) with the computed best
+paper-1 method (LeastConfidence, 0.8716 / 0.8215) and RandomSampling (0.8180 / 0.7658); paper 3
+compares RNHAL-full (0.8805 / 0.8316), TexHAL-full, RandomSampling and the best paper-1 method.
+
+**Findings recorded (2026-11-01)**: (1) RNHAL-full at the reference hierarchy (0.8805) beats every
+paper-1 method at nq100 and the deeper `L=4 [800,600,200,100]` hierarchy is the best RNHAL row
+(0.8955), 2.0 points below the upper bound (0.9157). (2) TexHAL with Q=[5,17] (0.8259) is *below* its
+own single-Q rows (Q=17: 0.8745) and below the best paper-1 method; this drives KI-40 / ADR 0011.
+(3) The 2026-08-26 RNHAL batch (Colab, see `ablation-study.md`) reported 0.8949 for the same
+`stage_full` config; the campaign gives 0.8805. The difference (0.0144, roughly 1.7 std of the
+campaign seeds) is consistent with GPU and code-version variance and was not investigated further;
+the campaign numbers are the authoritative ones.

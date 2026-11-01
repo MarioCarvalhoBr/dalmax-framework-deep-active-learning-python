@@ -7,12 +7,13 @@
 > `make campaign-smoke`; `experiments/campaign.md`). The configs, protocol, run tables and the
 > execution records are unchanged. CLI entry points live in `tools/` (`tools/trainer.py`).
 
-Status: **materialized and CPU-smoke-tested (2026-08-30, 12/12 passing, ~3m24s local CPU) — not
-yet run on real hardware.** This is the TexHAL analog of
+Status: **materialized and CPU-smoke-tested (2026-08-30, 12/12 passing, ~3m24s local CPU); executed
+in the campaign (2026-09-30 to 2026-10-05), see "Authoritative execution record" below.** This is the TexHAL analog of
 [`ablation-study.md`](ablation-study.md) (the RNHAL/paper-3 spec) — see
-[`papers-roadmap.md`](papers-roadmap.md) for how the two papers/methods relate. Every run table
-below is `TBD` pending a real lab-machine or Colab run; the run tables' *rows* and exact params
-JSON/CLI syntax are final.
+[`papers-roadmap.md`](papers-roadmap.md) for how the two papers/methods relate. The run tables
+below keep their original `TBD` placeholders (history); the executed numbers live in the
+"Authoritative execution record" section and in `campaign.md`. The run tables' *rows* and exact
+params JSON/CLI syntax are final.
 
 TexHAL = **Tex**ture-guided **H**ierarchical **A**ctive **L**earning: the VCTex color-texture
 representation (see "VCTex background" below) + hierarchical k-means batch selection — the same
@@ -26,6 +27,40 @@ All three sub-studies are evaluated on the held-out `test/` split of `daninhas_f
 and budgets consistent with `experimental-protocol.md`, and report **both weighted and macro F1**
 (same "which F1 is primary" framing as `ablation-study.md` — weighted primary / macro secondary,
 pending final advisor sign-off, applies identically here once numbers exist).
+
+## Authoritative execution record: the campaign (2026-09-30 to 2026-10-05)
+
+Executed once in the campaign (`experiments/campaign.md`: Google Colab Pro, 3 seeds, 192/192 runs OK,
+seed audit PASS). Final-round values, `n_query=100`, mean (std) of seeds 1-3, weighted F1 / macro F1
+(accuracy/precision/recall in `docs/results/campaign/paper2/`, local-only):
+
+| Study | Row | F1 weighted | F1 macro |
+|---|---|---|---|
+| 6.1 | Q=5 | 0.8382 (0.0242) | 0.7843 (0.0294) |
+| 6.1 | Q=13 | 0.8557 (0.0152) | 0.8052 (0.0194) |
+| 6.1 | Q=17 | 0.8745 (0.0079) | 0.8262 (0.0115) |
+| 6.1 | Q=[5,17] (full) | 0.8259 (0.0284) | 0.7687 (0.0271) |
+| 6.2 | L=1 [50] | 0.8281 (0.0153) | 0.7779 (0.0127) |
+| 6.2 | L=2 [300,100] | 0.8587 (0.0224) | 0.8053 (0.0280) |
+| 6.2 | L=2 [100,50] | 0.8585 (0.0253) | 0.8028 (0.0285) |
+| 6.2 | L=3 [300,100,50] | 0.8226 (0.0259) | 0.7684 (0.0213) |
+| 6.2 | L=3 [600,200,100] (reference) | 0.8259 (0.0284) | 0.7687 (0.0271) |
+| 6.2 | L=4 [300,100,50,25] | 0.8381 (0.0207) | 0.7860 (0.0209) |
+| 6.3 | TexHAL (full) | 0.8259 (0.0284) | 0.7687 (0.0271) |
+| 6.3 | w/o representation module (= shared KMH) | 0.8224 (0.0329) | 0.7566 (0.0311) |
+| 6.3 | w/o hierarchical module | 0.8190 (0.0122) | 0.7735 (0.0176) |
+
+Comparison (nq100): TexHAL-full 0.8259 / 0.7687 vs. best paper-1 method (LeastConfidence) 0.8716 /
+0.8215 vs. RandomSampling 0.8180 / 0.7658.
+
+**Finding and decision (2026-11-01, KI-40, ADR 0011)**: the canonical "full" configuration
+`Q=[5,17]` (two RAEs, 648-d descriptor) scores below every single-Q row (Q=5 0.8382, Q=13 0.8557, Q=17 0.8745), and is far below the best
+single-Q row, `Q=17` (0.8745 weighted F1, std 0.0079, a 4.86-point gain over Q=[5,17]). The user decided
+that TexHAL's canonical configuration becomes **Q=17** (single RAE, 486-d descriptor), **pending
+advisor confirmation**. The 6.2 hierarchy and 6.3 stage rows above were all run with Q=[5,17], so
+they describe the old configuration; a re-run of those with Q=17 (24 runs) is **proposed, not yet
+approved**. Until then the numbers above are the authoritative executed record and the row
+labelled "full" in this file still means Q=[5,17].
 
 ## VCTex background (verified 2026-08-26/30)
 

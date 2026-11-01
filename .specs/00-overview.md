@@ -87,15 +87,19 @@ distinct from "hierarchical" and matters for the ablation in
 
 - The paper under revision is `phd_files/Artigo_melhorias_Active_Learning_Mario.pdf`
   (LaTeX sources: `phd_files/Active_Learning_Mario/`).
-- The advisor has requested an **ablation study** for the paper's
+- **Campaign executed (2026-09-30 to 2026-10-05, verified 2026-11-01)**: all 192 runs of the three
+  papers (one manifest, 3 seeds, Google Colab Pro) completed, 0 incomplete/missing, seed audit PASS;
+  numbers in `.specs/experiments/campaign.md` (execution record), reports in `docs/results/campaign/`
+  (local-only, gitignored). Headline (nq=100, weighted F1): upper bound 0.9157; RNHAL 0.8805 (best
+  hierarchy `L=4 [800,600,200,100]`: 0.8955); best classical method LeastConfidence 0.8716; TexHAL
+  (Q=[5,17]) 0.8259, single-Q TexHAL Q=17 0.8745 (KI-40, ADR 0011, pending advisor). **Current phase:
+  thesis writing** (started 2026-11-01 under `thesis_drafts/`, gitignored).
+- (History) The advisor has requested an **ablation study** for the paper's
   `\subsection{Ablation study}` — see `.specs/experiments/ablation-study.md`.
-  The config files, run scripts, and report generation for all 11 run-table
-  rows are implemented and CPU-smoke-tested (Phase 3); what remains is
-  executing them on the lab machine and recording the resulting F1 numbers
-  (see `.specs/experiments/baseline-results.md` and
-  `.specs/architecture/refactor-plan.md` Phase 3).
-- Refactor **Phases 1-2 and 4 are complete; Phase 3 (ablation execution) is
-  materialized but not yet run on the lab machine**: the `dalmax/` package
+  The 11 run-table rows were first executed on 2026-08-26 (Colab, history) and
+  re-executed authoritatively in the campaign (see above;
+  `.specs/experiments/ablation-study.md`, `ablation-study-texhal.md`).
+- Refactor **Phases 1-4 are complete (Phase 3 ablations executed 2026-08-26 and again, authoritatively, in the campaign)**: the `dalmax/` package
   makes the ablations one-config-line runs (`RepresentationStrategy` +
   `embedding`/`selection` params blocks). See `.specs/architecture/refactor-plan.md`
   (owned by a different work batch) for the phased plan; the target design is in

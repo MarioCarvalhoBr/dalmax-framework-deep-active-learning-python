@@ -46,13 +46,14 @@ decisions** (ADRs) about the codebase supporting that research. Hence:
 │   ├── 0008-single-campaign-manifest-dedup.md              # one manifest, aliases, redundancy checker
 │   ├── 0009-shared-no-representation-run.md                # one shared "w/o representation" run (supersedes 2026-09-01)
 │   ├── 0010-cleanup-tools-and-hardware-agnostic.md         # tools/ CLIs, campaign as the only run path, hardware-agnostic repo
+│   ├── 0011-texhal-canonical-q17.md                        # TexHAL canonical config Q=17 (Proposed, pending advisor)
 │   └── template.md                       # [owned elsewhere]
 ├── experiments/
 │   ├── experimental-protocol.md          # datasets, splits, seeds, budgets, metrics, results layout
 │   ├── ablation-study.md                 # RNHAL (paper 3) ablation spec (representation / hierarchy / stage-contribution) — EXECUTED
-│   ├── ablation-study-texhal.md          # TexHAL (paper 2) ablation spec, same structure — materialized, not yet run
+│   ├── ablation-study-texhal.md          # TexHAL (paper 2) ablation spec, same structure — materialized; executed in the campaign (2026-10-05)
 │   ├── papers-roadmap.md                 # the three-paper plan (DAL benchmark / TexHAL / RNHAL) and how it maps onto the codebase
-│   ├── campaign.md                       # the single deduplicated re-execution of all three papers (manifest, dedup table, counts, commands)
+│   ├── campaign.md                       # the single deduplicated re-execution of all three papers (manifest, dedup table, counts, commands, execution record + all result tables)
 │   └── baseline-results.md               # where existing results/ runs live, what they cover
 ├── research-rules/
 │   ├── reproducibility.md                # seed policy, cache policy, config snapshot per run

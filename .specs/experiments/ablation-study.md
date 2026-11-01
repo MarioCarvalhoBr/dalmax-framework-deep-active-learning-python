@@ -8,7 +8,7 @@
 > execution records are unchanged. CLI entry points live in `tools/` (`tools/trainer.py`).
 
 **This file is the RNHAL (paper 3, SSRAE) suite.** TexHAL (paper 2, VCTex) has its own spec,
-[`ablation-study-texhal.md`](ablation-study-texhal.md) — not yet run. See
+[`ablation-study-texhal.md`](ablation-study-texhal.md) — executed in the campaign. See
 [`papers-roadmap.md`](papers-roadmap.md) for the full three-paper plan. Configs for this suite
 moved to `files_config/ablations/rnhal/` on 2026-08-30 (were `files_config/ablations/` directly);
 every path below that still says `files_config/ablations/<name>.json` (no `rnhal/` segment) reflects
@@ -590,6 +590,35 @@ Unit-tested against a synthetic tree in `tests/test_ablation_report.py`; also ru
   (full)" row's *reported* number should come from the pre-Phase-2 `results/dalmax{1,2}/` reference
   runs, not a new run — both are valid sources; `run_ablation_gpu_1.sh` runs `stage_full.json` so a
   cross-check is available, but does not obsolete the reference-run recomputation path.
+
+## Authoritative execution record: the campaign (2026-09-30 to 2026-10-05)
+
+The RNHAL ablations were **re-executed in the campaign** (`experiments/campaign.md`, 192 runs, 3 seeds,
+Google Colab Pro; 192/192 OK, seed audit PASS). The campaign numbers are now the authoritative ones
+for the paper and the thesis; the 2026-08-26 batch below stays as history (it is the source of the
+run tables in §6.1/§6.2/§6.3 above and of the committed `docs/results/ablation_tables/`). Final-round
+campaign values (mean of seeds 1-3, weighted F1 / macro F1, `n_query=100`; full table with std in
+`campaign.md`):
+
+| Row | Campaign (weighted / macro) | 2026-08-26 batch (weighted) |
+|---|---|---|
+| 6.1 Full (= 6.3 full = 6.2 L=3 [600,200,100]) | 0.8805 / 0.8316 | 0.8949 (`stage_full`), 0.8917 (`rep_full`) |
+| 6.1 Spatial-only | 0.8644 / 0.8070 | 0.8688 |
+| 6.1 Spectral-only | 0.8646 / 0.8122 | 0.8824 |
+| 6.3 w/o representation module (= shared KMH) | 0.8224 / 0.7566 | 0.8378 |
+| 6.3 w/o hierarchical module | 0.8532 / 0.8050 | 0.8124 |
+
+Hierarchy rows (6.2) in the campaign: L=1 [50] 0.8456, L=1 [100] 0.8544 (new), L=1 [200] 0.8601 (new),
+L=1 [600] 0.8496 (new), L=2 [300,100] 0.8531, L=2 [100,50] 0.8287, L=2 [200,100] 0.8528 (new),
+L=3 [300,100,50] 0.8622, L=3 [600,200,100] 0.8805 (reference), L=4 [300,100,50,25] 0.8612,
+**L=4 [800,600,200,100] 0.8955 / 0.8453 (new, best)**. Differences from the 2026-08-26 batch: the
+full-stage mean is 0.0144 lower in the campaign; "w/o hierarchical module" is now *above* (not below)
+`RandomSampling` (0.8180) at 0.8532, and the "w/o representation module" row is the shared KMH run
+(ADR 0009), 0.8224. In 6.1 spatial-only and spectral-only are now tied (0.8644 vs 0.8646) and both below full. The qualitative conclusions "the reference hierarchy beats the original grid" and
+"neither stage alone matches the combination" still hold; "removing the hierarchical module costs more
+than removing the representation module" does **not** hold in the campaign (-0.0273 vs -0.0581 weighted
+F1). Whether `L=4 [800,600,200,100]` becomes RNHAL's canonical hierarchy is **pending the advisor**
+(decision of 2026-11-01); until then the reference hierarchy stays `L=3 [600,200,100]`.
 
 ## Execution record (2026-08-25/26)
 
