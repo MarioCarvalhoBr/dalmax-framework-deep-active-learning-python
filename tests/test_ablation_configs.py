@@ -235,3 +235,24 @@ def test_no_ablation_folder_carries_stage_no_representation() -> None:
     full = _load(ABLATIONS_DIR.parent / "campaign" / "params_kmh.json")
     assert full.dataset.selection.hierarchy.n_clusters == (600, 200, 100)
     assert full.dataset.selection.hierarchy.sample_sizes == (30, 15, 2)
+
+
+TEXHAL_Q17_NAMES = ("hier_L1", "hier_L2a", "hier_L2b", "hier_L3", "hier_L4", "stage_no_hierarchy")
+
+
+@pytest.mark.parametrize("name", TEXHAL_Q17_NAMES)
+def test_texhal_q17_configs_use_single_rae_and_match_texhal_twin(name: str) -> None:
+    """ADR 0011: files_config/ablations/texhal_q17/ == texhal/ except embedding.q == [17]."""
+    for sub in ("", "micro"):
+        q17 = _load(ABLATIONS_DIR / "texhal_q17" / sub / f"{name}.json")
+        twin = _load(ABLATIONS_DIR / "texhal" / sub / f"{name}.json")
+        assert q17.dataset.embedding.extractor == "vctex"
+        assert q17.dataset.embedding.variant == "full"
+        assert tuple(q17.dataset.embedding.q) == (17,)
+        assert q17.dataset.selection == twin.dataset.selection
+
+
+def test_texhal_q17_folder_has_exactly_the_rerun_configs() -> None:
+    for sub in ("", "micro"):
+        on_disk = {p.stem for p in (ABLATIONS_DIR / "texhal_q17" / sub).glob("*.json")}
+        assert on_disk == set(TEXHAL_Q17_NAMES)
