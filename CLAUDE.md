@@ -159,7 +159,10 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   paper-1 method, below RNHAL 0.8805). Whether RNHAL's canonical hierarchy becomes
   `L=4 [800,600,200,100]` is open (pending advisor).
 - **Thesis writing** (started 2026-11-01): `thesis_drafts/final_thesis/` (gitignored, own git repo,
-  ReportBuilder harness), plan in `thesis_drafts/WRITING_PLAN.md`.
+  ReportBuilder harness), plan in `thesis_drafts/WRITING_PLAN.md`. Found 2026-11-02, pending author
+  decision (disclose as executed vs. fix and re-run 54 runs): KI-41 (no dropout layer, so the MC-dropout
+  strategies and BALD are degenerate) and KI-42 (`KMeansSampling`/`KCenterGreedy` use an untrained
+  embedding layer), see `.specs/quality/known-issues.md`.
 
 Next milestone: write the thesis from the campaign results; advisor review of the ablation section
 (`paper_drafts/ablation_section.tex`, weighted-primary/macro-secondary framing still pending

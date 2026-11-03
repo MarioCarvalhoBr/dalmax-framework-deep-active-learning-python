@@ -69,9 +69,14 @@ fixtures (which use imbalanced synthetic clusters).
 - The **number of ids finally returned** is controlled entirely by
   `target_size` (here, `budget`) passed to
   `hierarchical_sampling.hierarchical_sampling`, which recursively splits
-  `budget` across the top-level clusters (and their subclusters) in
-  proportion to cluster size (`find_subcluster_target_size`,
-  largest-remainder-style), **without consulting `sample_sizes` at all**.
+  `budget` across the top-level clusters (and their subclusters) by a
+  balanced "water-filling" allocation (`find_subcluster_target_size`,
+  `_find_best_cut_left`): every cluster gets `min(x, size)` points for the
+  largest integer cut `x` whose total does not exceed the target, and the
+  leftover points are given one each (`x + 1`) to randomly chosen clusters
+  larger than `x`. Small clusters are therefore taken whole and large ones
+  are capped at about the same quota (NOT proportionally to size). This
+  does **not** consult `sample_sizes` at all.
 
 So changing `sample_sizes` in `ablation-study.md` §6.2's grid changes
 *clustering quality*, not how many samples come out per level — `budget`
@@ -162,7 +167,7 @@ def _read_hierarchy(hierarchy: Any) -> tuple[list[int], int, list[int]]:
 
 
 class HierarchicalKMeansSelection(SelectionStrategy):
-    """Hierarchical k-means with resampling, then budget-proportional sampling.
+    """Hierarchical k-means with resampling, then balanced (water-filling) hierarchical sampling.
 
     Parameters
     ----------

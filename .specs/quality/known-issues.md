@@ -96,6 +96,9 @@ plan.
 
 ## Open item count
 
+(Update 2026-11-02: KI-35 to KI-40 are resolved as stated in their own sections; **KI-41 and KI-42 are
+open, pending author decision**, so the open list below gains these two: 9 open in total, 42 tracked items.)
+
 34 tracked items total (KI-34 added 2026-08-26, while reconciling the Phase 3 ablation execution
 batch; KI-33 added/resolved 2026-08-25). Of these, **27 are now fully resolved**: KI-1 through
 KI-10, KI-13 through KI-20, KI-22, KI-24 through KI-29, KI-32, and KI-33 (KI-22 fixed 2026-08-23,
@@ -252,3 +255,63 @@ representation module most). TexHAL (Q=17) edges the best paper-1 method (+0.3 p
 not a code bug). Status: Resolved (executed); advisor confirmation of the Q=17 decision is still pending.
 Related note (no action): the RNHAL pending decision on whether the canonical hierarchy
 becomes `L=4 [800,600,200,100]` is tracked in `papers-roadmap.md`.
+
+### KI-41 — no dropout layer in the ResNet-50 head: MC-dropout strategies and BALD are degenerate (OPEN, pending author decision; found 2026-11-02)
+
+**Location**: `dalmax/models/daninhas_resnet50.py::DaninhasModelResNet50` (no `nn.Dropout` anywhere: a
+pretrained backbone, `embedding_layer = nn.Linear(2048, 50)` and `classifier = nn.Linear(2048, n_classes)`);
+`dalmax/models/base.py::DeepLearning.predict_prob_dropout` (l. 120-134) and `predict_prob_dropout_split`
+(l. 136-148); consumers `dalmax/query_strategies/{least_confidence,margin_sampling,entropy_sampling}_dropout.py`
+and `bayesian_active_learning_disagreement_dropout.py` (`BALDDropout`).
+
+**Evidence (verified against the code)**: both predict functions only call `self.clf.train()` and then run
+`n_drop` (10 in `files_config/campaign/params_paper1.json`) forward passes under `torch.no_grad()` over a
+`DataLoader(..., shuffle=False)`; the dataset transform for DANINHAS is deterministic (`ToTensor` +
+`Normalize`, the random augmentations in `dalmax/data/handlers.py` are commented out). With no dropout, the
+only train-mode effect is BatchNorm using batch statistics (and updating its running statistics, a side
+effect of "prediction"). Because the loader is unshuffled, every pass sees the same batches, hence the same
+batch statistics: the `n_drop` passes are identical up to GPU floating-point nondeterminism, not merely
+similar. Consequences: (i) `LeastConfidenceDropout`, `MarginSamplingDropout` and `EntropySamplingDropout`
+equal their non-dropout counterparts computed with BatchNorm in train mode (batch-dependent scores, not
+an MC-dropout posterior); (ii) `BALDDropout`'s mutual information `entropy(mean p) - mean(entropy p)`
+(code: `entropy2 - entropy1`, ascending sort) is zero for every sample up to float noise (and `0*log(0)`
+can give NaN for saturated probabilities), so its ranking is determined by rounding noise, effectively
+arbitrary. The original DeepAL nets (Huang 2021, https://github.com/ej0cl6/deep-active-learning) contain
+dropout layers, so the strategies were not ported faithfully.
+
+**Impact on the campaign**: `paper1` strategies `LeastConfidenceDropout`, `MarginSamplingDropout`,
+`EntropySamplingDropout`, `BALDDropout`, all budgets (nq 10/50/100) x seeds 1-3 = 36 executed runs. Other
+strategies are unaffected (the non-dropout ones call `eval()`). Severity: High for paper 1 (4 of the 12
+classical baselines do not measure what their names say); no effect on papers 2/3.
+
+**Status**: open, pending author decision. Options: (a) keep the executed runs and disclose the behaviour
+in paper 1 (the thesis chapter already does); (b) fix: add `nn.Dropout(p)` before the classifier (and make
+`predict_prob_dropout*` use it) and re-run the affected strategies as a new campaign part, keeping the old
+runs as history (append-only). Combined with KI-42 option (b): 6 strategies x 3 budgets x 3 seeds = 54 runs.
+
+### KI-42 — `KMeansSampling` and `KCenterGreedy` cluster an untrained random ReLU projection (OPEN, pending author decision; found 2026-11-02)
+
+**Location**: `dalmax/models/daninhas_resnet50.py::DaninhasModelResNet50.forward` (`e1 =
+relu(embedding_layer(features))`, `embedding_layer = nn.Linear(2048, 50)`, while `classifier` consumes the
+2048-d `features` directly); `dalmax/models/base.py::DeepLearning.train` (l. 62-86: `self.clf =
+self.net(n_classes)` re-created at every call, i.e. every round) and `DeepLearning.get_embeddings`;
+`dalmax/query_strategies/base.py::Strategy.get_embeddings`; consumers `kmeans_sampling.py`,
+`kcenter_greedy.py`.
+
+**Evidence (verified against the code)**: `e1` is returned by `forward` but the training loss is
+`F.cross_entropy(out, y)` on the classifier output only, so `embedding_layer` receives no gradient (it is in
+the optimizer's parameter list but `.grad` stays `None`, SGD skips it) and keeps its random initialisation.
+The model is rebuilt each round (`self.net(n_classes)`), so the projection is re-drawn every round (from
+the seeded torch RNG). `KMeansSampling` and `KCenterGreedy` therefore operate on a random 50-d ReLU
+projection of the ImageNet-pretrained (then fine-tuned) 2048-d features, not on a learned embedding as in
+DeepAL, where `e1` is the trained penultimate layer.
+
+**Impact on the campaign**: `paper1` strategies `KMeansSampling` and `KCenterGreedy`, all budgets x seeds
+1-3 = 18 executed runs. Random projections roughly preserve distances (Johnson-Lindenstrauss), so the
+strategies still behave as diversity samplers, but not as specified. Severity: Medium for paper 1; no
+effect on papers 2/3 (KMH uses ResNet-50 ImageNet features through the embedding provider, not `e1`).
+
+**Status**: open, pending author decision. Options: (a) keep the executed runs and disclose it in paper 1
+(the thesis chapter already does); (b) fix: make `e1` the trained penultimate representation, or use the
+2048-d features for the embedding strategies, and re-run `KMeansSampling`/`KCenterGreedy` (with KI-41 (b):
+6 strategies x 3 budgets x 3 seeds = 54 runs as a new campaign part, old runs kept as history).

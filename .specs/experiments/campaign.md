@@ -346,3 +346,9 @@ below full (0.8259) and its macro F1 (0.7735) was above full (0.7687). (2) The r
 (0.0201). (3) TexHAL (Q=17) now edges the best paper-1 method at nq100 (0.8745 vs LeastConfidence 0.8716,
 +0.3 points weighted, well within std) and stays below RNHAL (0.8805, -0.6 points). The Q=[5,17]
 history tables remain in the report as `6_2_q5_17`/`6_3_q5_17`.
+
+**Implementation findings (2026-11-02, while writing paper 1; KI-41, KI-42)**: the ResNet-50 model has no
+dropout layer, so `LeastConfidenceDropout`, `MarginSamplingDropout`, `EntropySamplingDropout` and
+`BALDDropout` do not perform MC-dropout (KI-41), and `KMeansSampling`/`KCenterGreedy` cluster an untrained
+random 50-d projection (KI-42). The `paper1` tables are reported as executed, with this disclosure; whether
+to fix and re-run the 6 strategies x 3 budgets x 3 seeds = 54 runs as a new part is pending the author.

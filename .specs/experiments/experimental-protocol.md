@@ -136,6 +136,11 @@ reads `"embedding"`/`"selection"` from the params JSON verbatim — see
 `.specs/experiments/ablation-study.md` for the exact syntax used by the
 ablations.
 
+Caveats on two families (found 2026-11-02, open): the MC-dropout strategies (`LeastConfidenceDropout`,
+`MarginSamplingDropout`, `EntropySamplingDropout`, `BALDDropout`) run on a model with no dropout layer, so
+they are not MC-dropout and BALD's mutual information is zero up to noise (`quality/known-issues.md` KI-41);
+`KMeansSampling` and `KCenterGreedy` use an untrained random projection as embedding (KI-42).
+
 ## New CLI flags (Phase 2, additive — every other flag/default is unchanged)
 
 - `--device {auto,cuda,cpu}` (default `auto`): compute device for the
