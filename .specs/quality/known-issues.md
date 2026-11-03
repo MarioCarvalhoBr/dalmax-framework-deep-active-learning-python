@@ -97,7 +97,7 @@ plan.
 ## Open item count
 
 (Update 2026-11-02: KI-35 to KI-40 are resolved as stated in their own sections; **KI-41 and KI-42 are
-open, pending author decision**, so the open list below gains these two: 9 open in total, 42 tracked items.)
+accepted as-is (author decision 2026-11-02)**, so they leave the open list (documented, not open): 8 open in total, 43 tracked items.)
 (Update 2026-11-02b: **KI-43** (round-0 mismatch, disclosure) added: 10 open, 43 tracked items.)
 
 34 tracked items total (KI-34 added 2026-08-26, while reconciling the Phase 3 ablation execution
@@ -257,7 +257,7 @@ not a code bug). Status: Resolved (executed); advisor confirmation of the Q=17 d
 Related note (no action): the RNHAL pending decision on whether the canonical hierarchy
 becomes `L=4 [800,600,200,100]` is tracked in `papers-roadmap.md`.
 
-### KI-41 — no dropout layer in the ResNet-50 head: MC-dropout strategies and BALD are degenerate (OPEN, pending author decision; found 2026-11-02)
+### KI-41 — no dropout layer in the ResNet-50 head: MC-dropout strategies and BALD are degenerate (ACCEPTED AS-IS, author decision 2026-11-02; found 2026-11-02)
 
 **Location**: `dalmax/models/daninhas_resnet50.py::DaninhasModelResNet50` (no `nn.Dropout` anywhere: a
 pretrained backbone, `embedding_layer = nn.Linear(2048, 50)` and `classifier = nn.Linear(2048, n_classes)`);
@@ -285,12 +285,12 @@ dropout layers, so the strategies were not ported faithfully.
 strategies are unaffected (the non-dropout ones call `eval()`). Severity: High for paper 1 (4 of the 12
 classical baselines do not measure what their names say); no effect on papers 2/3.
 
-**Status**: open, pending author decision. Options: (a) keep the executed runs and disclose the behaviour
+**Status**: Accepted as-is (author decision 2026-11-02): runs kept, behaviour disclosed in paper 1; fix deferred to a future campaign. Options considered: (a) keep the executed runs and disclose the behaviour
 in paper 1 (the thesis chapter already does); (b) fix: add `nn.Dropout(p)` before the classifier (and make
 `predict_prob_dropout*` use it) and re-run the affected strategies as a new campaign part, keeping the old
 runs as history (append-only). Combined with KI-42 option (b): 6 strategies x 3 budgets x 3 seeds = 54 runs.
 
-### KI-42 — `KMeansSampling` and `KCenterGreedy` cluster an untrained random ReLU projection (OPEN, pending author decision; found 2026-11-02)
+### KI-42 — `KMeansSampling` and `KCenterGreedy` cluster an untrained random ReLU projection (ACCEPTED AS-IS, author decision 2026-11-02; found 2026-11-02)
 
 **Location**: `dalmax/models/daninhas_resnet50.py::DaninhasModelResNet50.forward` (`e1 =
 relu(embedding_layer(features))`, `embedding_layer = nn.Linear(2048, 50)`, while `classifier` consumes the
@@ -312,7 +312,7 @@ DeepAL, where `e1` is the trained penultimate layer.
 strategies still behave as diversity samplers, but not as specified. Severity: Medium for paper 1; no
 effect on papers 2/3 (KMH uses ResNet-50 ImageNet features through the embedding provider, not `e1`).
 
-**Status**: open, pending author decision. Options: (a) keep the executed runs and disclose it in paper 1
+**Status**: Accepted as-is (author decision 2026-11-02): runs kept, behaviour disclosed in paper 1; fix deferred to a future campaign. Options considered: (a) keep the executed runs and disclose it in paper 1
 (the thesis chapter already does); (b) fix: make `e1` the trained penultimate representation, or use the
 2048-d features for the embedding strategies, and re-run `KMeansSampling`/`KCenterGreedy` (with KI-41 (b):
 6 strategies x 3 budgets x 3 seeds = 54 runs as a new campaign part, old runs kept as history).
