@@ -231,19 +231,24 @@ was uncapped by default (superseded by KI-39: it hung on the real campaign; now 
 `tests/test_adversarial_strategies.py`. Any result produced with the earlier batched version is invalid.
 These two baselines are the slowest campaign groups. Severity: Medium, Resolved 2026-09-29.
 
-### KI-40 — TexHAL canonical `Q=[5,17]` underperforms single-Q VCTex; hierarchy/stage ablations ran with it (OPEN, found 2026-11-01)
+### KI-40 — TexHAL canonical `Q=[5,17]` underperforms single-Q VCTex; hierarchy/stage ablations ran with it (RESOLVED 2026-11-02, pending advisor review; found 2026-11-01)
 
 The campaign (`experiments/campaign.md`, executed 2026-09-30 to 2026-10-05) showed that the TexHAL
 "full" configuration `Q=[5,17]` (two RAEs, 648-d) scores 0.8259 weighted F1 / 0.7687 macro F1 at nq100,
 below `Q=5` (0.8382), `Q=13` (0.8557) and `Q=17` (0.8745 / 0.8262, std 0.0079), and below the best
 paper-1 method (LeastConfidence, 0.8716). All TexHAL 6.2 (hierarchy) and 6.3 (stage) rows, and the
-shared `shared/texhal_full` run, used `Q=[5,17]`. **Decision (user, 2026-11-01, pending advisor)**:
-TexHAL's canonical configuration becomes `Q=17` (ADR 0011). **Open**: the 6.2/6.3 ablations are not
-valid for the new canonical configuration; a re-run with `Q=17` (24 runs: 8 groups x 3 seeds) is
-**proposed, not yet approved** and would need manifest and dedup-table changes
-(`scripts/campaign/build_manifest.py`, `campaign.md`). Until then paper 2's 6.2/6.3 tables must be
-labelled as `Q=[5,17]` results. **Update 2026-11-01**: campaign part `texhal_q17` now exists (18 runs, aliases
-for the reference/full rows; 210 runs / 70 groups total); runs are pending
-(`make campaign-run PART=texhal_q17`), still subject to advisor confirmation. Severity: Medium (scientific consistency of paper 2, not a code bug).
-Status: Open. Related note (no action): the RNHAL pending decision on whether the canonical hierarchy
+shared `shared/texhal_full` run, used `Q=[5,17]`. **Decision (author, 2026-11-01; advisor review
+pending)**: TexHAL's canonical configuration becomes `Q=17` (ADR 0011, accepted).
+
+**Resolution**: campaign part `texhal_q17` (18 runs = 6 groups x 3 seeds; the reference/full rows are
+aliases of the already-executed `texhal/6_1/rep_q17`; 210 runs / 70 groups total) was executed on
+2026-11-01 (about 70 min on Google Colab Pro, commit `442a8cd`) and verified on 2026-11-02
+(`make campaign-verify`: 210/210 OK, seed audit PASS for seeds 1-3). Outcome (nq100, weighted F1 / macro F1):
+6.2 best row is now `L=3 [300,100,50]` 0.8842 / 0.8398 (reference `[600,200,100]` 0.8745 / 0.8262);
+6.3 full 0.8745, w/o hierarchical 0.8454, w/o representation 0.8224 (both ablations now hurt, the
+representation module most). TexHAL (Q=17) edges the best paper-1 method (+0.3 points, within std) and is
+0.6 points below RNHAL. The `Q=[5,17]` 6.2/6.3 results are kept as history (report tables
+`6_2_q5_17`/`6_3_q5_17`); paper 2 uses the Q=17 tables. Severity: Medium (scientific consistency of paper 2,
+not a code bug). Status: Resolved (executed); advisor confirmation of the Q=17 decision is still pending.
+Related note (no action): the RNHAL pending decision on whether the canonical hierarchy
 becomes `L=4 [800,600,200,100]` is tracked in `papers-roadmap.md`.

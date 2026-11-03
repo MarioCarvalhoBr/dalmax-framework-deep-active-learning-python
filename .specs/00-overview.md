@@ -87,12 +87,12 @@ distinct from "hierarchical" and matters for the ablation in
 
 - The paper under revision is `phd_files/Artigo_melhorias_Active_Learning_Mario.pdf`
   (LaTeX sources: `phd_files/Active_Learning_Mario/`).
-- **Campaign executed (2026-09-30 to 2026-10-05, verified 2026-11-01)**: all 192 runs of the three
+- **Campaign executed (2026-09-30 to 2026-10-05, verified 2026-11-01; part `texhal_q17` executed 2026-11-01, verified 2026-11-02: 210/210)**: all runs of the three
   papers (one manifest, 3 seeds, Google Colab Pro) completed, 0 incomplete/missing, seed audit PASS;
   numbers in `.specs/experiments/campaign.md` (execution record), reports in `docs/results/campaign/`
   (local-only, gitignored). Headline (nq=100, weighted F1): upper bound 0.9157; RNHAL 0.8805 (best
   hierarchy `L=4 [800,600,200,100]`: 0.8955); best classical method LeastConfidence 0.8716; TexHAL
-  (Q=[5,17]) 0.8259, single-Q TexHAL Q=17 0.8745 (KI-40, ADR 0011, pending advisor). **Current phase:
+  (Q=[5,17]) 0.8259, TexHAL canonical Q=17 0.8745 (KI-40, ADR 0011: accepted by the author 2026-11-01, advisor review pending; its 18-run `texhal_q17` re-run of 6.2/6.3 executed 2026-11-01, campaign now 210/210 runs). **Current phase:
   thesis writing** (started 2026-11-01 under `thesis_drafts/`, gitignored).
 - (History) The advisor has requested an **ablation study** for the paper's
   `\subsection{Ablation study}` — see `.specs/experiments/ablation-study.md`.

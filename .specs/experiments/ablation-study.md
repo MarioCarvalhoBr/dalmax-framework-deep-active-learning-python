@@ -594,7 +594,7 @@ Unit-tested against a synthetic tree in `tests/test_ablation_report.py`; also ru
 ## Authoritative execution record: the campaign (2026-09-30 to 2026-10-05)
 
 The RNHAL ablations were **re-executed in the campaign** (`experiments/campaign.md`, 192 runs, 3 seeds,
-Google Colab Pro; 192/192 OK, seed audit PASS). The campaign numbers are now the authoritative ones
+Google Colab Pro; 192/192 OK at the time (210/210 after part `texhal_q17`, TexHAL only), seed audit PASS). The campaign numbers are now the authoritative ones
 for the paper and the thesis; the 2026-08-26 batch below stays as history (it is the source of the
 run tables in §6.1/§6.2/§6.3 above and of the committed `docs/results/ablation_tables/`). Final-round
 campaign values (mean of seeds 1-3, weighted F1 / macro F1, `n_query=100`; full table with std in

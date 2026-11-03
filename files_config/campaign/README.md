@@ -23,6 +23,6 @@ campaign runs them (`SMOKE_EXCLUDE=` includes them in the smoke too). KMH at n_q
 `strategy_name`, `n_query`, `n_init_labeled`, `n_round`, `seeds`, `dir_results`, `used_by`, `note`.
 Groups consumed by more than one paper live under `shared/` (one exception: `texhal/6_1/rep_q17`,
 executed before ADR 0011 made it TexHAL's canonical config, stays in place). Part `texhal_q17`
-(18 runs, pending) re-runs TexHAL's 6.2 hierarchy ablation and the 6.3 w/o-hierarchy stage with VCTex
+(18 runs, executed 2026-11-01) re-runs TexHAL's 6.2 hierarchy ablation and the 6.3 w/o-hierarchy stage with VCTex
 `q=[17]`; its reference/full rows are aliases of `texhal/6_1/rep_q17`. The executed Q=[5,17] 6.2/6.3
 groups stay in part `texhal` and are tabulated as `6_2_q5_17`/`6_3_q5_17`.

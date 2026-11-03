@@ -99,14 +99,15 @@ All three papers are re-executed **once**, together, on one GPU environment from
 
 ## Campaign executed; decisions of 2026-11-01
 
-The campaign finished on 2026-10-05 (192/192 runs OK, seed audit PASS; execution record and all
-numbers in `campaign.md`). Decisions taken by the user on 2026-11-01:
+The campaign's first 192 runs finished on 2026-10-05 and the 18-run `texhal_q17` part on 2026-11-01
+(210/210 runs OK on 2026-11-02, seed audit PASS; execution record and all numbers in `campaign.md`). Decisions taken by the user on 2026-11-01:
 
 - **Paper 2 (TexHAL) canonical configuration becomes Q=17** (single RAE, 486-d) instead of Q=[5,17]
-  (Q=17: 0.8745 / 0.8262 weighted/macro F1 vs Q=[5,17]: 0.8259 / 0.7687). **Pending advisor
-  confirmation** (ADR 0011, status Proposed). The TexHAL hierarchy (6.2) and stage (6.3) ablations in
-  the campaign were run with Q=[5,17]; a re-run with Q=17 (24 runs) is **proposed, not yet approved**
-  (KI-40). Until approved, paper 2's 6.2/6.3 tables describe the Q=[5,17] configuration.
+  (Q=17: 0.8745 / 0.8262 weighted/macro F1 vs Q=[5,17]: 0.8259 / 0.7687). **Accepted by the
+  author, advisor review pending** (ADR 0011). The TexHAL hierarchy (6.2) and stage (6.3) ablations were
+  re-run with Q=17 (part `texhal_q17`, 18 runs, executed 2026-11-01, KI-40 resolved): paper 2's 6.2/6.3
+  tables use them (best 6.2 row `L=3 [300,100,50]` 0.8842; 6.3 both ablations hurt; TexHAL Q=17 edges
+  the best paper-1 method by 0.3 points and is 0.6 below RNHAL). The Q=[5,17] tables remain as history.
 - **RNHAL canonical hierarchy**: whether it becomes `L=4 [800,600,200,100]` (0.8955 / 0.8453, best
   row) instead of `L=3 [600,200,100]` (0.8805 / 0.8316) is **pending the advisor**.
 - **Thesis writing phase started** (2026-11-01) at `thesis_drafts/final_thesis/` (gitignored, its own

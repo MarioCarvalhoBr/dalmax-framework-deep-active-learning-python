@@ -31,7 +31,7 @@ pending final advisor sign-off, applies identically here once numbers exist).
 ## Authoritative execution record: the campaign (2026-09-30 to 2026-10-05)
 
 Executed once in the campaign (`experiments/campaign.md`: Google Colab Pro, 3 seeds, 192/192 runs OK,
-seed audit PASS). Final-round values, `n_query=100`, mean (std) of seeds 1-3, weighted F1 / macro F1
+seed audit PASS; the Q=17 re-run of 6.2/6.3 (part `texhal_q17`) added 18 runs on 2026-11-01, campaign 210/210). Final-round values, `n_query=100`, mean (std) of seeds 1-3, weighted F1 / macro F1
 (accuracy/precision/recall in `docs/results/campaign/paper2/`, local-only):
 
 | Study | Row | F1 weighted | F1 macro |
@@ -55,19 +55,23 @@ Comparison (nq100): TexHAL-full 0.8259 / 0.7687 vs. best paper-1 method (LeastCo
 
 **Finding and decision (2026-11-01, KI-40, ADR 0011)**: the canonical "full" configuration
 `Q=[5,17]` (two RAEs, 648-d descriptor) scores below every single-Q row (Q=5 0.8382, Q=13 0.8557, Q=17 0.8745), and is far below the best
-single-Q row, `Q=17` (0.8745 weighted F1, std 0.0079, a 4.86-point gain over Q=[5,17]). The user decided
-that TexHAL's canonical configuration becomes **Q=17** (single RAE, 486-d descriptor), **pending
-advisor confirmation**. The 6.2 hierarchy and 6.3 stage rows above were all run with Q=[5,17], so
-they describe the old configuration; a re-run of those with Q=17 (24 runs) is **proposed, not yet
-approved**. Until then the numbers above are the authoritative executed record and the row
-labelled "full" in this file still means Q=[5,17].
+single-Q row, `Q=17` (0.8745 weighted F1, std 0.0079, a 4.86-point gain over Q=[5,17]). The author decided
+that TexHAL's canonical configuration becomes **Q=17** (single RAE, 486-d descriptor; advisor
+review pending). The 6.2 hierarchy and 6.3 stage rows above were all run with Q=[5,17], so
+they describe the former configuration (history record). Their Q=17 re-run was executed on 2026-11-01
+(see below); the row labelled "full" in the tables above still means Q=[5,17].
 
 **Q=17 re-run defined (2026-11-01)**: §6.2 and §6.3 are now defined with `embedding = {extractor: vctex, q: [17], variant: full}`
 as campaign part `texhal_q17` (18 runs = 6 groups x 3 seeds; configs `files_config/ablations/texhal_q17/`,
 micro mirrors in `texhal_q17/micro/`). The reference hierarchy (L=3 k=[600,200,100]) and the "full" stage
 are **not** re-run: they are the already-executed `texhal/6_1/rep_q17` (aliases `texhal_q17/6_2/hier_ref`,
-`texhal_q17/6_3/stage_full`); "w/o representation" stays the shared KMH run. Runs are **pending**; the
+`texhal_q17/6_3/stage_full`); "w/o representation" stays the shared KMH run. Runs were **executed 2026-11-01** (18/18 OK, verified 2026-11-02, 210/210); the
 Q=[5,17] 6.2/6.3 numbers above stay as the history record (campaign tables `6_2_q5_17`/`6_3_q5_17`).
+Q=17 results (nq100, weighted F1 / macro F1): 6.2 L=1 [50] 0.8606 / 0.8118; L=2 [300,100] 0.8669 / 0.8134;
+L=2 [100,50] 0.8665 / 0.8142; L=3 [300,100,50] **0.8842 / 0.8398**; L=3 [600,200,100] (reference)
+0.8745 / 0.8262; L=4 [300,100,50,25] 0.8828 / 0.8332. 6.3: TexHAL full 0.8745 / 0.8262; w/o representation
+(shared KMH) 0.8224 / 0.7566; w/o hierarchical 0.8454 / 0.7943. Full tables and findings in
+`experiments/campaign.md`.
 The tables and `*.json` named below under "6.2"/"6.3" still describe the Q=[5,17] execution unless
 they say `texhal_q17`.
 

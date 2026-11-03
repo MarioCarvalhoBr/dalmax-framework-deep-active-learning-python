@@ -148,19 +148,22 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   (only captured at runtime in `run_metadata.json`), review follow-ups (best-effort determinism
   record, complete-leaf resume, seed-audit WARN, `--exclude-strategy`).
 
-- **Campaign executed** (2026-09-30 to 2026-10-05 on Google Colab Pro, verified 2026-11-01): 192/192
-  runs OK, seed audit PASS for seeds 1-3; execution record and every result table in
+- **Campaign executed** (2026-09-30 to 2026-10-05 on Google Colab Pro, verified 2026-11-01; part
+  `texhal_q17` executed 2026-11-01, verified 2026-11-02): 210/210 runs OK, seed audit PASS for seeds 1-3;
+  execution record and every result table in
   [`.specs/experiments/campaign.md`](.specs/experiments/campaign.md); reports in
   `docs/results/campaign/` (local-only since `docs/*` is gitignored; a copy is kept under
-  `thesis_drafts/final_thesis/context/campaign-results/`). Decisions of 2026-11-01 (pending advisor):
-  TexHAL's canonical config becomes `Q=17` (ADR 0011, KI-40; a 24-run re-run of its 6.2/6.3 ablations
-  is proposed, not approved); whether RNHAL's canonical hierarchy becomes `L=4 [800,600,200,100]` is open.
+  `thesis_drafts/final_thesis/context/campaign-results/`). TexHAL's canonical config is `Q=17` (ADR 0011
+  accepted by the author 2026-11-01, advisor review pending; KI-40 resolved): its 6.2/6.3 ablations were
+  re-run in `texhal_q17` (best 6.2 row `L=3 [300,100,50]` 0.8842; TexHAL Q=17 0.8745 edges the best
+  paper-1 method, below RNHAL 0.8805). Whether RNHAL's canonical hierarchy becomes
+  `L=4 [800,600,200,100]` is open (pending advisor).
 - **Thesis writing** (started 2026-11-01): `thesis_drafts/final_thesis/` (gitignored, own git repo,
   ReportBuilder harness), plan in `thesis_drafts/WRITING_PLAN.md`.
 
 Next milestone: write the thesis from the campaign results; advisor review of the ablation section
 (`paper_drafts/ablation_section.tex`, weighted-primary/macro-secondary framing still pending
-confirmation, see `.specs/experiments/ablation-study.md`), of the TexHAL `Q=17` decision and of the RNHAL
+confirmation, see `.specs/experiments/ablation-study.md`), of the TexHAL `Q=17` decision (already executed and tabulated) and of the RNHAL
 `L=4` hierarchy; a lab-machine smoke run confirming the Phase 4 and `tools/` moves is still separately
 outstanding.
 
@@ -224,7 +227,7 @@ outstanding.
   the one-shot re-execution of everything the three papers need: paper 1 = 12 classical strategies +
   **KMH** (hierarchical k-means over ImageNet ResNet-50 features, confirmed by the user) x nq {10,50,100}
   + the `FullSupervised` upper bound; papers 2/3 = TexHAL/RNHAL ablations at nq100 (+ 5 new RNHAL
-  hierarchy rows). 210 runs / 70 groups (192 executed; the 18-run `texhal_q17` part is pending, ADR 0011), results under `results/campaign/`; groups consumed by
+  hierarchy rows). 210 runs / 70 groups (all executed; the 18-run `texhal_q17` part ran 2026-11-01, ADR 0011), results under `results/campaign/`; groups consumed by
   several papers live under `shared/` (`shared/kmh_nq100`, `shared/random_nq100`,
   `shared/texhal_full`) and every alias row points to the one run. `stage_no_representation` is ONE
   shared run (2026-09-01 per-paper decision superseded by ADR 0009; its only config is

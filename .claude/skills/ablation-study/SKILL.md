@@ -1,6 +1,6 @@
 ---
 name: ablation-study
-description: Operational guide for the three ablation studies (representation, hierarchy, stage contribution), run for both RNHAL (paper 3, SSRAE, executed) and TexHAL (paper 2, VCTex, not yet run) via a METHOD variable - which code changes each requires, which configs to run, expected outputs, and how results feed the paper.
+description: Operational guide for the three ablation studies (representation, hierarchy, stage contribution), run for both RNHAL (paper 3, SSRAE, executed) and TexHAL (paper 2, VCTex, executed; canonical Q=17 per ADR 0011) via a METHOD variable - which code changes each requires, which configs to run, expected outputs, and how results feed the paper.
 ---
 
 # Ablation study
@@ -22,15 +22,15 @@ sub-studies are evaluated with **macro F1** on the held-out split, dataset
 **Method-aware since 2026-08-30**: there are now TWO ablation suites, selected by a `METHOD`
 environment variable (`rnhal` default, or `texhal`) threaded through every script/Makefile target —
 `rnhal` (paper 3, SSRAE, **this file's/`ablation-study.md`'s subject, executed** 2026-08-26) and
-`texhal` (paper 2, VCTex, `.specs/experiments/ablation-study-texhal.md`, materialized but not yet
-run). Configs live under `files_config/ablations/{rnhal,texhal}/` (see that folder's `README.md`
+`texhal` (paper 2, VCTex, `.specs/experiments/ablation-study-texhal.md`, executed in the campaign, 2026-09-30 to
+2026-11-01; canonical Q=17 per ADR 0011). Configs live under `files_config/ablations/{rnhal,texhal}/` (see that folder's `README.md`
 for the naming-convention differences, mainly §6.1) and `.specs/experiments/papers-roadmap.md` for
 the three-paper plan this reflects. Everything below describes the `rnhal` suite by default; the
 same commands work for `texhal` with `METHOD=texhal` prefixed/passed, and its own `ablation-study-
 texhal.md` mirrors this file's structure.
 
 **Status (2026-08-23, Phase 3 landed): configs and lab scripts materialized, CPU smoke-tested
-11/11, not yet run on the lab machine.** All 11 run-table rows are now real files, not just JSON
+11/11 (history; both suites have since been executed in the campaign).** All 11 run-table rows are now real files, not just JSON
 snippets in this spec: `files_config/ablations/*.json` (+ `files_config/ablations/micro/*.json` CPU
 mirrors, validated by `tests/test_ablation_configs.py`, smoke-tested by
 `make campaign-smoke`), run through the campaign manifest. See

@@ -21,7 +21,8 @@ invented here, including for the upper bound.
 
 > **2026-11-01 (ADR 0011, KI-40)**: the first 192 runs (the 64 groups before the `texhal_q17` row below)
 > were executed 2026-09-30 to 2026-10-05; part `texhal_q17` (18 runs, 6 groups) was added afterwards and
-> is **pending** (`make campaign-run PART=texhal_q17`, resume-safe).
+> **executed on 2026-11-01** (18/18 OK; verified 2026-11-02: 210/210 OK, seed audit PASS). All 210 runs
+> are now done.
 
 | Part | Groups x seeds | Runs | Content |
 |---|---|---|---|
@@ -29,7 +30,7 @@ invented here, including for the upper bound.
 | `upper_bound` | 1 x 3 | 3 | `FullSupervised`: train once on the entire pool (8,086), evaluate on the test set |
 | `rnhal` | 14 x 3 | 42 | paper 3 ablations at nq=100: 6.1 spatial/spectral; 6.2 five existing + five new hierarchy rows; 6.3 full + w/o hierarchical |
 | `texhal` | 10 x 3 | 30 | paper 2 ablations at nq=100: 6.1 q5/q13/q17; 6.2 L1/L2a/L2b/L3/L4; 6.3 w/o hierarchical; plus `shared/texhal_full` |
-| `texhal_q17` | 6 x 3 | 18 | paper 2, TexHAL canonical `Q=17` (ADR 0011, status proposed): 6.2 L1/L2a/L2b/L3/L4 and 6.3 w/o hierarchical re-run with VCTex `q=[17]` (`files_config/ablations/texhal_q17/`) |
+| `texhal_q17` | 6 x 3 | 18 | paper 2, TexHAL canonical `Q=17` (ADR 0011, accepted by the author 2026-11-01, advisor review pending; **executed 2026-11-01**): 6.2 L1/L2a/L2b/L3/L4 and 6.3 w/o hierarchical re-run with VCTex `q=[17]` (`files_config/ablations/texhal_q17/`) |
 | **Total** | **70 x 3** | **210** | |
 
 Paper 1 = the 12 classical strategies (RandomSampling, LeastConfidence, MarginSampling,
@@ -165,7 +166,7 @@ below). Per-run durations are not aggregated here (TBD; derivable from each run'
 start timestamp and `log-dalmax.log`). The earlier Colab ablation batch took about 9-10 min per
 ablation-config run. Micro CPU smoke: ~18-40 s per micro run.
 
-## Execution record (past tense; executed 2026-09-30 to 2026-10-05, verified 2026-11-01)
+## Execution record (past tense; executed 2026-09-30 to 2026-10-05, verified 2026-11-01; part `texhal_q17` executed 2026-11-01, verified 2026-11-02)
 
 **Where / when**: Google Colab Pro, several sessions with resume (complete-leaf skip, so each
 re-launch only ran what was missing). First run started 2026-09-30T00:23Z, last run finished
@@ -193,6 +194,14 @@ matrices under `confusion_matrices/`). Since 2026-11-01 `docs/*` is gitignored, 
 **local-only** (not in git). The thesis project keeps a copy under
 `thesis_drafts/final_thesis/context/campaign-results/` (itself gitignored). Raw runs are under
 `results/campaign/` (gitignored, append-only).
+
+**Part `texhal_q17` (ADR 0011), executed 2026-11-01**: Google Colab Pro, one session, 18:10 to 19:20 UTC
+(about 70 min wall-clock; 103 s to 165 s per run), 18/18 runs DONE, at git commit `442a8cd`, on an
+NVIDIA A100-SXM4-80GB (from `environment.gpus[0].name` in each run's `run_metadata.json`). `results/` was
+downloaded back. **Verification (2026-11-02)**: `make campaign-verify`: `Totals: OK=210 INCOMPLETE=0
+MISSING=0 (of 210 jobs)`; seed audit **PASS for seeds 1, 2 and 3** (69 runs compared per seed,
+reference `shared/random_nq100`). `make campaign-report` was re-run: 13 tables + `summary.csv` +
+`seed_audit.md` + 70 mean confusion matrices, 70/70 groups with data (still local-only).
 
 ### Results (final round, mean +/- std over seeds 1-3, n=3 each; weighted F1 / macro F1)
 
@@ -279,14 +288,30 @@ Paper 3 (RNHAL, `n_query=100`):
 | 6.3 | w/o representation module (= shared KMH) | 0.8224 (0.0329) | 0.7566 (0.0311) |
 | 6.3 | w/o hierarchical module | 0.8532 (0.0214) | 0.8050 (0.0297) |
 
-Paper 2 (TexHAL, `n_query=100`; **all TexHAL 6.2/6.3 rows use Q=[5,17]**, see KI-40 and ADR 0011):
+Paper 2 (TexHAL, `n_query=100`; since ADR 0011 the canonical configuration is **Q=17**; 6.2/6.3 rows
+come from part `texhal_q17`, executed 2026-11-01):
 
 | Study | Row | F1 weighted | F1 macro |
 |---|---|---|---|
 | 6.1 | Q=5 | 0.8382 (0.0242) | 0.7843 (0.0294) |
 | 6.1 | Q=13 | 0.8557 (0.0152) | 0.8052 (0.0194) |
-| 6.1 | Q=17 | **0.8745** (0.0079) | **0.8262** (0.0115) |
-| 6.1 | Q=[5,17] (full) | 0.8259 (0.0284) | 0.7687 (0.0271) |
+| 6.1 | Q=17 (TexHAL canonical) | 0.8745 (0.0079) | 0.8262 (0.0115) |
+| 6.1 | Q=[5,17] (former canonical) | 0.8259 (0.0284) | 0.7687 (0.0271) |
+| 6.2 | L=1 [50] | 0.8606 (0.0138) | 0.8118 (0.0100) |
+| 6.2 | L=2 [300,100] | 0.8669 (0.0175) | 0.8134 (0.0167) |
+| 6.2 | L=2 [100,50] | 0.8665 (0.0034) | 0.8142 (0.0026) |
+| 6.2 | L=3 [300,100,50] | **0.8842** (0.0201) | **0.8398** (0.0250) |
+| 6.2 | L=3 [600,200,100] (reference) | 0.8745 (0.0079) | 0.8262 (0.0115) |
+| 6.2 | L=4 [300,100,50,25] | 0.8828 (0.0219) | 0.8332 (0.0253) |
+| 6.3 | TexHAL (full) | 0.8745 (0.0079) | 0.8262 (0.0115) |
+| 6.3 | w/o representation module (= shared KMH) | 0.8224 (0.0329) | 0.7566 (0.0311) |
+| 6.3 | w/o hierarchical module | 0.8454 (0.0145) | 0.7943 (0.0080) |
+
+History block (executed 2026-09-30 to 2026-10-05, **Q=[5,17]**, superseded by ADR 0011; still reported
+by the campaign report as tables `6_2_q5_17`/`6_3_q5_17`):
+
+| Study | Row | F1 weighted | F1 macro |
+|---|---|---|---|
 | 6.2 | L=1 [50] | 0.8281 (0.0153) | 0.7779 (0.0127) |
 | 6.2 | L=2 [300,100] | 0.8587 (0.0224) | 0.8053 (0.0280) |
 | 6.2 | L=2 [100,50] | 0.8585 (0.0253) | 0.8028 (0.0285) |
@@ -297,15 +322,27 @@ Paper 2 (TexHAL, `n_query=100`; **all TexHAL 6.2/6.3 rows use Q=[5,17]**, see KI
 | 6.3 | w/o representation module (= shared KMH) | 0.8224 (0.0329) | 0.7566 (0.0311) |
 | 6.3 | w/o hierarchical module | 0.8190 (0.0122) | 0.7735 (0.0176) |
 
-Comparison tables (nq100): paper 2 compares TexHAL-full (0.8259 / 0.7687) with the computed best
-paper-1 method (LeastConfidence, 0.8716 / 0.8215) and RandomSampling (0.8180 / 0.7658); paper 3
-compares RNHAL-full (0.8805 / 0.8316), TexHAL-full, RandomSampling and the best paper-1 method.
+Comparison tables (nq100): paper 2 compares TexHAL (VCTex Q=17 + hierarchical, 0.8745 / 0.8262) with
+the computed best paper-1 method (LeastConfidence, 0.8716 / 0.8215) and RandomSampling (0.8180 /
+0.7658); paper 3 compares RNHAL-full (0.8805 / 0.8316), TexHAL (Q=17), RandomSampling and the best
+paper-1 method.
 
 **Findings recorded (2026-11-01)**: (1) RNHAL-full at the reference hierarchy (0.8805) beats every
 paper-1 method at nq100 and the deeper `L=4 [800,600,200,100]` hierarchy is the best RNHAL row
 (0.8955), 2.0 points below the upper bound (0.9157). (2) TexHAL with Q=[5,17] (0.8259) is *below* its
-own single-Q rows (Q=17: 0.8745) and below the best paper-1 method; this drives KI-40 / ADR 0011.
+own single-Q rows (Q=17: 0.8745) and below the best paper-1 method; this drove KI-40 / ADR 0011
+(**superseded by the 2026-11-02 findings below**: the canonical configuration is now Q=17).
 (3) The 2026-08-26 RNHAL batch (Colab, see `ablation-study.md`) reported 0.8949 for the same
 `stage_full` config; the campaign gives 0.8805. The difference (0.0144, roughly 1.7 std of the
 campaign seeds) is consistent with GPU and code-version variance and was not investigated further;
 the campaign numbers are the authoritative ones.
+
+**Findings recorded (2026-11-02, after part `texhal_q17`)**: (1) With Q=17 both TexHAL stage ablations
+now tell a clean story: removing either module hurts, and the representation module matters most
+(weighted F1: full 0.8745; w/o hierarchical 0.8454, -2.9 points; w/o representation 0.8224, -5.2 points).
+Under Q=[5,17] the ablation was not informative: w/o hierarchical (0.8190) was only 0.7 points
+below full (0.8259) and its macro F1 (0.7735) was above full (0.7687). (2) The reference hierarchy is no longer the best TexHAL row:
+`L=3 [300,100,50]` is (0.8842 / 0.8398), +1.0 point weighted over the reference, within one std
+(0.0201). (3) TexHAL (Q=17) now edges the best paper-1 method at nq100 (0.8745 vs LeastConfidence 0.8716,
++0.3 points weighted, well within std) and stays below RNHAL (0.8805, -0.6 points). The Q=[5,17]
+history tables remain in the report as `6_2_q5_17`/`6_3_q5_17`.

@@ -19,7 +19,7 @@ files_config/ablations/
     ├── hier_L1.json .. hier_L4.json                              (§6.2)
     ├── stage_full.json / stage_no_hierarchy.json               (§6.3)
     └── micro/           # CPU smoke mirrors of the 11 files above
-└── texhal_q17/          # paper 2, canonical Q=17 re-run of 6.2/6.3 (ADR 0011; campaign part `texhal_q17`, pending)
+└── texhal_q17/          # paper 2, canonical Q=17 re-run of 6.2/6.3 (ADR 0011; campaign part `texhal_q17`, executed 2026-11-01)
     ├── hier_L1.json / hier_L2a.json / hier_L2b.json / hier_L3.json / hier_L4.json   (§6.2)
     ├── stage_no_hierarchy.json                                   (§6.3)
     └── micro/           # CPU smoke mirrors of the 6 files above
@@ -43,7 +43,7 @@ Phase 2 `"embedding"`/`"selection"` config syntax; see `tests/test_ablation_conf
 | Paper | Method | CLI preset (unchanged) | Ablation suite | Status |
 |---|---|---|---|---|
 | 1 — DAL benchmark comparison | all non-representation baselines (Random, Entropy, Margin, BALD, ...) | n/a | none (no ablations for paper 1) | n/a |
-| 2 — TexHAL proposal | VCTex + hierarchical k-means | `VCTexKmeansHCSampling` (or generic `RepresentationStrategy` with `embedding.extractor="vctex"`) | `files_config/ablations/texhal/` | configs materialized, not yet run |
+| 2 — TexHAL proposal | VCTex + hierarchical k-means | `VCTexKmeansHCSampling` (or generic `RepresentationStrategy` with `embedding.extractor="vctex"`) | `files_config/ablations/texhal/` | **executed** in the campaign (2026-09-30 to 2026-11-01; Q=17 re-run of 6.2/6.3 in `texhal_q17/`), see `.specs/experiments/ablation-study-texhal.md` |
 | 3 — RNHAL proposal | SSRAE + hierarchical k-means | `SSRAEKmeansHCSampling` (or generic `RepresentationStrategy` with `embedding.extractor="ssrae"`) | `files_config/ablations/rnhal/` | **executed** 2026-08-26 on Colab, see `.specs/experiments/ablation-study.md` |
 
 Every file in both method folders uses the generic `RepresentationStrategy` `--strategy_name`
