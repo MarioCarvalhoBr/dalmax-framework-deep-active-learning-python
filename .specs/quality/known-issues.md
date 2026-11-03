@@ -98,6 +98,7 @@ plan.
 
 (Update 2026-11-02: KI-35 to KI-40 are resolved as stated in their own sections; **KI-41 and KI-42 are
 open, pending author decision**, so the open list below gains these two: 9 open in total, 42 tracked items.)
+(Update 2026-11-02b: **KI-43** (round-0 mismatch, disclosure) added: 10 open, 43 tracked items.)
 
 34 tracked items total (KI-34 added 2026-08-26, while reconciling the Phase 3 ablation execution
 batch; KI-33 added/resolved 2026-08-25). Of these, **27 are now fully resolved**: KI-1 through
@@ -315,3 +316,75 @@ effect on papers 2/3 (KMH uses ResNet-50 ImageNet features through the embedding
 (the thesis chapter already does); (b) fix: make `e1` the trained penultimate representation, or use the
 2048-d features for the embedding strategies, and re-run `KMeansSampling`/`KCenterGreedy` (with KI-41 (b):
 6 strategies x 3 budgets x 3 seeds = 54 runs as a new campaign part, old runs kept as history).
+
+### KI-43 — round-0 metrics differ across runs of the same seed and initial labeled set (OPEN, disclosure; found 2026-11-02)
+
+**What was observed** (audit of the 132 `NQ_*` leaves under `results/campaign/` with `run_metadata.json`; the
+`FullSupervised` upper bound excluded). In every group the initial labeled set is identical for a seed (md5 of
+the logged `Initial labeled idxs` equal for seeds 1, 2, 3 across Random, KMH, TexHAL and `texhal_q17`), yet the
+round-0 weighted F1 (model trained only on the 100 initial labels) is not a function of the seed alone. nq100,
+all on one A100-SXM4-80GB, torch 2.5.0+cu124, `determinism.deterministic_algorithms = warn_only`:
+
+| seed | value | runs | Colab image tag | git commit |
+|---|---|---|---|---|
+| 1 | 0.308398 (acc 0.34378) | 36 nq100 runs (`shared/random_nq100`, 11 `paper1/nq100`, all `rnhal/*`, `texhal/*`, `shared/texhal_full`) | 20260921 | 9128826 or 705b8e3 |
+| 1 | 0.300169 (acc 0.31909) | `shared/kmh_nq100` only | 20260921 | 705b8e3 |
+| 1 | 0.297946 (acc 0.32194) | the 6 `texhal_q17/*` runs | 20261029 | 442a8cd |
+| 2 | 0.430349 / 0.420118 (kmh) / 0.467697 (`texhal_q17`) | same groups | same | same |
+| 3 | 0.616711 / 0.394459 (kmh) / 0.366958 (`texhal_q17`) | same groups | same | same |
+
+(user-reported values confirmed: seed 1 KMH 0.300 vs 0.308, seed 3 KMH 0.394 vs Random = RNHAL = 0.617.) Macro F1
+and accuracy deviate in lockstep (seed 3: macro 0.5092 vs 0.3292 vs 0.3400; accuracy 0.5959 vs 0.3751 vs 0.3951).
+Within a group all runs are bit-identical to each other, including different strategies and different `Q`/
+hierarchy, which confirms round 0 does not depend on the selection configuration. Across budgets the same
+holds only when the image is the same: `paper1/nq50` non-ResNet runs (image 20260921) equal nq100 (0.308398 /
+0.430349 / 0.616711), while all 11 non-ResNet `paper1/nq10` runs (image 20260930, `NIL=100` as well) give a
+different, constant value (0.437548 / 0.093498 / 0.467548), and so does the one nq50 outlier
+`paper1/nq50/AdversarialDeepFool` (image 20260930, 0.093498 for seed 2 = the nq10 value, not the nq50 one) and
+`paper1/nq10/AdversarialDeepFool` (image 20261001, 0.416078 / 0.303098 / 0.474383). So `p1/RandomSampling` at
+seed 2 has round-0 F1 0.0935 (nq10) vs 0.4303 (nq50, nq100) although round 0 cannot depend on `n_query`.
+
+**Two independent causes** (the deviation does not correlate with git commit, GPU model, nondeterministic-op
+warning list or strategy type among the "other" runs: 9128826 and 705b8e3 runs of the same image are equal; all
+GPUs are A100 80 GB; `cumsum_cuda_kernel` appears or not without changing the value):
+
+1. **RNG consumption before round-0 training (KMH, `resnet_imagenet` provider)**. `build_strategy`
+   (`dalmax/query_strategies/registry.py`, called at `dalmax/experiment/runner.py` after `get_network`, before
+   `initialize_labels` and `strategy.train()`) constructs the embedding provider;
+   `dalmax/embeddings/resnet_imagenet_provider.py` line 41 `model = resnet50(weights=weights)` first
+   random-initialises the whole network with torch's global CPU RNG and only then loads the pretrained weights.
+   Verified: after `torch.manual_seed(1)`, `torch.rand(1)` is 0.7576 but 0.8269 after `resnet50()`. The extra
+   draws shift the generator state seen by the `DataLoader(shuffle=True)` permutation of round-0 training
+   (`dalmax/models/base.py` l. 69), hence a different batch order and different weights. SSRAE (`ssrae_provider`,
+   LCG weights) and VCTex (`dalmax/tools/VCTex/rnn.py`, LCG weights) draw nothing from the torch RNG, which is
+   why RNHAL, TexHAL and Random coincide. This is a real, deterministic RNG-order difference, not noise.
+2. **Run environment drift between Colab sessions (the other groups)**. The round-0 value is a perfect function
+   of the Colab runtime image recorded in `environment.runtime.colab_release_tag` (20260921, 20260930,
+   20261001, 20261029; OS minor/Python patch also change), not of the code (the `texhal_q17` and `texhal`
+   `stage_no_hierarchy` logs are line-for-line identical up to the paths and `Q`, same torch 2.5.0+cu124, same
+   driver 580.82.07, and VCTex does not touch the torch RNG, yet 0.2979 vs 0.3084). The mechanism is best-effort
+   GPU determinism (`warn_only`, `.claude/rules/reproducibility.md`) plus unrecorded library differences in the
+   image (cuDNN/cuBLAS builds, numpy, torchvision, Pillow; only the torch version is stored in
+   `run_metadata.json`). Not proven which library; the correlation is.
+
+**Impact on the thesis**: not only the round-0 point. Every round trains a freshly built model, so each round's
+metric carries the same kind of run-to-run noise, and the final-round numbers of runs from different images are
+not bit-comparable; (a) the round-0 point of the learning curves differs between groups (KMH vs the others at
+every budget; `texhal_q17` vs `texhal`/RNHAL; nq10 vs nq50/nq100) and must not be read as a method effect;
+(b) comparisons across budgets of the same strategy mix images (nq10: 20260930; nq50, nq100: 20260921; KMH
+nq50: 20260930, nq10: 20261001; part `texhal_q17`: 20261029), so image noise is confounded with budget and,
+for TexHAL Q=17 vs Q=[5,17] or vs RNHAL, with the method; (c) the seed audit only proves the initial labeled
+sets are equal (it does), not that round-0 metrics are. The size of the effect is visible directly: round-0
+weighted F1 spans 0.367 to 0.617 for seed 3 from environment drift alone (100 labels, 5 classes, 10 epochs),
+which bounds how small a final-round difference the tables can resolve. Seed-averaged final metrics (3 seeds)
+are what the papers report; they remain valid but the single-seed round-0 numbers are noisy.
+
+**Recommendation (no code changed here)**: disclose in the thesis that GPU determinism is best-effort and that
+the campaign spans four Colab images; report seed means with std, and never attribute a round-0 gap (or a gap
+smaller than the seed std) to a method. For KMH, the clean fix is to make provider construction RNG-neutral
+(`torch.random.fork_rng()` around `resnet50(...)` in `ResNetImageNetProvider.__init__`, or build the provider
+lazily on first `query()`), then re-run `shared/kmh_nq100` and `paper1` `RepresentationStrategy` (12 runs) if
+the author wants KMH round 0 aligned; route to `implementer`, with a `run_metadata.json` extension recording
+`numpy`/`torchvision`/`scikit-learn`/cuDNN versions so image drift becomes attributable. A clean control for
+cause 2 is to re-run `RandomSampling` nq100 seeds 1-3 in the current image and compare with 0.3084 / 0.4303 /
+0.6167 (about 3 runs). Executed runs stay as history (append-only).

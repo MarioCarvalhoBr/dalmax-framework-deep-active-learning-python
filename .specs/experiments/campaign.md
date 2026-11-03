@@ -352,3 +352,5 @@ dropout layer, so `LeastConfidenceDropout`, `MarginSamplingDropout`, `EntropySam
 `BALDDropout` do not perform MC-dropout (KI-41), and `KMeansSampling`/`KCenterGreedy` cluster an untrained
 random 50-d projection (KI-42). The `paper1` tables are reported as executed, with this disclosure; whether
 to fix and re-run the 6 strategies x 3 budgets x 3 seeds = 54 runs as a new part is pending the author.
+
+**Round-0 finding (2026-11-02, KI-43)**: round-0 metrics of the same seed differ across run groups although the initial labeled sets are identical: KMH differs from all others because `resnet50()` construction consumes the torch RNG before round-0 training, and the rest tracks the Colab runtime image of each session (best-effort GPU determinism), so round-0 points and cross-image comparisons must not be read as method effects.
