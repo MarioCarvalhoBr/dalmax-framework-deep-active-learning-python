@@ -185,3 +185,6 @@ paper_drafts/
 # work around an OOM without editing files_config/ in place mid-batch — see
 # LAB_RUNBOOK.md's troubleshooting section). Never committed.
 files_config/local/
+
+# README figure thumbnails are dataset patches (data-safety rule): rebuilt locally, never committed
+assets/samples/
