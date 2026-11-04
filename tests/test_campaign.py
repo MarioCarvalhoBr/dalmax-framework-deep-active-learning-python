@@ -48,15 +48,23 @@ def micro_manifest() -> C.Manifest:
 
 def test_committed_manifests_match_the_generator() -> None:
     builder = _builder()
-    for rel, scale in builder.TARGETS.items():
-        assert (REPO_ROOT / rel).read_text() == builder.render(scale), f"{rel} drifted: rerun the builder"
+    for rel, target in builder.TARGETS.items():
+        assert (REPO_ROOT / rel).read_text() == builder.render(target), f"{rel} drifted: rerun the builder"
+
+
+def test_control_ki43_manifest_expands_to_three_jobs() -> None:
+    manifest = C.load_manifest(REPO_ROOT / "files_config/campaign/manifest_control_ki43.json")
+    jobs = C.expand_jobs(manifest, C.parse_parts("control"))
+    assert [(j.group.id, j.seed) for j in jobs] == [("control/random_nq100_ki43", s) for s in (1, 2, 3)]
+    assert manifest.results_root == "results/campaign_control"
+    assert jobs[0].group.dir_results == "results/campaign_control/random_nq100/"
 
 
 @pytest.mark.parametrize("which", ["full_manifest", "micro_manifest"])
 def test_run_counts_per_part(which: str, request: pytest.FixtureRequest) -> None:
     manifest: C.Manifest = request.getfixturevalue(which)
     counts = C.count_by_part(C.expand_jobs(manifest))
-    assert counts == {"paper1": 117, "upper_bound": 3, "rnhal": 42, "texhal": 30, "texhal_q17": 18}
+    assert counts == {"paper1": 117, "upper_bound": 3, "rnhal": 42, "texhal": 30, "texhal_q17": 18, "control": 0}
     assert sum(counts.values()) == 210
 
 

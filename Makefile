@@ -105,6 +105,10 @@ colab-check:
 # Variables (all optional):
 #   PART=all|paper1|upper_bound|rnhal|texhal|texhal_q17 (comma-separated allowed; default all)
 #   MICRO=1     -> files_config/campaign/manifest_micro.json (CPU smoke, results/smoke_campaign/)
+#   MANIFEST=path -> any other manifest (overrides MICRO), e.g. the KI-43 control (3 RandomSampling
+#                  nq100 runs into results/campaign_control/, see .specs/experiments/campaign.md):
+#                    make campaign-list MANIFEST=files_config/campaign/manifest_control_ki43.json
+#                    make campaign-run  MANIFEST=files_config/campaign/manifest_control_ki43.json PART=control
 #   SEEDS=1     -> restrict to a subset of the seeds (smoke)
 #   EXCLUDE=... -> comma-separated strategies to drop (default: none; with MICRO=1 the
 #                  two adversarial baselines, far too slow on CPU -- override with
@@ -114,7 +118,7 @@ colab-check:
 PART ?= all
 SMOKE_EXCLUDE ?= AdversarialBIM,AdversarialDeepFool
 EXCLUDE ?= $(if $(MICRO),$(SMOKE_EXCLUDE))
-CAMPAIGN_FLAGS = --part $(PART) $(if $(MICRO),--micro) $(if $(SEEDS),--seeds $(SEEDS)) $(if $(EXCLUDE),--exclude-strategy $(EXCLUDE))
+CAMPAIGN_FLAGS = --part $(PART) $(if $(MANIFEST),--manifest $(MANIFEST),$(if $(MICRO),--micro)) $(if $(SEEDS),--seeds $(SEEDS)) $(if $(EXCLUDE),--exclude-strategy $(EXCLUDE))
 
 # Print the job table and the run counts per part/total.
 campaign-list:

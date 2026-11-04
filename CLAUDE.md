@@ -71,6 +71,7 @@ make campaign-list                    # job table + run counts per part (210 run
 make campaign-run PART=all            # PART=paper1|upper_bound|rnhal|texhal (comma-separated ok); resume = re-run
 make campaign-verify                  # OK/INCOMPLETE/MISSING per job + seed audit (exit 0 ok / 1 fail / 2 warn)
 make campaign-report                  # docs/results/campaign/ (tables md/tex/csv, mean confusion matrices)
+make campaign-list MANIFEST=files_config/campaign/manifest_control_ki43.json   # any other manifest, e.g. the KI-43 control (prepared, not run)
 make campaign-smoke                   # micro campaign on CPU (seed 1) -> results/smoke_campaign/;
                                       # skips AdversarialBIM/AdversarialDeepFool by default (64 of 70 jobs; SMOKE_EXCLUDE= to include)
 

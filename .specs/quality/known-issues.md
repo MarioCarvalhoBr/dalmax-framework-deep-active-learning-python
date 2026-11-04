@@ -319,11 +319,13 @@ effect on papers 2/3 (KMH uses ResNet-50 ImageNet features through the embedding
 
 ### KI-43 — round-0 metrics differ across runs of the same seed and initial labeled set (OPEN, disclosure; found 2026-11-02)
 
+Control run prepared 2026-11-04 (not executed, pending the author's decision P07): see `.specs/experiments/campaign.md`, section "Control run for KI-43".
+
 **What was observed** (audit of the 132 `NQ_*` leaves under `results/campaign/` with `run_metadata.json`; the
 `FullSupervised` upper bound excluded). In every group the initial labeled set is identical for a seed (md5 of
 the logged `Initial labeled idxs` equal for seeds 1, 2, 3 across Random, KMH, TexHAL and `texhal_q17`), yet the
 round-0 weighted F1 (model trained only on the 100 initial labels) is not a function of the seed alone. nq100,
-all on one A100-SXM4-80GB, torch 2.5.0+cu124, `determinism.deterministic_algorithms = warn_only`:
+all on one 80 GB GPU model (see `environment.gpus[0].name` in each `run_metadata.json`), torch 2.5.0+cu124, `determinism.deterministic_algorithms = warn_only`:
 
 | seed | value | runs | Colab image tag | git commit |
 |---|---|---|---|---|
@@ -346,7 +348,7 @@ seed 2 has round-0 F1 0.0935 (nq10) vs 0.4303 (nq50, nq100) although round 0 can
 
 **Two independent causes** (the deviation does not correlate with git commit, GPU model, nondeterministic-op
 warning list or strategy type among the "other" runs: 9128826 and 705b8e3 runs of the same image are equal; all
-GPUs are A100 80 GB; `cumsum_cuda_kernel` appears or not without changing the value):
+GPUs are the same 80 GB model; `cumsum_cuda_kernel` appears or not without changing the value):
 
 1. **RNG consumption before round-0 training (KMH, `resnet_imagenet` provider)**. `build_strategy`
    (`dalmax/query_strategies/registry.py`, called at `dalmax/experiment/runner.py` after `get_network`, before
