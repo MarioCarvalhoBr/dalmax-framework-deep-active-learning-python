@@ -8,13 +8,12 @@ docstring for the exact finding and the file:line of the one hardcoded-device
 default that does exist in that source tree, which this pipeline never
 calls). So these tests run unconditionally on CPU, no `gpu` marker needed.
 
-Test fixtures deliberately use *imbalanced* cluster sizes: when every
-k-means cluster has exactly the same size, a separate, unrelated bug in
-`core/tools/SSL/src/utils.py:28` (`create_clusters_from_cluster_assignment`)
-makes NumPy collapse the ragged per-cluster index arrays into a single
-`dtype=object` 2-D array, which then fails torch tensor indexing --
-independent of device. See the module docstring for detail; it is a
-pre-existing vendored issue, not something this wrapper fixes.
+Most fixtures use *imbalanced* cluster sizes (historical reason: KI-30, the
+vendored `create_clusters_from_cluster_assignment` collapsed equal-size
+clusters into a 2-D `dtype=object` array that broke torch indexing). KI-30
+was fixed on 2026-11-07 (`dalmax/tools/SSL/src/utils.py::to_object_array`),
+and `test_perfectly_balanced_clusters_do_not_crash` below covers the
+balanced case explicitly.
 """
 
 from __future__ import annotations
@@ -146,3 +145,82 @@ def test_selection_on_cuda_matches_cpu_contract():
     assert len(selected) == 15
     assert len(set(selected.tolist())) == 15
     assert set(selected.tolist()) <= set(ids.tolist())
+
+
+# --- optional knobs (2026-11-07) -------------------------------------------------
+
+KNOB_CASES = [
+    {"init_method": "random"},
+    {"resample_strategy": "random"},
+    {"n_resamples": 0},
+    {"leaf_sampling": "closest"},
+]
+
+
+@pytest.mark.parametrize("knobs", KNOB_CASES, ids=lambda k: next(iter(k)))
+def test_every_knob_keeps_the_selection_contract_and_is_deterministic(knobs):
+    embeddings, ids = _synthetic_pool()
+    hierarchy = {**HIERARCHY_DICT, **knobs}
+    runs = [
+        HierarchicalKMeansSelection(hierarchy, device="cpu").select(
+            embeddings, ids, budget=20, rng=np.random.default_rng(7)
+        )
+        for _ in range(2)
+    ]
+    for selected in runs:
+        assert len(selected) == 20
+        assert len(set(selected.tolist())) == 20
+        assert set(selected.tolist()) <= set(ids.tolist())
+    np.testing.assert_array_equal(runs[0], runs[1])
+
+
+def test_leaf_sampling_closest_differs_from_random_and_is_valid():
+    embeddings, ids = _synthetic_pool()
+    selections = {}
+    for leaf in ("random", "closest"):
+        hierarchy = {**HIERARCHY_DICT, "leaf_sampling": leaf}
+        selections[leaf] = HierarchicalKMeansSelection(hierarchy, device="cpu").select(
+            embeddings, ids, budget=20, rng=np.random.default_rng(7)
+        )
+        assert len(set(selections[leaf].tolist())) == 20
+    assert set(selections["random"].tolist()) != set(selections["closest"].tolist())
+
+
+def test_knob_defaults_when_absent_and_hierarchy_value_beats_constructor_default():
+    default = HierarchicalKMeansSelection(HIERARCHY_DICT)
+    assert (default.n_resamples, default.init_method) == (10, "kmeans++")
+    assert (default.resample_strategy, default.leaf_sampling) == ("closest", "random")
+    assert HierarchicalKMeansSelection(HIERARCHY_DICT, n_resamples=4).n_resamples == 4
+    in_hierarchy = {**HIERARCHY_DICT, "n_resamples": 2}
+    assert HierarchicalKMeansSelection(in_hierarchy, n_resamples=4).n_resamples == 2
+
+
+def test_knobs_are_read_from_duck_typed_object_and_invalid_values_fail_fast():
+    obj = _HierarchyConfigLike([8, 4], 2, [4, 2])
+    obj.leaf_sampling = "closest"
+    assert HierarchicalKMeansSelection(obj).leaf_sampling == "closest"
+    with pytest.raises(ValueError, match="init_method"):
+        HierarchicalKMeansSelection({**HIERARCHY_DICT, "init_method": "bogus"})
+
+
+@pytest.mark.parametrize("leaf_sampling", ["random", "closest"])
+def test_perfectly_balanced_clusters_do_not_crash(leaf_sampling):
+    """KI-30 regression: 6 identical-size blobs clustered into [6, 2, 2] gives
+    equal-size clusters at every level (3 points per cluster in level 1 when
+    the blobs are well separated, 3 clusters per cluster in level 2, ...);
+    before the 2026-11-07 fix this raised a vendored ``TypeError``."""
+    embeddings, _ = make_blobs(
+        n_samples=[3] * 6, centers=None, n_features=4, cluster_std=0.05, random_state=3
+    )
+    embeddings = embeddings.astype(np.float32)
+    ids = np.arange(100, 100 + len(embeddings))
+    hierarchy = {
+        "n_clusters": [6, 2, 2],
+        "n_levels": 3,
+        "sample_sizes": [2, 2, 2],
+        "leaf_sampling": leaf_sampling,
+    }
+    sel = HierarchicalKMeansSelection(hierarchy=hierarchy, device="cpu")
+    out = sel.select(embeddings, ids, budget=4, rng=np.random.default_rng(0))
+    assert len(out) == 4 and len(set(out.tolist())) == 4
+    assert set(out.tolist()) <= set(ids.tolist())

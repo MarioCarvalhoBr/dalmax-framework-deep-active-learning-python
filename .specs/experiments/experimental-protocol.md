@@ -238,6 +238,16 @@ what makes `.claude/rules/reproducibility.md`'s "(params JSON + CLI args +
 seed + git commit) fully determine a run" verifiable after the fact — see
 `research-rules/reproducibility.md`.
 
+## Hierarchy knobs in `selection.hierarchy` / `config_kmh` (2026-11-07)
+
+Besides `n_clusters`, `n_levels`, `sample_sizes`, the hierarchy block accepts four optional keys
+(defaults = the previous hard-wired behaviour, so every existing params file is unchanged):
+`n_resamples` (int >= 0, default `10`; `0` = no resampling), `init_method` (`"kmeans++"` |
+`"random"`, default `"kmeans++"`), `resample_strategy` (`"closest"` | `"random"`, default
+`"closest"`), `leaf_sampling` (`"random"` | `"closest"`, default `"random"`). Invalid values raise
+`ConfigError` naming the key and the valid values; the resolved values appear in
+`run_metadata.json` under `config.dataset.selection.hierarchy`.
+
 ## Params file per GPU / environment
 
 - `files_config/benchmark/params_df_gpu_0.json` → `scripts/benchmark/run_pipe_gpu_0.sh` (`GPU_NUMBER=0`) →
