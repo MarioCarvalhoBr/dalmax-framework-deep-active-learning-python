@@ -89,7 +89,9 @@ def test_kmh_sweep_aliases_resolve_to_the_reference() -> None:
 def test_kmh_sweep_parts_filter_and_order() -> None:
     manifest = C.load_manifest(SWEEP)
     assert C.parse_parts("kmh_nq10") == ("kmh_nq10",)
-    assert C.parse_parts("kmh_nq100,kmh_nq10") == ("kmh_nq10", "kmh_nq100")
+    assert C.parse_parts("kmh_nq10,kmh_nq100") == ("kmh_nq100", "kmh_nq10")  # PARTS order: nq100 first
+    jobs_all = C.expand_jobs(manifest, C.parse_parts("all"))
+    assert [j.group.part for j in jobs_all][:33] == ["kmh_nq100"] * 33 and jobs_all[-1].group.part == "kmh_nq10"
     jobs = C.expand_jobs(manifest, C.parse_parts("kmh_nq50"))
     assert len(jobs) == 51 and {j.group.part for j in jobs} == {"kmh_nq50"}
     order = [C.PHASE_LABELS[C.phase_index(g, manifest.primary_nq)] for g in manifest.groups]

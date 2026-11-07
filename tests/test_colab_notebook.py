@@ -74,7 +74,9 @@ def test_parameters_cell_defines_campaign_part() -> None:
     nb = _load_notebook()
     code_cells = [c for c in nb["cells"] if c["cell_type"] == "code"]
     first_source = "".join(code_cells[0]["source"])
-    assert 'PART = "paper1"' in first_source
+    # Since 2026-11-07 the notebook defaults to the KMH sweep (ADR 0012) with PART = "all".
+    assert 'PART = "all"' in first_source
+    assert 'MANIFEST = "files_config/campaign/manifest_kmh_sweep.json"' in first_source
     assert "resumes" in first_source
 
 

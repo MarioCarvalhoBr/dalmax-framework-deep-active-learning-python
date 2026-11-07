@@ -73,7 +73,7 @@ make campaign-verify                  # OK/INCOMPLETE/MISSING per job + seed aud
 make campaign-report                  # docs/results/campaign/ (tables md/tex/csv, mean confusion matrices)
 make campaign-list MANIFEST=files_config/campaign/manifest_control_ki43.json   # any other manifest, e.g. the KI-43 control (prepared, not run)
 make campaign-list MANIFEST=files_config/campaign/manifest_kmh_sweep.json     # KMH parameter sweep (ADR 0012; prepared, not run): 135 runs / 45 groups
-make campaign-run MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=kmh_nq100   # kmh_nq50 | kmh_nq10; resume = re-run
+make campaign-run MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=all   # order kmh_nq100, kmh_nq50, kmh_nq10; resume = re-run
 make campaign-report MANIFEST=files_config/campaign/manifest_kmh_sweep.json REPORT_ROOT=results/campaign_kmh REPORT_OUT=docs/results/campaign_kmh
 make campaign-smoke-kmh               # micro KMH sweep on CPU (seed 1) -> results/smoke_campaign_kmh/
 make campaign-smoke                   # micro campaign on CPU (seed 1) -> results/smoke_campaign/;

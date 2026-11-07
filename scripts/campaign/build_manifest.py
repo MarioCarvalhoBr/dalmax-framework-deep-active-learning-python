@@ -368,7 +368,9 @@ def build_kmh_sweep(scale: Scale) -> dict[str, Any]:
     def gid(paper_nq: int, name: str) -> str:
         return f"kmh/nq{paper_nq}/{name}"
 
-    for paper_nq in sweep.BUDGETS:
+    # Execution order (= PARTS order in dalmax/campaign.py): nq100 first, the smallest part and the most
+    # informative one for papers 2 and 3, then nq50, then nq10.
+    for paper_nq in sorted(sweep.BUDGETS, reverse=True):
         nq = scale.nq_by_paper_nq[paper_nq]
         part = f"kmh_nq{paper_nq}"
         for name, h, knob in sweep.grid(paper_nq):

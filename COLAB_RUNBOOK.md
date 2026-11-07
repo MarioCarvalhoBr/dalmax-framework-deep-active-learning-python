@@ -344,26 +344,29 @@ the Parameters cell (second cell) is the only one to touch. Keep `DRIVE_ROOT`, `
 `BRANCH = "main"` as they are and set:
 
 ```python
-MANIFEST = "files_config/campaign/manifest_kmh_sweep.json"
-PART = "kmh_nq100"   # next sessions: "kmh_nq50", then "kmh_nq10"
+MANIFEST = "files_config/campaign/manifest_kmh_sweep.json"   # already the default
+PART = "all"                                                 # already the default
 ```
 
-Every campaign cell below (list, run, progress, verify, report, copy to Drive) reads these two variables:
-with the sweep manifest set, the cells write to `results/campaign_kmh/` and `docs/results/campaign_kmh/`
-and copy the tables to `$DRIVE_ROOT/results/campaign_kmh_tables`. Set `MANIFEST = ""` to go back to the
-main campaign of section 6. The numbered steps below are the same cells, in order.
+These are the notebook's defaults since 2026-11-07, so nothing needs editing: `PART = "all"` runs the
+three parts in the order `kmh_nq100`, `kmh_nq50`, `kmh_nq10` (the `PARTS` order of `dalmax/campaign.py`)
+and every session resumes where the previous one stopped. Every campaign cell below (list, run, progress,
+verify, report, copy to Drive) reads these two variables: with the sweep manifest set, the cells write to
+`results/campaign_kmh/` and `docs/results/campaign_kmh/` and copy the tables to
+`$DRIVE_ROOT/results/campaign_kmh_tables`. Set `MANIFEST = ""` to go back to the main campaign of
+section 6. The numbered steps below are the same cells, in order; `PART=...` is only needed to restrict.
 
 1. Do sections 0-5 first (runtime, Drive, clone, Poetry, `make colab-setup`, `make test`, `make smoke`,
    `make colab-check`), including the GPU identity check (step 3 of section 6): confirm the GPU
    (`<gpu-name>`) before launching.
 2. List: `!make campaign-list MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=kmh_nq10`
    (use any part name).
-3. Run one part per session: `!make campaign-run MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=kmh_nq100`.
-   Recommended order: `kmh_nq100` first (smallest, and the most informative for papers 2 and 3), then
-   `kmh_nq50`, then `kmh_nq10`. Resume is the same as in section 6: re-running the same command skips
-   complete leaves. Log: `results/campaign_kmh/campaign.log`, failures: `results/campaign_kmh/failures.log`.
+3. Run: `!make campaign-run MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=all` (the notebook's
+   run cell). Execution order: `kmh_nq100` first (smallest, and the most informative for papers 2 and 3), then
+   `kmh_nq50`, then `kmh_nq10`. One session will not hold all 135 runs; resume is the same as in section 6:
+   re-running the same command skips complete leaves. Log: `results/campaign_kmh/campaign.log`, failures: `results/campaign_kmh/failures.log`.
 4. Verify: `!make campaign-verify MANIFEST=files_config/campaign/manifest_kmh_sweep.json` (add `PART=...` to restrict).
-   Expected after each part: `OK=33` (`kmh_nq100`), `OK=51` (`kmh_nq50`), `OK=51` (`kmh_nq10`), seed audit PASS.
+   Expected at the end: `OK=135 INCOMPLETE=0 MISSING=0`, seed audit PASS (per part: 33, 51, 51).
    If the session dropped: redo sections 0-4 and re-run the same `campaign-run` cell (complete runs are skipped).
 5. Report: `!make campaign-report MANIFEST=files_config/campaign/manifest_kmh_sweep.json REPORT_ROOT=results/campaign_kmh REPORT_OUT=docs/results/campaign_kmh`,
    then copy to Drive: `!cp -r docs/results/campaign_kmh "$DRIVE_ROOT/results/campaign_kmh_tables"`.

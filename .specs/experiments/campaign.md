@@ -242,7 +242,7 @@ image: `kmh/nq{N}/hier_L3_ref` is that run, and the sweep never compares against
 - Manifests: `files_config/campaign/manifest_kmh_sweep.json` (results root `results/campaign_kmh`, nq 10/50/100,
   NIL 100, NR 8) and `manifest_kmh_sweep_micro.json` (root `results/smoke_campaign_kmh`, nq 3/4/5, NIL 10, NR 1),
   built by `build_kmh_sweep(scale)` in `scripts/campaign/build_manifest.py`. Group ids `kmh/nq{N}/<config>`,
-  parts `kmh_nq10|kmh_nq50|kmh_nq100` (new in `dalmax.campaign.PARTS`, executed after `control`, in that order; 0
+  parts `kmh_nq100|kmh_nq50|kmh_nq10` (new in `dalmax.campaign.PARTS`, executed after `control`, in that order, so `PART=all` runs nq100 first; 0
   jobs in the other manifests). `dir_results` is one directory per group,
   `results/campaign_kmh/nq{N}/<config>/` (all groups share strategy and NQ/NIL/NR, so a shared directory would
   make the leaf glob ambiguous). Tables (`paper1`): `kmh_hier_nq{N}` (rows in the order above) and

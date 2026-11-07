@@ -11,11 +11,11 @@
   "primary_nq": 100,
   "groups": [
     {
-      "id": "kmh/nq10/hier_L1_k10",
-      "part": "kmh_nq10",
-      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L1_k10.json",
+      "id": "kmh/nq100/hier_L1_k100",
+      "part": "kmh_nq100",
+      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L1_k100.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 10,
+      "n_query": 100,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -23,45 +23,22 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq10/hier_L1_k10/",
+      "dir_results": "results/campaign_kmh/nq100/hier_L1_k100/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_hier_nq10",
-          "row": "L=1, k=[10] (= n_query)"
-        }
-      ],
-      "note": "KMH sweep @ n_query=10: hierarchy k=[10] (hierarchy axis, other knobs default)."
-    },
-    {
-      "id": "kmh/nq10/hier_L1_k100",
-      "part": "kmh_nq10",
-      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L1_k100.json",
-      "strategy_name": "RepresentationStrategy",
-      "n_query": 10,
-      "n_init_labeled": 100,
-      "n_round": 8,
-      "seeds": [
-        1,
-        2,
-        3
-      ],
-      "dir_results": "results/campaign_kmh/nq10/hier_L1_k100/",
-      "used_by": [
-        {
-          "paper": "paper1",
-          "table": "kmh_hier_nq10",
+          "table": "kmh_hier_nq100",
           "row": "L=1, k=[100]"
         }
       ],
-      "note": "KMH sweep @ n_query=10: hierarchy k=[100] (hierarchy axis, other knobs default)."
+      "note": "KMH sweep @ n_query=100: hierarchy k=[100] (hierarchy axis, other knobs default)."
     },
     {
-      "id": "kmh/nq10/hier_L1_k200",
-      "part": "kmh_nq10",
-      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L1_k200.json",
+      "id": "kmh/nq100/hier_L1_k200",
+      "part": "kmh_nq100",
+      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L1_k200.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 10,
+      "n_query": 100,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -69,22 +46,22 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq10/hier_L1_k200/",
+      "dir_results": "results/campaign_kmh/nq100/hier_L1_k200/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_hier_nq10",
+          "table": "kmh_hier_nq100",
           "row": "L=1, k=[200]"
         }
       ],
-      "note": "KMH sweep @ n_query=10: hierarchy k=[200] (hierarchy axis, other knobs default)."
+      "note": "KMH sweep @ n_query=100: hierarchy k=[200] (hierarchy axis, other knobs default)."
     },
     {
-      "id": "kmh/nq10/hier_L1_k600",
-      "part": "kmh_nq10",
-      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L1_k600.json",
+      "id": "kmh/nq100/hier_L1_k600",
+      "part": "kmh_nq100",
+      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L1_k600.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 10,
+      "n_query": 100,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -92,22 +69,22 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq10/hier_L1_k600/",
+      "dir_results": "results/campaign_kmh/nq100/hier_L1_k600/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_hier_nq10",
+          "table": "kmh_hier_nq100",
           "row": "L=1, k=[600]"
         }
       ],
-      "note": "KMH sweep @ n_query=10: hierarchy k=[600] (hierarchy axis, other knobs default)."
+      "note": "KMH sweep @ n_query=100: hierarchy k=[600] (hierarchy axis, other knobs default)."
     },
     {
-      "id": "kmh/nq10/hier_L2_k200_100",
-      "part": "kmh_nq10",
-      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L2_k200_100.json",
+      "id": "kmh/nq100/hier_L2_k200_100",
+      "part": "kmh_nq100",
+      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L2_k200_100.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 10,
+      "n_query": 100,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -115,22 +92,22 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq10/hier_L2_k200_100/",
+      "dir_results": "results/campaign_kmh/nq100/hier_L2_k200_100/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_hier_nq10",
+          "table": "kmh_hier_nq100",
           "row": "L=2, k=[200,100]"
         }
       ],
-      "note": "KMH sweep @ n_query=10: hierarchy k=[200,100] (hierarchy axis, other knobs default)."
+      "note": "KMH sweep @ n_query=100: hierarchy k=[200,100] (hierarchy axis, other knobs default)."
     },
     {
-      "id": "kmh/nq10/hier_L2_matched",
-      "part": "kmh_nq10",
-      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L2_matched.json",
+      "id": "kmh/nq100/hier_L2_matched",
+      "part": "kmh_nq100",
+      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L2_matched.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 10,
+      "n_query": 100,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -138,22 +115,22 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq10/hier_L2_matched/",
+      "dir_results": "results/campaign_kmh/nq100/hier_L2_matched/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_hier_nq10",
-          "row": "L=2, k=[60,10] (budget-matched)"
+          "table": "kmh_hier_nq100",
+          "row": "L=2, k=[600,100] (budget-matched)"
         }
       ],
-      "note": "KMH sweep @ n_query=10: hierarchy k=[60,10] (hierarchy axis, other knobs default)."
+      "note": "KMH sweep @ n_query=100: hierarchy k=[600,100] (hierarchy axis, other knobs default)."
     },
     {
-      "id": "kmh/nq10/hier_L3_ref",
-      "part": "kmh_nq10",
-      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L3_ref.json",
+      "id": "kmh/nq100/hier_L3_ref",
+      "part": "kmh_nq100",
+      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L3_ref.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 10,
+      "n_query": 100,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -161,55 +138,32 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq10/hier_L3_ref/",
+      "dir_results": "results/campaign_kmh/nq100/hier_L3_ref/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_hier_nq10",
+          "table": "kmh_hier_nq100",
           "row": "L=3, k=[600,200,100] (reference)"
         },
         {
           "paper": "paper1",
-          "table": "kmh_knobs_nq10",
-          "row": "L=3, k=[600,200,100] (reference)"
-        }
-      ],
-      "note": "KMH sweep @ n_query=10: hierarchy k=[600,200,100] (hierarchy axis, other knobs default)."
-    },
-    {
-      "id": "kmh/nq10/hier_L3_matched",
-      "part": "kmh_nq10",
-      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L3_matched.json",
-      "strategy_name": "RepresentationStrategy",
-      "n_query": 10,
-      "n_init_labeled": 100,
-      "n_round": 8,
-      "seeds": [
-        1,
-        2,
-        3
-      ],
-      "dir_results": "results/campaign_kmh/nq10/hier_L3_matched/",
-      "used_by": [
-        {
-          "paper": "paper1",
-          "table": "kmh_hier_nq10",
-          "row": "L=3, k=[60,20,10] (budget-matched)"
+          "table": "kmh_hier_nq100",
+          "row": "L=3, k=[600,200,100] (budget-matched)"
         },
         {
           "paper": "paper1",
-          "table": "kmh_knobs_nq10",
-          "row": "L=3, k=[60,20,10] (budget-matched)"
+          "table": "kmh_knobs_nq100",
+          "row": "L=3, k=[600,200,100] (reference)"
         }
       ],
-      "note": "KMH sweep @ n_query=10: hierarchy k=[60,20,10] (hierarchy axis, other knobs default)."
+      "note": "KMH sweep @ n_query=100: hierarchy k=[600,200,100] (hierarchy axis, other knobs default). Also serves as: kmh/nq100/hier_L3_matched."
     },
     {
-      "id": "kmh/nq10/hier_L4_k800_600_200_100",
-      "part": "kmh_nq10",
-      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L4_k800_600_200_100.json",
+      "id": "kmh/nq100/hier_L4_k800_600_200_100",
+      "part": "kmh_nq100",
+      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L4_k800_600_200_100.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 10,
+      "n_query": 100,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -217,22 +171,22 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq10/hier_L4_k800_600_200_100/",
+      "dir_results": "results/campaign_kmh/nq100/hier_L4_k800_600_200_100/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_hier_nq10",
+          "table": "kmh_hier_nq100",
           "row": "L=4, k=[800,600,200,100]"
         }
       ],
-      "note": "KMH sweep @ n_query=10: hierarchy k=[800,600,200,100] (hierarchy axis, other knobs default)."
+      "note": "KMH sweep @ n_query=100: hierarchy k=[800,600,200,100] (hierarchy axis, other knobs default)."
     },
     {
-      "id": "kmh/nq10/hier_L3_ref__init_random",
-      "part": "kmh_nq10",
-      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L3_ref__init_random.json",
+      "id": "kmh/nq100/hier_L3_ref__init_random",
+      "part": "kmh_nq100",
+      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L3_ref__init_random.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 10,
+      "n_query": 100,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -240,22 +194,22 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq10/hier_L3_ref__init_random/",
+      "dir_results": "results/campaign_kmh/nq100/hier_L3_ref__init_random/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_knobs_nq10",
+          "table": "kmh_knobs_nq100",
           "row": "reference + init_method=random"
         }
       ],
-      "note": "KMH sweep @ n_query=10: hierarchy k=[600,200,100], knob init_method='random'."
+      "note": "KMH sweep @ n_query=100: hierarchy k=[600,200,100], knob init_method='random'."
     },
     {
-      "id": "kmh/nq10/hier_L3_ref__leaf_closest",
-      "part": "kmh_nq10",
-      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L3_ref__leaf_closest.json",
+      "id": "kmh/nq100/hier_L3_ref__leaf_closest",
+      "part": "kmh_nq100",
+      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L3_ref__leaf_closest.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 10,
+      "n_query": 100,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -263,22 +217,22 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq10/hier_L3_ref__leaf_closest/",
+      "dir_results": "results/campaign_kmh/nq100/hier_L3_ref__leaf_closest/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_knobs_nq10",
+          "table": "kmh_knobs_nq100",
           "row": "reference + leaf_sampling=closest"
         }
       ],
-      "note": "KMH sweep @ n_query=10: hierarchy k=[600,200,100], knob leaf_sampling='closest'."
+      "note": "KMH sweep @ n_query=100: hierarchy k=[600,200,100], knob leaf_sampling='closest'."
     },
     {
-      "id": "kmh/nq10/hier_L3_ref__no_resampling",
-      "part": "kmh_nq10",
-      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L3_ref__no_resampling.json",
+      "id": "kmh/nq100/hier_L3_ref__no_resampling",
+      "part": "kmh_nq100",
+      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L3_ref__no_resampling.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 10,
+      "n_query": 100,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -286,22 +240,22 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq10/hier_L3_ref__no_resampling/",
+      "dir_results": "results/campaign_kmh/nq100/hier_L3_ref__no_resampling/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_knobs_nq10",
+          "table": "kmh_knobs_nq100",
           "row": "reference + n_resamples=0"
         }
       ],
-      "note": "KMH sweep @ n_query=10: hierarchy k=[600,200,100], knob n_resamples=0."
+      "note": "KMH sweep @ n_query=100: hierarchy k=[600,200,100], knob n_resamples=0."
     },
     {
-      "id": "kmh/nq10/hier_L3_ref__resample_random",
-      "part": "kmh_nq10",
-      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L3_ref__resample_random.json",
+      "id": "kmh/nq100/hier_L3_ref__resample_random",
+      "part": "kmh_nq100",
+      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L3_ref__resample_random.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 10,
+      "n_query": 100,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -309,107 +263,15 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq10/hier_L3_ref__resample_random/",
+      "dir_results": "results/campaign_kmh/nq100/hier_L3_ref__resample_random/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_knobs_nq10",
+          "table": "kmh_knobs_nq100",
           "row": "reference + resample_strategy=random"
         }
       ],
-      "note": "KMH sweep @ n_query=10: hierarchy k=[600,200,100], knob resample_strategy='random'."
-    },
-    {
-      "id": "kmh/nq10/hier_L3_matched__init_random",
-      "part": "kmh_nq10",
-      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L3_matched__init_random.json",
-      "strategy_name": "RepresentationStrategy",
-      "n_query": 10,
-      "n_init_labeled": 100,
-      "n_round": 8,
-      "seeds": [
-        1,
-        2,
-        3
-      ],
-      "dir_results": "results/campaign_kmh/nq10/hier_L3_matched__init_random/",
-      "used_by": [
-        {
-          "paper": "paper1",
-          "table": "kmh_knobs_nq10",
-          "row": "budget-matched + init_method=random"
-        }
-      ],
-      "note": "KMH sweep @ n_query=10: hierarchy k=[60,20,10], knob init_method='random'."
-    },
-    {
-      "id": "kmh/nq10/hier_L3_matched__leaf_closest",
-      "part": "kmh_nq10",
-      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L3_matched__leaf_closest.json",
-      "strategy_name": "RepresentationStrategy",
-      "n_query": 10,
-      "n_init_labeled": 100,
-      "n_round": 8,
-      "seeds": [
-        1,
-        2,
-        3
-      ],
-      "dir_results": "results/campaign_kmh/nq10/hier_L3_matched__leaf_closest/",
-      "used_by": [
-        {
-          "paper": "paper1",
-          "table": "kmh_knobs_nq10",
-          "row": "budget-matched + leaf_sampling=closest"
-        }
-      ],
-      "note": "KMH sweep @ n_query=10: hierarchy k=[60,20,10], knob leaf_sampling='closest'."
-    },
-    {
-      "id": "kmh/nq10/hier_L3_matched__no_resampling",
-      "part": "kmh_nq10",
-      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L3_matched__no_resampling.json",
-      "strategy_name": "RepresentationStrategy",
-      "n_query": 10,
-      "n_init_labeled": 100,
-      "n_round": 8,
-      "seeds": [
-        1,
-        2,
-        3
-      ],
-      "dir_results": "results/campaign_kmh/nq10/hier_L3_matched__no_resampling/",
-      "used_by": [
-        {
-          "paper": "paper1",
-          "table": "kmh_knobs_nq10",
-          "row": "budget-matched + n_resamples=0"
-        }
-      ],
-      "note": "KMH sweep @ n_query=10: hierarchy k=[60,20,10], knob n_resamples=0."
-    },
-    {
-      "id": "kmh/nq10/hier_L3_matched__resample_random",
-      "part": "kmh_nq10",
-      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L3_matched__resample_random.json",
-      "strategy_name": "RepresentationStrategy",
-      "n_query": 10,
-      "n_init_labeled": 100,
-      "n_round": 8,
-      "seeds": [
-        1,
-        2,
-        3
-      ],
-      "dir_results": "results/campaign_kmh/nq10/hier_L3_matched__resample_random/",
-      "used_by": [
-        {
-          "paper": "paper1",
-          "table": "kmh_knobs_nq10",
-          "row": "budget-matched + resample_strategy=random"
-        }
-      ],
-      "note": "KMH sweep @ n_query=10: hierarchy k=[60,20,10], knob resample_strategy='random'."
+      "note": "KMH sweep @ n_query=100: hierarchy k=[600,200,100], knob resample_strategy='random'."
     },
     {
       "id": "kmh/nq50/hier_L1_k50",
@@ -813,11 +675,11 @@
       "note": "KMH sweep @ n_query=50: hierarchy k=[300,100,50], knob resample_strategy='random'."
     },
     {
-      "id": "kmh/nq100/hier_L1_k100",
-      "part": "kmh_nq100",
-      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L1_k100.json",
+      "id": "kmh/nq10/hier_L1_k10",
+      "part": "kmh_nq10",
+      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L1_k10.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 100,
+      "n_query": 10,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -825,22 +687,45 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq100/hier_L1_k100/",
+      "dir_results": "results/campaign_kmh/nq10/hier_L1_k10/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_hier_nq100",
+          "table": "kmh_hier_nq10",
+          "row": "L=1, k=[10] (= n_query)"
+        }
+      ],
+      "note": "KMH sweep @ n_query=10: hierarchy k=[10] (hierarchy axis, other knobs default)."
+    },
+    {
+      "id": "kmh/nq10/hier_L1_k100",
+      "part": "kmh_nq10",
+      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L1_k100.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 10,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign_kmh/nq10/hier_L1_k100/",
+      "used_by": [
+        {
+          "paper": "paper1",
+          "table": "kmh_hier_nq10",
           "row": "L=1, k=[100]"
         }
       ],
-      "note": "KMH sweep @ n_query=100: hierarchy k=[100] (hierarchy axis, other knobs default)."
+      "note": "KMH sweep @ n_query=10: hierarchy k=[100] (hierarchy axis, other knobs default)."
     },
     {
-      "id": "kmh/nq100/hier_L1_k200",
-      "part": "kmh_nq100",
-      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L1_k200.json",
+      "id": "kmh/nq10/hier_L1_k200",
+      "part": "kmh_nq10",
+      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L1_k200.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 100,
+      "n_query": 10,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -848,22 +733,22 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq100/hier_L1_k200/",
+      "dir_results": "results/campaign_kmh/nq10/hier_L1_k200/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_hier_nq100",
+          "table": "kmh_hier_nq10",
           "row": "L=1, k=[200]"
         }
       ],
-      "note": "KMH sweep @ n_query=100: hierarchy k=[200] (hierarchy axis, other knobs default)."
+      "note": "KMH sweep @ n_query=10: hierarchy k=[200] (hierarchy axis, other knobs default)."
     },
     {
-      "id": "kmh/nq100/hier_L1_k600",
-      "part": "kmh_nq100",
-      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L1_k600.json",
+      "id": "kmh/nq10/hier_L1_k600",
+      "part": "kmh_nq10",
+      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L1_k600.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 100,
+      "n_query": 10,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -871,22 +756,22 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq100/hier_L1_k600/",
+      "dir_results": "results/campaign_kmh/nq10/hier_L1_k600/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_hier_nq100",
+          "table": "kmh_hier_nq10",
           "row": "L=1, k=[600]"
         }
       ],
-      "note": "KMH sweep @ n_query=100: hierarchy k=[600] (hierarchy axis, other knobs default)."
+      "note": "KMH sweep @ n_query=10: hierarchy k=[600] (hierarchy axis, other knobs default)."
     },
     {
-      "id": "kmh/nq100/hier_L2_k200_100",
-      "part": "kmh_nq100",
-      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L2_k200_100.json",
+      "id": "kmh/nq10/hier_L2_k200_100",
+      "part": "kmh_nq10",
+      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L2_k200_100.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 100,
+      "n_query": 10,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -894,22 +779,22 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq100/hier_L2_k200_100/",
+      "dir_results": "results/campaign_kmh/nq10/hier_L2_k200_100/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_hier_nq100",
+          "table": "kmh_hier_nq10",
           "row": "L=2, k=[200,100]"
         }
       ],
-      "note": "KMH sweep @ n_query=100: hierarchy k=[200,100] (hierarchy axis, other knobs default)."
+      "note": "KMH sweep @ n_query=10: hierarchy k=[200,100] (hierarchy axis, other knobs default)."
     },
     {
-      "id": "kmh/nq100/hier_L2_matched",
-      "part": "kmh_nq100",
-      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L2_matched.json",
+      "id": "kmh/nq10/hier_L2_matched",
+      "part": "kmh_nq10",
+      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L2_matched.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 100,
+      "n_query": 10,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -917,22 +802,22 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq100/hier_L2_matched/",
+      "dir_results": "results/campaign_kmh/nq10/hier_L2_matched/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_hier_nq100",
-          "row": "L=2, k=[600,100] (budget-matched)"
+          "table": "kmh_hier_nq10",
+          "row": "L=2, k=[60,10] (budget-matched)"
         }
       ],
-      "note": "KMH sweep @ n_query=100: hierarchy k=[600,100] (hierarchy axis, other knobs default)."
+      "note": "KMH sweep @ n_query=10: hierarchy k=[60,10] (hierarchy axis, other knobs default)."
     },
     {
-      "id": "kmh/nq100/hier_L3_ref",
-      "part": "kmh_nq100",
-      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L3_ref.json",
+      "id": "kmh/nq10/hier_L3_ref",
+      "part": "kmh_nq10",
+      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L3_ref.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 100,
+      "n_query": 10,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -940,32 +825,27 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq100/hier_L3_ref/",
+      "dir_results": "results/campaign_kmh/nq10/hier_L3_ref/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_hier_nq100",
+          "table": "kmh_hier_nq10",
           "row": "L=3, k=[600,200,100] (reference)"
         },
         {
           "paper": "paper1",
-          "table": "kmh_hier_nq100",
-          "row": "L=3, k=[600,200,100] (budget-matched)"
-        },
-        {
-          "paper": "paper1",
-          "table": "kmh_knobs_nq100",
+          "table": "kmh_knobs_nq10",
           "row": "L=3, k=[600,200,100] (reference)"
         }
       ],
-      "note": "KMH sweep @ n_query=100: hierarchy k=[600,200,100] (hierarchy axis, other knobs default). Also serves as: kmh/nq100/hier_L3_matched."
+      "note": "KMH sweep @ n_query=10: hierarchy k=[600,200,100] (hierarchy axis, other knobs default)."
     },
     {
-      "id": "kmh/nq100/hier_L4_k800_600_200_100",
-      "part": "kmh_nq100",
-      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L4_k800_600_200_100.json",
+      "id": "kmh/nq10/hier_L3_matched",
+      "part": "kmh_nq10",
+      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L3_matched.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 100,
+      "n_query": 10,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -973,22 +853,50 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq100/hier_L4_k800_600_200_100/",
+      "dir_results": "results/campaign_kmh/nq10/hier_L3_matched/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_hier_nq100",
+          "table": "kmh_hier_nq10",
+          "row": "L=3, k=[60,20,10] (budget-matched)"
+        },
+        {
+          "paper": "paper1",
+          "table": "kmh_knobs_nq10",
+          "row": "L=3, k=[60,20,10] (budget-matched)"
+        }
+      ],
+      "note": "KMH sweep @ n_query=10: hierarchy k=[60,20,10] (hierarchy axis, other knobs default)."
+    },
+    {
+      "id": "kmh/nq10/hier_L4_k800_600_200_100",
+      "part": "kmh_nq10",
+      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L4_k800_600_200_100.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 10,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign_kmh/nq10/hier_L4_k800_600_200_100/",
+      "used_by": [
+        {
+          "paper": "paper1",
+          "table": "kmh_hier_nq10",
           "row": "L=4, k=[800,600,200,100]"
         }
       ],
-      "note": "KMH sweep @ n_query=100: hierarchy k=[800,600,200,100] (hierarchy axis, other knobs default)."
+      "note": "KMH sweep @ n_query=10: hierarchy k=[800,600,200,100] (hierarchy axis, other knobs default)."
     },
     {
-      "id": "kmh/nq100/hier_L3_ref__init_random",
-      "part": "kmh_nq100",
-      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L3_ref__init_random.json",
+      "id": "kmh/nq10/hier_L3_ref__init_random",
+      "part": "kmh_nq10",
+      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L3_ref__init_random.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 100,
+      "n_query": 10,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -996,22 +904,22 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq100/hier_L3_ref__init_random/",
+      "dir_results": "results/campaign_kmh/nq10/hier_L3_ref__init_random/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_knobs_nq100",
+          "table": "kmh_knobs_nq10",
           "row": "reference + init_method=random"
         }
       ],
-      "note": "KMH sweep @ n_query=100: hierarchy k=[600,200,100], knob init_method='random'."
+      "note": "KMH sweep @ n_query=10: hierarchy k=[600,200,100], knob init_method='random'."
     },
     {
-      "id": "kmh/nq100/hier_L3_ref__leaf_closest",
-      "part": "kmh_nq100",
-      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L3_ref__leaf_closest.json",
+      "id": "kmh/nq10/hier_L3_ref__leaf_closest",
+      "part": "kmh_nq10",
+      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L3_ref__leaf_closest.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 100,
+      "n_query": 10,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -1019,22 +927,22 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq100/hier_L3_ref__leaf_closest/",
+      "dir_results": "results/campaign_kmh/nq10/hier_L3_ref__leaf_closest/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_knobs_nq100",
+          "table": "kmh_knobs_nq10",
           "row": "reference + leaf_sampling=closest"
         }
       ],
-      "note": "KMH sweep @ n_query=100: hierarchy k=[600,200,100], knob leaf_sampling='closest'."
+      "note": "KMH sweep @ n_query=10: hierarchy k=[600,200,100], knob leaf_sampling='closest'."
     },
     {
-      "id": "kmh/nq100/hier_L3_ref__no_resampling",
-      "part": "kmh_nq100",
-      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L3_ref__no_resampling.json",
+      "id": "kmh/nq10/hier_L3_ref__no_resampling",
+      "part": "kmh_nq10",
+      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L3_ref__no_resampling.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 100,
+      "n_query": 10,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -1042,22 +950,22 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq100/hier_L3_ref__no_resampling/",
+      "dir_results": "results/campaign_kmh/nq10/hier_L3_ref__no_resampling/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_knobs_nq100",
+          "table": "kmh_knobs_nq10",
           "row": "reference + n_resamples=0"
         }
       ],
-      "note": "KMH sweep @ n_query=100: hierarchy k=[600,200,100], knob n_resamples=0."
+      "note": "KMH sweep @ n_query=10: hierarchy k=[600,200,100], knob n_resamples=0."
     },
     {
-      "id": "kmh/nq100/hier_L3_ref__resample_random",
-      "part": "kmh_nq100",
-      "params_json": "files_config/ablations/kmh_sweep/nq100/hier_L3_ref__resample_random.json",
+      "id": "kmh/nq10/hier_L3_ref__resample_random",
+      "part": "kmh_nq10",
+      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L3_ref__resample_random.json",
       "strategy_name": "RepresentationStrategy",
-      "n_query": 100,
+      "n_query": 10,
       "n_init_labeled": 100,
       "n_round": 8,
       "seeds": [
@@ -1065,15 +973,107 @@
         2,
         3
       ],
-      "dir_results": "results/campaign_kmh/nq100/hier_L3_ref__resample_random/",
+      "dir_results": "results/campaign_kmh/nq10/hier_L3_ref__resample_random/",
       "used_by": [
         {
           "paper": "paper1",
-          "table": "kmh_knobs_nq100",
+          "table": "kmh_knobs_nq10",
           "row": "reference + resample_strategy=random"
         }
       ],
-      "note": "KMH sweep @ n_query=100: hierarchy k=[600,200,100], knob resample_strategy='random'."
+      "note": "KMH sweep @ n_query=10: hierarchy k=[600,200,100], knob resample_strategy='random'."
+    },
+    {
+      "id": "kmh/nq10/hier_L3_matched__init_random",
+      "part": "kmh_nq10",
+      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L3_matched__init_random.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 10,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign_kmh/nq10/hier_L3_matched__init_random/",
+      "used_by": [
+        {
+          "paper": "paper1",
+          "table": "kmh_knobs_nq10",
+          "row": "budget-matched + init_method=random"
+        }
+      ],
+      "note": "KMH sweep @ n_query=10: hierarchy k=[60,20,10], knob init_method='random'."
+    },
+    {
+      "id": "kmh/nq10/hier_L3_matched__leaf_closest",
+      "part": "kmh_nq10",
+      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L3_matched__leaf_closest.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 10,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign_kmh/nq10/hier_L3_matched__leaf_closest/",
+      "used_by": [
+        {
+          "paper": "paper1",
+          "table": "kmh_knobs_nq10",
+          "row": "budget-matched + leaf_sampling=closest"
+        }
+      ],
+      "note": "KMH sweep @ n_query=10: hierarchy k=[60,20,10], knob leaf_sampling='closest'."
+    },
+    {
+      "id": "kmh/nq10/hier_L3_matched__no_resampling",
+      "part": "kmh_nq10",
+      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L3_matched__no_resampling.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 10,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign_kmh/nq10/hier_L3_matched__no_resampling/",
+      "used_by": [
+        {
+          "paper": "paper1",
+          "table": "kmh_knobs_nq10",
+          "row": "budget-matched + n_resamples=0"
+        }
+      ],
+      "note": "KMH sweep @ n_query=10: hierarchy k=[60,20,10], knob n_resamples=0."
+    },
+    {
+      "id": "kmh/nq10/hier_L3_matched__resample_random",
+      "part": "kmh_nq10",
+      "params_json": "files_config/ablations/kmh_sweep/nq10/hier_L3_matched__resample_random.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 10,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign_kmh/nq10/hier_L3_matched__resample_random/",
+      "used_by": [
+        {
+          "paper": "paper1",
+          "table": "kmh_knobs_nq10",
+          "row": "budget-matched + resample_strategy=random"
+        }
+      ],
+      "note": "KMH sweep @ n_query=10: hierarchy k=[60,20,10], knob resample_strategy='random'."
     }
   ],
   "aliases": [
@@ -1089,92 +1089,68 @@
     "paper1": {
       "tables": [
         {
-          "id": "kmh_hier_nq10",
+          "id": "kmh_hier_nq100",
           "kind": "ablation",
-          "title": "KMH sweep -- hierarchy axis, n_query=10",
+          "title": "KMH sweep -- hierarchy axis, n_query=100",
           "rows": [
             {
-              "label": "L=1, k=[10] (= n_query)",
-              "run": "kmh/nq10/hier_L1_k10"
-            },
-            {
               "label": "L=1, k=[100]",
-              "run": "kmh/nq10/hier_L1_k100"
+              "run": "kmh/nq100/hier_L1_k100"
             },
             {
               "label": "L=1, k=[200]",
-              "run": "kmh/nq10/hier_L1_k200"
+              "run": "kmh/nq100/hier_L1_k200"
             },
             {
               "label": "L=1, k=[600]",
-              "run": "kmh/nq10/hier_L1_k600"
+              "run": "kmh/nq100/hier_L1_k600"
             },
             {
               "label": "L=2, k=[200,100]",
-              "run": "kmh/nq10/hier_L2_k200_100"
+              "run": "kmh/nq100/hier_L2_k200_100"
             },
             {
-              "label": "L=2, k=[60,10] (budget-matched)",
-              "run": "kmh/nq10/hier_L2_matched"
+              "label": "L=2, k=[600,100] (budget-matched)",
+              "run": "kmh/nq100/hier_L2_matched"
             },
             {
               "label": "L=3, k=[600,200,100] (reference)",
-              "run": "kmh/nq10/hier_L3_ref"
+              "run": "kmh/nq100/hier_L3_ref"
             },
             {
-              "label": "L=3, k=[60,20,10] (budget-matched)",
-              "run": "kmh/nq10/hier_L3_matched"
+              "label": "L=3, k=[600,200,100] (budget-matched)",
+              "run": "kmh/nq100/hier_L3_matched"
             },
             {
               "label": "L=4, k=[800,600,200,100]",
-              "run": "kmh/nq10/hier_L4_k800_600_200_100"
+              "run": "kmh/nq100/hier_L4_k800_600_200_100"
             }
           ]
         },
         {
-          "id": "kmh_knobs_nq10",
+          "id": "kmh_knobs_nq100",
           "kind": "ablation",
-          "title": "KMH sweep -- knob axis, n_query=10",
+          "title": "KMH sweep -- knob axis, n_query=100",
           "rows": [
             {
               "label": "L=3, k=[600,200,100] (reference)",
-              "run": "kmh/nq10/hier_L3_ref"
+              "run": "kmh/nq100/hier_L3_ref"
             },
             {
               "label": "reference + init_method=random",
-              "run": "kmh/nq10/hier_L3_ref__init_random"
+              "run": "kmh/nq100/hier_L3_ref__init_random"
             },
             {
               "label": "reference + leaf_sampling=closest",
-              "run": "kmh/nq10/hier_L3_ref__leaf_closest"
+              "run": "kmh/nq100/hier_L3_ref__leaf_closest"
             },
             {
               "label": "reference + n_resamples=0",
-              "run": "kmh/nq10/hier_L3_ref__no_resampling"
+              "run": "kmh/nq100/hier_L3_ref__no_resampling"
             },
             {
               "label": "reference + resample_strategy=random",
-              "run": "kmh/nq10/hier_L3_ref__resample_random"
-            },
-            {
-              "label": "L=3, k=[60,20,10] (budget-matched)",
-              "run": "kmh/nq10/hier_L3_matched"
-            },
-            {
-              "label": "budget-matched + init_method=random",
-              "run": "kmh/nq10/hier_L3_matched__init_random"
-            },
-            {
-              "label": "budget-matched + leaf_sampling=closest",
-              "run": "kmh/nq10/hier_L3_matched__leaf_closest"
-            },
-            {
-              "label": "budget-matched + n_resamples=0",
-              "run": "kmh/nq10/hier_L3_matched__no_resampling"
-            },
-            {
-              "label": "budget-matched + resample_strategy=random",
-              "run": "kmh/nq10/hier_L3_matched__resample_random"
+              "run": "kmh/nq100/hier_L3_ref__resample_random"
             }
           ]
         },
@@ -1269,68 +1245,92 @@
           ]
         },
         {
-          "id": "kmh_hier_nq100",
+          "id": "kmh_hier_nq10",
           "kind": "ablation",
-          "title": "KMH sweep -- hierarchy axis, n_query=100",
+          "title": "KMH sweep -- hierarchy axis, n_query=10",
           "rows": [
             {
+              "label": "L=1, k=[10] (= n_query)",
+              "run": "kmh/nq10/hier_L1_k10"
+            },
+            {
               "label": "L=1, k=[100]",
-              "run": "kmh/nq100/hier_L1_k100"
+              "run": "kmh/nq10/hier_L1_k100"
             },
             {
               "label": "L=1, k=[200]",
-              "run": "kmh/nq100/hier_L1_k200"
+              "run": "kmh/nq10/hier_L1_k200"
             },
             {
               "label": "L=1, k=[600]",
-              "run": "kmh/nq100/hier_L1_k600"
+              "run": "kmh/nq10/hier_L1_k600"
             },
             {
               "label": "L=2, k=[200,100]",
-              "run": "kmh/nq100/hier_L2_k200_100"
+              "run": "kmh/nq10/hier_L2_k200_100"
             },
             {
-              "label": "L=2, k=[600,100] (budget-matched)",
-              "run": "kmh/nq100/hier_L2_matched"
+              "label": "L=2, k=[60,10] (budget-matched)",
+              "run": "kmh/nq10/hier_L2_matched"
             },
             {
               "label": "L=3, k=[600,200,100] (reference)",
-              "run": "kmh/nq100/hier_L3_ref"
+              "run": "kmh/nq10/hier_L3_ref"
             },
             {
-              "label": "L=3, k=[600,200,100] (budget-matched)",
-              "run": "kmh/nq100/hier_L3_matched"
+              "label": "L=3, k=[60,20,10] (budget-matched)",
+              "run": "kmh/nq10/hier_L3_matched"
             },
             {
               "label": "L=4, k=[800,600,200,100]",
-              "run": "kmh/nq100/hier_L4_k800_600_200_100"
+              "run": "kmh/nq10/hier_L4_k800_600_200_100"
             }
           ]
         },
         {
-          "id": "kmh_knobs_nq100",
+          "id": "kmh_knobs_nq10",
           "kind": "ablation",
-          "title": "KMH sweep -- knob axis, n_query=100",
+          "title": "KMH sweep -- knob axis, n_query=10",
           "rows": [
             {
               "label": "L=3, k=[600,200,100] (reference)",
-              "run": "kmh/nq100/hier_L3_ref"
+              "run": "kmh/nq10/hier_L3_ref"
             },
             {
               "label": "reference + init_method=random",
-              "run": "kmh/nq100/hier_L3_ref__init_random"
+              "run": "kmh/nq10/hier_L3_ref__init_random"
             },
             {
               "label": "reference + leaf_sampling=closest",
-              "run": "kmh/nq100/hier_L3_ref__leaf_closest"
+              "run": "kmh/nq10/hier_L3_ref__leaf_closest"
             },
             {
               "label": "reference + n_resamples=0",
-              "run": "kmh/nq100/hier_L3_ref__no_resampling"
+              "run": "kmh/nq10/hier_L3_ref__no_resampling"
             },
             {
               "label": "reference + resample_strategy=random",
-              "run": "kmh/nq100/hier_L3_ref__resample_random"
+              "run": "kmh/nq10/hier_L3_ref__resample_random"
+            },
+            {
+              "label": "L=3, k=[60,20,10] (budget-matched)",
+              "run": "kmh/nq10/hier_L3_matched"
+            },
+            {
+              "label": "budget-matched + init_method=random",
+              "run": "kmh/nq10/hier_L3_matched__init_random"
+            },
+            {
+              "label": "budget-matched + leaf_sampling=closest",
+              "run": "kmh/nq10/hier_L3_matched__leaf_closest"
+            },
+            {
+              "label": "budget-matched + n_resamples=0",
+              "run": "kmh/nq10/hier_L3_matched__no_resampling"
+            },
+            {
+              "label": "budget-matched + resample_strategy=random",
+              "run": "kmh/nq10/hier_L3_matched__resample_random"
             }
           ]
         }
