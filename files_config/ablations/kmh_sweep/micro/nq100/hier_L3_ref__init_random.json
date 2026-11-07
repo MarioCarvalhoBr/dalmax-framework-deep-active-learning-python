@@ -1,0 +1,43 @@
+{
+    "_comment": "Micro (CPU smoke) mirror (clusters / 10, min 2) of the full-scale config of the same name: n_query=100, hierarchy k=[60,20,10] sample_sizes=[3,2,2], knob init_method='random' (default elsewhere).",
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_micro/",
+        "n_epoch": 1,
+        "n_drop": 10,
+        "n_classes": 5,
+        "train_args": {
+            "batch_size": 16,
+            "num_workers": 0
+        },
+        "test_args": {
+            "batch_size": 16,
+            "num_workers": 0
+        },
+        "optimizer_args": {
+            "lr": 0.05,
+            "momentum": 0.3
+        },
+        "embedding": {
+            "extractor": "resnet_imagenet",
+            "q": null,
+            "variant": "full"
+        },
+        "selection": {
+            "method": "hierarchical",
+            "hierarchy": {
+                "n_clusters": [
+                    60,
+                    20,
+                    10
+                ],
+                "n_levels": 3,
+                "sample_sizes": [
+                    3,
+                    2,
+                    2
+                ],
+                "init_method": "random"
+            }
+        }
+    }
+}

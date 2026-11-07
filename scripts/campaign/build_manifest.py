@@ -1,4 +1,5 @@
-"""Generate `files_config/campaign/manifest.json`, `manifest_micro.json` and `manifest_control_ki43.json`.
+"""Generate `files_config/campaign/manifest.json`, `manifest_micro.json`, `manifest_control_ki43.json`
+and the KMH sweep manifests `manifest_kmh_sweep.json` / `manifest_kmh_sweep_micro.json`.
 
 The manifests are committed artifacts (single source of truth, see
 `.specs/experiments/campaign.md`); this script is how they are produced,
@@ -23,6 +24,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 from dalmax.campaign import Alias, derive_used_by  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import build_kmh_sweep_configs as sweep  # noqa: E402
 
 SEEDS = [1, 2, 3]
 # Paper 1: the 12 classical strategies (no RNHAL/TexHAL -- those belong to papers 3/2).
@@ -344,10 +348,104 @@ def build_control_ki43() -> dict[str, Any]:
     }
 
 
+def build_kmh_sweep(scale: Scale) -> dict[str, Any]:
+    """Paper-1 KMH parameter sweep (stage 1): hierarchy axis + knob axis at nq {10, 50, 100}.
+
+    One group per grid point (`kmh/nq{N}/<config>`, part `kmh_nq{N}`), each in its own results
+    directory (every group shares strategy/NQ/NIL/NR, so a shared directory would make the leaf glob
+    ambiguous). At nq100 the budget-matched L3 shape IS the reference: `kmh/nq100/hier_L3_matched` is an
+    alias of `kmh/nq100/hier_L3_ref` (and `hier_L1_k{nq}` is `hier_L1_k100`, so it is not listed).
+    Results go to a NEW root (`<campaign root>_kmh`); the reference is re-run inside it so every
+    comparison is within one runtime image (KI-43).
+    """
+    root = f"{scale.results_root}_kmh"
+    params_dir = f"files_config/ablations/kmh_sweep/{scale.abl_subdir}"
+    by_name = {h.name: h for h in sweep.HIERARCHIES}
+    groups: list[dict[str, Any]] = []
+    aliases: list[dict[str, Any]] = []
+    tables: list[dict[str, Any]] = []
+
+    def gid(paper_nq: int, name: str) -> str:
+        return f"kmh/nq{paper_nq}/{name}"
+
+    for paper_nq in sweep.BUDGETS:
+        nq = scale.nq_by_paper_nq[paper_nq]
+        part = f"kmh_nq{paper_nq}"
+        for name, h, knob in sweep.grid(paper_nq):
+            clusters = sweep.clusters_for(h, paper_nq)
+            note = (f"KMH sweep @ n_query={paper_nq}: hierarchy k={sweep._fmt(clusters)}"
+                    + (f", knob {knob[1]}={knob[2]!r}." if knob else " (hierarchy axis, other knobs default)."))
+            groups.append({
+                "id": gid(paper_nq, name), "part": part,
+                "params_json": f"{params_dir}nq{paper_nq}/{name}.json",
+                "strategy_name": "RepresentationStrategy", "n_query": nq,
+                "n_init_labeled": scale.n_init, "n_round": scale.n_round, "seeds": list(SEEDS),
+                "dir_results": f"{root}/nq{paper_nq}/{name}/", "used_by": [], "note": note,
+            })
+        ref_id = gid(paper_nq, "hier_L3_ref")
+        if paper_nq == sweep.REFERENCE_NQ:
+            aliases.append({
+                "id": gid(paper_nq, "hier_L3_matched"), "canonical": ref_id,
+                "params_json": f"{params_dir}nq{paper_nq}/hier_L3_ref.json",
+                "strategy_name": "RepresentationStrategy",
+                "reason": "At n_query=100 the budget-matched L=3 hierarchy [6nq,2nq,nq] = [600,200,100] IS the "
+                          "reference hierarchy: one run.",
+            })
+            for g in groups:
+                if g["id"] == ref_id:
+                    g["note"] += f" Also serves as: {gid(paper_nq, 'hier_L3_matched')}."
+
+        def row(label: str, run: str) -> dict[str, str]:
+            return {"label": label, "run": run}
+
+        def label(h: sweep.Hierarchy, budget: int) -> str:
+            return h.label.format(k=sweep._fmt(sweep.clusters_for(h, budget)))
+
+        tables.append({
+            "id": f"kmh_hier_nq{paper_nq}", "kind": "ablation",
+            "title": f"KMH sweep -- hierarchy axis, n_query={paper_nq}",
+            "rows": [row(label(h, paper_nq), gid(paper_nq, sweep.config_name(h, paper_nq)))
+                     for h in sweep.hierarchies_for(paper_nq)],
+        })
+        knob_rows: list[dict[str, str]] = []
+        for hname in sweep.KNOB_HIERARCHIES:
+            h = by_name[hname]
+            if sweep.is_alias_of_reference(h, paper_nq):
+                continue
+            tag = "reference" if h.kind == "reference" else "budget-matched"
+            knob_rows.append(row(label(h, paper_nq), gid(paper_nq, hname)))
+            knob_rows += [row(f"{tag} + {key}={value}", gid(paper_nq, f"{hname}__{suffix}"))
+                          for suffix, key, value in sweep.KNOBS]
+        tables.append({
+            "id": f"kmh_knobs_nq{paper_nq}", "kind": "ablation",
+            "title": f"KMH sweep -- knob axis, n_query={paper_nq}", "rows": knob_rows,
+        })
+
+    all_tables = {"paper1": {"tables": tables}}
+    used = derive_used_by(all_tables, {a["id"]: Alias(a["id"], a["canonical"], a["params_json"],
+                                                      a["strategy_name"], a["reason"]) for a in aliases})
+    for g in groups:
+        g["used_by"] = used.get(g["id"], [])
+    return {
+        "name": f"{scale.name}_kmh_sweep",
+        "description": "Paper-1 KMH parameter sweep, stage 1 (.specs/experiments/campaign.md, 'KMH parameter "
+                       "sweep'). Generated by scripts/campaign/build_manifest.py -- do not edit by hand.",
+        "dataset_name": "DANINHAS",
+        "results_root": root,
+        "seeds": SEEDS,
+        "primary_nq": scale.nq_by_paper_nq[100],
+        "groups": groups,
+        "aliases": aliases,
+        "tables": all_tables,
+    }
+
+
 TARGETS = {
     "files_config/campaign/manifest.json": lambda: build(FULL),
     "files_config/campaign/manifest_micro.json": lambda: build(MICRO),
     "files_config/campaign/manifest_control_ki43.json": build_control_ki43,
+    "files_config/campaign/manifest_kmh_sweep.json": lambda: build_kmh_sweep(FULL),
+    "files_config/campaign/manifest_kmh_sweep_micro.json": lambda: build_kmh_sweep(MICRO),
 }
 
 

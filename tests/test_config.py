@@ -484,3 +484,103 @@ def test_experiment_config_still_rejects_non_positive_n_query():
 def test_load_experiment_config_allows_n_round_zero():
     config = _load(PARAMS_GPU_0, "CIFAR10", n_round=0)
     assert config.n_round == 0
+
+
+# --- optional hierarchy knobs (2026-11-07) -------------------------------------
+
+
+def _hierarchy_payload(**knobs) -> dict:
+    return {
+        "DANINHAS": {
+            "data_dir": "DATA/daninhas_full/",
+            "n_epoch": 10,
+            "n_drop": 10,
+            "n_classes": 5,
+            "train_args": {"batch_size": 256, "num_workers": 4},
+            "test_args": {"batch_size": 256, "num_workers": 4},
+            "optimizer_args": {"lr": 0.05, "momentum": 0.3},
+            "selection": {
+                "method": "hierarchical",
+                "hierarchy": {
+                    "n_clusters": [600, 200, 100],
+                    "n_levels": 3,
+                    "sample_sizes": [30, 15, 2],
+                    **knobs,
+                },
+            },
+        }
+    }
+
+
+def _load_hierarchy(tmp_path, **knobs) -> HierarchyConfig:
+    params_path = tmp_path / "params.json"
+    params_path.write_text(json.dumps(_hierarchy_payload(**knobs)))
+    hierarchy = _load(params_path, "DANINHAS").dataset.selection.hierarchy
+    assert hierarchy is not None
+    return hierarchy
+
+
+def test_hierarchy_knobs_are_read_from_params_json(tmp_path):
+    hierarchy = _load_hierarchy(
+        tmp_path,
+        n_resamples=0,
+        init_method="random",
+        resample_strategy="random",
+        leaf_sampling="closest",
+    )
+    assert hierarchy.n_resamples == 0
+    assert hierarchy.init_method == "random"
+    assert hierarchy.resample_strategy == "random"
+    assert hierarchy.leaf_sampling == "closest"
+
+
+def test_hierarchy_knobs_default_when_absent(tmp_path):
+    hierarchy = _load_hierarchy(tmp_path)
+    assert hierarchy.n_resamples == 10
+    assert hierarchy.init_method == "kmeans++"
+    assert hierarchy.resample_strategy == "closest"
+    assert hierarchy.leaf_sampling == "random"
+
+
+def test_legacy_config_kmh_gets_knob_defaults():
+    hierarchy = _load(PARAMS_GPU_0, "DANINHAS").dataset.selection.hierarchy
+    assert hierarchy is not None
+    assert (hierarchy.n_resamples, hierarchy.init_method) == (10, "kmeans++")
+    assert (hierarchy.resample_strategy, hierarchy.leaf_sampling) == ("closest", "random")
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("init_method", "k-means"),
+        ("resample_strategy", "farthest"),
+        ("leaf_sampling", "r"),
+        ("n_resamples", -1),
+        ("n_resamples", "ten"),
+        ("n_resamples", 2.5),
+    ],
+)
+def test_hierarchy_invalid_knob_raises_config_error_naming_key(tmp_path, key, value):
+    params_path = tmp_path / "params.json"
+    params_path.write_text(json.dumps(_hierarchy_payload(**{key: value})))
+    with pytest.raises(ConfigError, match=key):
+        _load(params_path, "DANINHAS")
+
+
+def test_hierarchy_invalid_choice_lists_valid_values():
+    with pytest.raises(ConfigError, match="kmeans\\+\\+"):
+        HierarchyConfig(n_clusters=(5,), n_levels=1, sample_sizes=(2,), init_method="x")
+
+
+def test_to_dict_round_trips_hierarchy_knobs(tmp_path):
+    knobs = {
+        "n_resamples": 3,
+        "init_method": "random",
+        "resample_strategy": "random",
+        "leaf_sampling": "closest",
+    }
+    params_path = tmp_path / "params.json"
+    params_path.write_text(json.dumps(_hierarchy_payload(**knobs)))
+    as_dict = json.loads(json.dumps(to_dict(_load(params_path, "DANINHAS"))))
+    hierarchy = as_dict["dataset"]["selection"]["hierarchy"]
+    assert {k: hierarchy[k] for k in knobs} == knobs

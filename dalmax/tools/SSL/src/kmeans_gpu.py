@@ -9,7 +9,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from .utils import create_clusters_from_cluster_assignment
+from .utils import create_clusters_from_cluster_assignment, to_object_array
 from sklearn.utils import check_random_state
 
 
@@ -447,4 +447,4 @@ def sort_cluster_by_distance(
             del point_feats
         else:
             sorted_clusters.append(np.array([]).astype(int))
-    return np.array(sorted_clusters, dtype=object)
+    return to_object_array(sorted_clusters)  # DalMax fix (KI-30): equal-size clusters

@@ -65,17 +65,39 @@ class OptimizerArgs:
             raise ConfigError(f"OptimizerArgs.momentum must be >= 0, got {self.momentum}")
 
 
+HIERARCHY_CHOICES: dict[str, tuple[str, ...]] = {
+    "init_method": ("kmeans++", "random"),
+    "resample_strategy": ("closest", "random"),
+    "leaf_sampling": ("random", "closest"),
+}
+
+
 @dataclass(frozen=True)
 class HierarchyConfig:
     """Hierarchical k-means configuration (formerly ``config_kmh``).
 
     ``n_clusters[i]`` and ``sample_sizes[i]`` describe level ``i`` of the
     hierarchy; both sequences must have exactly ``n_levels`` entries.
+
+    Optional knobs (2026-11-07; defaults reproduce the previous hard-wired behaviour):
+
+    - ``n_resamples``: centroid-refinement resampling iterations per level
+      (int >= 0; ``0`` disables resampling).
+    - ``init_method``: k-means centroid initialisation, ``"kmeans++"`` or ``"random"``.
+    - ``resample_strategy``: how points are drawn from each cluster during
+      resampling, ``"closest"`` (to the centroid) or ``"random"``.
+    - ``leaf_sampling``: how the final selection picks points inside a leaf
+      cluster, ``"random"`` or ``"closest"`` (to the centroid); maps to the vendored
+      ``sampling_strategy`` ``"r"`` / ``"c"``.
     """
 
     n_clusters: tuple[int, ...]
     n_levels: int
     sample_sizes: tuple[int, ...]
+    n_resamples: int = 10
+    init_method: str = "kmeans++"
+    resample_strategy: str = "closest"
+    leaf_sampling: str = "random"
 
     def __post_init__(self) -> None:
         if self.n_levels <= 0:
@@ -98,6 +120,16 @@ class HierarchyConfig:
             raise ConfigError(
                 f"HierarchyConfig.sample_sizes must all be > 0, got {self.sample_sizes}"
             )
+        if isinstance(self.n_resamples, bool) or self.n_resamples < 0:
+            raise ConfigError(
+                f"HierarchyConfig.n_resamples must be an int >= 0, got {self.n_resamples!r}"
+            )
+        for name, valid in HIERARCHY_CHOICES.items():
+            value = getattr(self, name)
+            if value not in valid:
+                raise ConfigError(
+                    f"HierarchyConfig.{name} must be one of {list(valid)}, got {value!r}"
+                )
 
 
 @dataclass(frozen=True)

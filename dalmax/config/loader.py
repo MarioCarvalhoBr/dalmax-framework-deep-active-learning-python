@@ -76,12 +76,28 @@ def _build_optimizer_args(d: dict[str, Any], context: str) -> OptimizerArgs:
     return OptimizerArgs(lr=float(d["lr"]), momentum=float(d["momentum"]))
 
 
+_HIERARCHY_DEFAULTS = HierarchyConfig(n_clusters=(1,), n_levels=1, sample_sizes=(1,))
+
+
+def _as_int(value: Any, key: str) -> int:
+    """Parse an int-valued key, raising ConfigError (naming the key) on garbage."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or int(value) != value:
+        raise ConfigError(f"{key} must be an integer, got {value!r}")
+    return int(value)
+
+
 def _build_hierarchy_config(d: dict[str, Any], context: str) -> HierarchyConfig:
     _require_keys(d, _REQUIRED_HIERARCHY_KEYS, context)
     return HierarchyConfig(
         n_clusters=tuple(int(n) for n in d["n_clusters"]),
         n_levels=int(d["n_levels"]),
         sample_sizes=tuple(int(n) for n in d["sample_sizes"]),
+        n_resamples=_HIERARCHY_DEFAULTS.n_resamples
+        if "n_resamples" not in d
+        else _as_int(d["n_resamples"], f"{context}.n_resamples"),
+        init_method=d.get("init_method", _HIERARCHY_DEFAULTS.init_method),
+        resample_strategy=d.get("resample_strategy", _HIERARCHY_DEFAULTS.resample_strategy),
+        leaf_sampling=d.get("leaf_sampling", _HIERARCHY_DEFAULTS.leaf_sampling),
     )
 
 

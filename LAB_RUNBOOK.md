@@ -59,6 +59,9 @@ the same `results/campaign/` tree; groups never overlap between the two commands
   two adversarial baselines (`AdversarialBIM`, `AdversarialDeepFool`; far too slow on CPU) -- 64 of the
   70 micro jobs; the real campaign runs them.
 - Wall-clock: TBD (unmeasured). Record it here with the `<gpu-name>` after the first full run.
+- **KMH parameter sweep** (paper 1, ADR 0012; 135 runs, results in `results/campaign_kmh/`): same commands with
+  `MANIFEST=files_config/campaign/manifest_kmh_sweep.json` and `PART=kmh_nq100|kmh_nq50|kmh_nq10`; see
+  `COLAB_RUNBOOK.md` section 6b.
 
 ## 0. Prerequisites & one-time setup
 

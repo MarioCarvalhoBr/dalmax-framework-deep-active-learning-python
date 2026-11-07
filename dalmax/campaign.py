@@ -12,7 +12,7 @@ computation). Nothing runs twice.
 CLI (`python -m dalmax.campaign <cmd>`):
 
 - `list`: print the job table (counts per part and in total).
-- `run --part {paper1,upper_bound,rnhal,texhal,texhal_q17,all}[,...] [--micro] [--dry-run]
+- `run --part {paper1,upper_bound,rnhal,texhal,texhal_q17,control,kmh_nq10,kmh_nq50,kmh_nq100,all}[,...] [--micro] [--dry-run]
   [--skip-existing|--no-skip-existing] [--device cuda]`: execute the jobs
   sequentially through `tools/trainer.py` (subprocess), logging to
   `<results_root>/campaign.log` and `<results_root>/failures.log`, continuing
@@ -65,7 +65,8 @@ TRAINER_SCRIPT = "tools/trainer.py"
 # Layout/ownership rule: a run group lives under the FIRST paper that consumes
 # it (paper 1 < 2 < 3) and its `used_by` lists every consumer; e.g. paper 1's
 # `KMH@100` is also the "w/o representation module" row of papers 2 and 3.
-PARTS: tuple[str, ...] = ("paper1", "upper_bound", "rnhal", "texhal", "texhal_q17", "control")
+PARTS: tuple[str, ...] = ("paper1", "upper_bound", "rnhal", "texhal", "texhal_q17", "control",
+                          "kmh_nq10", "kmh_nq50", "kmh_nq100")
 
 # Execution phases (see module docstring). Index = order of execution.
 PHASE_LABELS: tuple[str, ...] = (
@@ -76,6 +77,9 @@ PHASE_LABELS: tuple[str, ...] = (
     "paper1_other_nq",
     "upper_bound",
     "control",
+    "kmh_nq10",
+    "kmh_nq50",
+    "kmh_nq100",
 )
 
 
@@ -442,7 +446,8 @@ def phase_index(group: RunGroup, primary_nq: int) -> int:
     the manifest's paper-1 primary budget (the one papers 2/3 compare against)."""
     if group.part == "paper1":
         return 0 if group.n_query == primary_nq else 4
-    return {"rnhal": 1, "texhal": 2, "texhal_q17": 3, "upper_bound": 5, "control": 6}[group.part]
+    return {"rnhal": 1, "texhal": 2, "texhal_q17": 3, "upper_bound": 5, "control": 6,
+            "kmh_nq10": 7, "kmh_nq50": 8, "kmh_nq100": 9}[group.part]
 
 
 def parse_parts(spec: str) -> tuple[str, ...]:
@@ -775,7 +780,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     def common(p: argparse.ArgumentParser) -> None:
         p.add_argument("--manifest", default=None, help=f"manifest path (default {DEFAULT_MANIFEST})")
         p.add_argument("--micro", action="store_true", help=f"use {DEFAULT_MICRO_MANIFEST} (CPU smoke)")
-        p.add_argument("--part", default="all", help="paper1,upper_bound,rnhal,texhal,texhal_q17,control (comma-separated) or all")
+        p.add_argument("--part", default="all", help="paper1,upper_bound,rnhal,texhal,texhal_q17,control,kmh_nq10,kmh_nq50,kmh_nq100 (comma-separated) or all")
         p.add_argument("--seeds", default=None, help="comma-separated subset of the seeds (smoke); default all")
         p.add_argument(
             "--exclude-strategy", default=None,

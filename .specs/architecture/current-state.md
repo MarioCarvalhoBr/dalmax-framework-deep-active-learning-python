@@ -143,6 +143,16 @@ gap in the params files, not a code gap).
 result is wrapped into `dalmax/tools/SSL/src/clusters.py::HierarchicalCluster.from_dict` then walked
 by `dalmax/tools/SSL/src/hierarchical_sampling.py::hierarchical_sampling`.
 
+**Hierarchy knobs (2026-11-07).** `HierarchyConfig` (`dalmax/config/schema.py`) gained four optional
+fields, read by `_build_hierarchy_config` (the legacy `config_kmh` path included) and by
+`HierarchicalKMeansSelection`: `n_resamples` (int >= 0, default `10`; `0` disables resampling),
+`init_method` (`"kmeans++"` | `"random"`, default `"kmeans++"`), `resample_strategy`
+(`"closest"` | `"random"`, default `"closest"`), `leaf_sampling` (`"random"` | `"closest"`, default
+`"random"`; maps to the vendored `sampling_strategy` `"r"`/`"c"`; for `"closest"` the wrapper sorts the
+leaf clusters by distance to their centroid first). The defaults reproduce the previous behaviour
+exactly (golden fixtures unchanged); invalid values raise `ConfigError` naming the key. They are
+snapshotted in `run_metadata.json` via `to_dict`.
+
 ## 5. Historical coupling points (fixed in Phase 2, files since deleted in Phase 4)
 
 The pre-refactor `demo.py` (historical)/`utils/orchestrator.py`/`utils/data.py` design had several confirmed

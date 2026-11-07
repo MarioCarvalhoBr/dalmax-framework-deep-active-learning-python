@@ -245,3 +245,34 @@ def test_build_strategy_rejects_unknown_name():
     config = _config("RandomSampling")
     with pytest.raises(KeyError):
         build_strategy("__nope__", dataset, net, config, logger=None, rng=np.random.default_rng(0))
+
+
+def test_build_strategy_forwards_hierarchy_knobs_to_selection():
+    import dataclasses
+
+    from dalmax.config.schema import HierarchyConfig
+
+    dataset, net = _dataset_and_net()
+    config = _config("SSRAEKmeansHCSampling")
+    base = config.dataset.selection.hierarchy
+    hierarchy = HierarchyConfig(
+        n_clusters=base.n_clusters,
+        n_levels=base.n_levels,
+        sample_sizes=base.sample_sizes,
+        n_resamples=0,
+        init_method="random",
+        resample_strategy="random",
+        leaf_sampling="closest",
+    )
+    selection_cfg = dataclasses.replace(config.dataset.selection, hierarchy=hierarchy)
+    config = dataclasses.replace(
+        config, dataset=dataclasses.replace(config.dataset, selection=selection_cfg)
+    )
+    strategy = build_strategy(
+        "SSRAEKmeansHCSampling", dataset, net, config, logger=None, rng=np.random.default_rng(0)
+    )
+    assert isinstance(strategy.selection, HierarchicalKMeansSelection)
+    assert strategy.selection.n_resamples == 0
+    assert strategy.selection.init_method == "random"
+    assert strategy.selection.resample_strategy == "random"
+    assert strategy.selection.leaf_sampling == "closest"

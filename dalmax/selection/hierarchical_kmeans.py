@@ -10,9 +10,9 @@ couplings (`.specs/architecture/target-architecture.md` §6):
 - no hardcoded `device="cuda"` — the device is an explicit constructor
   argument.
 
-## Vendored pipeline, unmodified
+## Vendored pipeline
 
-This wraps, without editing:
+This wraps (the only edit to the vendored tree is the KI-30 fix below):
 - `dalmax.tools.SSL.src.hierarchical_kmeans_gpu.hierarchical_kmeans_with_resampling`
 - `dalmax.tools.SSL.src.clusters.HierarchicalCluster.from_dict`
 - `dalmax.tools.SSL.src.hierarchical_sampling.hierarchical_sampling`
@@ -36,21 +36,19 @@ run on CPU unconditionally (no `skipif`/`gpu` marker needed for the
 "does it run" property); a real `device="cuda"` run is exercised only when
 CUDA is actually available (see `tests/test_selection_hierarchical.py`).
 
-## A separate, data-dependent vendored quirk (documented, not fixed here)
+## Equal-size clusters (KI-30, fixed 2026-11-07)
 
-`dalmax.tools.SSL.src.utils.create_clusters_from_cluster_assignment` builds
-`np.array(clusters, dtype=object)` from a Python list of per-cluster index
-arrays (`dalmax/tools/SSL/src/utils.py:28`). When every cluster happens to
-have **exactly** the same size, NumPy interprets that list of equal-length
-arrays as a regular 2-D array and casts it to `dtype=object` element-wise,
-so each "cluster" row silently becomes an object array of Python ints
-instead of an int64 array — `torch.cdist`/tensor indexing on it then raises
-`TypeError: can't convert np.ndarray of type numpy.object_ ...`. This is a
-pre-existing bug in the vendored code, independent of device (CPU or GPU),
-triggered only by perfectly balanced cluster sizes; real embeddings
-essentially never produce perfectly balanced k-means clusters, so it is not
-worked around here, only documented and avoided in this module's own test
-fixtures (which use imbalanced synthetic clusters).
+`dalmax.tools.SSL.src.utils.create_clusters_from_cluster_assignment` used to
+build `np.array(clusters, dtype=object)` from a list of per-cluster index
+arrays; when every cluster had exactly the same size NumPy produced a 2-D
+object array and `torch.cdist`/tensor indexing raised
+`TypeError: can't convert np.ndarray of type numpy.object_ ...`. The KMH sweep's
+budget-matched hierarchies (small cluster counts at the upper levels) made the
+case likely, so the vendored builder was fixed at the source:
+`dalmax/tools/SSL/src/utils.py::to_object_array` pre-allocates the 1-D object
+array and replaces the four `np.array(..., dtype=object)` sites (each marked
+`DalMax fix (KI-30)`). Regression test:
+`tests/test_selection_hierarchical.py::test_perfectly_balanced_clusters_do_not_crash`.
 
 ## `sample_sizes` semantics (resolves the `ablation-study.md` §6.2 TBD)
 
@@ -88,6 +86,24 @@ consistent with the two params files on disk) is to scale
 fixed `ratio` taken from an existing run, such as
 `files_config/benchmark/params_df_gpu_0.json`'s `30/600 = 0.05`), not with `n_query`.
 
+## Optional knobs (2026-11-07)
+
+The `hierarchy` object/dict may also carry four optional keys (defaults reproduce the
+previous hard-wired behaviour exactly):
+
+- `n_resamples` (int >= 0, default 10): resampling iterations per level; 0 = no resampling.
+- `init_method` (`"kmeans++"` | `"random"`, default `"kmeans++"`): k-means centroid init.
+- `resample_strategy` (`"closest"` | `"random"`, default `"closest"`): how points are drawn
+  from each cluster during resampling.
+- `leaf_sampling` (`"random"` | `"closest"`, default `"random"`): how the final selection
+  picks points inside a leaf cluster (vendored `sampling_strategy` `"r"` / `"c"`).
+
+The vendored `"c"` branch takes `current_cluster[:k]` and assumes leaf clusters are sorted by
+increasing distance to their centroid, but `hierarchical_kmeans_with_resampling` returns them
+unsorted. This wrapper therefore sorts the level-1 (leaf) clusters by distance to the level-1
+centroids (stable sort, so deterministic) before `HierarchicalCluster.from_dict`, only when
+`leaf_sampling == "closest"`; the vendored code is untouched.
+
 ## RNG isolation
 
 `hierarchical_sampling`'s core randomness (`find_subcluster_target_size`,
@@ -121,6 +137,19 @@ from dalmax.tools.SSL.src import hierarchical_sampling as hs
 from dalmax.tools.SSL.src.clusters import HierarchicalCluster
 
 _MAX_SEED = 2**32 - 1
+
+
+_KNOB_DEFAULTS: dict[str, Any] = {
+    "n_resamples": 10,
+    "init_method": "kmeans++",
+    "resample_strategy": "closest",
+    "leaf_sampling": "random",
+}
+_VALID_CHOICES: dict[str, tuple[str, ...]] = {
+    "init_method": ("kmeans++", "random"),
+    "resample_strategy": ("closest", "random"),
+    "leaf_sampling": ("random", "closest"),
+}
 
 
 def _read_hierarchy(hierarchy: Any) -> tuple[list[int], int, list[int]]:
@@ -166,6 +195,44 @@ def _read_hierarchy(hierarchy: Any) -> tuple[list[int], int, list[int]]:
     return n_clusters, n_levels, sample_sizes
 
 
+def _read_knobs(hierarchy: Any) -> dict[str, Any]:
+    """Read the optional knobs (`n_resamples`, `init_method`, `resample_strategy`,
+    `leaf_sampling`) from a dict or duck-typed object; absent keys take the defaults.
+    Invalid values raise `ValueError` naming the key and the valid values.
+    """
+    knobs: dict[str, Any] = {}
+    for key, default in _KNOB_DEFAULTS.items():
+        if isinstance(hierarchy, dict):
+            knobs[key] = hierarchy.get(key, default)
+        else:
+            knobs[key] = getattr(hierarchy, key, default)
+    if isinstance(knobs["n_resamples"], bool) or not isinstance(knobs["n_resamples"], int):
+        raise ValueError(f"hierarchy n_resamples must be an int >= 0, got {knobs['n_resamples']!r}")
+    if knobs["n_resamples"] < 0:
+        raise ValueError(f"hierarchy n_resamples must be an int >= 0, got {knobs['n_resamples']!r}")
+    for key, valid in _VALID_CHOICES.items():
+        if knobs[key] not in valid:
+            raise ValueError(f"hierarchy {key} must be one of {list(valid)}, got {knobs[key]!r}")
+    return knobs
+
+
+def _sort_leaf_clusters_by_distance(level: dict[str, Any], data: torch.Tensor) -> dict[str, Any]:
+    """Return a copy of the level-1 result with each cluster's ids sorted by increasing
+    L2 distance to its centroid (stable sort), as the vendored `"c"` sampling expects.
+    """
+    centroids = level["centroids"]
+    sorted_clusters = np.empty(len(level["clusters"]), dtype=object)
+    for i, members in enumerate(level["clusters"]):
+        members = np.asarray(members, dtype=np.int64)
+        if members.size == 0:
+            sorted_clusters[i] = members
+            continue
+        dist = torch.cdist(data[members], centroids[i, None].to(data.dtype)).flatten()
+        order = torch.argsort(dist, stable=True).cpu().numpy()
+        sorted_clusters[i] = members[order]
+    return {**level, "clusters": sorted_clusters}
+
+
 class HierarchicalKMeansSelection(SelectionStrategy):
     """Hierarchical k-means with resampling, then balanced (water-filling) hierarchical sampling.
 
@@ -180,14 +247,30 @@ class HierarchicalKMeansSelection(SelectionStrategy):
         Torch device string (`"cpu"` or `"cuda"`) the intermediate data
         tensor is placed on. CPU is fully supported (see module docstring).
     n_resamples:
-        Number of resampling iterations per level, forwarded to
-        `hierarchical_kmeans_with_resampling`.
+        Number of resampling iterations per level. ``None`` (default) means "take
+        it from `hierarchy` (key/attribute `n_resamples`), else 10". An explicit
+        value overrides nothing present in `hierarchy`: a value in `hierarchy`
+        always takes precedence, the argument is only the fallback.
+
+    The hierarchy may also carry `init_method`, `resample_strategy` and
+    `leaf_sampling` (see the module docstring, "Optional knobs").
     """
 
-    def __init__(self, hierarchy: Any, device: str = "cpu", n_resamples: int = 10):
+    def __init__(self, hierarchy: Any, device: str = "cpu", n_resamples: int | None = None):
         self.n_clusters, self.n_levels, self.sample_sizes = _read_hierarchy(hierarchy)
+        knobs = _read_knobs(hierarchy)
+        has_n_resamples = (
+            "n_resamples" in hierarchy
+            if isinstance(hierarchy, dict)
+            else hasattr(hierarchy, "n_resamples")
+        )
+        if not has_n_resamples and n_resamples is not None:
+            knobs["n_resamples"] = n_resamples
         self.device = device
-        self.n_resamples = n_resamples
+        self.n_resamples: int = knobs["n_resamples"]
+        self.init_method: str = knobs["init_method"]
+        self.resample_strategy: str = knobs["resample_strategy"]
+        self.leaf_sampling: str = knobs["leaf_sampling"]
 
     def select(
         self,
@@ -219,10 +302,21 @@ class HierarchicalKMeansSelection(SelectionStrategy):
             n_levels=self.n_levels,
             sample_sizes=list(self.sample_sizes),
             n_resamples=self.n_resamples,
+            init_method=self.init_method,
+            sample_strategy=self.resample_strategy,
             verbose=False,
         )
+        sampling_strategy = "r" if self.leaf_sampling == "random" else "c"
+        if sampling_strategy == "c":
+            clusters_by_level = [
+                _sort_leaf_clusters_by_distance(clusters_by_level[0], data),
+                *clusters_by_level[1:],
+            ]
         cl = HierarchicalCluster.from_dict(clusters_by_level)
-        positions = np.asarray(hs.hierarchical_sampling(cl, target_size=budget), dtype=np.int64)
+        positions = np.asarray(
+            hs.hierarchical_sampling(cl, target_size=budget, sampling_strategy=sampling_strategy),
+            dtype=np.int64,
+        )
         positions = np.unique(positions)
 
         # Defensive top-up/trim: `hierarchical_sampling` is expected to return

@@ -26,6 +26,7 @@ from .dist_comm import (
 from .utils import (
     _delete_old_checkpoint,
     get_last_valid_checkpoint,
+    to_object_array,
 )
 
 
@@ -793,7 +794,7 @@ def distributed_sort_cluster_by_distance(
             ).item()
             assert rank_data['prev_item'] == part_indices[i + 1] - 1
             sorted_clusters += rank_data["sorted_clusters"]
-        sorted_clusters = np.array(sorted_clusters, dtype=object)
+        sorted_clusters = to_object_array(sorted_clusters)  # DalMax fix (KI-30)
         np.save(
             Path(save_dir, "sorted_clusters.npy"),
             sorted_clusters

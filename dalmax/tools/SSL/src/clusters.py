@@ -11,6 +11,8 @@ from typing import Dict, List
 
 import numpy as np
 
+from .utils import to_object_array
+
 
 logger = logging.getLogger("hkmeans")
 
@@ -63,13 +65,14 @@ class HierarchicalCluster:
         for level in range(2, 1 + self.n_levels):
             current_non_flat = self.clusters[level]
             prev_flat = self.flat_clusters[level - 1]
-            self.flat_clusters[level] = np.array(
+            # DalMax fix (KI-30): to_object_array instead of np.array(..., dtype=object),
+            # which collapses equal-length flat clusters into a 2-D object array.
+            self.flat_clusters[level] = to_object_array(
                 [
                     np.concatenate([prev_flat[el] for el in clus])
                     if len(clus) > 0 else np.array([])
                     for clus in current_non_flat
-                ],
-                dtype=object,
+                ]
             )
 
         logger.info("Computing cluster length")

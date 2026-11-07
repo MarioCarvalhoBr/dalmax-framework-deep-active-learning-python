@@ -195,3 +195,12 @@ TexHAL's canonical configuration is VCTex `Q=17` (single RAE). The six files are
 `texhal_q17/6_2/hier_ref`, `texhal_q17/6_3/stage_full`); "w/o representation" stays the shared KMH run.
 Run with `make campaign-run PART=texhal_q17` (18 runs). Validated by
 `tests/test_ablation_configs.py` (`q == [17]`, selection equal to the `texhal/` twin).
+
+## `kmh_sweep/` (2026-11-07, prepared, not executed)
+
+Paper-1 KMH parameter sweep, stage 1: 45 configs per scale in `nq{10,50,100}/` (hierarchy axis
+`hier_*`, knob axis `<hier>__{init_random,leaf_closest,no_resampling,resample_random}`) plus the CPU
+mirror in `micro/nq{N}/`. **Generated** by `scripts/campaign/build_kmh_sweep_configs.py`
+(`make kmh-sweep-configs`; do not edit by hand, `tests/test_kmh_sweep_configs.py` fails on drift). Run only
+through `files_config/campaign/manifest_kmh_sweep.json`; grid, `sample_sizes` rule and commands in
+`.specs/experiments/campaign.md` ("KMH parameter sweep").

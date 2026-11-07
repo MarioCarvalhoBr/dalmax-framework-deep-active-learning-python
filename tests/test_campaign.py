@@ -23,6 +23,8 @@ from dalmax.reporting.leaf_check import REQUIRED_FILES
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FULL = REPO_ROOT / C.DEFAULT_MANIFEST
 MICRO = REPO_ROOT / C.DEFAULT_MICRO_MANIFEST
+SWEEP = REPO_ROOT / "files_config/campaign/manifest_kmh_sweep.json"
+SWEEP_MICRO = REPO_ROOT / "files_config/campaign/manifest_kmh_sweep_micro.json"
 
 
 def _builder():
@@ -60,11 +62,46 @@ def test_control_ki43_manifest_expands_to_three_jobs() -> None:
     assert jobs[0].group.dir_results == "results/campaign_control/random_nq100/"
 
 
+@pytest.mark.parametrize("path", [SWEEP, SWEEP_MICRO])
+def test_kmh_sweep_manifest_counts_and_layout(path: Path) -> None:
+    manifest = C.load_manifest(path)  # validates: params load, no redundant computation, aliases == canonical
+    counts = C.count_by_part(C.expand_jobs(manifest))
+    assert counts["kmh_nq10"] == counts["kmh_nq50"] == 51 and counts["kmh_nq100"] == 33
+    assert sum(counts.values()) == 135 and len(manifest.groups) == 45
+    assert len({g.dir_results for g in manifest.groups}) == len(manifest.groups)  # one leaf dir per group
+    assert all(g.strategy_name == "RepresentationStrategy" for g in manifest.groups)
+    assert manifest.results_root.endswith("_kmh") and not manifest.results_root.startswith("results/campaign/")
+    assert {g.part for g in manifest.groups} == {"kmh_nq10", "kmh_nq50", "kmh_nq100"}
+
+
+def test_kmh_sweep_aliases_resolve_to_the_reference() -> None:
+    manifest = C.load_manifest(SWEEP)
+    aliases = manifest.alias_by_id()
+    assert set(aliases) == {"kmh/nq100/hier_L3_matched"}
+    assert aliases["kmh/nq100/hier_L3_matched"].canonical == "kmh/nq100/hier_L3_ref"
+    assert "kmh/nq100/hier_L1_kNQ" not in manifest.group_by_id()
+    table_runs = {r["run"] for t in manifest.tables["paper1"]["tables"] for r in t["rows"]}
+    assert "kmh/nq100/hier_L3_matched" in table_runs  # the row exists, as an alias
+    # every group is consumed by at least one table row (used_by non-empty)
+    assert all(g.used_by for g in manifest.groups)
+
+
+def test_kmh_sweep_parts_filter_and_order() -> None:
+    manifest = C.load_manifest(SWEEP)
+    assert C.parse_parts("kmh_nq10") == ("kmh_nq10",)
+    assert C.parse_parts("kmh_nq100,kmh_nq10") == ("kmh_nq10", "kmh_nq100")
+    jobs = C.expand_jobs(manifest, C.parse_parts("kmh_nq50"))
+    assert len(jobs) == 51 and {j.group.part for j in jobs} == {"kmh_nq50"}
+    order = [C.PHASE_LABELS[C.phase_index(g, manifest.primary_nq)] for g in manifest.groups]
+    assert order == sorted(order, key=C.PHASE_LABELS.index)
+
+
 @pytest.mark.parametrize("which", ["full_manifest", "micro_manifest"])
 def test_run_counts_per_part(which: str, request: pytest.FixtureRequest) -> None:
     manifest: C.Manifest = request.getfixturevalue(which)
     counts = C.count_by_part(C.expand_jobs(manifest))
-    assert counts == {"paper1": 117, "upper_bound": 3, "rnhal": 42, "texhal": 30, "texhal_q17": 18, "control": 0}
+    assert counts == {"paper1": 117, "upper_bound": 3, "rnhal": 42, "texhal": 30, "texhal_q17": 18, "control": 0,
+                      "kmh_nq10": 0, "kmh_nq50": 0, "kmh_nq100": 0}
     assert sum(counts.values()) == 210
 
 

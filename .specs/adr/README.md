@@ -21,6 +21,7 @@ session must be captured here in the same task, not deferred.
 | [0009](0009-shared-no-representation-run.md) | One shared "w/o representation module" run for papers 2 and 3 (and paper 1's KMH@100); supersedes the 2026-09-01 per-paper decision | Accepted |
 | [0010](0010-cleanup-tools-and-hardware-agnostic.md) | `tools/` for CLIs, the campaign as the only run path (legacy scripts/reporters removed), hardware-agnostic repository (no GPU model names; GPU recorded at runtime), determinism/resume/seed-audit follow-ups, `--exclude-strategy` | Accepted |
 | [0011](0011-texhal-canonical-q17.md) | TexHAL canonical configuration `Q=17` (single RAE) instead of `Q=[5,17]`, from the campaign results; 6.2/6.3 ablations re-run with Q=17 (part `texhal_q17`, executed 2026-11-01) | Accepted (author 2026-11-01; advisor review pending) |
+| [0012](0012-kmh-parameter-sweep.md) | KMH parameter sweep at `n_query` 10/50/100 (hierarchy shapes incl. budget-matched ones, k-means init, leaf sampling, resampling), as a separate manifest; four optional `selection.hierarchy` keys with behaviour-preserving defaults | Accepted (author 2026-11-07; prepared, not executed) |
 
 ## When to add a new ADR
 
