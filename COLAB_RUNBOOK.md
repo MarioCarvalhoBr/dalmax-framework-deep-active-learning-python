@@ -339,7 +339,22 @@ to decide whether paper 1's KMH reference changes. It runs 3 seeds at n_query 10
 | `kmh_nq100` | 33 | 11 |
 | **Total** | **135** | **45** |
 
-1. Do sections 0-5 first, including the GPU identity check (step 3 of section 6): confirm the GPU
+**Notebook setup (the only edit you make).** In [`notebooks/colab_runbook.ipynb`](notebooks/colab_runbook.ipynb)
+the Parameters cell (second cell) is the only one to touch. Keep `DRIVE_ROOT`, `REPO_URL`, `REPO_DIR` and
+`BRANCH = "main"` as they are and set:
+
+```python
+MANIFEST = "files_config/campaign/manifest_kmh_sweep.json"
+PART = "kmh_nq100"   # next sessions: "kmh_nq50", then "kmh_nq10"
+```
+
+Every campaign cell below (list, run, progress, verify, report, copy to Drive) reads these two variables:
+with the sweep manifest set, the cells write to `results/campaign_kmh/` and `docs/results/campaign_kmh/`
+and copy the tables to `$DRIVE_ROOT/results/campaign_kmh_tables`. Set `MANIFEST = ""` to go back to the
+main campaign of section 6. The numbered steps below are the same cells, in order.
+
+1. Do sections 0-5 first (runtime, Drive, clone, Poetry, `make colab-setup`, `make test`, `make smoke`,
+   `make colab-check`), including the GPU identity check (step 3 of section 6): confirm the GPU
    (`<gpu-name>`) before launching.
 2. List: `!make campaign-list MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=kmh_nq10`
    (use any part name).
@@ -348,6 +363,8 @@ to decide whether paper 1's KMH reference changes. It runs 3 seeds at n_query 10
    `kmh_nq50`, then `kmh_nq10`. Resume is the same as in section 6: re-running the same command skips
    complete leaves. Log: `results/campaign_kmh/campaign.log`, failures: `results/campaign_kmh/failures.log`.
 4. Verify: `!make campaign-verify MANIFEST=files_config/campaign/manifest_kmh_sweep.json` (add `PART=...` to restrict).
+   Expected after each part: `OK=33` (`kmh_nq100`), `OK=51` (`kmh_nq50`), `OK=51` (`kmh_nq10`), seed audit PASS.
+   If the session dropped: redo sections 0-4 and re-run the same `campaign-run` cell (complete runs are skipped).
 5. Report: `!make campaign-report MANIFEST=files_config/campaign/manifest_kmh_sweep.json REPORT_ROOT=results/campaign_kmh REPORT_OUT=docs/results/campaign_kmh`,
    then copy to Drive: `!cp -r docs/results/campaign_kmh "$DRIVE_ROOT/results/campaign_kmh_tables"`.
 
