@@ -25,9 +25,24 @@ def create_clusters_from_cluster_assignment(
     index_split = np.searchsorted(sorted_cluster_assigment, list(range(num_clusters)))
     clusters = np.split(ID, index_split[1:])
     if return_object_array:
-        return np.array(clusters, dtype=object)
+        return to_object_array(clusters)
     else:
         return clusters
+
+
+def to_object_array(arrays) -> np.ndarray:
+    """1-D ``dtype=object`` array whose elements are the given index arrays.
+
+    DalMax fix (KI-30, 2026-11-07): ``np.array(list_of_arrays, dtype=object)``
+    silently builds a 2-D object array when every array has the same length,
+    which later breaks ``torch`` indexing (``TypeError: can't convert np.ndarray
+    of type numpy.object_``). Pre-allocating the outer array keeps one
+    ``int64`` array per element whatever the lengths are.
+    """
+    out = np.empty(len(arrays), dtype=object)
+    for i, arr in enumerate(arrays):
+        out[i] = np.asarray(arr)
+    return out
 
 
 def find_all_checkpoints(save_dir, pattern):
