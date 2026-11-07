@@ -72,6 +72,10 @@ make campaign-run PART=all            # PART=paper1|upper_bound|rnhal|texhal (co
 make campaign-verify                  # OK/INCOMPLETE/MISSING per job + seed audit (exit 0 ok / 1 fail / 2 warn)
 make campaign-report                  # docs/results/campaign/ (tables md/tex/csv, mean confusion matrices)
 make campaign-list MANIFEST=files_config/campaign/manifest_control_ki43.json   # any other manifest, e.g. the KI-43 control (prepared, not run)
+make campaign-list MANIFEST=files_config/campaign/manifest_kmh_sweep.json     # KMH parameter sweep (ADR 0012; prepared, not run): 135 runs / 45 groups
+make campaign-run MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=kmh_nq100   # kmh_nq50 | kmh_nq10; resume = re-run
+make campaign-report MANIFEST=files_config/campaign/manifest_kmh_sweep.json REPORT_ROOT=results/campaign_kmh REPORT_OUT=docs/results/campaign_kmh
+make campaign-smoke-kmh               # micro KMH sweep on CPU (seed 1) -> results/smoke_campaign_kmh/
 make campaign-smoke                   # micro campaign on CPU (seed 1) -> results/smoke_campaign/;
                                       # skips AdversarialBIM/AdversarialDeepFool by default (64 of 70 jobs; SMOKE_EXCLUDE= to include)
 
@@ -164,6 +168,10 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   2026-11-02: runs kept as executed, behaviour disclosed in paper 1, no re-run (fix deferred to a future campaign): KI-41 (no dropout layer, so the MC-dropout
   strategies and BALD are degenerate) and KI-42 (`KMeansSampling`/`KCenterGreedy` use an untrained
   embedding layer), see `.specs/quality/known-issues.md`.
+- **KMH parameter sweep** (prepared 2026-11-07, ADR 0012, not executed): 45 groups / 135 runs at nq
+  10/50/100 (hierarchy shapes incl. budget-matched, k-means init, leaf sampling, resampling), manifest
+  `files_config/campaign/manifest_kmh_sweep.json`, results `results/campaign_kmh/`; decides whether
+  paper 1's KMH reference changes (thesis pendencia P17). Runbook: `COLAB_RUNBOOK.md` section 6b.
 
 Next milestone: write the thesis from the campaign results; advisor review of the ablation section
 (`paper_drafts/ablation_section.tex`, weighted-primary/macro-secondary framing still pending
@@ -238,3 +246,6 @@ outstanding.
   `files_config/campaign/params_kmh.json`). Engine `dalmax/campaign.py`, reports
   `dalmax/reporting/campaign_report.py`. `seed_everything` now also sets `CUBLAS_WORKSPACE_CONFIG` and
   `torch.use_deterministic_algorithms(True, warn_only=True)`; `run_metadata.json` has a `determinism` block.
+- **Optional `selection.hierarchy` keys (ADR 0012)**: `n_resamples` (default 10), `init_method`
+  (`kmeans++`|`random`), `resample_strategy` (`closest`|`random`), `leaf_sampling` (`random`|`closest`);
+  the defaults reproduce the previous behaviour, so existing params JSONs and executed runs are unchanged.

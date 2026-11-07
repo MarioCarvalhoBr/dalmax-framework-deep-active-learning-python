@@ -324,6 +324,44 @@ every other run.
 
 ---
 
+## 6b. The KMH parameter sweep (paper 1; ADR 0012)
+
+The sweep is a separate manifest (`files_config/campaign/manifest_kmh_sweep.json`, ADR 0012,
+[`.specs/experiments/campaign.md`](.specs/experiments/campaign.md) "KMH parameter sweep") that varies the
+KMH selection (hierarchy shapes including budget-matched ones, k-means init, leaf sampling, resampling)
+to decide whether paper 1's KMH reference changes. It runs 3 seeds at n_query 10/50/100 into a NEW tree,
+`results/campaign_kmh/`, so it never touches `results/campaign/`. It is prepared, not executed.
+
+| Part | Runs | Run groups |
+|---|---|---|
+| `kmh_nq10` | 51 | 17 |
+| `kmh_nq50` | 51 | 17 |
+| `kmh_nq100` | 33 | 11 |
+| **Total** | **135** | **45** |
+
+1. Do sections 0-5 first, including the GPU identity check (step 3 of section 6): confirm the GPU
+   (`<gpu-name>`) before launching.
+2. List: `!make campaign-list MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=kmh_nq10`
+   (use any part name).
+3. Run one part per session: `!make campaign-run MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=kmh_nq100`.
+   Recommended order: `kmh_nq100` first (smallest, and the most informative for papers 2 and 3), then
+   `kmh_nq50`, then `kmh_nq10`. Resume is the same as in section 6: re-running the same command skips
+   complete leaves. Log: `results/campaign_kmh/campaign.log`, failures: `results/campaign_kmh/failures.log`.
+4. Verify: `!make campaign-verify MANIFEST=files_config/campaign/manifest_kmh_sweep.json` (add `PART=...` to restrict).
+5. Report: `!make campaign-report MANIFEST=files_config/campaign/manifest_kmh_sweep.json REPORT_ROOT=results/campaign_kmh REPORT_OUT=docs/results/campaign_kmh`,
+   then copy to Drive: `!cp -r docs/results/campaign_kmh "$DRIVE_ROOT/results/campaign_kmh_tables"`.
+
+**Drive quota.** `results/campaign_kmh/` is a new tree on Drive (via the `results/` symlink). Each run writes
+a ~95 MB checkpoint, so 135 runs are about **13 GB**; check the quota first.
+
+**Wall-clock: unmeasured.** The reference hierarchy costs about 64 s of clustering per round in the executed
+campaign; L=1 shapes cost much less. Record the measured hours here after the first part.
+
+**CPU smoke (not on Colab).** `make campaign-smoke-kmh` runs the micro sweep on CPU (seed 1) into
+`results/smoke_campaign_kmh/`.
+
+---
+
 ## Running from VS Code (Colab extension)
 
 You can also open a notebook locally in VS Code with the official **Google Colab**

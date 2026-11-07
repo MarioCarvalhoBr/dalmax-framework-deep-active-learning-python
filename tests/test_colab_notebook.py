@@ -81,8 +81,11 @@ def test_parameters_cell_defines_campaign_part() -> None:
 def test_campaign_cells_use_the_part_parameter() -> None:
     nb = _load_notebook()
     sources = ["".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "code"]
-    assert any("make campaign-run PART={PART}" in s for s in sources)
-    assert any("make campaign-verify PART={PART}" in s for s in sources)
+    # Since ADR 0012 the campaign cells also take the optional MANIFEST (KMH sweep).
+    assert any("make campaign-run {MANIFEST_ARG} PART={PART}" in s for s in sources)
+    assert any("make campaign-verify {MANIFEST_ARG} PART={PART}" in s for s in sources)
+    params = next(s for s in sources if "MANIFEST_ARG = " in s)
+    assert 'MANIFEST = ""' in params and "manifest_kmh_sweep.json" in params
 
 
 def test_gpu_identity_check_runs_right_after_colab_check() -> None:
@@ -99,7 +102,7 @@ def test_gpu_identity_check_runs_right_after_colab_check() -> None:
 def test_progress_cell_present() -> None:
     nb = _load_notebook()
     sources = ["".join(c["source"]) for c in nb["cells"] if c["cell_type"] == "code"]
-    assert any("campaign.log" in s and "campaign-verify PART={PART}" in s for s in sources)
+    assert any("campaign.log" in s and "campaign-verify {MANIFEST_ARG} PART={PART}" in s for s in sources)
 
 
 def test_every_make_target_in_notebook_exists() -> None:
