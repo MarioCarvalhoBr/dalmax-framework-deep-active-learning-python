@@ -10,9 +10,9 @@ couplings (`.specs/architecture/target-architecture.md` §6):
 - no hardcoded `device="cuda"` — the device is an explicit constructor
   argument.
 
-## Vendored pipeline, unmodified
+## Vendored pipeline
 
-This wraps, without editing:
+This wraps (the only edit to the vendored tree is the KI-30 fix below):
 - `dalmax.tools.SSL.src.hierarchical_kmeans_gpu.hierarchical_kmeans_with_resampling`
 - `dalmax.tools.SSL.src.clusters.HierarchicalCluster.from_dict`
 - `dalmax.tools.SSL.src.hierarchical_sampling.hierarchical_sampling`
@@ -36,21 +36,19 @@ run on CPU unconditionally (no `skipif`/`gpu` marker needed for the
 "does it run" property); a real `device="cuda"` run is exercised only when
 CUDA is actually available (see `tests/test_selection_hierarchical.py`).
 
-## A separate, data-dependent vendored quirk (documented, not fixed here)
+## Equal-size clusters (KI-30, fixed 2026-11-07)
 
-`dalmax.tools.SSL.src.utils.create_clusters_from_cluster_assignment` builds
-`np.array(clusters, dtype=object)` from a Python list of per-cluster index
-arrays (`dalmax/tools/SSL/src/utils.py:28`). When every cluster happens to
-have **exactly** the same size, NumPy interprets that list of equal-length
-arrays as a regular 2-D array and casts it to `dtype=object` element-wise,
-so each "cluster" row silently becomes an object array of Python ints
-instead of an int64 array — `torch.cdist`/tensor indexing on it then raises
-`TypeError: can't convert np.ndarray of type numpy.object_ ...`. This is a
-pre-existing bug in the vendored code, independent of device (CPU or GPU),
-triggered only by perfectly balanced cluster sizes; real embeddings
-essentially never produce perfectly balanced k-means clusters, so it is not
-worked around here, only documented and avoided in this module's own test
-fixtures (which use imbalanced synthetic clusters).
+`dalmax.tools.SSL.src.utils.create_clusters_from_cluster_assignment` used to
+build `np.array(clusters, dtype=object)` from a list of per-cluster index
+arrays; when every cluster had exactly the same size NumPy produced a 2-D
+object array and `torch.cdist`/tensor indexing raised
+`TypeError: can't convert np.ndarray of type numpy.object_ ...`. The KMH sweep's
+budget-matched hierarchies (small cluster counts at the upper levels) made the
+case likely, so the vendored builder was fixed at the source:
+`dalmax/tools/SSL/src/utils.py::to_object_array` pre-allocates the 1-D object
+array and replaces the four `np.array(..., dtype=object)` sites (each marked
+`DalMax fix (KI-30)`). Regression test:
+`tests/test_selection_hierarchical.py::test_perfectly_balanced_clusters_do_not_crash`.
 
 ## `sample_sizes` semantics (resolves the `ablation-study.md` §6.2 TBD)
 
