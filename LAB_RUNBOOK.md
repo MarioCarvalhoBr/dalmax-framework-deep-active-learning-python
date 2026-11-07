@@ -93,7 +93,7 @@ the same `results/campaign/` tree; groups never overlap between the two commands
   subsequent visit):
   ```bash
   # first time:
-  git clone https://github.com/MarioCarvalhoBr/dalmax-deep-active-learning-python.git
+  git clone https://github.com/MarioCarvalhoBr/dalmax-framework-deep-active-learning-python.git
   cd dalmax-deep-active-learning-python
 
   # every subsequent visit:

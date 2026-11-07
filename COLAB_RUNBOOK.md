@@ -108,7 +108,7 @@ Cell (first time in this Drive/account — clones into the *local* runtime
 disk, not Drive, per the architecture decision above):
 ```python
 %cd /content
-!git clone https://github.com/MarioCarvalhoBr/dalmax-deep-active-learning-python.git dalmax
+!git clone https://github.com/MarioCarvalhoBr/dalmax-framework-deep-active-learning-python.git dalmax
 %cd /content/dalmax
 ```
 

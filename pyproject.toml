@@ -27,7 +27,7 @@ dependencies = [
 ]
 
 [project.urls]
-Repository = "https://github.com/MarioCarvalhoBr/dalmax-deep-active-learning-python"
+Repository = "https://github.com/MarioCarvalhoBr/dalmax-framework-deep-active-learning-python"
 
 [tool.poetry]
 # This repo is a research application (trainer.py CLI, historically demo.py, + run_*.sh experiment scripts),
