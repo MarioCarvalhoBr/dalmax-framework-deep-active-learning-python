@@ -1,6 +1,6 @@
 .PHONY: setup lint format test test-all smoke clean micro-dataset \
 	lab-setup lab-check colab-setup colab-check \
-	campaign-list campaign-run campaign-verify campaign-report campaign-smoke campaign-manifest
+	campaign-list campaign-run campaign-verify campaign-report campaign-smoke campaign-smoke-kmh campaign-manifest kmh-sweep-configs
 
 # GPU index used by `lab-check` (sets CUDA_VISIBLE_DEVICES).
 # Override on the command line, e.g. `make lab-check GPU=1`.
@@ -103,12 +103,19 @@ colab-check:
 # execution of everything papers 1-3 need -- no redundant runs. See
 # .specs/experiments/campaign.md, COLAB_RUNBOOK.md and LAB_RUNBOOK.md.
 # Variables (all optional):
-#   PART=all|paper1|upper_bound|rnhal|texhal|texhal_q17 (comma-separated allowed; default all)
+#   PART=all|paper1|upper_bound|rnhal|texhal|texhal_q17|control|kmh_nq10|kmh_nq50|kmh_nq100 (comma-separated allowed; default all)
 #   MICRO=1     -> files_config/campaign/manifest_micro.json (CPU smoke, results/smoke_campaign/)
 #   MANIFEST=path -> any other manifest (overrides MICRO), e.g. the KI-43 control (3 RandomSampling
 #                  nq100 runs into results/campaign_control/, see .specs/experiments/campaign.md):
 #                    make campaign-list MANIFEST=files_config/campaign/manifest_control_ki43.json
 #                    make campaign-run  MANIFEST=files_config/campaign/manifest_control_ki43.json PART=control
+#                  The KMH parameter sweep (paper 1, prepared, not executed; 135 runs, 45 groups, results/campaign_kmh/):
+#                    make campaign-list   MANIFEST=files_config/campaign/manifest_kmh_sweep.json
+#                    make campaign-run    MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=kmh_nq10  # kmh_nq50|kmh_nq100
+#                    make campaign-verify MANIFEST=files_config/campaign/manifest_kmh_sweep.json
+#                    make campaign-report MANIFEST=files_config/campaign/manifest_kmh_sweep.json REPORT_ROOT=results/campaign_kmh REPORT_OUT=docs/results/campaign_kmh
+#                  (its configs: `make kmh-sweep-configs`; CPU smoke: `make campaign-smoke-kmh`)
+#   REPORT_ROOT / REPORT_OUT -> `campaign-report` results root / output dir (defaults: results/campaign, docs/results/campaign)
 #   SEEDS=1     -> restrict to a subset of the seeds (smoke)
 #   EXCLUDE=... -> comma-separated strategies to drop (default: none; with MICRO=1 the
 #                  two adversarial baselines, far too slow on CPU -- override with
@@ -135,8 +142,10 @@ campaign-verify:
 
 # Tables (md/tex/csv), seed audit and mean confusion matrices from results/campaign/
 # into docs/results/campaign/ (MICRO=1: results/smoke_campaign/ -> results/smoke_campaign/report/).
+REPORT_ROOT ?= results/campaign
+REPORT_OUT ?= docs/results/campaign
 campaign-report:
-	poetry run python -m dalmax.reporting.campaign_report $(if $(MICRO),--micro --root results/smoke_campaign --out results/smoke_campaign/report,--root results/campaign --out docs/results/campaign)
+	poetry run python -m dalmax.reporting.campaign_report $(if $(MANIFEST),--manifest $(MANIFEST) --root $(REPORT_ROOT) --out $(REPORT_OUT),$(if $(MICRO),--micro --root results/smoke_campaign --out results/smoke_campaign/report,--root $(REPORT_ROOT) --out $(REPORT_OUT)))
 
 # Micro campaign on CPU, seed 1 only, into results/smoke_campaign/ (every run
 # group once; the two adversarial baselines are skipped by default: 58 of the 64
@@ -144,6 +153,16 @@ campaign-report:
 campaign-smoke:
 	poetry run python -m dalmax.campaign run --part all --micro --seeds 1 $(if $(SMOKE_EXCLUDE),--exclude-strategy $(SMOKE_EXCLUDE))
 
-# Regenerate the two committed manifests from scripts/campaign/build_manifest.py.
-campaign-manifest:
+# Micro KMH sweep on CPU, seed 1 only, into results/smoke_campaign_kmh/ (45 jobs).
+# Verify afterwards with
+# `make campaign-verify MANIFEST=files_config/campaign/manifest_kmh_sweep_micro.json SEEDS=1`.
+campaign-smoke-kmh:
+	poetry run python -m dalmax.campaign run --part all --manifest files_config/campaign/manifest_kmh_sweep_micro.json --seeds 1 --device cpu
+
+# Regenerate the KMH sweep params files (files_config/ablations/kmh_sweep/, full + micro).
+kmh-sweep-configs:
+	poetry run python scripts/campaign/build_kmh_sweep_configs.py
+
+# Regenerate the committed manifests (and the sweep configs they reference) from scripts/campaign/.
+campaign-manifest: kmh-sweep-configs
 	poetry run python scripts/campaign/build_manifest.py

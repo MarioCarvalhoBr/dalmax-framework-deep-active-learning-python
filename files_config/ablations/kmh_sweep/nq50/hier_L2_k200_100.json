@@ -1,0 +1,40 @@
+{
+    "_comment": "KMH sweep stage 1: ImageNet ResNet-50 features + hierarchical k-means at n_query=50, hierarchy k=[200,100] sample_sizes=[10,5]; otherwise identical to params_kmh.json. See .specs/experiments/campaign.md, 'KMH parameter sweep'.",
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_full/",
+        "n_epoch": 10,
+        "n_drop": 10,
+        "n_classes": 5,
+        "train_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "test_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "optimizer_args": {
+            "lr": 0.05,
+            "momentum": 0.3
+        },
+        "embedding": {
+            "extractor": "resnet_imagenet",
+            "q": null,
+            "variant": "full"
+        },
+        "selection": {
+            "method": "hierarchical",
+            "hierarchy": {
+                "n_clusters": [
+                    200,
+                    100
+                ],
+                "n_levels": 2,
+                "sample_sizes": [
+                    10,
+                    5
+                ]
+            }
+        }
+    }
+}
