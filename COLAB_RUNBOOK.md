@@ -374,8 +374,17 @@ section 6. The numbered steps below are the same cells, in order; `PART=...` is 
 **Drive quota.** `results/campaign_kmh/` is a new tree on Drive (via the `results/` symlink). Each run writes
 a ~95 MB checkpoint, so 135 runs are about **13 GB**; check the quota first.
 
-**Wall-clock: unmeasured.** The reference hierarchy costs about 64 s of clustering per round in the executed
-campaign; L=1 shapes cost much less. Record the measured hours here after the first part.
+**Wall-clock.** First pass (2026-11-07 to 2026-11-08): about 10 to 12 GPU hours (estimate from log timestamps,
+Colab session restarts included). The reference hierarchy costs about 64 s of clustering per round in the
+executed campaign; L=1 shapes cost much less.
+
+**Resuming after the KI-44 fix (2026-11-08).** The first pass finished 129/135 runs; six `init_random` runs
+failed because random k-means init can leave empty clusters (KI-44, fixed in the vendored
+`hierarchical_sampling.py`). In a live session run `cd /content/dalmax && git pull` (or redo sections 0 to 4 in a
+new session, which clone `main` fresh), then re-run the same run cell: the engine skips the 129 complete leaves
+and executes only the 6 incomplete ones. Expected verify afterwards: `OK=135 INCOMPLETE=0 MISSING=0`. The
+notebook text for section 6b still says wall-clock is unmeasured; it is left untouched on purpose (tests pin its
+cells), this file is the record.
 
 **CPU smoke (not on Colab).** `make campaign-smoke-kmh` runs the micro sweep on CPU (seed 1) into
 `results/smoke_campaign_kmh/`.

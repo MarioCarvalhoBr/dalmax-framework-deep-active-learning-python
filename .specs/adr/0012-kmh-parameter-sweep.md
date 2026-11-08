@@ -1,6 +1,6 @@
 # ADR 0012: KMH parameter sweep at every paper-1 budget
 
-- **Status:** Accepted (author decision 2026-11-07; prepared, not executed)
+- **Status:** Accepted (author decision 2026-11-07; executed 2026-11-07 to 2026-11-08, 129/135 in the first pass; 6 init_random runs re-run after the KI-44 fix)
 - **Date:** 2026-11-07
 
 ## Context
@@ -55,6 +55,15 @@ protocol otherwise unchanged (`n_init_labeled=100`, `n_round=8`, 10 epochs):
 Totals: 45 run groups, 135 runs (51 + 51 + 33). The sweep is the first stage; the grid is data at
 the top of `scripts/campaign/build_kmh_sweep_configs.py` so that a second stage (for example the
 knobs on more hierarchies, `num_init`, or the same knobs on RNHAL and TexHAL) is a list edit.
+
+## Execution note (2026-11-08)
+
+The sweep ran on Colab Pro from 2026-11-07 to 2026-11-08 (about 10 to 12 GPU hours, estimate). First pass: 129/135
+runs complete; six `init_random` runs failed deterministically (nq100 and nq50 `hier_L3_ref` seed 3; nq10
+`hier_L3_ref` seeds 1 and 3; nq10 `hier_L3_matched` seeds 1 and 2). Cause: random k-means init can leave empty
+clusters and the vendored `hierarchical_sampling.py` crashed on them (KI-44, fixed 2026-11-08, no completed run
+affected). The six leaves are re-run by resuming the same command. With `init_method="random"` an empty cluster
+means fewer effective clusters at that level in that round; state this wherever the `init_random` rows are reported.
 
 ## Consequences
 

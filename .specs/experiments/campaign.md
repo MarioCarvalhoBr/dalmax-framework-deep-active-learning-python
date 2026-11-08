@@ -179,12 +179,21 @@ Colab runtime image is held fixed (KI-43 cause 2). Nothing here was run; it awai
   `log-dalmax.log`, seeds 1-3, mean about 65.8 s), so the control is about 3.3 minutes of GPU plus session
   setup (dataset copy to local disk, `poetry install`) as in `COLAB_RUNBOOK.md`.
 
-## KMH parameter sweep (paper 1; prepared 2026-11-07, not executed)
+## KMH parameter sweep (paper 1; prepared 2026-11-07, executed 2026-11-07 to 2026-11-08, re-run of 6 runs pending)
 
 Author decision (2026-11-07): vary every KMH knob at `n_query` 10, 50 and 100 to find the strongest KMH
 configuration per budget; the reference may change afterwards. Stage 1 (below) is the grid; the
 generator keeps the grid as data at the top of `scripts/campaign/build_kmh_sweep_configs.py` so a stage 2
-can extend it. Nothing here was run. The four new `selection.hierarchy` keys it uses (`n_resamples`,
+can extend it. Execution status (2026-11-08): the author ran
+`make campaign-run MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=all` on Colab Pro; the first
+pass completed 129/135 runs. The six failures are all `init_random` configurations (nq100 `hier_L3_ref` seed 3;
+nq50 `hier_L3_ref` seed 3; nq10 `hier_L3_ref` seeds 1 and 3; nq10 `hier_L3_matched` seeds 1 and 2), failing
+deterministically at the same round on two attempts. Cause: KI-44 (random k-means init can leave empty clusters
+and `hierarchical_sampling.py` crashed on them), fixed 2026-11-08 without changing any completed run. Resume plan:
+re-run the same command; the engine skips the 129 complete leaves and executes the 6 incomplete ones, then
+`campaign-verify` should report `OK=135` and `campaign-report` produces the tables. Wall-clock of the first pass:
+about 10 to 12 GPU hours (estimate from log timestamps, 2026-11-07 ~15:40 UTC to 2026-11-08 ~01:05 UTC, Colab
+session restarts included). The four new `selection.hierarchy` keys it uses (`n_resamples`,
 `init_method`, `resample_strategy`, `leaf_sampling`) are specified in `experimental-protocol.md`; their
 defaults reproduce the campaign's behaviour exactly.
 
@@ -267,6 +276,7 @@ Measured by the real execution: the whole campaign (192 runs) spanned 2026-09-30
 below). Per-run durations are not aggregated here (TBD; derivable from each run's `run_metadata.json`
 start timestamp and `log-dalmax.log`). The earlier Colab ablation batch took about 9-10 min per
 ablation-config run. Micro CPU smoke: ~18-40 s per micro run.
+KMH sweep first pass (129 of 135 runs): about 10 to 12 GPU hours (estimate from log timestamps).
 
 ## Execution record (past tense; executed 2026-09-30 to 2026-10-05, verified 2026-11-01; part `texhal_q17` executed 2026-11-01, verified 2026-11-02)
 

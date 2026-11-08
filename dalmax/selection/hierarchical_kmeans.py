@@ -50,6 +50,15 @@ array and replaces the four `np.array(..., dtype=object)` sites (each marked
 `DalMax fix (KI-30)`). Regression test:
 `tests/test_selection_hierarchical.py::test_perfectly_balanced_clusters_do_not_crash`.
 
+## Empty clusters (KI-44, fixed 2026-11-08)
+
+With `init_method="random"` the vendored k-means draws its initial centroids as
+random data points and never re-seeds an empty one, so a level can contain
+empty clusters (k-means++ practically never does). `hierarchical_sampling.py`
+used to crash on them (`np.min` of an empty array); it now gives them a zero
+allocation (`DalMax fix (KI-44)`). Semantics: an empty cluster means the
+hierarchy has effectively fewer clusters at that level in that round.
+
 ## `sample_sizes` semantics (resolves the `ablation-study.md` §6.2 TBD)
 
 `sample_sizes[level]` and the final selection budget (`n_query`) are
