@@ -107,6 +107,15 @@ def find_subcluster_target_size(
         arr = subcluster_sizes * multiplier
     else:
         arr = np.array(subcluster_sizes) * multiplier
+    # DalMax fix (KI-44): a cluster with no subclusters (an empty k-means cluster,
+    # which `init_method="random"` can produce) can only carry a zero target;
+    # `_find_best_cut_left` would otherwise call `np.min` on an empty array.
+    if arr.size == 0:
+        if target_size != 0:
+            raise ValueError(
+                f"cannot allocate target_size={target_size} over zero subclusters"
+            )
+        return np.zeros(0, dtype=np.int64)
     best_cut_left =  _find_best_cut_left(arr, target_size)
     if best_cut_left == np.max(arr):
         return arr
@@ -154,6 +163,10 @@ def recursive_hierarchical_sampling(
             return np.concatenate([replicates, remaining_samples])
     else:
         subcl_indices = clusters.clusters[level][cl_index]
+        if len(subcl_indices) == 0:
+            # DalMax fix (KI-44): empty cluster above the leaf level; its target
+            # is zero by construction (its flat size is 0), nothing to sample.
+            return np.zeros(0, dtype=np.int64)
         subcluster_sizes = clusters.flat_clusters_size[level - 1][subcl_indices]
         subcluster_target_sizes = find_subcluster_target_size(
             subcluster_sizes,

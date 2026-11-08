@@ -224,3 +224,71 @@ def test_perfectly_balanced_clusters_do_not_crash(leaf_sampling):
     out = sel.select(embeddings, ids, budget=4, rng=np.random.default_rng(0))
     assert len(out) == 4 and len(set(out.tolist())) == 4
     assert set(out.tolist()) <= set(ids.tolist())
+
+
+def _hierarchy_with_empty_clusters():
+    """Two-level hierarchy with an empty leaf cluster (index 1) and an empty
+    coarse cluster (index 1), the shape the vendored k-means produces when
+    `init_method="random"` leaves a centroid with no assigned point (KI-44)."""
+    from dalmax.tools.SSL.src.clusters import HierarchicalCluster
+    from dalmax.tools.SSL.src.utils import to_object_array
+
+    level1 = to_object_array(
+        [
+            np.array([0, 1, 2]),
+            np.array([], dtype=np.int64),
+            np.array([3, 4]),
+            np.array([5, 6, 7, 8]),
+        ]
+    )
+    level2 = to_object_array(
+        [np.array([0, 2]), np.array([], dtype=np.int64), np.array([1, 3])]
+    )
+    return HierarchicalCluster.from_dict([{"clusters": level1}, {"clusters": level2}])
+
+
+@pytest.mark.parametrize("sampling_strategy", ["r", "c"])
+def test_hierarchical_sampling_tolerates_empty_clusters(sampling_strategy):
+    """KI-44 regression (found 2026-11-08 in the KMH sweep, `init_random` runs):
+    an empty cluster above the leaf level made `find_subcluster_target_size`
+    call `np.min` on an empty array (``ValueError: zero-size array``). The
+    empty clusters must simply contribute nothing."""
+    from dalmax.tools.SSL.src import hierarchical_sampling as hs
+
+    cl = _hierarchy_with_empty_clusters()
+    np.random.seed(0)
+    out = hs.hierarchical_sampling(cl, target_size=5, sampling_strategy=sampling_strategy)
+    assert len(out) == 5 and len(set(out.tolist())) == 5
+    assert set(out.tolist()) <= set(range(9))
+
+
+def test_find_subcluster_target_size_rejects_positive_target_on_empty_cluster():
+    from dalmax.tools.SSL.src import hierarchical_sampling as hs
+
+    assert hs.find_subcluster_target_size(np.array([], dtype=np.int64), 0, 1).size == 0
+    with pytest.raises(ValueError, match="zero subclusters"):
+        hs.find_subcluster_target_size(np.array([], dtype=np.int64), 3, 1)
+
+
+@pytest.mark.parametrize("leaf_sampling", ["random", "closest"])
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_random_init_with_empty_clusters_keeps_the_contract(seed, leaf_sampling):
+    """End-to-end KI-44 regression: three tight groups of duplicated points
+    clustered into 6 clusters with `init_method="random"` give duplicated
+    centroids, hence empty clusters (checked: level-1 sizes such as
+    [10, 0, 2, 8, 6, 4]). Selection must still return `budget` unique ids."""
+    base = np.array([[0.0, 0.0], [10.0, 10.0], [20.0, 0.0]], dtype=np.float32)
+    noise = np.random.default_rng(0).normal(0, 1e-3, (30, 2)).astype(np.float32)
+    embeddings = np.repeat(base, 10, axis=0) + noise
+    ids = np.arange(300, 330)
+    hierarchy = {
+        "n_clusters": [6, 3],
+        "n_levels": 2,
+        "sample_sizes": [2, 2],
+        "init_method": "random",
+        "leaf_sampling": leaf_sampling,
+    }
+    sel = HierarchicalKMeansSelection(hierarchy=hierarchy, device="cpu")
+    out = sel.select(embeddings, ids, budget=5, rng=np.random.default_rng(seed))
+    assert len(out) == 5 and len(set(out.tolist())) == 5
+    assert set(out.tolist()) <= set(ids.tolist())
