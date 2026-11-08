@@ -307,6 +307,113 @@ clustering per round). Prepared, not executed.
 
 Command count updates: `make campaign-list MANIFEST=files_config/campaign/manifest_kmh_sweep.json` now shows 165 runs / 55 groups; `campaign-smoke-kmh` runs 55 jobs.
 
+### Stage 1 results (executed 2026-11-07 to 2026-11-08 on Google Colab Pro; verified locally 2026-11-08: 135/135 OK, seed audit PASS)
+
+Final round, mean +/- std over seeds 1-3 (n=3), weighted F1 / macro F1; `query s` = mean query time per round in
+seconds from the run logs (start of round to the logging of the queried indices; shared cloud runtimes, orders of
+magnitude only). Report: `docs/results/campaign_kmh/` (gitignored; copy in
+`thesis_drafts/final_thesis/context/campaign-results/kmh_sweep/`). Paper-1 campaign baselines for comparison
+(final weighted F1, `results/campaign/`): nq100 LeastConfidence 0.8716 +/- 0.0237, KMH (`shared/kmh_nq100`)
+0.8224; nq50 AdversarialDeepFool 0.7913 +/- 0.0213, KMH 0.7833; nq10 KMH 0.6466, LeastConfidence 0.5357.
+
+
+**Hierarchy axis, nq100** (`kmh_hier_nq100`)
+
+| Row | Run group | F1 weighted | F1 macro | query s |
+|---|---|---|---|---|
+| L=1, k=[100] | `kmh/nq100/hier_L1_k100` | 0.8468 +/- 0.0168 | 0.7882 +/- 0.0280 | 7.7 |
+| L=1, k=[200] | `kmh/nq100/hier_L1_k200` | 0.8408 +/- 0.0132 | 0.7862 +/- 0.0188 | 14.2 |
+| L=1, k=[600] | `kmh/nq100/hier_L1_k600` | 0.8314 +/- 0.0149 | 0.7784 +/- 0.0105 | 41.7 |
+| L=2, k=[200,100] | `kmh/nq100/hier_L2_k200_100` | 0.8449 +/- 0.0202 | 0.7942 +/- 0.0176 | 21.1 |
+| L=2, k=[600,100] (budget-matched) | `kmh/nq100/hier_L2_matched` | 0.8520 +/- 0.0154 | 0.8005 +/- 0.0160 | 48.9 |
+| L=3, k=[600,200,100] (reference) | `kmh/nq100/hier_L3_ref` | 0.8389 +/- 0.0315 | 0.7881 +/- 0.0302 | 62.0 |
+| L=3, k=[600,200,100] (budget-matched) | `kmh/nq100/hier_L3_ref` | 0.8389 +/- 0.0315 | 0.7881 +/- 0.0302 | 62.0 |
+| L=4, k=[800,600,200,100] | `kmh/nq100/hier_L4_k800_600_200_100` | 0.8603 +/- 0.0211 | 0.8010 +/- 0.0238 | 114.8 |
+
+**Knob axis, nq100** (`kmh_knobs_nq100`)
+
+| Row | Run group | F1 weighted | F1 macro | query s |
+|---|---|---|---|---|
+| L=3, k=[600,200,100] (reference) | `kmh/nq100/hier_L3_ref` | 0.8389 +/- 0.0315 | 0.7881 +/- 0.0302 | 62.0 |
+| reference + init_method=random | `kmh/nq100/hier_L3_ref__init_random` | 0.8383 +/- 0.0178 | 0.7832 +/- 0.0199 | 55.4 |
+| reference + leaf_sampling=closest | `kmh/nq100/hier_L3_ref__leaf_closest` | 0.8386 +/- 0.0089 | 0.7839 +/- 0.0115 | 62.7 |
+| reference + n_resamples=0 | `kmh/nq100/hier_L3_ref__no_resampling` | 0.8525 +/- 0.0155 | 0.7995 +/- 0.0132 | 5.6 |
+| reference + resample_strategy=random | `kmh/nq100/hier_L3_ref__resample_random` | 0.8493 +/- 0.0176 | 0.7945 +/- 0.0173 | 60.8 |
+
+**Hierarchy axis, nq50** (`kmh_hier_nq50`)
+
+| Row | Run group | F1 weighted | F1 macro | query s |
+|---|---|---|---|---|
+| L=1, k=[50] (= n_query) | `kmh/nq50/hier_L1_k50` | 0.7798 +/- 0.0230 | 0.7086 +/- 0.0160 | 4.1 |
+| L=1, k=[100] | `kmh/nq50/hier_L1_k100` | 0.8051 +/- 0.0053 | 0.7358 +/- 0.0061 | 7.5 |
+| L=1, k=[200] | `kmh/nq50/hier_L1_k200` | 0.7904 +/- 0.0078 | 0.7259 +/- 0.0088 | 14.3 |
+| L=1, k=[600] | `kmh/nq50/hier_L1_k600` | 0.7814 +/- 0.0064 | 0.7112 +/- 0.0163 | 41.5 |
+| L=2, k=[200,100] | `kmh/nq50/hier_L2_k200_100` | 0.7886 +/- 0.0437 | 0.7226 +/- 0.0414 | 21.2 |
+| L=2, k=[300,50] (budget-matched) | `kmh/nq50/hier_L2_matched` | 0.7815 +/- 0.0118 | 0.7029 +/- 0.0279 | 25.0 |
+| L=3, k=[600,200,100] (reference) | `kmh/nq50/hier_L3_ref` | 0.7951 +/- 0.0136 | 0.7217 +/- 0.0067 | 62.1 |
+| L=3, k=[300,100,50] (budget-matched) | `kmh/nq50/hier_L3_matched` | 0.8264 +/- 0.0098 | 0.7570 +/- 0.0061 | 32.2 |
+| L=4, k=[800,600,200,100] | `kmh/nq50/hier_L4_k800_600_200_100` | 0.7874 +/- 0.0203 | 0.7152 +/- 0.0280 | 115.3 |
+
+**Knob axis, nq50** (`kmh_knobs_nq50`)
+
+| Row | Run group | F1 weighted | F1 macro | query s |
+|---|---|---|---|---|
+| L=3, k=[600,200,100] (reference) | `kmh/nq50/hier_L3_ref` | 0.7951 +/- 0.0136 | 0.7217 +/- 0.0067 | 62.1 |
+| reference + init_method=random | `kmh/nq50/hier_L3_ref__init_random` | 0.7587 +/- 0.0436 | 0.6874 +/- 0.0529 | 55.1 |
+| reference + leaf_sampling=closest | `kmh/nq50/hier_L3_ref__leaf_closest` | 0.8215 +/- 0.0026 | 0.7523 +/- 0.0043 | 62.0 |
+| reference + n_resamples=0 | `kmh/nq50/hier_L3_ref__no_resampling` | 0.8156 +/- 0.0218 | 0.7387 +/- 0.0297 | 5.6 |
+| reference + resample_strategy=random | `kmh/nq50/hier_L3_ref__resample_random` | 0.8061 +/- 0.0261 | 0.7366 +/- 0.0272 | 60.0 |
+| L=3, k=[300,100,50] (budget-matched) | `kmh/nq50/hier_L3_matched` | 0.8264 +/- 0.0098 | 0.7570 +/- 0.0061 | 32.2 |
+| budget-matched + init_method=random | `kmh/nq50/hier_L3_matched__init_random` | 0.8024 +/- 0.0067 | 0.7238 +/- 0.0141 | 28.1 |
+| budget-matched + leaf_sampling=closest | `kmh/nq50/hier_L3_matched__leaf_closest` | 0.8032 +/- 0.0116 | 0.7255 +/- 0.0232 | 32.0 |
+| budget-matched + n_resamples=0 | `kmh/nq50/hier_L3_matched__no_resampling` | 0.8127 +/- 0.0098 | 0.7412 +/- 0.0024 | 2.9 |
+| budget-matched + resample_strategy=random | `kmh/nq50/hier_L3_matched__resample_random` | 0.8048 +/- 0.0256 | 0.7182 +/- 0.0417 | 30.6 |
+
+**Hierarchy axis, nq10** (`kmh_hier_nq10`)
+
+| Row | Run group | F1 weighted | F1 macro | query s |
+|---|---|---|---|---|
+| L=1, k=[10] (= n_query) | `kmh/nq10/hier_L1_k10` | 0.5028 +/- 0.1568 | 0.4350 +/- 0.1248 | 2.1 |
+| L=1, k=[100] | `kmh/nq10/hier_L1_k100` | 0.6013 +/- 0.0299 | 0.4984 +/- 0.0281 | 7.4 |
+| L=1, k=[200] | `kmh/nq10/hier_L1_k200` | 0.6374 +/- 0.0234 | 0.5397 +/- 0.0506 | 14.2 |
+| L=1, k=[600] | `kmh/nq10/hier_L1_k600` | 0.5637 +/- 0.0823 | 0.5009 +/- 0.0644 | 41.7 |
+| L=2, k=[200,100] | `kmh/nq10/hier_L2_k200_100` | 0.6121 +/- 0.0660 | 0.5083 +/- 0.0855 | 21.2 |
+| L=2, k=[60,10] (budget-matched) | `kmh/nq10/hier_L2_matched` | 0.5537 +/- 0.0464 | 0.4498 +/- 0.0671 | 5.8 |
+| L=3, k=[600,200,100] (reference) | `kmh/nq10/hier_L3_ref` | 0.6539 +/- 0.0505 | 0.5519 +/- 0.0403 | 62.2 |
+| L=3, k=[60,20,10] (budget-matched) | `kmh/nq10/hier_L3_matched` | 0.6188 +/- 0.1372 | 0.5240 +/- 0.0999 | 7.5 |
+| L=4, k=[800,600,200,100] | `kmh/nq10/hier_L4_k800_600_200_100` | 0.6510 +/- 0.0230 | 0.5574 +/- 0.0233 | 115.0 |
+
+**Knob axis, nq10** (`kmh_knobs_nq10`)
+
+| Row | Run group | F1 weighted | F1 macro | query s |
+|---|---|---|---|---|
+| L=3, k=[600,200,100] (reference) | `kmh/nq10/hier_L3_ref` | 0.6539 +/- 0.0505 | 0.5519 +/- 0.0403 | 62.2 |
+| reference + init_method=random | `kmh/nq10/hier_L3_ref__init_random` | 0.5827 +/- 0.0712 | 0.4892 +/- 0.0444 | 56.0 |
+| reference + leaf_sampling=closest | `kmh/nq10/hier_L3_ref__leaf_closest` | 0.6329 +/- 0.0649 | 0.5304 +/- 0.0732 | 62.2 |
+| reference + n_resamples=0 | `kmh/nq10/hier_L3_ref__no_resampling` | 0.6160 +/- 0.0605 | 0.5230 +/- 0.0549 | 5.6 |
+| reference + resample_strategy=random | `kmh/nq10/hier_L3_ref__resample_random` | 0.6629 +/- 0.0774 | 0.5581 +/- 0.0704 | 60.2 |
+| L=3, k=[60,20,10] (budget-matched) | `kmh/nq10/hier_L3_matched` | 0.6188 +/- 0.1372 | 0.5240 +/- 0.0999 | 7.5 |
+| budget-matched + init_method=random | `kmh/nq10/hier_L3_matched__init_random` | 0.6167 +/- 0.0200 | 0.5290 +/- 0.0248 | 6.9 |
+| budget-matched + leaf_sampling=closest | `kmh/nq10/hier_L3_matched__leaf_closest` | 0.6407 +/- 0.0516 | 0.5149 +/- 0.0574 | 7.5 |
+| budget-matched + n_resamples=0 | `kmh/nq10/hier_L3_matched__no_resampling` | 0.6705 +/- 0.0549 | 0.5861 +/- 0.0384 | 0.8 |
+| budget-matched + resample_strategy=random | `kmh/nq10/hier_L3_matched__resample_random` | 0.5704 +/- 0.0484 | 0.4551 +/- 0.0645 | 7.1 |
+
+**Reading (2026-11-08, author decision recorded in `thesis_drafts/PENDENCIAS.md` P17).** The re-run reference
+(0.8389 / 0.7951 / 0.6539 at nq 100 / 50 / 10) sits 0.7 to 1.7 points above the campaign's KMH rows: the size of
+the runtime-image effect (KI-43) and the floor for reading differences; with n=3 the seed std is 0.01 to 0.05
+(up to 0.16 at nq10). nq100: the best configuration, `L=4 [800,600,200,100]` 0.8603 +/- 0.0211, stays 1.1 points
+below LeastConfidence (within one std); every KMH configuration has a larger mean-of-rounds F1 than LeastConfidence
+(about 0.73 to 0.75 vs 0.70), so KMH leads the learning curve and is overtaken only at the last round. nq50: the
+budget-matched `L=3 [300,100,50]` 0.8264 +/- 0.0098 beats the reference by 3.1 points and AdversarialDeepFool by
+3.5, the only effect beyond noise in the sweep. nq10: nothing separates from the reference; `L=1 k=10` is the worst
+(0.5028 +/- 0.1568). Knobs: `init_method=random` never helps and hurts at nq10/nq50 (and produces empty
+clusters, KI-44); `n_resamples=0` changes the result by +1.4 / +2.1 / -3.8 points (noise) while cutting the query
+time from about 62 s to about 6 s per round; `leaf_sampling` and `resample_strategy` have no consistent sign.
+Decision: the reference `[600,200,100]` stays the canonical KMH in all three papers and in `shared/kmh_nq100`;
+paper 1 reports the sweep as a sensitivity study (thesis version only; test-set selection disclosed). Stage 2
+(above) tries to close the nq100 gap; if a configuration beats LeastConfidence there, P17 is revisited.
+
+
 ## Wall-clock
 
 The paper-1 `AdversarialBIM`/`AdversarialDeepFool` baselines use the original per-sample DeepAL semantics (one sample at a time; KI-38). BIM is capped at 50 iterations and samples that cannot reach the decision boundary (saturated float32 prediction, zero gradient) get distance `inf` and are never queried before converged ones; DeepFool has a matching zero-gradient guard (KI-39, found on the real campaign 2026-09-30) and are the slowest groups; they are excluded from `make campaign-smoke` by default.
