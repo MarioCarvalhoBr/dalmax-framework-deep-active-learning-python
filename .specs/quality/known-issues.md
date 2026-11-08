@@ -99,6 +99,7 @@ plan.
 (Update 2026-11-02: KI-35 to KI-40 are resolved as stated in their own sections; **KI-41 and KI-42 are
 accepted as-is (author decision 2026-11-02)**, so they leave the open list (documented, not open): 8 open in total, 43 tracked items.)
 (Update 2026-11-02b: **KI-43** (round-0 mismatch, disclosure) added: 10 open, 43 tracked items.)
+(Update 2026-11-08: **KI-44** (empty clusters under random k-means init crashed the hierarchical sampling) added and resolved the same day: 10 open, 44 tracked items.)
 
 34 tracked items total (KI-34 added 2026-08-26, while reconciling the Phase 3 ablation execution
 batch; KI-33 added/resolved 2026-08-25). Of these, **27 are now fully resolved**: KI-1 through
@@ -390,3 +391,45 @@ the author wants KMH round 0 aligned; route to `implementer`, with a `run_metada
 `numpy`/`torchvision`/`scikit-learn`/cuDNN versions so image drift becomes attributable. A clean control for
 cause 2 is to re-run `RandomSampling` nq100 seeds 1-3 in the current image and compare with 0.3084 / 0.4303 /
 0.6167 (about 3 runs). Executed runs stay as history (append-only).
+
+### KI-44 — random k-means init leaves empty clusters that crashed the hierarchical sampling (RESOLVED 2026-11-08; found 2026-11-08)
+
+**Symptom.** The KMH parameter sweep (ADR 0012, executed 2026-11-07 to 2026-11-08) finished 129/135 runs; six runs
+failed with exit 1, all of them `init_random` configurations (`init_method: "random"`), with
+`ValueError: zero-size array to reduction operation minimum which has no identity`. The same seed failed at the
+same round on two attempts (deterministic): `kmh/nq100/hier_L3_ref__init_random` seed 3 (round 1),
+`kmh/nq50/hier_L3_ref__init_random` seed 3 (round 1), `kmh/nq10/hier_L3_ref__init_random` seeds 1 (round 5) and
+3 (round 1), `kmh/nq10/hier_L3_matched__init_random` seeds 1 (round 7) and 2 (round 3). The other `init_random`
+seeds (for example nq100 seeds 1 and 2) completed.
+
+**Root cause.** The vendored k-means (`dalmax/tools/SSL/src/kmeans_gpu.py::_kmeans`) with `init_method="random"`
+draws the initial centroids as random data points and never re-seeds a centroid that ends up with no assigned
+point, so empty clusters can appear at any level (k-means++ spreads the centroids and practically never produces
+them). The clustering tolerates empty clusters (`create_clusters_from_cluster_assignment` and
+`HierarchicalCluster.process_clusters` give them size 0, and the water-filling allocation gives them a zero
+target), but `dalmax/tools/SSL/src/hierarchical_sampling.py::recursive_hierarchical_sampling` recursed into an
+empty cluster above the leaf level and `find_subcluster_target_size` called `np.min` on an empty array.
+Reproduced locally on CPU: the unpatched module raised the identical error on a hand-built hierarchy with an
+empty coarse cluster.
+
+**Fix** (same file, both edits marked `DalMax fix (KI-44)`): `find_subcluster_target_size` returns an empty int64
+allocation when there are zero subclusters and the target is 0 (and raises a clear `ValueError` if the target is
+positive); `recursive_hierarchical_sampling` returns an empty int64 array for a cluster with no subclusters.
+
+**Behaviour preservation.** Both branches are reached only where the previous code raised, so the 129 completed
+sweep runs and every executed campaign run are unaffected (same RNG consumption, same selections). No run has
+to be redone except the six that failed.
+
+**Regression tests** (`tests/test_selection_hierarchical.py`):
+`test_hierarchical_sampling_tolerates_empty_clusters`,
+`test_find_subcluster_target_size_rejects_positive_target_on_empty_cluster`,
+`test_random_init_with_empty_clusters_keeps_the_contract` (three groups of duplicated points clustered into 6
+clusters with random init give level-1 sizes such as `[10, 0, 2, 8, 6, 4]`).
+
+**Semantic note for the papers.** With `init_method="random"` an empty cluster means the hierarchy effectively has
+fewer clusters at that level in that round. This is inherent to the vendored algorithm (no empty-cluster
+re-seeding) and must be stated wherever the `init_random` rows are reported.
+
+**Next step.** The author re-runs the same command; the campaign engine resumes (skip-existing) and executes only
+the six incomplete leaves. Then `make campaign-verify MANIFEST=files_config/campaign/manifest_kmh_sweep.json`
+expects `OK=135`.
