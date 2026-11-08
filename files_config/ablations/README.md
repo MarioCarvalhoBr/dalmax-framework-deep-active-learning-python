@@ -198,7 +198,7 @@ Run with `make campaign-run PART=texhal_q17` (18 runs). Validated by
 
 ## `kmh_sweep/` (2026-11-07, prepared, not executed)
 
-Paper-1 KMH parameter sweep, stage 1: 45 configs per scale in `nq{10,50,100}/` (hierarchy axis
+Paper-1 KMH parameter sweep, stage 1 (45 configs per scale) plus stage 2 (nq100 only, 10 more configs, 2026-11-08; 55 per scale in total) in `nq{10,50,100}/` (hierarchy axis
 `hier_*`, knob axis `<hier>__{init_random,leaf_closest,no_resampling,resample_random}`) plus the CPU
 mirror in `micro/nq{N}/`. **Generated** by `scripts/campaign/build_kmh_sweep_configs.py`
 (`make kmh-sweep-configs`; do not edit by hand, `tests/test_kmh_sweep_configs.py` fails on drift). Run only

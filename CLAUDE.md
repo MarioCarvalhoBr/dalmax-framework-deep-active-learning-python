@@ -72,7 +72,7 @@ make campaign-run PART=all            # PART=paper1|upper_bound|rnhal|texhal (co
 make campaign-verify                  # OK/INCOMPLETE/MISSING per job + seed audit (exit 0 ok / 1 fail / 2 warn)
 make campaign-report                  # docs/results/campaign/ (tables md/tex/csv, mean confusion matrices)
 make campaign-list MANIFEST=files_config/campaign/manifest_control_ki43.json   # any other manifest, e.g. the KI-43 control (prepared, not run)
-make campaign-list MANIFEST=files_config/campaign/manifest_kmh_sweep.json     # KMH parameter sweep (ADR 0012; executed 2026-11-07/08, 6 runs pending re-run): 135 runs / 45 groups
+make campaign-list MANIFEST=files_config/campaign/manifest_kmh_sweep.json     # KMH parameter sweep (ADR 0012; stage 1 executed 2026-11-07/08, 135/135 OK; stage 2 prepared 2026-11-08, not run): 165 runs / 55 groups
 make campaign-run MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=all   # order kmh_nq100, kmh_nq50, kmh_nq10; resume = re-run
 make campaign-report MANIFEST=files_config/campaign/manifest_kmh_sweep.json REPORT_ROOT=results/campaign_kmh REPORT_OUT=docs/results/campaign_kmh
 make campaign-smoke-kmh               # micro KMH sweep on CPU (seed 1) -> results/smoke_campaign_kmh/
@@ -168,8 +168,10 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   2026-11-02: runs kept as executed, behaviour disclosed in paper 1, no re-run (fix deferred to a future campaign): KI-41 (no dropout layer, so the MC-dropout
   strategies and BALD are degenerate) and KI-42 (`KMeansSampling`/`KCenterGreedy` use an untrained
   embedding layer), see `.specs/quality/known-issues.md`.
-- **KMH parameter sweep** (prepared 2026-11-07, ADR 0012; executed 2026-11-07 to 2026-11-08, 129/135, the 6 `init_random` runs pending re-run after KI-44: empty clusters under random k-means init crashed the hierarchical sampling, fixed in the vendored `hierarchical_sampling.py`): 45 groups / 135 runs at nq
-  10/50/100 (hierarchy shapes incl. budget-matched, k-means init, leaf sampling, resampling), manifest
+- **KMH parameter sweep** (prepared 2026-11-07, ADR 0012; stage 1 executed 2026-11-07 to 2026-11-08 and verified locally 135/135, after the 6 `init_random` runs were re-run following KI-44: empty clusters under random k-means init crashed the hierarchical sampling, fixed in the vendored `hierarchical_sampling.py`): 45 groups / 135 runs at nq
+  10/50/100 (hierarchy shapes incl. budget-matched, k-means init, leaf sampling, resampling) plus stage 2 (prepared
+  2026-11-08, nq100 only, 10 groups / 30 runs: deeper hierarchies, coarse level below budget, resampling on L=4;
+  total 165 runs / 55 groups, same `PART=all` command resumes), manifest
   `files_config/campaign/manifest_kmh_sweep.json`, results `results/campaign_kmh/`; decides whether
   paper 1's KMH reference changes (thesis pendencia P17). Runbook: `COLAB_RUNBOOK.md` section 6b.
 

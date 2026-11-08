@@ -48,8 +48,8 @@ def test_committed_configs_match_the_generator() -> None:
 
 def test_file_counts_per_budget() -> None:
     per_nq = {nq: sum(f"/nq{nq}/" in rel and "/micro/" not in rel for rel in EXPECTED) for nq in GEN.BUDGETS}
-    assert per_nq == {10: 17, 50: 17, 100: 11}
-    assert sum(per_nq.values()) == 45
+    assert per_nq == {10: 17, 50: 17, 100: 21}
+    assert sum(per_nq.values()) == 55
 
 
 @pytest.mark.parametrize("rel", sorted(EXPECTED))
@@ -117,3 +117,47 @@ def test_knob_configs_differ_from_their_base_only_in_the_knob() -> None:
                 h = h.dataset.selection.hierarchy
                 assert getattr(h, key) == value and getattr(base, key) != value
                 assert (h.n_clusters, h.sample_sizes) == (base.n_clusters, base.sample_sizes)
+
+
+STAGE2_EXPECTED: dict[str, tuple[tuple[int, ...], tuple[int, ...]]] = {
+    "hier_L5_k1000_800_600_200_100": ((1000, 800, 600, 200, 100), (50, 40, 30, 10, 5)),
+    "hier_L4_k1200_600_200_100": ((1200, 600, 200, 100), (60, 30, 10, 5)),
+    "hier_L4_k800_600_200_50": ((800, 600, 200, 50), (40, 30, 10, 3)),
+    "hier_L3_k800_600_100": ((800, 600, 100), (40, 30, 5)),
+    "hier_L1_k50": ((50,), (3,)),
+    "hier_L1_k20": ((20,), (2,)),
+    "hier_L4_k800_600_200_100__no_resampling": ((800, 600, 200, 100), (40, 30, 10, 5)),
+    "hier_L4_k800_600_200_100__resample_random": ((800, 600, 200, 100), (40, 30, 10, 5)),
+    "hier_L4_k800_600_200_100__sample_x2": ((800, 600, 200, 100), (80, 60, 20, 10)),
+    "hier_L2_matched__no_resampling": ((600, 100), (30, 5)),
+}
+
+
+@pytest.mark.parametrize("name", sorted(STAGE2_EXPECTED))
+def test_stage2_configs_load_with_expected_shapes(name: str) -> None:
+    rel = f"files_config/ablations/kmh_sweep/nq100/{name}.json"
+    h = _load(rel, 100).dataset.selection.hierarchy
+    assert (h.n_clusters, h.sample_sizes) == STAGE2_EXPECTED[name]
+    assert json.loads((REPO_ROOT / rel).read_text())["_comment"].startswith("KMH sweep stage 2 (nq100 only, 2026-11-08)")
+    assert (SWEEP_DIR / f"micro/nq100/{name}.json").exists()
+
+
+def test_stage2_knobs_and_scope() -> None:
+    def hier(name: str):
+        return _load(f"files_config/ablations/kmh_sweep/nq100/{name}.json", 100).dataset.selection.hierarchy
+
+    assert hier("hier_L4_k800_600_200_100__no_resampling").n_resamples == 0
+    assert hier("hier_L4_k800_600_200_100__resample_random").resample_strategy == "random"
+    assert hier("hier_L2_matched__no_resampling").n_resamples == 0
+    assert hier("hier_L4_k800_600_200_100__sample_x2").n_resamples == hier("hier_L4_k800_600_200_100").n_resamples
+    stage2_files = {f"{n}.json" for n, _, _ in GEN.stage2_points()}
+    assert {n for n, _, _ in GEN.stage2_points()} == set(STAGE2_EXPECTED)
+    for nq in (10, 50):  # a stage-1 file may share a name (hier_L1_k50 at nq50) but is a different config
+        assert not {f"{n}.json" for n, h, k in GEN.grid(nq) if GEN.is_stage2(h, k, nq)} & stage2_files
+    assert GEN.STAGE2_NQ == 100 and all(GEN.is_stage2(h, k, 100) for n, h, k in GEN.stage2_points())
+
+
+def test_stage2_micro_sample_x2_is_capped_doubled_rule() -> None:
+    h = _load("files_config/ablations/kmh_sweep/micro/nq100/hier_L4_k800_600_200_100__sample_x2.json", 5)
+    h = h.dataset.selection.hierarchy
+    assert (h.n_clusters, h.sample_sizes) == ((80, 60, 20, 10), (8, 6, 4, 4))

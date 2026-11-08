@@ -336,8 +336,12 @@ to decide whether paper 1's KMH reference changes. It runs 3 seeds at n_query 10
 |---|---|---|
 | `kmh_nq10` | 51 | 17 |
 | `kmh_nq50` | 51 | 17 |
-| `kmh_nq100` | 33 | 11 |
-| **Total** | **135** | **45** |
+| `kmh_nq100` | 63 | 21 |
+| **Total** | **165** | **55** |
+
+Stage 2 (2026-11-08, nq100 only, 10 groups / 30 runs; ADR 0012) is part of `kmh_nq100`: re-running the
+same `PART=all` command resumes and executes only the 30 new runs, estimated 8 to 10 GPU hours (the L4/L5
+shapes cost about 2 min of clustering per round). Stage 2 is prepared, not executed.
 
 **Notebook setup (the only edit you make).** In [`notebooks/colab_runbook.ipynb`](notebooks/colab_runbook.ipynb)
 the Parameters cell (second cell) is the only one to touch. Keep `DRIVE_ROOT`, `REPO_URL`, `REPO_DIR` and
@@ -363,16 +367,16 @@ section 6. The numbered steps below are the same cells, in order; `PART=...` is 
    (use any part name).
 3. Run: `!make campaign-run MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=all` (the notebook's
    run cell). Execution order: `kmh_nq100` first (smallest, and the most informative for papers 2 and 3), then
-   `kmh_nq50`, then `kmh_nq10`. One session will not hold all 135 runs; resume is the same as in section 6:
+   `kmh_nq50`, then `kmh_nq10`. One session will not hold all 165 runs; resume is the same as in section 6:
    re-running the same command skips complete leaves. Log: `results/campaign_kmh/campaign.log`, failures: `results/campaign_kmh/failures.log`.
 4. Verify: `!make campaign-verify MANIFEST=files_config/campaign/manifest_kmh_sweep.json` (add `PART=...` to restrict).
-   Expected at the end: `OK=135 INCOMPLETE=0 MISSING=0`, seed audit PASS (per part: 33, 51, 51).
+   Expected at the end: `OK=165 INCOMPLETE=0 MISSING=0`, seed audit PASS (per part: 63, 51, 51); after the KI-44 re-run but before stage 2 it is `OK=135` (33, 51, 51).
    If the session dropped: redo sections 0-4 and re-run the same `campaign-run` cell (complete runs are skipped).
 5. Report: `!make campaign-report MANIFEST=files_config/campaign/manifest_kmh_sweep.json REPORT_ROOT=results/campaign_kmh REPORT_OUT=docs/results/campaign_kmh`,
    then copy to Drive: `!cp -r docs/results/campaign_kmh "$DRIVE_ROOT/results/campaign_kmh_tables"`.
 
 **Drive quota.** `results/campaign_kmh/` is a new tree on Drive (via the `results/` symlink). Each run writes
-a ~95 MB checkpoint, so 135 runs are about **13 GB**; check the quota first.
+a ~95 MB checkpoint, so 165 runs are about **16 GB** (stage 1: 13 GB); check the quota first.
 
 **Wall-clock.** First pass (2026-11-07 to 2026-11-08): about 10 to 12 GPU hours (estimate from log timestamps,
 Colab session restarts included). The reference hierarchy costs about 64 s of clustering per round in the

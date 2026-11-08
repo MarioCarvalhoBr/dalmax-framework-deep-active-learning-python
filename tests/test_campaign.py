@@ -66,8 +66,8 @@ def test_control_ki43_manifest_expands_to_three_jobs() -> None:
 def test_kmh_sweep_manifest_counts_and_layout(path: Path) -> None:
     manifest = C.load_manifest(path)  # validates: params load, no redundant computation, aliases == canonical
     counts = C.count_by_part(C.expand_jobs(manifest))
-    assert counts["kmh_nq10"] == counts["kmh_nq50"] == 51 and counts["kmh_nq100"] == 33
-    assert sum(counts.values()) == 135 and len(manifest.groups) == 45
+    assert counts["kmh_nq10"] == counts["kmh_nq50"] == 51 and counts["kmh_nq100"] == 63
+    assert sum(counts.values()) == 165 and len(manifest.groups) == 55
     assert len({g.dir_results for g in manifest.groups}) == len(manifest.groups)  # one leaf dir per group
     assert all(g.strategy_name == "RepresentationStrategy" for g in manifest.groups)
     assert manifest.results_root.endswith("_kmh") and not manifest.results_root.startswith("results/campaign/")
@@ -91,7 +91,7 @@ def test_kmh_sweep_parts_filter_and_order() -> None:
     assert C.parse_parts("kmh_nq10") == ("kmh_nq10",)
     assert C.parse_parts("kmh_nq10,kmh_nq100") == ("kmh_nq100", "kmh_nq10")  # PARTS order: nq100 first
     jobs_all = C.expand_jobs(manifest, C.parse_parts("all"))
-    assert [j.group.part for j in jobs_all][:33] == ["kmh_nq100"] * 33 and jobs_all[-1].group.part == "kmh_nq10"
+    assert [j.group.part for j in jobs_all][:63] == ["kmh_nq100"] * 63 and jobs_all[-1].group.part == "kmh_nq10"
     jobs = C.expand_jobs(manifest, C.parse_parts("kmh_nq50"))
     assert len(jobs) == 51 and {j.group.part for j in jobs} == {"kmh_nq50"}
     order = [C.PHASE_LABELS[C.phase_index(g, manifest.primary_nq)] for g in manifest.groups]

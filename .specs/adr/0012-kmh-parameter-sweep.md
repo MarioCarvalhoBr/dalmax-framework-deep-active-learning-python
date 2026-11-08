@@ -1,6 +1,6 @@
 # ADR 0012: KMH parameter sweep at every paper-1 budget
 
-- **Status:** Accepted (author decision 2026-11-07; executed 2026-11-07 to 2026-11-08, 129/135 in the first pass; 6 init_random runs re-run after the KI-44 fix)
+- **Status:** Accepted (author decision 2026-11-07; stage 1 executed 2026-11-07 to 2026-11-08, 129/135 in the first pass, the 6 init_random runs re-run after the KI-44 fix, 135/135 verified locally 2026-11-08; stage 2 (nq100 only, 30 runs) prepared 2026-11-08, not executed)
 - **Date:** 2026-11-07
 
 ## Context
@@ -56,13 +56,49 @@ Totals: 45 run groups, 135 runs (51 + 51 + 33). The sweep is the first stage; th
 the top of `scripts/campaign/build_kmh_sweep_configs.py` so that a second stage (for example the
 knobs on more hierarchies, `num_init`, or the same knobs on RNHAL and TexHAL) is a list edit.
 
+## Stage 2 (2026-11-08, nq100 only; prepared, not executed)
+
+Stage-1 results that motivate it (final-round weighted F1, mean of seeds 1-3, nq100; best traditional method
+LeastConfidence 0.8716): `hier_L4_k800_600_200_100` 0.8603 (best, but 115 s of query per round),
+`hier_L3_ref__no_resampling` 0.8525 (6 s per round), `hier_L2_matched` 0.8520, `hier_L3_ref__resample_random`
+0.8493, `hier_L1_k100` 0.8468 > `hier_L1_k200` 0.8408 > `hier_L1_k600` 0.8314, `hier_L3_ref` 0.8389;
+`init_random` and `leaf_closest` had no effect. Hypotheses: deeper or wider hierarchies help at nq100; the 200
+level may be superfluous; a coarse level below the budget (several images per cluster) is untested; resampling
+off or random is at least as good and far cheaper; resampling intensity (`sample_sizes`) was never varied.
+
+Grid:
+
+| # | Config (`nq100`) | Hierarchy `n_clusters` | `sample_sizes` | Change vs stage 1 |
+|---|---|---|---|---|
+| 1 | `hier_L5_k1000_800_600_200_100` | [1000,800,600,200,100] | [50,40,30,10,5] | deeper (L=5) |
+| 2 | `hier_L4_k1200_600_200_100` | [1200,600,200,100] | [60,30,10,5] | wider top level |
+| 3 | `hier_L4_k800_600_200_50` | [800,600,200,50] | [40,30,10,3] | coarse last level below the budget (two images per cluster) |
+| 4 | `hier_L3_k800_600_100` | [800,600,100] | [40,30,5] | L4 without the 200 level |
+| 5 | `hier_L1_k50` | [50] | [3] | single level below the budget |
+| 6 | `hier_L1_k20` | [20] | [2] | single, very coarse level |
+| 7 | `hier_L4_k800_600_200_100__no_resampling` | [800,600,200,100] | [40,30,10,5] | `n_resamples: 0` |
+| 8 | `hier_L4_k800_600_200_100__resample_random` | [800,600,200,100] | [40,30,10,5] | `resample_strategy: "random"` |
+| 9 | `hier_L4_k800_600_200_100__sample_x2` | [800,600,200,100] | [80,60,20,10] | resampling intensity doubled, no other knob |
+| 10 | `hier_L2_matched__no_resampling` | [600,100] | [30,5] | `n_resamples: 0` |
+
+Totals after stage 2: 10 new groups x 3 seeds = 30 runs, all in part `kmh_nq100` (now 21 groups / 63 runs);
+overall **55 groups / 165 runs** (63 + 51 + 51). The stage-2 groups follow the stage-1 groups inside
+`kmh_nq100`, so `PART=all` keeps the order nq100, nq50, nq10; the same
+`make campaign-run MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=all` command resumes
+(complete leaves are skipped) and executes only the 30 new runs. Params files live next to the stage-1 ones
+(`files_config/ablations/kmh_sweep/nq100/`, micro mirror in `micro/nq100/`, `_comment` "KMH sweep stage 2
+(nq100 only, 2026-11-08)"); results in `results/campaign_kmh/nq100/<config>/`. New table
+`kmh_stage2_nq100` (paper1): four context rows (`hier_L3_ref`, `hier_L4_k800_600_200_100`, `hier_L2_matched`,
+`hier_L1_k100`) then the ten rows above. Estimated 8 to 10 GPU hours (the L4/L5 shapes cost about 2 min of
+clustering per round). Prepared, not executed.
+
 ## Execution note (2026-11-08)
 
 The sweep ran on Colab Pro from 2026-11-07 to 2026-11-08 (about 10 to 12 GPU hours, estimate). First pass: 129/135
 runs complete; six `init_random` runs failed deterministically (nq100 and nq50 `hier_L3_ref` seed 3; nq10
 `hier_L3_ref` seeds 1 and 3; nq10 `hier_L3_matched` seeds 1 and 2). Cause: random k-means init can leave empty
 clusters and the vendored `hierarchical_sampling.py` crashed on them (KI-44, fixed 2026-11-08, no completed run
-affected). The six leaves are re-run by resuming the same command. With `init_method="random"` an empty cluster
+affected). The six leaves were re-run by resuming the same command (2026-11-08); the stage-1 results were downloaded and verified locally the same day (135/135 OK, seed audit PASS for seeds 1-3). With `init_method="random"` an empty cluster
 means fewer effective clusters at that level in that round; state this wherever the `init_random` rows are reported.
 
 ## Consequences
