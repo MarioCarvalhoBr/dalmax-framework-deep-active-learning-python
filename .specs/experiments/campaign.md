@@ -409,9 +409,13 @@ budget-matched `L=3 [300,100,50]` 0.8264 +/- 0.0098 beats the reference by 3.1 p
 (0.5028 +/- 0.1568). Knobs: `init_method=random` never helps and hurts at nq10/nq50 (and produces empty
 clusters, KI-44); `n_resamples=0` changes the result by +1.4 / +2.1 / -3.8 points (noise) while cutting the query
 time from about 62 s to about 6 s per round; `leaf_sampling` and `resample_strategy` have no consistent sign.
-Decision: the reference `[600,200,100]` stays the canonical KMH in all three papers and in `shared/kmh_nq100`;
-paper 1 reports the sweep as a sensitivity study (thesis version only; test-set selection disclosed). Stage 2
-(above) tries to close the nq100 gap; if a configuration beats LeastConfidence there, P17 is revisited.
+Decision (author, 2026-11-08, revised the same day): paper 1 reports KMH with the best sweep configuration per
+budget as its result (nq10 `hier_L3_matched__no_resampling` 0.6705, nq50 `hier_L3_matched` 0.8264, nq100
+`hier_L4_k800_600_200_100` 0.8603, the last provisional until stage 2), the configuration per budget being declared
+in the method and the sweep reported as the configuration study that selected it; no re-baseline of the other
+strategies and no runtime-image caveat in the thesis text (three seeds, mean and std). `shared/kmh_nq100`
+(reference hierarchy, 0.8224) stays as the "w/o representation module" ablation row of papers 2 and 3. The
+lab record (this file, KI-43) keeps the runtime-image facts. Stage 2 (above) may change the nq100 row.
 
 
 ## Wall-clock

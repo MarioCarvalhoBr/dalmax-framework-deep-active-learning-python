@@ -322,6 +322,8 @@ effect on papers 2/3 (KMH uses ResNet-50 ImageNet features through the embedding
 
 Control run prepared 2026-11-04 (not executed, pending the author's decision P07): see `.specs/experiments/campaign.md`, section "Control run for KI-43".
 
+Author decision 2026-11-08 (thesis): the KMH sweep runs (one later runtime image) are reported in paper 1 as KMH's results next to the campaign rows, without a runtime-image caveat in the thesis text and without a re-baseline of the other strategies; the facts stay recorded here and in `campaign.md` (reference re-run +0.7 to +1.7 points of weighted F1 vs the campaign rows).
+
 **What was observed** (audit of the 132 `NQ_*` leaves under `results/campaign/` with `run_metadata.json`; the
 `FullSupervised` upper bound excluded). In every group the initial labeled set is identical for a seed (md5 of
 the logged `Initial labeled idxs` equal for seeds 1, 2, 3 across Random, KMH, TexHAL and `texhal_q17`), yet the
