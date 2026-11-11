@@ -27,6 +27,7 @@ HISTORY_ALLOWLIST = {
     ".specs/experiments/ablation-study.md",
     ".specs/experiments/baseline-results.md",
     ".specs/experiments/campaign.md",  # past-tense campaign execution record (2026-09/10)
+    ".specs/adr/0013-hierarchy-transfer-runs.md",  # past-tense Outcome record (2026-11-11 run)
     ".specs/infrastructure/execution-environments.md",
 }
 

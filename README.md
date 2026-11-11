@@ -246,7 +246,7 @@ deterministic kernel), so report seed-averaged numbers.
 ## The campaign
 
 Everything the three papers need runs from ONE manifest,
-`files_config/campaign/manifest.json` (222 runs in 74 run groups, 210 executed, seeds 1 to 3;
+`files_config/campaign/manifest.json` (222 runs in 74 run groups, all executed, seeds 1 to 3;
 configurations shared by several papers run once and are aliased), driven by the
 engine `dalmax/campaign.py`. See
 [`.specs/experiments/campaign.md`](.specs/experiments/campaign.md) and ADR 0008/0009/0010.
@@ -266,7 +266,7 @@ allowed), `MICRO=1` (micro manifest on CPU, results in `results/smoke_campaign/`
 `SEEDS=1`, `EXCLUDE=A,B`, `DEVICE=cuda|cpu|auto` and `RUN_ARGS='--dry-run'`.
 `make campaign-manifest` regenerates the committed manifests from
 `scripts/campaign/build_manifest.py`. The campaign was executed on Google Colab
-Pro (210 of 210 runs OK, seed audit passed); the results are tabulated in the
+Pro (222 of 222 runs OK, seed audit passed); the results are tabulated in the
 campaign spec.
 
 Step-by-step operator guides: **[`LAB_RUNBOOK.md`](LAB_RUNBOOK.md)** (lab machine) and
@@ -493,7 +493,7 @@ hierarchy, stage contribution) are a matter of configuration, not new code:
 2026-08-26, Phase 4 (polish, single `dalmax/` package) done**, followed by the CLI/`tools/`
 cleanup and the checkpoint/inference tools. The one-shot campaign (222 runs for the three
 papers: 210 executed 2026-09-30 to 2026-11-01 and verified, plus the 12-run `hier_transfer`
-part prepared 2026-11-10, ADR 0013, not yet executed) and the 165-run KMH configuration
+part, ADR 0013, executed 2026-11-11 and verified, 222/222) and the 165-run KMH configuration
 study (ADR 0012, executed and verified 2026-11-10). Next: writing the thesis from the
 campaign results and advisor review of the ablation section.
 

@@ -320,6 +320,8 @@ effect on papers 2/3 (KMH uses ResNet-50 ImageNet features through the embedding
 
 ### KI-43 — round-0 metrics differ across runs of the same seed and initial labeled set (OPEN, disclosure; found 2026-11-02)
 
+Note 2026-11-10: the `hier_transfer` part (ADR 0013) ran on a third runtime image (a different GPU model, see `run_metadata.json` `environment.gpus[0].name`); its 12 runs are compared only within the campaign's nq100 tables, as before.
+
 Control run prepared 2026-11-04 (not executed, pending the author's decision P07): see `.specs/experiments/campaign.md`, section "Control run for KI-43".
 
 Author decision 2026-11-08 (thesis): the KMH sweep runs (one later runtime image) are reported in paper 1 as KMH's results next to the campaign rows, without a runtime-image caveat in the thesis text and without a re-baseline of the other strategies; the facts stay recorded here and in `campaign.md` (reference re-run +0.7 to +1.7 points of weighted F1 vs the campaign rows).

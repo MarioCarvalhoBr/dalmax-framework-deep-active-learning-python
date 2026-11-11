@@ -1,6 +1,6 @@
 # ADR 0013: Run the KMH-sweep winning hierarchy with the learned descriptors of papers 2 and 3
 
-- **Status:** Accepted (author decision 2026-11-10), not executed
+- **Status:** Accepted (author decision 2026-11-10), executed 2026-11-11 (UTC) and verified 2026-11-10 (local time)
 - **Date:** 2026-11-10
 
 ## Context
@@ -45,4 +45,30 @@ ImageNet extractor).
 - The results feed table 6.2 of papers 2 and 3 and the thesis chapter 9; the comparison tables are unchanged, so
   which hierarchy becomes canonical for RNHAL/TexHAL remains an open author/advisor decision.
 - Disk: about 1.1 GB more checkpoints (12 x ~95 MB) under `results/campaign/`.
-- Follow-up: run it (`COLAB_RUNBOOK.md` section 6c), verify (`OK=222` once everything is present), regenerate the report.
+- Follow-up (done): run it (`COLAB_RUNBOOK.md` section 6c), verify (`OK=222`), regenerate the report.
+
+## Outcome (executed 2026-11-11 UTC, verified 2026-11-10 local)
+
+All 12 runs ran in one Google Colab Pro session (start timestamps 2026-11-11 01:53 to 02:18 UTC, code commit `eee5d4e`). `make campaign-verify`: `OK=222 INCOMPLETE=0 MISSING=0 (of 222 jobs)`; seed audit PASS for seeds 1, 2 and 3 (73 runs compared per seed, reference `shared/random_nq100`); `make campaign-report` regenerated `docs/results/campaign` (74/74 groups with data). Runtime image (past-tense record): NVIDIA L4 GPU (22 GB), 12 vCPU Intel Xeon 2.20 GHz, 53 GB RAM, Ubuntu 24.04, Python 3.12.16, PyTorch 2.5.0+cu124, cuDNN 9.1, driver 580.82.07, Colab release `release-colab-external-images_20261109-060054_RC00`. This is a third runtime image of the campaign (the earlier 210 runs used two A100 images). All 12 runs logged the known `cumsum_cuda_kernel` non-deterministic-op warning (now 102 of 222 campaign runs).
+
+Final round, seeds 1-3, mean +/- population sd:
+
+| Group id | Representation, hierarchy | Weighted F1 (mean +/- sd) | Macro F1 | Accuracy | Seeds 1 / 2 / 3 (weighted F1) |
+|---|---|---|---|---|---|
+| `rnhal/6_2/hier_L2_matched__no_resampling` | SSRAE q=13, `[600,100]`, `[30,5]`, m=0 | 0.8592 +/- 0.0138 | 0.8054 +/- 0.0141 | 0.8506 | 0.8538 / 0.8457 / 0.8782 |
+| `rnhal/6_2/hier_L3__no_resampling` | SSRAE q=13, `[600,200,100]`, `[30,15,2]`, m=0 | 0.8740 +/- 0.0217 | 0.8276 +/- 0.0272 | 0.8677 | 0.8444 / 0.8960 / 0.8817 |
+| `texhal_q17/6_2/hier_L2_matched__no_resampling` | VCTex Q=17, `[600,100]`, `[30,5]`, m=0 | 0.8544 +/- 0.0244 | 0.8062 +/- 0.0276 | 0.8424 | 0.8260 / 0.8855 / 0.8519 |
+| `texhal_q17/6_2/hier_L3__no_resampling` | VCTex Q=17, `[600,200,100]`, `[30,15,2]`, m=0 | 0.8642 +/- 0.0216 | 0.8178 +/- 0.0247 | 0.8561 | 0.8380 / 0.8909 / 0.8637 |
+
+Reference values: RNHAL reference (m=10) 0.8805 +/- 0.0084; RNHAL L=4 `[800,600,200,100]` 0.8955; TexHAL Q=17 reference (m=10)
+0.8745 +/- 0.0079; TexHAL best `[300,100,50]` 0.8842; KMH (ImageNet features) `k=[600,100]` without resampling 0.8819 +/- 0.0148
+(KMH sweep stage 2 winner), KMH reference shape without resampling 0.8525, KMH reference with m=10 (`shared/kmh_nq100`) 0.8224.
+
+Reading (fixed before the runs in the thesis plan): the KMH-winner shape does NOT transfer to the descriptors. Under
+`k=[600,100]` without resampling both descriptors are below the ImageNet features (SSRAE 2.3 points below, VCTex 2.8 below,
+beyond one sd). Turning resampling off at the reference shape costs the descriptors 0.7 (SSRAE) and 1.0 (VCTex) points, within
+one sd, and roughly triples the spread across seeds, whereas it had gained 3.0 points for the ImageNet features. Hierarchy and
+representation interact: the descriptors' advantage over ImageNet features holds under the reference and deeper hierarchies,
+not under the hierarchy tuned for ImageNet features. No canonical configuration changes (author decision 2026-11-10: the
+reference hierarchy stays canonical for RNHAL and TexHAL).
+

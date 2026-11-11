@@ -24,8 +24,9 @@ invented here, including for the upper bound.
 > **executed on 2026-11-01** (18/18 OK; verified 2026-11-02: 210/210 OK, seed audit PASS). All 210 runs
 > are now done.
 >
-> **2026-11-10 (ADR 0013)**: part `hier_transfer` (12 runs, 4 groups) was added (prepared, **not executed**);
-> the manifest totals are now 222 runs / 74 groups, of which the first 210 are executed.
+> **2026-11-10 (ADR 0013)**: part `hier_transfer` (12 runs, 4 groups) was added and **executed on 2026-11-11 (UTC)**
+> (12/12 OK; verified 2026-11-10 local time: 222/222 OK, seed audit PASS); the manifest totals are 222 runs / 74 groups,
+> all executed.
 
 | Part | Groups x seeds | Runs | Content |
 |---|---|---|---|
@@ -34,7 +35,7 @@ invented here, including for the upper bound.
 | `rnhal` | 14 x 3 | 42 | paper 3 ablations at nq=100: 6.1 spatial/spectral; 6.2 five existing + five new hierarchy rows; 6.3 full + w/o hierarchical |
 | `texhal` | 10 x 3 | 30 | paper 2 ablations at nq=100: 6.1 q5/q13/q17; 6.2 L1/L2a/L2b/L3/L4; 6.3 w/o hierarchical; plus `shared/texhal_full` |
 | `texhal_q17` | 6 x 3 | 18 | paper 2, TexHAL canonical `Q=17` (ADR 0011, accepted by the author 2026-11-01, advisor review pending; **executed 2026-11-01**): 6.2 L1/L2a/L2b/L3/L4 and 6.3 w/o hierarchical re-run with VCTex `q=[17]` (`files_config/ablations/texhal_q17/`) |
-| `hier_transfer` | 4 x 3 | 12 | ADR 0013 (author decision 2026-11-10, **not executed**): the KMH-sweep winner shape and the reference shape, both with `n_resamples=0`, for RNHAL and TexHAL Q=17 (see below) |
+| `hier_transfer` | 4 x 3 | 12 | ADR 0013 (author decision 2026-11-10, **executed 2026-11-11**): the KMH-sweep winner shape and the reference shape, both with `n_resamples=0`, for RNHAL and TexHAL Q=17 (see below) |
 | **Total** | **74 x 3** | **222** | |
 
 Paper 1 = the 12 classical strategies (RandomSampling, LeastConfidence, MarginSampling,
@@ -160,7 +161,7 @@ RNHAL-full vs TexHAL-full vs RandomSampling@100 + best paper-1 @100 as context).
 render `TBD`. `docs/results/campaign/summary.csv` lists every (paper, table, row) with its
 resolved run.
 
-## Hierarchy transfer part (`hier_transfer`, prepared 2026-11-10, not executed)
+## Hierarchy transfer part (`hier_transfer`, prepared 2026-11-10, executed 2026-11-11)
 
 ADR 0013. Motivation: KMH sweep stage 2 found `k=[600,100]`, `sample_sizes=[30,5]`, `n_resamples=0` over frozen
 ImageNet features at 0.8819 weighted F1 (nq100), above RNHAL (0.8805) and TexHAL Q=17 (0.8745); the learned descriptors
@@ -180,7 +181,37 @@ Note: the reference `sample_sizes` are `[30,15,2]` (as in `hier_L3_ref` of the s
 is a different computation, so there is no alias. Results dirs: `results/campaign/{rnhal,texhal_q17}/6_2/<name>/`.
 Run: `make campaign-run PART=hier_transfer` (12 runs, about 2 to 4 GPU hours on Colab); verify with
 `make campaign-verify PART=hier_transfer` (or without `PART`: `OK=222` once everything is present); then
-`make campaign-report`. Runbook: `COLAB_RUNBOOK.md` section 6c. Results: TBD.
+`make campaign-report`. Runbook: `COLAB_RUNBOOK.md` section 6c.
+
+**Execution record (past tense)**: Google Colab Pro, one session, run start timestamps 2026-11-11 01:53 to 02:18 UTC, 12/12 runs
+DONE, code commit `eee5d4e`, on an NVIDIA L4 GPU (22 GB; 12 vCPU Intel Xeon 2.20 GHz, 53 GB RAM, Ubuntu 24.04, Python 3.12.16,
+PyTorch 2.5.0+cu124, cuDNN 9.1, driver 580.82.07, Colab release `release-colab-external-images_20261109-060054_RC00`), a third
+runtime image of the campaign (the earlier 210 runs used two A100 images). **Verification (2026-11-10, local time)**:
+`make campaign-verify`: `OK=222 INCOMPLETE=0 MISSING=0 (of 222 jobs)`; seed audit **PASS for seeds 1, 2 and 3** (73 runs compared
+per seed, reference `shared/random_nq100`); `make campaign-report` re-run: 74/74 groups with data. All 12 runs logged the known
+`cumsum_cuda_kernel` non-deterministic-op warning (now 102 of 222 campaign runs).
+
+### Results (final round, nq100, mean +/- population sd over seeds 1-3)
+
+| Group id | Representation, hierarchy | Weighted F1 (mean +/- sd) | Macro F1 | Accuracy | Seeds 1 / 2 / 3 (weighted F1) |
+|---|---|---|---|---|---|
+| `rnhal/6_2/hier_L2_matched__no_resampling` | SSRAE q=13, `[600,100]`, `[30,5]`, m=0 | 0.8592 +/- 0.0138 | 0.8054 +/- 0.0141 | 0.8506 | 0.8538 / 0.8457 / 0.8782 |
+| `rnhal/6_2/hier_L3__no_resampling` | SSRAE q=13, `[600,200,100]`, `[30,15,2]`, m=0 | 0.8740 +/- 0.0217 | 0.8276 +/- 0.0272 | 0.8677 | 0.8444 / 0.8960 / 0.8817 |
+| `texhal_q17/6_2/hier_L2_matched__no_resampling` | VCTex Q=17, `[600,100]`, `[30,5]`, m=0 | 0.8544 +/- 0.0244 | 0.8062 +/- 0.0276 | 0.8424 | 0.8260 / 0.8855 / 0.8519 |
+| `texhal_q17/6_2/hier_L3__no_resampling` | VCTex Q=17, `[600,200,100]`, `[30,15,2]`, m=0 | 0.8642 +/- 0.0216 | 0.8178 +/- 0.0247 | 0.8561 | 0.8380 / 0.8909 / 0.8637 |
+
+Reference values: RNHAL reference (m=10) 0.8805 +/- 0.0084; RNHAL L=4 `[800,600,200,100]` 0.8955; TexHAL Q=17 reference (m=10)
+0.8745 +/- 0.0079; TexHAL best `[300,100,50]` 0.8842; KMH (ImageNet features) `k=[600,100]` without resampling 0.8819 +/- 0.0148
+(KMH sweep stage 2 winner), KMH reference shape without resampling 0.8525, KMH reference with m=10 (`shared/kmh_nq100`) 0.8224.
+
+Reading (fixed before the runs in the thesis plan): the KMH-winner shape does NOT transfer to the descriptors. Under
+`k=[600,100]` without resampling both descriptors are below the ImageNet features (SSRAE 2.3 points below, VCTex 2.8 below,
+beyond one sd). Turning resampling off at the reference shape costs the descriptors 0.7 (SSRAE) and 1.0 (VCTex) points, within
+one sd, and roughly triples the spread across seeds, whereas it had gained 3.0 points for the ImageNet features. Hierarchy and
+representation interact: the descriptors' advantage over ImageNet features holds under the reference and deeper hierarchies,
+not under the hierarchy tuned for ImageNet features. No canonical configuration changes (author decision 2026-11-10: the
+reference hierarchy stays canonical for RNHAL and TexHAL).
+
 
 ## Control run for KI-43 (prepared 2026-11-04, not executed)
 

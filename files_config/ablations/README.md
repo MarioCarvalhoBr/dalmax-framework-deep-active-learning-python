@@ -24,7 +24,7 @@ files_config/ablations/
     ├── stage_no_hierarchy.json                                   (§6.3)
     └── micro/           # CPU smoke mirrors of the 6 files above
 
-Hierarchy-transfer rows (ADR 0013, 2026-11-10, campaign part `hier_transfer`; prepared, not executed):
+Hierarchy-transfer rows (ADR 0013, 2026-11-10, campaign part `hier_transfer`; executed 2026-11-11, verified):
     rnhal/hier_L2_matched__no_resampling.json, rnhal/hier_L3__no_resampling.json,
     texhal_q17/hier_L2_matched__no_resampling.json, texhal_q17/hier_L3__no_resampling.json (+ their micro/ mirrors)
 

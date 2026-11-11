@@ -154,7 +154,8 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   record, complete-leaf resume, seed-audit WARN, `--exclude-strategy`).
 
 - **Campaign executed** (2026-09-30 to 2026-10-05 on Google Colab Pro, verified 2026-11-01; part
-  `texhal_q17` executed 2026-11-01, verified 2026-11-02): 210/210 runs OK, seed audit PASS for seeds 1-3;
+  `texhal_q17` executed 2026-11-01, verified 2026-11-02; part `hier_transfer` executed 2026-11-11 UTC, verified
+  2026-11-10 local, ADR 0013): 222/222 runs OK, seed audit PASS for seeds 1-3;
   execution record and every result table in
   [`.specs/experiments/campaign.md`](.specs/experiments/campaign.md); reports in
   `docs/results/campaign/` (local-only since `docs/*` is gitignored; a copy is kept under
@@ -241,17 +242,17 @@ outstanding.
   the one-shot re-execution of everything the three papers need: paper 1 = 12 classical strategies +
   **KMH** (hierarchical k-means over ImageNet ResNet-50 features, confirmed by the user) x nq {10,50,100}
   + the `FullSupervised` upper bound; papers 2/3 = TexHAL/RNHAL ablations at nq100 (+ 5 new RNHAL
-  hierarchy rows). 222 runs / 74 groups (210 executed; the 18-run `texhal_q17` part ran 2026-11-01, ADR 0011; the 12-run `hier_transfer` part, prepared 2026-11-10, ADR 0013, is not executed), results under `results/campaign/`; groups consumed by
+  hierarchy rows). 222 runs / 74 groups (all 222 executed; the 18-run `texhal_q17` part ran 2026-11-01, ADR 0011; the 12-run `hier_transfer` part, ADR 0013, ran 2026-11-11 UTC and was verified 2026-11-10 local), results under `results/campaign/`; groups consumed by
   several papers live under `shared/` (`shared/kmh_nq100`, `shared/random_nq100`,
   `shared/texhal_full`) and every alias row points to the one run. `stage_no_representation` is ONE
   shared run (2026-09-01 per-paper decision superseded by ADR 0009; its only config is
   `files_config/campaign/params_kmh.json`). Engine `dalmax/campaign.py`, reports
   `dalmax/reporting/campaign_report.py`. `seed_everything` now also sets `CUBLAS_WORKSPACE_CONFIG` and
   `torch.use_deterministic_algorithms(True, warn_only=True)`; `run_metadata.json` has a `determinism` block.
-- **Hierarchy transfer part `hier_transfer` (ADR 0013, prepared 2026-11-10, not executed)**: 4 groups / 12 runs appended to
+- **Hierarchy transfer part `hier_transfer` (ADR 0013, prepared 2026-11-10, executed 2026-11-11 UTC, verified 222/222)**: 4 groups / 12 runs appended to
   the main manifest (`make campaign-run PART=hier_transfer`): the KMH-sweep nq100 winner shape `k=[600,100]`, `sample_sizes=[30,5]`,
   `n_resamples=0` (0.8819 with ImageNet features) and the reference shape without resampling, each with SSRAE (`rnhal/6_2/`)
-  and VCTex Q=17 (`texhal_q17/6_2/`); rows of table 6.2 of papers 3 and 2. Runbook: `COLAB_RUNBOOK.md` section 6c.
+  and VCTex Q=17 (`texhal_q17/6_2/`); rows of table 6.2 of papers 3 and 2. Outcome: the shape does not transfer; under `k=[600,100]` without resampling the descriptors (SSRAE 0.8592, VCTex Q=17 0.8544) are below the ImageNet features (0.8819); no canonical configuration changes. It ran on a third runtime image with a different GPU model (see `run_metadata.json`). Runbook: `COLAB_RUNBOOK.md` section 6c.
 - **Optional `selection.hierarchy` keys (ADR 0012)**: `n_resamples` (default 10), `init_method`
   (`kmeans++`|`random`), `resample_strategy` (`closest`|`random`), `leaf_sampling` (`random`|`closest`);
   the defaults reproduce the previous behaviour, so existing params JSONs and executed runs are unchanged.

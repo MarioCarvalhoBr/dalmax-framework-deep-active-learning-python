@@ -330,7 +330,9 @@ every other run.
 Twelve runs (4 groups x seeds 1-3, `n_query=100`): the KMH-sweep winner shape (`k=[600,100]`, `sample_sizes=[30,5]`,
 no resampling) and the reference shape without resampling, with the SSRAE (RNHAL, `results/campaign/rnhal/6_2/`) and VCTex
 Q=17 (TexHAL, `results/campaign/texhal_q17/6_2/`) descriptors. They are a part of the MAIN manifest, not of the sweep.
-Prepared 2026-11-10, not executed; estimated 2 to 4 GPU hours, about 1.1 GB of checkpoints.
+Prepared 2026-11-10; estimated 2 to 4 GPU hours, about 1.1 GB of checkpoints.
+
+**Executed** 2026-11-11 (UTC) in one Colab session (code commit `eee5d4e`), on a third runtime image with a different GPU model than the earlier campaign runs (see `environment.gpus[0].name` in `run_metadata.json`). `make campaign-verify PART=hier_transfer` gave `OK=12`, and after merging into the main `results/` tree `make campaign-verify` gave `OK=222 INCOMPLETE=0 MISSING=0`, seed audit PASS for seeds 1, 2, 3. Outcome in `.specs/experiments/campaign.md` (section "Hierarchy transfer part").
 
 **Notebook setup.** The Parameters cell of `notebooks/colab_runbook.ipynb` already defaults to `MANIFEST = ""` and
 `PART = "hier_transfer"` (since 2026-11-10; nothing to edit). Do sections 0-5 first (runtime, Drive, clone,
@@ -351,7 +353,7 @@ The sweep is a separate manifest (`files_config/campaign/manifest_kmh_sweep.json
 [`.specs/experiments/campaign.md`](.specs/experiments/campaign.md) "KMH parameter sweep") that varies the
 KMH selection (hierarchy shapes including budget-matched ones, k-means init, leaf sampling, resampling)
 to decide whether paper 1's KMH reference changes. It runs 3 seeds at n_query 10/50/100 into a NEW tree,
-`results/campaign_kmh/`, so it never touches `results/campaign/`. It is prepared, not executed.
+`results/campaign_kmh/`, so it never touches `results/campaign/`. Executed and verified (stage 1 on 2026-11-07/08, stage 2 on 2026-11-09/10; 165/165 OK).
 
 | Part | Runs | Run groups |
 |---|---|---|
