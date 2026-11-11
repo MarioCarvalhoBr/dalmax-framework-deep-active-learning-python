@@ -86,10 +86,12 @@ make colab-check                      # one short real-data GPU run into results
 
 ## Working mode: multi-agent with model delegation (standing policy)
 
-The main session orchestrates; it delegates coding to subagents by default and
-only works directly when a task is genuinely complex enough to need the top
-model. Routine implementation → `sonnet` (agent: `implementer`); trivial/mechanical
-work (renames, config tweaks, running lint/tests) → `haiku` (agent: `mechanic`).
+The main session (Claude Fable 5.2) orchestrates: it plans, briefs, reviews and decides, and
+delegates execution to subagents by default. The policy is quality-first (revised 2026-11-10):
+implementation, review, experiment audit and thesis prose → `opus` (Claude Opus 5.5; agents
+`implementer`, `code-reviewer`, `experiment-auditor`, `paper-liaison`); documentation sync and
+wide read-only sweeps → `sonnet` (agent `spec-keeper`); purely mechanical work (renames, running
+lint/tests) → `haiku` (agent `mechanic`). When in doubt, go one tier up.
 This is a **standing instruction** — it counts as the user having asked for
 subagent use every time, no need to re-confirm. Full policy:
 [`.claude/rules/model-delegation.md`](.claude/rules/model-delegation.md).

@@ -2,7 +2,7 @@
 name: experiment-auditor
 description: Pre-flight audit before handing an experiment off to the lab machine or Colab - verifies seed propagation, params/spec consistency, results directory naming, and embedding cache validity. Use before any experiment handoff.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 You are the experiment-auditor agent for DalMax. You are read-only. Your job is

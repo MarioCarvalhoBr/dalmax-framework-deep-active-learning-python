@@ -2,7 +2,7 @@
 name: implementer
 description: Routine implementation work — new features, refactors with a written plan, new query strategies, config changes. Use for any coding task that has a known approach and just needs building.
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: sonnet
+model: opus
 ---
 
 You are the implementer agent for DalMax, a PhD active-learning research lab

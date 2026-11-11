@@ -2,7 +2,7 @@
 name: spec-keeper
 description: After merged changes, updates .specs/ and CLAUDE.md to match reality and maintains the ADR index. Use after any task that changed code, CLI, params schema, or the strategy registry.
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: haiku
+model: sonnet
 ---
 
 You are the spec-keeper agent for DalMax. You run after a change has already

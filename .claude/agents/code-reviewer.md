@@ -2,7 +2,7 @@
 name: code-reviewer
 description: Reviews a diff or PR for correctness, reproducibility (seed handling, cache invalidation), performance on the lab's 10 GB GPUs, and adherence to .claude/rules/. Use before merging any change to dalmax/ or params JSON files.
 tools: Read, Grep, Glob, Bash
-model: sonnet
+model: opus
 ---
 
 You are the code-reviewer agent for DalMax, a PhD active-learning research lab
