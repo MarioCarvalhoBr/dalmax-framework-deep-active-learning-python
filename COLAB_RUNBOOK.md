@@ -339,9 +339,9 @@ to decide whether paper 1's KMH reference changes. It runs 3 seeds at n_query 10
 | `kmh_nq100` | 63 | 21 |
 | **Total** | **165** | **55** |
 
-Stage 2 (2026-11-08, nq100 only, 10 groups / 30 runs; ADR 0012) is part of `kmh_nq100`: re-running the
+Stage 2 (prepared 2026-11-08, nq100 only, 10 groups / 30 runs; ADR 0012) is part of `kmh_nq100`: re-running the
 same `PART=all` command resumes and executes only the 30 new runs, estimated 8 to 10 GPU hours (the L4/L5
-shapes cost about 2 min of clustering per round). Stage 2 is prepared, not executed.
+shapes cost about 2 min of clustering per round). Stage 2 was executed 2026-11-09 to 2026-11-10 and verified locally 165/165 on 2026-11-10.
 
 **Notebook setup (the only edit you make).** In [`notebooks/colab_runbook.ipynb`](notebooks/colab_runbook.ipynb)
 the Parameters cell (second cell) is the only one to touch. Keep `DRIVE_ROOT`, `REPO_URL`, `REPO_DIR` and

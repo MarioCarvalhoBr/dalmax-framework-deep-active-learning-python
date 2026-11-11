@@ -179,12 +179,12 @@ Colab runtime image is held fixed (KI-43 cause 2). Nothing here was run; it awai
   `log-dalmax.log`, seeds 1-3, mean about 65.8 s), so the control is about 3.3 minutes of GPU plus session
   setup (dataset copy to local disk, `poetry install`) as in `COLAB_RUNBOOK.md`.
 
-## KMH parameter sweep (paper 1; prepared 2026-11-07; stage 1 executed 2026-11-07 to 2026-11-08, verified 135/135; stage 2 prepared 2026-11-08, not executed)
+## KMH parameter sweep (paper 1; prepared 2026-11-07; stage 1 executed 2026-11-07 to 2026-11-08, verified 135/135; stage 2 prepared 2026-11-08, executed 2026-11-09 to 2026-11-10, verified 165/165)
 
 Author decision (2026-11-07): vary every KMH knob at `n_query` 10, 50 and 100 to find the strongest KMH
 configuration per budget; the reference may change afterwards. Stage 1 (below) is the grid; the
 generator keeps the grid as data at the top of `scripts/campaign/build_kmh_sweep_configs.py`; stage 2 (nq100
-only, prepared 2026-11-08) extends it, see the "Stage 2" subsection. Execution status (2026-11-08): the author ran
+only, prepared 2026-11-08) extends it, see the "Stage 2" subsection. Execution status (stage 1, 2026-11-08; stage 2 below): the author ran
 `make campaign-run MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=all` on Colab Pro; the first
 pass completed 129/135 runs. The six failures are all `init_random` configurations (nq100 `hier_L3_ref` seed 3;
 nq50 `hier_L3_ref` seed 3; nq10 `hier_L3_ref` seeds 1 and 3; nq10 `hier_L3_matched` seeds 1 and 2), failing
@@ -193,7 +193,8 @@ and `hierarchical_sampling.py` crashed on them), fixed 2026-11-08 without changi
 re-run the same day by resuming the same command (the engine skipped the 129 complete leaves); the results were
 downloaded and verified locally on 2026-11-08: `campaign-verify` 135/135 OK, seed audit PASS for seeds 1-3,
 `campaign-report` written to `docs/results/campaign_kmh/` (copy in `thesis_drafts/final_thesis/context/campaign-results/kmh_sweep/`).
-Stage-1 result tables: see "Stage 1 results" below. Wall-clock of the first pass:
+Stage-1 result tables: see "Stage 1 results" below. Stage 2 ran 2026-11-09 to 2026-11-10 on Colab Pro and was verified
+locally 2026-11-10 (165/165 OK, seed audit PASS); see "Stage 2 results" below. Wall-clock of the first pass:
 about 10 to 12 GPU hours (estimate from log timestamps, 2026-11-07 ~15:40 UTC to 2026-11-08 ~01:05 UTC, Colab
 session restarts included). The four new `selection.hierarchy` keys it uses (`n_resamples`,
 `init_method`, `resample_strategy`, `leaf_sampling`) are specified in `experimental-protocol.md`; their
@@ -269,7 +270,7 @@ make campaign-smoke-kmh                                                         
 
 Execution record: not executed.
 
-### Stage 2 (2026-11-08, nq100 only; prepared, not executed)
+### Stage 2 (prepared 2026-11-08, nq100 only; executed 2026-11-09 to 2026-11-10)
 
 Stage-1 results that motivate it (final-round weighted F1, mean of seeds 1-3, nq100; best traditional method
 LeastConfidence 0.8716): `hier_L4_k800_600_200_100` 0.8603 (best, but 115 s of query per round),
@@ -306,6 +307,50 @@ overall **55 groups / 165 runs** (63 + 51 + 51). The stage-2 groups follow the s
 clustering per round). Prepared, not executed.
 
 Command count updates: `make campaign-list MANIFEST=files_config/campaign/manifest_kmh_sweep.json` now shows 165 runs / 55 groups; `campaign-smoke-kmh` runs 55 jobs.
+
+### Stage 2 results (executed 2026-11-09 to 2026-11-10 on Google Colab Pro; verified locally 2026-11-10: 165/165 OK, seed audit PASS)
+
+The author pulled commit `7950264` and re-ran the same `PART=all` command; only the 30 new runs executed. Downloaded and
+verified on 2026-11-10 with `make campaign-verify MANIFEST=files_config/campaign/manifest_kmh_sweep.json`:
+`Totals: OK=165 INCOMPLETE=0 MISSING=0 (of 165 jobs)`, seed audit PASS for seeds 1-3 (55 runs compared per seed).
+No failures, no re-runs. Report regenerated in `docs/results/campaign_kmh/` (7 tables, 55 confusion matrices; copy in
+`thesis_drafts/final_thesis/context/campaign-results/kmh_sweep/`). Wall-clock of stage 2: not recorded.
+
+nq100, final-round weighted F1 (mean +/- sd over seeds 1-3, ddof 0), macro F1, normalised AUC of the weighted-F1 curve
+(trapezoid over rounds 0..8 divided by 8) and mean query time per round (from log timestamps). Rows marked "stage 1"
+are context from the first stage.
+
+| config | F1w | sd | F1m | sd | AUC | query s |
+|---|---|---|---|---|---|---|
+| hier_L2_matched__no_resampling (k=[600,100], n_resamples=0) | 0.8819 | 0.0148 | 0.8321 | 0.0223 | 0.7237 | 4.7 |
+| hier_L4_k1200_600_200_100 | 0.8604 | 0.0097 | 0.8084 | 0.0137 | 0.7851 | 143.4 |
+| hier_L4_k800_600_200_100 (stage 1) | 0.8603 | 0.0211 | 0.8010 | 0.0238 | 0.7658 | 114.8 |
+| hier_L3_k800_600_100 | 0.8595 | 0.0111 | 0.8023 | 0.0122 | 0.7681 | 101.8 |
+| hier_L1_k50 | 0.8564 | 0.0068 | 0.7982 | 0.0126 | 0.7486 | 4.2 |
+| hier_L4_k800_600_200_100__sample_x2 | 0.8528 | 0.0098 | 0.8024 | 0.0067 | 0.7664 | 115.4 |
+| hier_L3_ref__no_resampling (stage 1) | 0.8525 | 0.0155 | 0.7995 | 0.0132 | 0.7599 | 5.6 |
+| hier_L4_k800_600_200_50 | 0.8520 | 0.0116 | 0.7936 | 0.0099 | 0.7750 | 113.7 |
+| hier_L2_matched (stage 1) | 0.8520 | 0.0154 | 0.8005 | 0.0160 | 0.7435 | 48.9 |
+| hier_L5_k1000_800_600_200_100 | 0.8511 | 0.0030 | 0.7943 | 0.0063 | 0.7756 | 182.8 |
+| hier_L4_k800_600_200_100__resample_random | 0.8449 | 0.0017 | 0.7878 | 0.0027 | 0.7747 | 113.9 |
+| hier_L3_ref (stage 1, reference) | 0.8389 | 0.0315 | 0.7881 | 0.0302 | 0.7457 | 62.0 |
+| hier_L1_k20 | 0.8388 | 0.0067 | 0.7770 | 0.0080 | 0.7368 | 2.4 |
+| hier_L4_k800_600_200_100__no_resampling | 0.8096 | 0.0693 | 0.7571 | 0.0633 | 0.7677 | 10.3 |
+
+Per-seed weighted F1 of the winner (`hier_L2_matched__no_resampling`): 0.8861, 0.8620, 0.8976. Per-seed of
+`hier_L4_k800_600_200_100__no_resampling`: 0.8492, 0.8674, 0.7121 (one seed collapses). Paper-1 campaign comparison at
+nq100: Least Confidence 0.8716 +/- 0.0237 (AUC 0.7098); full supervision 0.9157.
+
+Reading:
+
+1. Removing the resampling helps the two-level budget-matched shape (+3.0 points over 0.8520) and the reference shape
+   (+1.4) but hurts the four-level shape (one seed collapses).
+2. Deeper or wider hierarchies (L=5; first level 1200) do not improve on L=4 (0.8604 vs 0.8603).
+3. Doubling the samples per cluster does not help (0.8528).
+4. A single level with 50 clusters (0.8564) beats 100 and 20 clusters.
+5. The winner is also the second-cheapest query (4.7 s per round against 62.0 s for the reference and 114.8 s for L=4).
+6. Its AUC (0.7237) is below the AUC of the deep shapes (0.76 to 0.79) but above Least Confidence (0.7098): it starts
+   slower and finishes higher.
 
 ### Stage 1 results (executed 2026-11-07 to 2026-11-08 on Google Colab Pro; verified locally 2026-11-08: 135/135 OK, seed audit PASS)
 
@@ -411,11 +456,12 @@ clusters, KI-44); `n_resamples=0` changes the result by +1.4 / +2.1 / -3.8 point
 time from about 62 s to about 6 s per round; `leaf_sampling` and `resample_strategy` have no consistent sign.
 Decision (author, 2026-11-08, revised the same day): paper 1 reports KMH with the best sweep configuration per
 budget as its result (nq10 `hier_L3_matched__no_resampling` 0.6705, nq50 `hier_L3_matched` 0.8264, nq100
-`hier_L4_k800_600_200_100` 0.8603, the last provisional until stage 2), the configuration per budget being declared
+`hier_L2_matched__no_resampling` 0.8819, final after stage 2 and replacing the provisional L=4 0.8603), the configuration per budget being declared
 in the method and the sweep reported as the configuration study that selected it; no re-baseline of the other
 strategies and no runtime-image caveat in the thesis text (three seeds, mean and std). `shared/kmh_nq100`
 (reference hierarchy, 0.8224) stays as the "w/o representation module" ablation row of papers 2 and 3. The
-lab record (this file, KI-43) keeps the runtime-image facts. Stage 2 (above) may change the nq100 row.
+lab record (this file, KI-43) keeps the runtime-image facts. Stage 2 (executed 2026-11-10, "Stage 2 results" above) set the nq100 row; with it KMH is first at all three query sizes
+(within one sd of LeastConfidence at nq100).
 
 
 ## Wall-clock
@@ -427,7 +473,8 @@ Measured by the real execution: the whole campaign (192 runs) spanned 2026-09-30
 below). Per-run durations are not aggregated here (TBD; derivable from each run's `run_metadata.json`
 start timestamp and `log-dalmax.log`). The earlier Colab ablation batch took about 9-10 min per
 ablation-config run. Micro CPU smoke: ~18-40 s per micro run.
-KMH sweep first pass (129 of 135 runs): about 10 to 12 GPU hours (estimate from log timestamps).
+KMH sweep first pass (129 of 135 runs): about 10 to 12 GPU hours (estimate from log timestamps). KMH sweep stage 2 (30 runs):
+executed 2026-11-09 to 2026-11-10, wall-clock not recorded.
 
 ## Execution record (past tense; executed 2026-09-30 to 2026-10-05, verified 2026-11-01; part `texhal_q17` executed 2026-11-01, verified 2026-11-02)
 

@@ -1,6 +1,6 @@
 # ADR 0012: KMH parameter sweep at every paper-1 budget
 
-- **Status:** Accepted (author decision 2026-11-07; stage 1 executed 2026-11-07 to 2026-11-08, 129/135 in the first pass, the 6 init_random runs re-run after the KI-44 fix, 135/135 verified locally 2026-11-08; stage 2 (nq100 only, 30 runs) prepared 2026-11-08, not executed)
+- **Status:** Accepted (author decision 2026-11-07; stage 1 executed 2026-11-07 to 2026-11-08, 129/135 in the first pass, the 6 init_random runs re-run after the KI-44 fix, 135/135 verified locally 2026-11-08; stage 2 (nq100 only, 30 runs) prepared 2026-11-08, executed 2026-11-09 to 2026-11-10 on Colab Pro, verified locally 165/165 on 2026-11-10)
 - **Date:** 2026-11-07
 
 ## Context
@@ -56,7 +56,7 @@ Totals: 45 run groups, 135 runs (51 + 51 + 33). The sweep is the first stage; th
 the top of `scripts/campaign/build_kmh_sweep_configs.py` so that a second stage (for example the
 knobs on more hierarchies, `num_init`, or the same knobs on RNHAL and TexHAL) is a list edit.
 
-## Stage 2 (2026-11-08, nq100 only; prepared, not executed)
+## Stage 2 (prepared 2026-11-08, nq100 only; executed 2026-11-09 to 2026-11-10)
 
 Stage-1 results that motivate it (final-round weighted F1, mean of seeds 1-3, nq100; best traditional method
 LeastConfidence 0.8716): `hier_L4_k800_600_200_100` 0.8603 (best, but 115 s of query per round),
@@ -90,7 +90,16 @@ overall **55 groups / 165 runs** (63 + 51 + 51). The stage-2 groups follow the s
 (nq100 only, 2026-11-08)"); results in `results/campaign_kmh/nq100/<config>/`. New table
 `kmh_stage2_nq100` (paper1): four context rows (`hier_L3_ref`, `hier_L4_k800_600_200_100`, `hier_L2_matched`,
 `hier_L1_k100`) then the ten rows above. Estimated 8 to 10 GPU hours (the L4/L5 shapes cost about 2 min of
-clustering per round). Prepared, not executed.
+clustering per round). Executed 2026-11-09 to 2026-11-10 (the author pulled commit `7950264`); verified locally 2026-11-10:
+`OK=165 INCOMPLETE=0 MISSING=0`, seed audit PASS for seeds 1-3, no failures, no re-runs.
+
+**Outcome.** At nq100 the winner is `hier_L2_matched__no_resampling` (k=[600,100], `n_resamples=0`), final-round weighted F1
+0.8819 +/- 0.0148 with 4.7 s of query per round (reference 0.8389 at 62.0 s; stage-1 L=4 0.8603 at 114.8 s). Deeper or
+wider hierarchies (L=5, first level 1200), doubled leaf samples and single-level variants did not beat it; removing the
+resampling collapses one seed on L=4. Decision (author decision of 2026-11-08 applied, no new pendencia): paper 1 reports
+KMH at nq100 with this configuration, replacing the provisional L=4 (0.8603); nq10 (`hier_L3_matched__no_resampling`
+0.6705) and nq50 (`hier_L3_matched` 0.8264) are unchanged. `shared/kmh_nq100` (0.8224) stays the papers 2/3 ablation row.
+Tables and the six readings: `.specs/experiments/campaign.md`, "Stage 2 results".
 
 ## Execution note (2026-11-08)
 

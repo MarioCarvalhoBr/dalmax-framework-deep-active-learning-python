@@ -196,7 +196,7 @@ TexHAL's canonical configuration is VCTex `Q=17` (single RAE). The six files are
 Run with `make campaign-run PART=texhal_q17` (18 runs). Validated by
 `tests/test_ablation_configs.py` (`q == [17]`, selection equal to the `texhal/` twin).
 
-## `kmh_sweep/` (2026-11-07, prepared, not executed)
+## `kmh_sweep/` (2026-11-07; stage 1 executed 2026-11-07/08, stage 2 executed 2026-11-09/10, 165/165 verified)
 
 Paper-1 KMH parameter sweep, stage 1 (45 configs per scale) plus stage 2 (nq100 only, 10 more configs, 2026-11-08; 55 per scale in total) in `nq{10,50,100}/` (hierarchy axis
 `hier_*`, knob axis `<hier>__{init_random,leaf_closest,no_resampling,resample_random}`) plus the CPU
