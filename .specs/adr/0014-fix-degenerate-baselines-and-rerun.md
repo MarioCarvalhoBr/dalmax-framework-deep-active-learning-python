@@ -69,7 +69,8 @@ We will fix the three defects in code and re-run only the affected 21 groups:
    DeepFool's selection whenever a duplicate pair straddles the batch boundary, which breaks the constraint that the
    five unchanged strategies keep their behaviour; keeping the pool order there is harmless, because the tied samples
    are the same image with the same label (only which copy is picked differs, there is no class bias). Switching DeepFool
-   to the random tie-break is one registry entry if ever wanted (it would then need a re-run too).
+   to the random tie-break is one registry entry if ever wanted (it would then need a re-run too). The duplicates themselves, including 171 images
+   present in both train and test, are recorded as KI-46 (open, author decision).
 4. **Re-run parts**: the 21 groups `p1/<Strategy>/nq{10,50,100}` keep their ids, `dir_results` and table rows
    (results land in the same leaf paths) and move from part `paper1` to two parts balanced by the GPU time of the
    first execution (BIM about 2,300 s per run, MC dropout about 230 s, KMeans/KCenter about 90 s): `paper1_rerun_a`

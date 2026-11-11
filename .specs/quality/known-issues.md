@@ -101,6 +101,7 @@ accepted as-is (author decision 2026-11-02)**, so they leave the open list (docu
 (Update 2026-11-02b: **KI-43** (round-0 mismatch, disclosure) added: 10 open, 43 tracked items.)
 (Update 2026-11-08: **KI-44** (empty clusters under random k-means init crashed the hierarchical sampling) added and resolved the same day: 10 open, 44 tracked items.)
 (Update 2026-11-11: **KI-45** (AdversarialBIM ties broken in pool order) added and accepted as-is, disclosed in the thesis like KI-41/KI-42: 10 open, 45 tracked items. KI-43 gained a dated note on the two executions of the reference KMH configuration.)
+(Update 2026-11-11c: **KI-46** (byte-identical duplicate images in DANINHAS, including across train and test) added, OPEN, pending an author decision: 11 open, 46 tracked items.)
 (Update 2026-11-11b: author decision of the same day reverses the "accepted as-is" status of **KI-41, KI-42 and KI-45**: all three are **fixed in code (2026-11-11, ADR 0014)** and their 63 runs are prepared for re-execution as campaign parts `paper1_rerun_a` / `paper1_rerun_b` (not executed yet). They stay out of the open count: 10 open, 45 tracked items.)
 
 34 tracked items total (KI-34 added 2026-08-26, while reconciling the Phase 3 ablation execution
@@ -528,3 +529,23 @@ appendix C, chapters 1, 9 and 10, where BIM is listed with the other strategies 
 fix deferred to a future campaign. Fix option: break ties at random (e.g. add a tiny seeded jitter from
 `derive_seed(seed, "adversarial_ties")`, or `np.lexsort((rng.permutation(len(dis)), dis))`) and re-run the 9 BIM
 runs as a new campaign part, old runs kept as history.
+
+### KI-46 — DANINHAS contains byte-identical duplicate images, also across train and test (OPEN, pending author decision; found 2026-11-11)
+
+**Found** while implementing ADR 0014 (checking whether DeepFool distances can tie exactly). Evidence, read-only
+`md5sum` over `DATA/daninhas_full/` (2026-11-11): **train** 8,086 files, 7,405 distinct contents; 1,269 files belong to
+588 groups of identical copies, never across classes. **Test** 2,106 files, 1,008 distinct contents (per class:
+Brachiaria 335/172, Coloniao 190/89, Graminea 970/502, Mamona 456/167, Outras folhas largas 155/78). **Across splits**
+171 distinct images occur in both train and test (394 test files are copies of a training image). The copies share the
+tile coordinates and differ in the orthophoto number of the file name (e.g.
+`test/DATASET_MAMONA/ORTOFOTO_234_9001_43609_1.jpg` and `ORTOFOTO_278_9001_43609_1.jpg`), which points to overlapping
+orthophoto exports. Only exact byte duplicates were counted; near-duplicates were not checked.
+
+**Consequences** (not acted on): (1) train/test leakage: part of the test set is in the pool, so every method that
+labels those pool images is evaluated partly on images it was trained on; (2) duplicated test files weight those images
+two or more times in every metric; (3) duplicates tie exactly in any per-sample score, which is why ADR 0014 keeps
+`AdversarialDeepFool` on its pool-order tie-break. `DATA/` is immutable (`.claude/rules/data-safety.md`), so any
+remedy (deduplicated evaluation, a documented limitation, a new split) is an author decision; nothing was changed.
+Severity: potentially High for the absolute numbers of all three papers, unknown for the comparisons between methods
+(every method sees the same test set).
+
