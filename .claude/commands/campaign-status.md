@@ -1,5 +1,5 @@
 ---
-description: Report campaign progress (files_config/campaign/manifest.json vs results/campaign/): per-part run counts, OK/INCOMPLETE/MISSING, seed audit. Read-only.
+description: Report campaign progress (files_config/campaign/manifest.json vs results/campaign/): per-part run counts, OK/INCOMPLETE/MISSING/STALE, seed audit. Read-only.
 ---
 
 Report the state of the campaign (ADR 0008/0009/0010, `.specs/experiments/campaign.md`). Treat `$ARGUMENTS`

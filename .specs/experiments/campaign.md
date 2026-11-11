@@ -127,7 +127,7 @@ make campaign-list                        # job table + counts per part
 make campaign-run PART=all                # everything, skip-existing (re-run = resume)
 make campaign-run PART=paper1|paper1_rerun_a|paper1_rerun_b|upper_bound|rnhal|texhal|texhal_q17|hier_transfer   # or comma-separated (+ control, kmh_nq10|50|100 for the other manifests)
 make campaign-archive-superseded [DRY=1|CHECK=1]   # ADR 0014: move superseded re-run leaves to results/old_results_broken/
-make campaign-verify                      # OK/INCOMPLETE/MISSING per job + seed-consistency audit
+make campaign-verify                      # OK/INCOMPLETE/MISSING/STALE per job + seed-consistency audit
 make campaign-report                      # docs/results/campaign/ (tables md/tex/csv, confusion matrices)
 make campaign-smoke                       # micro campaign on CPU (seed 1) -> results/smoke_campaign/;
                                           # skips AdversarialBIM/AdversarialDeepFool (68 of 74 jobs)
@@ -252,19 +252,30 @@ deleted) by `scripts/campaign/archive_superseded_runs.py` (`make campaign-archiv
 `CHECK=1` moves nothing and exits 1 while a stale leaf is still in the live tree) to
 `results/old_results_broken/<path below results/>`, e.g.
 `results/old_results_broken/campaign/paper1/nq100/daninhas_full/SEED_1/NQ_100_NIL_100_NR_8_NE_10/AdversarialBIM/`, with one
-line per move in `results/old_results_broken/ARCHIVE_LOG.tsv` (UTC time, source, destination, reason). A leaf is
-superseded iff its `run_metadata.json` `started_at` precedes the fix cutoff `SUPERSEDED_BEFORE = 2026-11-11T19:12:28Z`
-(override `--before`); a leaf started at or after it is never moved, an existing destination is never overwritten or
-merged (reported, exit 1), a leaf without a readable start time is skipped (exit 1), and re-running is idempotent. This
+line per move in `results/old_results_broken/ARCHIVE_LOG.tsv` (UTC time, source, destination, reason). One definition,
+`dalmax/superseded.py::classify_leaf`, shared by the script and the engine (ADR 0014 amendment): a leaf is superseded iff
+its `run_metadata.json` `started_at` precedes the fix cutoff `SUPERSEDED_BEFORE = 2026-11-11T19:12:28Z` (script override
+`--before`) OR it lacks `config.dataset.model_args` (always written by the fixed code, never by the pre-fix code). A
+current leaf is never moved, an existing destination is never overwritten or merged (reported, exit 1), a leaf without
+readable metadata is never moved (`UNREADABLE` with `results.json`, exit 1, resolved by hand; `INTERRUPTED` without it,
+exit 0, re-run by the engine), `dir_results` must be under `results/` without `..`, and re-running is idempotent. This
 is the one sanctioned exception to the append-only rule of `results/` (`.claude/rules/data-safety.md`), on the
 author's explicit instruction to keep the old runs.
+
+**Safeguards (ADR 0014 amendment).** `campaign run` (also `--dry-run`) refuses to start, exit 3 and nothing launched,
+while a selected job of `paper1_rerun_a`/`paper1_rerun_b` has a superseded or unreadable leaf, listing the count and the
+first leaves; `campaign verify` reports such jobs as `STALE` (non-OK, exit 1), so `OK` for a re-run part is always a run
+of the fixed code. Other parts are not inspected. Local tree before archiving (2026-11-11): `OK=159 STALE=63`. The
+notebook's check and pre-run gate cells raise on failure (the gate asserts 24 / 39 runs for the part), and its zip cell
+refuses unless the check passes and verify reports all runs `OK`; it ships `results/campaign/campaign_<PART>.log`.
 
 **Procedure** (operator guide: `COLAB_RUNBOOK.md` section 6d): on each account, sections 0-5, then
 `make campaign-archive-superseded DRY=1`, `make campaign-archive-superseded`, `CHECK=1`, `make campaign-list`
 (`paper1_rerun_a 24 runs (8 run groups)` / `paper1_rerun_b 39 runs (13 run groups)`), `make campaign-run PART=...`
 (resume = same command), `make campaign-verify PART=...` (`OK=24` / `OK=39`), zip the new leaves of the part (about
-2.3 GB / 3.7 GB). Merge into the authoritative tree: archive first, then `unzip -n`, then `CHECK=1`, then
-`make campaign-verify` (expect `OK=222`, seed audit PASS) and `make campaign-report`.
+2.3 GB / 3.7 GB). Merge into the authoritative tree: archive first (`unzip -n` over un-archived old leaves would keep
+their files and add only the new-only ones, mixing the two runs), then `unzip -n` both zips, then `CHECK=1`, then
+`make campaign-verify` (expect `OK=222 ... STALE=0`, seed audit PASS) and `make campaign-report`.
 
 ## Control run for KI-43 (prepared 2026-11-04, not executed)
 

@@ -15,7 +15,9 @@
   (`make campaign-archive-superseded`) MOVES the superseded first-execution leaves of the re-run parts
   `paper1_rerun_a`/`paper1_rerun_b` into `results/old_results_broken/<same path below results/>`, on the
   author's explicit instruction to keep (not delete) them. It never deletes, never overwrites or merges into an
-  existing destination, never moves a leaf started at or after its cutoff, and logs every move in
+  existing destination, never moves a current leaf of the fixed code, an interrupted or an unreadable leaf
+  ("superseded" has one definition, `dalmax/superseded.py::classify_leaf`, also used by the campaign engine's
+  run guard and `STALE` verify status; never re-implement it elsewhere), and logs every move in
   `results/old_results_broken/ARCHIVE_LOG.tsv`. Agents never run it against the real `results/` tree (tests use
   temporary trees); the operator runs it (`COLAB_RUNBOOK.md` section 6d). No other code may move or delete
   anything under `results/`.

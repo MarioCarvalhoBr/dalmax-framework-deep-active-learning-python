@@ -23,7 +23,7 @@ the per-GPU ablation scripts, `make ablations-*`/`ablation-report*`/`smoke-ablat
    ```
    Skip-existing makes a relaunch resume (a job is done only when its leaf holds every artifact;
    `results.json` is written last). Failures go to `results/campaign/failures.log` and the batch continues.
-3. **Verify**: `make campaign-verify PART=rnhal` (per-job OK/INCOMPLETE/MISSING + seed audit; exit 0/1/2).
+3. **Verify**: `make campaign-verify PART=rnhal` (per-job OK/INCOMPLETE/MISSING/STALE + seed audit; exit 0/1/2).
 4. **Report**: `make campaign-report` writes `docs/results/campaign/paper{2,3}/` tables (md/tex, weighted
    and macro F1, `TBD` for missing rows) plus `summary.csv` and mean confusion matrices. Papers 2/3
    comparison tables also need paper 1's `shared/*` runs (`make campaign-run PART=paper1`).

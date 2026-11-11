@@ -71,7 +71,9 @@ make campaign-list                    # job table + run counts per part (222 run
 make campaign-run PART=all            # PART=paper1|paper1_rerun_a|paper1_rerun_b|upper_bound|rnhal|texhal|texhal_q17|hier_transfer (comma-separated ok); resume = re-run
 make campaign-archive-superseded DRY=1   # ADR 0014: report the superseded leaves of the re-run parts (then without DRY: move
 make campaign-archive-superseded CHECK=1 #   them to results/old_results_broken/; CHECK=1: exit 1 while a stale leaf remains)
-make campaign-verify                  # OK/INCOMPLETE/MISSING per job + seed audit (exit 0 ok / 1 fail / 2 warn)
+make campaign-verify                  # OK/INCOMPLETE/MISSING/STALE per job + seed audit (exit 0 ok / 1 fail / 2 warn)
+make campaign-archive-superseded DRY=1  # ADR 0014: superseded re-run leaves -> results/old_results_broken/ (then without DRY, then CHECK=1);
+                                      # campaign-run refuses (exit 3) and verify says STALE while one is live
 make campaign-report                  # docs/results/campaign/ (tables md/tex/csv, mean confusion matrices)
 make campaign-list MANIFEST=files_config/campaign/manifest_control_ki43.json   # any other manifest, e.g. the KI-43 control (prepared, not run)
 make campaign-list MANIFEST=files_config/campaign/manifest_kmh_sweep.json     # KMH parameter sweep (ADR 0012; stage 1 executed 2026-11-07/08, 135/135 OK; stage 2 executed 2026-11-09/10, 165/165 verified 2026-11-10): 165 runs / 55 groups

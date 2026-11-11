@@ -258,7 +258,7 @@ engine `dalmax/campaign.py`. See
 ```bash
 make campaign-list                 # job table + run counts per part
 make campaign-run PART=all         # sequential, skip-existing: re-run the same command to resume
-make campaign-verify               # OK/INCOMPLETE/MISSING per job + seed audit
+make campaign-verify               # OK/INCOMPLETE/MISSING/STALE per job + seed audit
 make campaign-report               # tables + mean confusion matrices -> docs/results/campaign/
 make campaign-smoke                # CPU micro campaign (skips the two adversarial baselines)
 ```

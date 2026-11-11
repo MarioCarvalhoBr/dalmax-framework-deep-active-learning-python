@@ -107,3 +107,39 @@ We will fix the three defects in code and re-run only the affected 21 groups:
   it, so the MC-dropout groups' signature changed (they are not aliases of anything).
 - Follow-up: execute the two parts (`COLAB_RUNBOOK.md` section 6d), archive, merge, `make campaign-verify` (expect
   `OK=222`), `make campaign-report`, then update paper 1's tables and the KI-41/KI-42/KI-45 disclosures in the thesis.
+
+## Amendment (2026-11-11, safeguards against keeping or shipping the superseded leaves)
+
+Two reviews found that the only protection against launching the re-run parts over the old leaves (skip-existing would
+keep them as complete, `verify` would count them `OK`) or zipping old leaves was an operator step. With the cloud
+credits nearly exhausted, that mistake must be impossible, not just documented:
+
+1. **One definition** in `dalmax/superseded.py` (stdlib only; imported by `dalmax/campaign.py`, by
+   `scripts/campaign/archive_superseded_runs.py` and, for the part names, by `scripts/campaign/build_manifest.py`):
+   `RERUN_PARTS`, `SUPERSEDED_BEFORE` and `classify_leaf`. A leaf of a re-run part is **superseded** when its
+   `run_metadata.json` (a) started before the cutoff, OR (b) lacks `config.dataset.model_args`. Rule (b) holds because
+   `run_metadata.json` stores `to_dict(config)` (`dataclasses.asdict`), and since the fix `DatasetConfig.model_args`
+   always exists (`{"dropout_p": null}` when the params JSON has no block); none of the 63 first-execution leaves under
+   `results/campaign/paper1/` has the key (checked read-only 2026-11-11). Without a readable `run_metadata.json` (or
+   with model_args but no valid `started_at`) a leaf is **interrupted** if it has no `results.json` (not superseded; the
+   engine re-runs it, as `job_done` already treats any incomplete leaf) and **unreadable** if it has one (blocking,
+   resolved by hand, `COLAB_RUNBOOK.md` section 6d). The archive script keeps its rules (never delete, never overwrite,
+   never move a current, interrupted or unreadable leaf) and now also rejects `..` components in `dir_results`.
+2. **Engine guard**: `campaign run` (real, `--dry-run`, `--no-skip-existing`) raises `SupersededLeavesError` before
+   launching or logging anything when a selected job of a re-run part has a superseded or unreadable leaf (every
+   matching leaf is checked): exit 3, the count, the first five leaves and the archive commands. `campaign verify`
+   reports such jobs as `STALE` (non-OK, exit 1; `Totals: ... STALE=n`), so `OK=24` / `OK=39` / `OK=222` can only mean
+   runs of the fixed code. Jobs of other parts are never inspected. On the local tree (2026-11-11, before archiving):
+   `OK=159 STALE=63`, and `run --part paper1_rerun_a --dry-run` refuses with 24 leaves.
+3. **Notebook**: the archive check cell and a new gate cell right before the run cell call the check with
+   `subprocess.run(..., check=True)`, so "Run all" stops there; the gate also asserts that `campaign-list` reports 24 runs
+   / 8 groups (`paper1_rerun_a`) or 39 / 13 (`paper1_rerun_b`), which the Parameters cell prints in a banner. The zip
+   cell refuses unless the check passes and verify reports every run of the part `OK` (explicit `ZIP_PARTIAL` opt-out),
+   checks the checkpoint count, and adds the account's `campaign.log` / `failures.log` as
+   `results/campaign/{campaign,failures}_<PART>.log` so the measured times survive the merge.
+4. Not done: failing at startup (in `build_strategy`) for an MC-dropout strategy configured without dropout. A
+   config-level check is not possible (`dropout_p: null` means the model's own default, 0.0 for the DANINHAS ResNet-50
+   but 0.5 for the CIFAR10 CNN) and building a probe model would draw from the torch RNG, i.e. change the reviewed runs.
+   The existing fail-fast `MCDropoutError` at the first query remains the guard.
+
+No query strategy, model, seeding or config behaviour changed; the manifests are unchanged (`build_manifest.py --check`).

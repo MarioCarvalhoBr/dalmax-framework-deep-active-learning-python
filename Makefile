@@ -138,7 +138,7 @@ campaign-list:
 campaign-run:
 	poetry run python -m dalmax.campaign run $(CAMPAIGN_FLAGS) $(if $(DEVICE),--device $(DEVICE)) $(RUN_ARGS)
 
-# Per-job OK/INCOMPLETE/MISSING + the seed-consistency audit.
+# Per-job OK/INCOMPLETE/MISSING/STALE (STALE: superseded re-run leaf, ADR 0014) + the seed-consistency audit.
 # Exit 0 all OK, 1 incomplete/missing job or FAIL audit, 2 only audit WARNs.
 campaign-verify:
 	poetry run python -m dalmax.campaign verify $(CAMPAIGN_FLAGS)
