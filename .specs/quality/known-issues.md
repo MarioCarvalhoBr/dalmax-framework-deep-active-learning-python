@@ -100,6 +100,7 @@ plan.
 accepted as-is (author decision 2026-11-02)**, so they leave the open list (documented, not open): 8 open in total, 43 tracked items.)
 (Update 2026-11-02b: **KI-43** (round-0 mismatch, disclosure) added: 10 open, 43 tracked items.)
 (Update 2026-11-08: **KI-44** (empty clusters under random k-means init crashed the hierarchical sampling) added and resolved the same day: 10 open, 44 tracked items.)
+(Update 2026-11-11: **KI-45** (AdversarialBIM ties broken in pool order) added and accepted as-is, disclosed in the thesis like KI-41/KI-42: 10 open, 45 tracked items. KI-43 gained a dated note on the two executions of the reference KMH configuration.)
 
 34 tracked items total (KI-34 added 2026-08-26, while reconciling the Phase 3 ablation execution
 batch; KI-33 added/resolved 2026-08-25). Of these, **27 are now fully resolved**: KI-1 through
@@ -396,6 +397,21 @@ the author wants KMH round 0 aligned; route to `implementer`, with a `run_metada
 cause 2 is to re-run `RandomSampling` nq100 seeds 1-3 in the current image and compare with 0.3084 / 0.4303 /
 0.6167 (about 3 runs). Executed runs stay as history (append-only).
 
+Note 2026-11-11 (thesis integrity audit, `thesis_drafts/final_thesis/files/audits/2026-11-11-integrity.md`,
+F-04/F-06; recomputed from the logs): the reference KMH configuration (ImageNet features, `[600,200,100]`,
+`n_resamples=10`) was executed twice, in the campaign (`paper1/nq10` and `paper1/nq50`
+`RepresentationStrategy`, `shared/kmh_nq100`; commit 705b8e3) and in the KMH sweep (`campaign_kmh/nq{10,50,100}/hier_L3_ref`;
+commit b26d8ca, later runtime image). The logged `Round k query_idxs` are identical in all 24 query rounds of
+every budget (8 rounds x 3 seeds; 24/24 at nq10, nq50 and nq100), so the two executions differ only in training.
+Their final weighted F1 means still differ: nq10 0.6466 (campaign) vs 0.6539 (sweep), nq50 0.7833 vs 0.7951,
+nq100 0.8224 vs 0.8389 (per seed at nq100: 0.7938/0.8685/0.8049 vs 0.8587/0.8635/0.7945, i.e. up to 6.5 points
+for one seed). This is the direct measure of the run-to-run training variation of the protocol: about 1.7
+points in the seed mean at nq100. The thesis now states it once in paper 1, in the chapter 9 limitations and
+in the chapter 10 conclusion, treats differences of that size as ties, and no longer ranks the untuned
+reference with one of the two executions (first at nq10, level with Adversarial DeepFool at nq50, below Least
+Confidence at nq100). It also confirms that the code-version changes between 705b8e3 and b26d8ca (new
+`selection.hierarchy` options with neutral defaults, KI-44 fix) preserved the selection behaviour.
+
 ### KI-44 — random k-means init leaves empty clusters that crashed the hierarchical sampling (RESOLVED 2026-11-08; found 2026-11-08)
 
 **Symptom.** The KMH parameter sweep (ADR 0012, executed 2026-11-07 to 2026-11-08) finished 129/135 runs; six runs
@@ -437,3 +453,36 @@ re-seeding) and must be stated wherever the `init_random` rows are reported.
 **Next step.** The author re-runs the same command; the campaign engine resumes (skip-existing) and executes only
 the six incomplete leaves. Then `make campaign-verify MANIFEST=files_config/campaign/manifest_kmh_sweep.json`
 expects `OK=135`.
+
+### KI-45 — AdversarialBIM selection is degenerate: ties in the BIM distance are broken in pool order (ACCEPTED AS-IS, disclosed in the thesis; found 2026-11-11)
+
+**Location**: `dalmax/query_strategies/adversarial_base.py::PerSampleAdversarialStrategy.query`, l. 72
+(`return unlabeled_idxs[dis.argsort(kind="stable")[:n]]`); distance computed in
+`dalmax/query_strategies/adversarial_bim.py::AdversarialBIM.cal_dis` (l. 59; `eta += self.eps * torch.sign(grad)`,
+`eps = 0.05`, returns `(eta * eta).sum()`, l. 80-87); pool order from `dalmax/data/datasets.py::Data.get_unlabeled_data`
+(`np.arange(self.n_pool)[~self.labeled_idxs]`, sorted indices).
+
+**Evidence** (thesis integrity audit `thesis_drafts/final_thesis/files/audits/2026-11-11-integrity.md`, F-01;
+re-computed from the logged `Round k query_idxs` of `results/campaign/paper1/nq{10,50,100}/**/AdversarialBIM/`).
+BIM moves every input element by exactly `eps` per step, so the squared norm of `eta` takes few discrete values
+(essentially one per step count) and many unlabeled images tie. The stable `argsort` then keeps the pool order,
+and the DANINHAS pool is stored class by class (`Brachiaria` first, indices 0 to 773; blocks of
+774/1036/1198/3370/1708 images). Images that hit the 50-iteration cap get `inf` and are never selected
+(165 to 368 per round in the logs), so the cap cannot explain the batch. Over the 24 query rounds of each budget
+(8 rounds x 3 seeds), 91.7% (nq10), 69.8% (nq50) and 81.2% (nq100) of the BIM queries lie among the `2b` lowest
+unlabeled indices, and in 5 rounds the batch is exactly the `b` lowest; the same statistic is 0.0 to 4.3% for
+`AdversarialDeepFool` and `RandomSampling` (0.0/1.7/4.3% and 0.4/0.8/2.7%; Least Confidence is in the same range
+per the audit). At nq100 86.5% of the BIM queries are `Brachiaria`, and the final weighted F1 falls below its
+round-0 value at nq50 and nq100 (0.3006 and 0.2844). The BIM rows of paper 1 therefore measure an index-ordered
+selection, an implementation artefact, not the BIM criterion.
+
+**Impact on the campaign**: `paper1` `AdversarialBIM`, nq 10/50/100 x seeds 1-3 = 9 executed runs. No other
+strategy is affected in practice (DeepFool distances are continuous and show no index bias); papers 2/3 do not
+use BIM.
+
+**Status**: Accepted as-is (orchestrator/author decision 2026-11-11, same policy as KI-41/KI-42): runs kept as
+executed (append-only), behaviour disclosed in the thesis (paper 1 results footnote, method and limitations,
+appendix C, chapters 1, 9 and 10, where BIM is listed with the other strategies evaluated in a degenerate form);
+fix deferred to a future campaign. Fix option: break ties at random (e.g. add a tiny seeded jitter from
+`derive_seed(seed, "adversarial_ties")`, or `np.lexsort((rng.permutation(len(dis)), dis))`) and re-run the 9 BIM
+runs as a new campaign part, old runs kept as history.
