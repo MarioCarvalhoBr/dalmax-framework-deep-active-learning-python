@@ -302,7 +302,7 @@ seeds (1,2,3) and one protocol in one environment. Sections 0-5 (runtime, Drive,
    `paper1` and `texhal` (and `texhal_q17` for the Q=17 6.2/6.3 rows) before reporting.
 5. **Progress / monitor** (the notebook's Progress cell): `!make campaign-verify PART=...` plus
    `!tail -n 20 results/campaign/campaign.log`; failures go to `results/campaign/failures.log`.
-6. **Verify**: `!make campaign-verify` -- OK/INCOMPLETE/MISSING per job with the artifact checks of
+6. **Verify**: `!make campaign-verify` -- OK/INCOMPLETE/MISSING/STALE per job (STALE: a superseded leaf of a re-run part, section 6d) with the artifact checks of
    `dalmax/reporting/leaf_check.py`, plus the **seed-consistency audit** (for every seed, all runs
    must have started from the identical initial labeled set; PASS/WARN/FAIL per seed, offenders
    listed). Exit code 0 = all OK, 1 = an incomplete/missing job or a FAIL audit, 2 = only audit
@@ -379,6 +379,17 @@ sections 0-5. The MC-dropout groups use `files_config/campaign/params_paper1_mc_
 from the other strategies' (inherent to MC dropout). The new runs execute on a later runtime image than the five unchanged
 paper-1 strategies (KI-43: compare seed means, not single runs).
 
+> **WARNING, second account.** The notebook defaults to `PART = "paper1_rerun_a"`. On account **B** set
+> `PART = "paper1_rerun_b"` in the Parameters cell and check that its banner prints
+> `SELECTED PART: paper1_rerun_b  ->  expect 39 runs (13 run groups)` (account A: `24 runs (8 run groups)`).
+> If both accounts run `paper1_rerun_a`, half the credits are spent twice and part B is never run.
+
+**On first use run the notebook cell by cell**, not "Run all", and read each output before the next cell. The
+safeguards (ADR 0014 addendum) stop a wrong session anyway: the archive check cell and the gate cell right before the
+run cell raise on failure, the gate asserts the `campaign-list` count for `PART`, `campaign-run` itself refuses to start
+(exit 3, nothing launched) while a superseded or unreadable leaf of a re-run part is live, and `campaign-verify` reports
+such a leaf as `STALE`, never `OK`.
+
 **Per account (A and B do the same steps with their own `PART`):**
 
 1. **Drive prerequisites.** Each account has its own Google Drive, so the dataset must be on THAT account's Drive:
@@ -400,22 +411,29 @@ paper-1 strategies (KI-43: compare seed means, not single runs).
    without old campaign results it reports `missing=63` and nothing to move, which is fine.
 5. **Archive**: `!make campaign-archive-superseded`. Expect `moved=63` (or `moved=0 ... missing=63` on a Drive without old
    results). Every move is logged in `results/old_results_broken/ARCHIVE_LOG.tsv`. Re-running is safe
-   (`already_archived=63`), and leaves started after the cutoff (the new runs) are never moved. Exit status 1 means a
-   `CONFLICT` (the destination already exists; nothing is merged or overwritten) or an `UNREADABLE` leaf (no readable
-   `run_metadata.json`): read the listed paths and resolve them by hand before going on.
-6. **Check**: `!make campaign-archive-superseded CHECK=1` must print `CHECK OK`. A `STALE` leaf would be skipped as
-   complete by `campaign-run`, so never launch while the check fails.
+   (`already_archived=63`), and leaves of the fixed code (started after the cutoff, with `config.dataset.model_args`
+   in `run_metadata.json`) are never moved. A leaf is superseded when its `run_metadata.json` started before the cutoff
+   **or** lacks `config.dataset.model_args` (only the fixed code writes it), one definition in `dalmax/superseded.py`
+   shared by the script and the engine. Exit status 1 means a `CONFLICT` (the destination already exists; nothing is
+   merged or overwritten) or an `UNREADABLE` leaf; see "Unreadable or interrupted leaves" below.
+6. **Check**: `!make campaign-archive-superseded CHECK=1` must print `CHECK OK` (the notebook cell raises otherwise).
+   A `STALE` leaf would otherwise be skipped as complete; `campaign-run` now refuses to start while one exists.
 7. **List**: `!make campaign-list PART=paper1_rerun_a` (B: `PART=paper1_rerun_b`). Expect `paper1_rerun_a 24 runs (8 run
    groups)` and `TOTAL 24 runs (8 run groups)` (B: 39 runs, 13 groups). Without `PART`: `paper1 54 runs (18 run groups)`,
-   `TOTAL 222 runs (74 run groups)`.
+   `TOTAL 222 runs (74 run groups)`. The notebook's gate cell (right before the run cell) re-runs the check and asserts
+   this count; it raises on a mismatch.
 8. **Run**: `!make campaign-run PART=paper1_rerun_a` (the notebook's run cell). After a disconnect or a session limit:
    redo sections 0-4, run steps 4-6 again (they find nothing more to move) and the same `campaign-run` command:
    skip-existing resumes, at most the run in progress is lost.
-9. **Verify**: `!make campaign-verify PART=paper1_rerun_a`: expect `OK=24 INCOMPLETE=0 MISSING=0` (B: `OK=39`) and the
-   seed audit PASS for seeds 1-3. Without `PART` the other parts show up as MISSING on a Drive that does not hold them;
+9. **Verify**: `!make campaign-verify PART=paper1_rerun_a`: expect `OK=24 INCOMPLETE=0 MISSING=0 STALE=0` (B: `OK=39`)
+   and the seed audit PASS for seeds 1-3. `OK` for a re-run part can only be a run of the fixed code. Without `PART` the other parts show up as MISSING on a Drive that does not hold them;
    that is expected.
-10. **Zip only the new leaves of the part** (the notebook's 6d zip cell does exactly this; run step 6 first so that the
-    globs can only match new runs):
+10. **Zip only the new leaves of the part, plus this account's `campaign.log`.** The notebook's 6d zip cell does all of
+    it and refuses (raises) unless the check passes and verify reports `OK=24` / `OK=39` (set `ZIP_PARTIAL = True` in
+    that cell only to ship an incomplete part on purpose). It also adds `results/campaign/campaign.log` (and
+    `failures.log` if any) under a part-specific name, `results/campaign/campaign_<PART>.log`, so the measured run times
+    of both accounts survive the merge (the two logs, and the merge target's own `campaign.log`, would otherwise
+    collide). By hand:
 
     Account A:
     ```python
@@ -425,6 +443,9 @@ paper-1 strategies (KI-43: compare seed means, not single runs).
         results/campaign/paper1/nq50/*/SEED_*/NQ_50_*/AdversarialBIM \
         results/campaign/paper1/nq*/*/SEED_*/NQ_*/KMeansSampling \
         results/campaign/paper1/nq*/*/SEED_*/NQ_*/KCenterGreedy
+    !mkdir -p /content/stage_a/results/campaign && \
+        cp /content/dalmax/results/campaign/campaign.log /content/stage_a/results/campaign/campaign_paper1_rerun_a.log && \
+        cd /content/stage_a && zip -qr /content/paper1_rerun_a.zip results
     !unzip -l /content/paper1_rerun_a.zip | grep -c saved_model.pth   # expect 24
     !cp /content/paper1_rerun_a.zip "$DRIVE_ROOT/"                    # about 2.3 GB
     ```
@@ -438,21 +459,41 @@ paper-1 strategies (KI-43: compare seed means, not single runs).
         results/campaign/paper1/nq*/*/SEED_*/NQ_*/MarginSamplingDropout \
         results/campaign/paper1/nq*/*/SEED_*/NQ_*/EntropySamplingDropout \
         results/campaign/paper1/nq*/*/SEED_*/NQ_*/BALDDropout
+    !mkdir -p /content/stage_b/results/campaign && \
+        cp /content/dalmax/results/campaign/campaign.log /content/stage_b/results/campaign/campaign_paper1_rerun_b.log && \
+        cd /content/stage_b && zip -qr /content/paper1_rerun_b.zip results
     !unzip -l /content/paper1_rerun_b.zip | grep -c saved_model.pth   # expect 39
     !cp /content/paper1_rerun_b.zip "$DRIVE_ROOT/"                    # about 3.7 GB
     ```
 
     The zip stores the paths as `results/campaign/paper1/...` (it follows the `results/` symlink); download it from Drive.
 
+**Unreadable or interrupted leaves** (reported by steps 4-6, by `campaign-run`'s refusal and by `campaign-verify`):
+
+- `INTERRUPTED` (no readable `run_metadata.json` and no `results.json`): a run that died before it finished. It is not
+  superseded and not moved; `campaign-run` re-runs it as an incomplete leaf. Nothing to do.
+- `UNREADABLE` (no readable `run_metadata.json`, or one without a valid `started_at`, but `results.json` present): a
+  finished run whose provenance cannot be told, so the script refuses to move it and the engine refuses to run. Inspect
+  it: `!ls -la <leaf>` and `!head -c 400 <leaf>/run_metadata.json`. If it is a first-execution run (files dated
+  2026-09-30 to 2026-10-05), move it by hand to the archive path, never delete it:
+  `!mkdir -p "$(dirname results/old_results_broken/<path below results/>)" && mv <leaf> results/old_results_broken/<path below results/>`
+  and append a line to `results/old_results_broken/ARCHIVE_LOG.tsv` (`<utc time>\t<leaf>\t<destination>\tunreadable metadata, archived by hand`).
+  If it is a new run with a corrupted file, move it the same way (it is re-run). Then repeat step 6 until `CHECK OK`.
+
 **Merging the downloads into the authoritative `results/` tree** (the machine that holds all 222 runs, e.g. the local one),
 in this order:
 
-1. `make campaign-archive-superseded DRY=1`, then `make campaign-archive-superseded`: moves the 63 old leaves of that tree
-   to `results/old_results_broken/`. **This must happen before unzipping**: unzipping first would overwrite the old files
-   in place and the first execution would be lost.
-2. At the repo root: `unzip -n paper1_rerun_a.zip` and `unzip -n paper1_rerun_b.zip` (`-n`: never overwrite).
-3. `make campaign-archive-superseded CHECK=1`: `CHECK OK`.
-4. `make campaign-verify`: `OK=222 INCOMPLETE=0 MISSING=0`, seed audit PASS for seeds 1-3. Then `make campaign-report`.
+1. **Archive locally first**: `make campaign-archive-superseded DRY=1` (expect `would move=63`), then
+   `make campaign-archive-superseded` (`moved=63`): the 63 old leaves of that tree go to `results/old_results_broken/`.
+   **This must happen before unzipping.** `unzip -n` never overwrites, so unzipping over un-archived old leaves would not
+   replace them: it would silently skip every file the old leaf already has (`results.json`, `saved_model.pth`, ...) and
+   add only the files the old leaf lacks, leaving a mix of old results and new-only files in the same leaf.
+2. At the repo root: `unzip -n paper1_rerun_a.zip` and `unzip -n paper1_rerun_b.zip` (`-n`: never overwrite). The logs
+   land as `results/campaign/campaign_paper1_rerun_a.log` and `campaign_paper1_rerun_b.log`, next to the local
+   `campaign.log`.
+3. `make campaign-archive-superseded CHECK=1`: `CHECK OK` (`current=63`).
+4. `make campaign-verify`: `OK=222 INCOMPLETE=0 MISSING=0 STALE=0`, seed audit PASS for seeds 1-3. Then
+   `make campaign-report`.
 
 ---
 
