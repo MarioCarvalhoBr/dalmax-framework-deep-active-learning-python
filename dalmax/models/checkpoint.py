@@ -24,6 +24,7 @@ directly.
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from typing import Any
 
 import torch
@@ -58,6 +59,7 @@ def save_checkpoint(
     class_names: list[str],
     img_size: int,
     extra: dict[str, Any] | None = None,
+    model_kwargs: Mapping[str, Any] | None = None,
 ) -> None:
     """Save a trained model's weights + reconstruction metadata to `path`.
 
@@ -79,6 +81,11 @@ def save_checkpoint(
         Free-form provenance the caller wants to keep alongside the
         checkpoint (strategy name, seed, dataset name, git commit, torch
         version, save timestamp, ...). Not interpreted by this module.
+    model_kwargs:
+        Extra constructor arguments of the model class (the params JSON's
+        `model_args`, e.g. `{"dropout_p": 0.5}`, ADR 0014), so `load_checkpoint`
+        rebuilds the identical architecture. Optional key of the format:
+        checkpoints written before it existed have none and load as `{}`.
     """
     payload = {
         "format": CHECKPOINT_FORMAT,
@@ -89,6 +96,7 @@ def save_checkpoint(
         "class_names": list(class_names),
         "img_size": int(img_size),
         "extra": dict(extra or {}),
+        "model_kwargs": dict(model_kwargs or {}),
     }
     parent = os.path.dirname(path)
     if parent:
@@ -96,7 +104,9 @@ def save_checkpoint(
     torch.save(payload, path)
 
 
-def _rebuild_model(model_name: str, n_classes: int) -> torch.nn.Module:
+def _rebuild_model(
+    model_name: str, n_classes: int, model_kwargs: Mapping[str, Any]
+) -> torch.nn.Module:
     # Local import: dalmax.models.registry imports dalmax.config.schema, and
     # keeping this import inside the function avoids any import-order cycle
     # between dalmax.models.checkpoint and dalmax.models.registry.
@@ -106,7 +116,7 @@ def _rebuild_model(model_name: str, n_classes: int) -> torch.nn.Module:
         model_cls = get_model_class(model_name)
     except KeyError as exc:
         raise CheckpointError(str(exc)) from exc
-    return model_cls(n_classes)
+    return model_cls(n_classes, **model_kwargs)
 
 
 def _load_payload(path: str, device: str) -> dict[str, Any]:
@@ -148,7 +158,8 @@ def load_checkpoint(path: str, device: str = "cpu") -> tuple[torch.nn.Module, di
     (clf, meta):
         `clf` is a `.eval()`'d model instance on `device`. `meta` is
         `{"model_name", "n_classes", "class_names", "img_size", "extra",
-        "version"}`.
+        "model_kwargs", "version"}` (`model_kwargs` is `{}` for a checkpoint
+        saved before that key existed).
 
     Raises
     ------
@@ -165,10 +176,11 @@ def load_checkpoint(path: str, device: str = "cpu") -> tuple[torch.nn.Module, di
         "class_names": payload["class_names"],
         "img_size": payload["img_size"],
         "extra": payload.get("extra", {}),
+        "model_kwargs": dict(payload.get("model_kwargs", {})),
         "version": payload.get("version"),
     }
 
-    clf = _rebuild_model(meta["model_name"], meta["n_classes"])
+    clf = _rebuild_model(meta["model_name"], meta["n_classes"], meta["model_kwargs"])
     clf.load_state_dict(payload["state_dict"])
     clf.eval()
     clf.to(device)
@@ -206,6 +218,7 @@ def describe_checkpoint(path: str) -> dict[str, Any]:
         "class_names": payload["class_names"],
         "img_size": payload["img_size"],
         "extra": payload.get("extra", {}),
+        "model_kwargs": dict(payload.get("model_kwargs", {})),
         "total_params": total_params,
         "layers": layers,
         "file_size_bytes": file_size_bytes,

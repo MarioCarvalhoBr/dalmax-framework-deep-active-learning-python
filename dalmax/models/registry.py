@@ -2,7 +2,7 @@
 (deleted, Phase 4) `get_network_deep_learning` `if/elif` chain for the
 `dalmax`-routed CLI.
 
-`DeepLearning` (`dalmax/models/base.py`, vendored, untouched) still expects a
+`DeepLearning` (`dalmax/models/base.py`, vendored) still expects a
 plain dict of the historical shape
 (`n_epoch`/`n_classes`/`n_drop`/`train_args`/`test_args`/`optimizer_args`) —
 `_legacy_params_dict` is the one place that reconstructs that dict from the
@@ -62,7 +62,10 @@ def get_network(config: ExperimentConfig, device: str) -> DeepLearning:
     name = config.dataset.name
     model_cls = get_model_class(name)
     params = _legacy_params_dict(config.dataset)
-    return DeepLearning(model_cls, params, torch.device(device))
+    # `model_args` (ADR 0014): only the arguments the params JSON sets are passed, so a
+    # params file without the block builds the model exactly as before it existed.
+    model_kwargs = config.dataset.model_args.as_kwargs()
+    return DeepLearning(model_cls, params, torch.device(device), model_kwargs=model_kwargs)
 
 
 def get_model_class(model_name: str) -> Callable:
