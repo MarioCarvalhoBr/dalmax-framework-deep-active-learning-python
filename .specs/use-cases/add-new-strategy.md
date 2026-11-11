@@ -96,6 +96,15 @@ Unchanged in spirit since Phase 2, with paths updated for the Phase 4 package mo
    `config.dataset.<field>` — never `self.params[<dataset_name>][<key>]` string-keyed dict access
    (the KI-4 anti-pattern), and never a `setattr(strategy, ...)` post-construction injection (the
    KI-7 anti-pattern this refactor removed).
+   If the strategy needs its own random generator or another constructor argument derived from the run's
+   config, accept it as a keyword-only constructor argument and add an entry to
+   `dalmax/query_strategies/registry.py::LEGACY_STRATEGY_KWARGS` (`name -> callable(config) -> kwargs`); the
+   `AdversarialBIM` receives its tie-break generator this way
+   (`np.random.default_rng(derive_seed(config.seed, "adversarial_ties"))`, KI-45, ADR 0014). Never draw from a
+   literal seed or from the run's main generator.
+   If it needs MC-dropout predictions (`predict_prob_dropout*`), the model must carry a dropout layer: set
+   `"model_args": {"dropout_p": ...}` in the params JSON (the DANINHAS ResNet-50 has none by default and
+   `predict_prob_dropout*` raise `MCDropoutError` without one, KI-41, ADR 0014).
 6. Add a test asserting `dalmax.query_strategies.registry.build_strategy("<NewStrategyClass>", ...)`
    resolves without error — see `tests/test_strategy_registry.py` for the pattern (stub
    dataset/net, no real training). `tests/test_registry.py`/`tests/test_strategy_registry.py` parse

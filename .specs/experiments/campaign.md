@@ -27,10 +27,17 @@ invented here, including for the upper bound.
 > **2026-11-10 (ADR 0013)**: part `hier_transfer` (12 runs, 4 groups) was added and **executed on 2026-11-11 (UTC)**
 > (12/12 OK; verified 2026-11-10 local time: 222/222 OK, seed audit PASS); the manifest totals are 222 runs / 74 groups,
 > all executed.
+>
+> **2026-11-11 (ADR 0014)**: seven paper-1 baselines were fixed in code (KI-41, KI-42, KI-45) and their 21 groups
+> (63 runs) moved from `paper1` to the new parts `paper1_rerun_a` / `paper1_rerun_b`, **prepared, not executed**
+> (section "Re-run of the seven fixed baselines" below). Totals unchanged (222 runs / 74 groups); the 63 first-execution
+> runs are superseded and are moved to `results/old_results_broken/` before the re-run.
 
 | Part | Groups x seeds | Runs | Content |
 |---|---|---|---|
-| `paper1` | 39 x 3 | 117 | 12 classical strategies x nq {10,50,100} (36 groups, 108 runs) + KMH x nq {10,50,100} (3 groups, 9 runs) |
+| `paper1` | 18 x 3 | 54 | the 5 unchanged classical strategies (RandomSampling, LeastConfidence, MarginSampling, EntropySampling, AdversarialDeepFool) x nq {10,50,100} (15 groups, 45 runs) + KMH x nq {10,50,100} (3 groups, 9 runs); until ADR 0014 the part also held the 21 groups now in the two re-run parts (39 groups, 117 runs, executed 2026-09-30 to 2026-10-05) |
+| `paper1_rerun_a` | 8 x 3 | 24 | ADR 0014 (**prepared 2026-11-11, not executed**): AdversarialBIM nq100 and nq50 (KI-45), KMeansSampling and KCenterGreedy x nq {10,50,100} (KI-42); Colab account A, about 4.3 GPU hours |
+| `paper1_rerun_b` | 13 x 3 | 39 | ADR 0014 (**prepared 2026-11-11, not executed**): AdversarialBIM nq10 (KI-45), LeastConfidenceDropout, MarginSamplingDropout, EntropySamplingDropout, BALDDropout x nq {10,50,100} (KI-41, `params_paper1_mc_dropout.json`); Colab account B, about 4.2 GPU hours |
 | `upper_bound` | 1 x 3 | 3 | `FullSupervised`: train once on the entire pool (8,086), evaluate on the test set |
 | `rnhal` | 14 x 3 | 42 | paper 3 ablations at nq=100: 6.1 spatial/spectral; 6.2 five existing + five new hierarchy rows; 6.3 full + w/o hierarchical |
 | `texhal` | 10 x 3 | 30 | paper 2 ablations at nq=100: 6.1 q5/q13/q17; 6.2 L1/L2a/L2b/L3/L4; 6.3 w/o hierarchical; plus `shared/texhal_full` |
@@ -107,6 +114,10 @@ results/campaign/
 ├── shared/{random_nq100,kmh_nq100,texhal_full}/...
 ├── rnhal/<study>/<config>/...                   # incl. rnhal/6_3/stage_full
 └── texhal/<study>/<config>/...
+
+results/old_results_broken/campaign/paper1/nq{10,50,100}/...   # ADR 0014: the 63 superseded first-execution leaves
+                                                                # of the re-run parts (moved, same path below results/),
+                                                                # + ARCHIVE_LOG.tsv at results/old_results_broken/
 ```
 
 ## Commands
@@ -114,7 +125,8 @@ results/campaign/
 ```bash
 make campaign-list                        # job table + counts per part
 make campaign-run PART=all                # everything, skip-existing (re-run = resume)
-make campaign-run PART=paper1|upper_bound|rnhal|texhal|texhal_q17|hier_transfer   # or comma-separated (+ control, kmh_nq10|50|100 for the other manifests)
+make campaign-run PART=paper1|paper1_rerun_a|paper1_rerun_b|upper_bound|rnhal|texhal|texhal_q17|hier_transfer   # or comma-separated (+ control, kmh_nq10|50|100 for the other manifests)
+make campaign-archive-superseded [DRY=1|CHECK=1]   # ADR 0014: move superseded re-run leaves to results/old_results_broken/
 make campaign-verify                      # OK/INCOMPLETE/MISSING per job + seed-consistency audit
 make campaign-report                      # docs/results/campaign/ (tables md/tex/csv, confusion matrices)
 make campaign-smoke                       # micro campaign on CPU (seed 1) -> results/smoke_campaign/;
@@ -129,7 +141,7 @@ changed, so the GPU campaign still runs them. `make campaign-smoke` (and `MICRO=
 (`SMOKE_EXCLUDE=` includes them); with the same exclusion `verify` does not report them MISSING.
 Execution order (independent of `--part`): paper 1 at nq100
 first (the shared canonical runs land early), then rnhal, texhal, texhal_q17, hier_transfer, then paper 1 at nq50 and nq10,
-then the upper bound -- what is missing if a budget runs out is the least reusable part. Papers 2/3
+then `paper1_rerun_a` and `paper1_rerun_b`, then the upper bound -- what is missing if a budget runs out is the least reusable part. Papers 2/3
 comparison tables need paper 1's `shared/*` runs and `shared/texhal_full`: run those parts before
 reporting.
 
@@ -212,6 +224,47 @@ representation interact: the descriptors' advantage over ImageNet features holds
 not under the hierarchy tuned for ImageNet features. No canonical configuration changes (author decision 2026-11-10: the
 reference hierarchy stays canonical for RNHAL and TexHAL).
 
+
+## Re-run of the seven fixed baselines (parts `paper1_rerun_a` / `paper1_rerun_b`; prepared 2026-11-11, not executed)
+
+ADR 0014 (author decision 2026-11-11). The first execution evaluated seven paper-1 strategies in a degenerate form
+(`.specs/quality/known-issues.md`): the four MC-dropout strategies without any dropout layer (KI-41), KMeansSampling and
+KCenterGreedy on an untrained random 50-d projection (KI-42), AdversarialBIM with ties broken in pool order (KI-45). All
+three are fixed in code (2026-11-11); only these 21 groups are re-run. RandomSampling, LeastConfidence, MarginSampling,
+EntropySampling, AdversarialDeepFool, KMH and every paper-2/3 group are not re-run: their behaviour is unchanged (same
+model construction and RNG stream, same training, same selection; verified on CPU, see ADR 0014).
+
+| Part | Groups (id `p1/<Strategy>/nq<k>`) | Runs | Params | GPU time (first-execution GPU class) |
+|---|---|---|---|---|
+| `paper1_rerun_a` | AdversarialBIM nq100, nq50; KMeansSampling, KCenterGreedy nq 10/50/100 | 24 | `params_paper1.json` | about 4.3 h (6 x 2,300 s + 18 x 90 s) |
+| `paper1_rerun_b` | AdversarialBIM nq10; LeastConfidenceDropout, MarginSamplingDropout, EntropySamplingDropout, BALDDropout nq 10/50/100 | 39 | MC-dropout groups: `params_paper1_mc_dropout.json` (= `params_paper1.json` + `"model_args": {"dropout_p": 0.5}`); BIM: `params_paper1.json` | about 4.2 h (3 x 2,300 s + 36 x 230 s) |
+
+The groups keep their ids, `dir_results` (`results/campaign/paper1/nq<k>/`) and table rows, so the new runs land in the
+same leaf paths as the first execution and the tables, report and thesis need no change of paths. The split balances
+the GPU time measured in the first execution (per run: BIM about 2,300 s, MC dropout about 230 s, KMeans/KCenter about
+90 s; KMeans/KCenter will be somewhat slower now on 2048-d embeddings) so that two Colab accounts can run one part each
+at the same time. Only the four MC-dropout strategies train with the dropout layer, so their round-0 model differs from
+the other strategies' (inherent to MC dropout). The re-run executes on a later runtime image than the unchanged
+strategies (KI-43): report seed means and treat gaps within the run-to-run variation as ties.
+
+**Archive of the superseded runs.** Because skip-existing would keep the old complete leaves, they are first moved (never
+deleted) by `scripts/campaign/archive_superseded_runs.py` (`make campaign-archive-superseded`; `DRY=1` reports,
+`CHECK=1` moves nothing and exits 1 while a stale leaf is still in the live tree) to
+`results/old_results_broken/<path below results/>`, e.g.
+`results/old_results_broken/campaign/paper1/nq100/daninhas_full/SEED_1/NQ_100_NIL_100_NR_8_NE_10/AdversarialBIM/`, with one
+line per move in `results/old_results_broken/ARCHIVE_LOG.tsv` (UTC time, source, destination, reason). A leaf is
+superseded iff its `run_metadata.json` `started_at` precedes the fix cutoff `SUPERSEDED_BEFORE = 2026-11-11T19:12:28Z`
+(override `--before`); a leaf started at or after it is never moved, an existing destination is never overwritten or
+merged (reported, exit 1), a leaf without a readable start time is skipped (exit 1), and re-running is idempotent. This
+is the one sanctioned exception to the append-only rule of `results/` (`.claude/rules/data-safety.md`), on the
+author's explicit instruction to keep the old runs.
+
+**Procedure** (operator guide: `COLAB_RUNBOOK.md` section 6d): on each account, sections 0-5, then
+`make campaign-archive-superseded DRY=1`, `make campaign-archive-superseded`, `CHECK=1`, `make campaign-list`
+(`paper1_rerun_a 24 runs (8 run groups)` / `paper1_rerun_b 39 runs (13 run groups)`), `make campaign-run PART=...`
+(resume = same command), `make campaign-verify PART=...` (`OK=24` / `OK=39`), zip the new leaves of the part (about
+2.3 GB / 3.7 GB). Merge into the authoritative tree: archive first, then `unzip -n`, then `CHECK=1`, then
+`make campaign-verify` (expect `OK=222`, seed audit PASS) and `make campaign-report`.
 
 ## Control run for KI-43 (prepared 2026-11-04, not executed)
 
@@ -718,5 +771,8 @@ history tables remain in the report as `6_2_q5_17`/`6_3_q5_17`.
 dropout layer, so `LeastConfidenceDropout`, `MarginSamplingDropout`, `EntropySamplingDropout` and
 `BALDDropout` do not perform MC-dropout (KI-41), and `KMeansSampling`/`KCenterGreedy` cluster an untrained
 random 50-d projection (KI-42). The `paper1` tables are reported as executed, with this disclosure. **Author decision (2026-11-02): accepted as-is**: the runs are kept, the behaviour is disclosed in paper 1, and the fix (6 strategies x 3 budgets x 3 seeds = 54 runs as a new part) is deferred to a future campaign; no re-run.
+**Superseded 2026-11-11 (ADR 0014)**: with KI-45 (AdversarialBIM ties) found the same day, the author decided to fix all
+three and re-run the 63 runs as parts `paper1_rerun_a` / `paper1_rerun_b` (section "Re-run of the seven fixed baselines";
+prepared, not executed).
 
 **Round-0 finding (2026-11-02, KI-43)**: round-0 metrics of the same seed differ across run groups although the initial labeled sets are identical: KMH differs from all others because `resnet50()` construction consumes the torch RNG before round-0 training, and the rest tracks the Colab runtime image of each session (best-effort GPU determinism), so round-0 points and cross-image comparisons must not be read as method effects.

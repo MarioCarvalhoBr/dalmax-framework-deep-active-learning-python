@@ -101,6 +101,7 @@ accepted as-is (author decision 2026-11-02)**, so they leave the open list (docu
 (Update 2026-11-02b: **KI-43** (round-0 mismatch, disclosure) added: 10 open, 43 tracked items.)
 (Update 2026-11-08: **KI-44** (empty clusters under random k-means init crashed the hierarchical sampling) added and resolved the same day: 10 open, 44 tracked items.)
 (Update 2026-11-11: **KI-45** (AdversarialBIM ties broken in pool order) added and accepted as-is, disclosed in the thesis like KI-41/KI-42: 10 open, 45 tracked items. KI-43 gained a dated note on the two executions of the reference KMH configuration.)
+(Update 2026-11-11b: author decision of the same day reverses the "accepted as-is" status of **KI-41, KI-42 and KI-45**: all three are **fixed in code (2026-11-11, ADR 0014)** and their 63 runs are prepared for re-execution as campaign parts `paper1_rerun_a` / `paper1_rerun_b` (not executed yet). They stay out of the open count: 10 open, 45 tracked items.)
 
 34 tracked items total (KI-34 added 2026-08-26, while reconciling the Phase 3 ablation execution
 batch; KI-33 added/resolved 2026-08-25). Of these, **27 are now fully resolved**: KI-1 through
@@ -259,7 +260,22 @@ not a code bug). Status: Resolved (executed); advisor confirmation of the Q=17 d
 Related note (no action): the RNHAL pending decision on whether the canonical hierarchy
 becomes `L=4 [800,600,200,100]` is tracked in `papers-roadmap.md`.
 
-### KI-41 — no dropout layer in the ResNet-50 head: MC-dropout strategies and BALD are degenerate (ACCEPTED AS-IS, author decision 2026-11-02; found 2026-11-02)
+### KI-41 — no dropout layer in the ResNet-50 head: MC-dropout strategies and BALD are degenerate (FIXED IN CODE 2026-11-11, re-run prepared, not executed; ADR 0014; was accepted as-is 2026-11-02; found 2026-11-02)
+
+**Fix (2026-11-11, ADR 0014; author decision of 2026-11-11 to fix and re-run).** `DaninhasModelResNet50(n_classes,
+dropout_p=0.0)` applies `nn.Dropout(dropout_p)` to the 2048-d pooled features right before `classifier` when
+`dropout_p > 0`, as in DeepAL; with the default the parameters, `state_dict` keys, construction RNG draws and logits are
+the pre-fix ones (tested against a frozen copy of the old class). The value comes from the optional params-JSON block
+`"model_args": {"dropout_p": ...}` (`dalmax/config/schema.py::ModelArgs`, validated by the loader, threaded by
+`get_network` into `DeepLearning(model_kwargs=...)`, recorded in `run_metadata.json` and in the checkpoint);
+`files_config/campaign/params_paper1_mc_dropout.json` sets 0.5 for the four MC-dropout strategies only.
+`predict_prob_dropout*` now run under `dalmax/models/mc_dropout.py::mc_dropout_mode` (eval mode, only the dropout
+modules in train mode, modes restored, BatchNorm statistics untouched) and raise `MCDropoutError` when the model has no
+dropout with p > 0; they use their `n_drop` argument (equal to `params['n_drop']` in every caller). BALD and
+`EntropySamplingDropout` use `torch.xlogy(p, p)` (no NaN at p = 0). Tests: `tests/test_mc_dropout_and_embeddings.py`.
+Re-run: the 12 groups `p1/{LeastConfidenceDropout,MarginSamplingDropout,EntropySamplingDropout,BALDDropout}/nq*`
+(36 runs) in part `paper1_rerun_b`; the executed runs are moved to `results/old_results_broken/` by
+`make campaign-archive-superseded` before the re-run. The record below describes the first execution.
 
 **Location**: `dalmax/models/daninhas_resnet50.py::DaninhasModelResNet50` (no `nn.Dropout` anywhere: a
 pretrained backbone, `embedding_layer = nn.Linear(2048, 50)` and `classifier = nn.Linear(2048, n_classes)`);
@@ -287,12 +303,26 @@ dropout layers, so the strategies were not ported faithfully.
 strategies are unaffected (the non-dropout ones call `eval()`). Severity: High for paper 1 (4 of the 12
 classical baselines do not measure what their names say); no effect on papers 2/3.
 
-**Status**: Accepted as-is (author decision 2026-11-02): runs kept, behaviour disclosed in paper 1; fix deferred to a future campaign. Options considered: (a) keep the executed runs and disclose the behaviour
+**Status**: Fixed in code 2026-11-11 (ADR 0014), re-run prepared, not executed (see the fix paragraph at the top).
+History: accepted as-is by the author on 2026-11-02 (runs kept, behaviour disclosed in paper 1, fix deferred to a future
+campaign); option (b) below was chosen on 2026-11-11. Options considered: (a) keep the executed runs and disclose the behaviour
 in paper 1 (the thesis chapter already does); (b) fix: add `nn.Dropout(p)` before the classifier (and make
 `predict_prob_dropout*` use it) and re-run the affected strategies as a new campaign part, keeping the old
-runs as history (append-only). Combined with KI-42 option (b): 6 strategies x 3 budgets x 3 seeds = 54 runs.
+runs as history (append-only). Combined with KI-42 option (b): 6 strategies x 3 budgets x 3 seeds = 54 runs
+(63 with KI-45's BIM).
 
-### KI-42 — `KMeansSampling` and `KCenterGreedy` cluster an untrained random ReLU projection (ACCEPTED AS-IS, author decision 2026-11-02; found 2026-11-02)
+### KI-42 — `KMeansSampling` and `KCenterGreedy` cluster an untrained random ReLU projection (FIXED IN CODE 2026-11-11, re-run prepared, not executed; ADR 0014; was accepted as-is 2026-11-02; found 2026-11-02)
+
+**Fix (2026-11-11, ADR 0014).** `DaninhasModelResNet50.forward` returns as `e1` the 2048-d pooled features that feed the
+classifier (the trained penultimate representation, as in DeepAL) and `get_embedding_dim()` returns 2048.
+`embedding_layer = nn.Linear(2048, 50)` is kept, constructed in the same position and unused: its construction draws
+from the torch RNG before the classifier's initialisation and its keys are in every checkpoint, so removing it would
+change every strategy's training. Only `get_embeddings` consumes `e1`. `KCenterGreedy` also clamps the squared pairwise
+distances at 0 before `np.sqrt` (float cancellation made near-duplicate rows NaN, and a NaN row wins `argmax`);
+`KMeansSampling` is unchanged (it draws from NumPy's global RNG, seeded by `seed_everything`). Tests:
+`tests/test_mc_dropout_and_embeddings.py`, `tests/test_kcenter_greedy.py`. Re-run: the 6 groups
+`p1/{KMeansSampling,KCenterGreedy}/nq*` (18 runs) in part `paper1_rerun_a`. The record below describes the first
+execution.
 
 **Location**: `dalmax/models/daninhas_resnet50.py::DaninhasModelResNet50.forward` (`e1 =
 relu(embedding_layer(features))`, `embedding_layer = nn.Linear(2048, 50)`, while `classifier` consumes the
@@ -314,7 +344,8 @@ DeepAL, where `e1` is the trained penultimate layer.
 strategies still behave as diversity samplers, but not as specified. Severity: Medium for paper 1; no
 effect on papers 2/3 (KMH uses ResNet-50 ImageNet features through the embedding provider, not `e1`).
 
-**Status**: Accepted as-is (author decision 2026-11-02): runs kept, behaviour disclosed in paper 1; fix deferred to a future campaign. Options considered: (a) keep the executed runs and disclose it in paper 1
+**Status**: Fixed in code 2026-11-11 (ADR 0014), re-run prepared, not executed (see the fix paragraph at the top).
+History: accepted as-is by the author on 2026-11-02; option (b) below was chosen on 2026-11-11. Options considered: (a) keep the executed runs and disclose it in paper 1
 (the thesis chapter already does); (b) fix: make `e1` the trained penultimate representation, or use the
 2048-d features for the embedding strategies, and re-run `KMeansSampling`/`KCenterGreedy` (with KI-41 (b):
 6 strategies x 3 budgets x 3 seeds = 54 runs as a new campaign part, old runs kept as history).
@@ -454,7 +485,17 @@ re-seeding) and must be stated wherever the `init_random` rows are reported.
 the six incomplete leaves. Then `make campaign-verify MANIFEST=files_config/campaign/manifest_kmh_sweep.json`
 expects `OK=135`.
 
-### KI-45 — AdversarialBIM selection is degenerate: ties in the BIM distance are broken in pool order (ACCEPTED AS-IS, disclosed in the thesis; found 2026-11-11)
+### KI-45 — AdversarialBIM selection is degenerate: ties in the BIM distance are broken in pool order (FIXED IN CODE 2026-11-11, re-run prepared, not executed; ADR 0014; was accepted as-is earlier the same day; found 2026-11-11)
+
+**Fix (2026-11-11, ADR 0014).** `dalmax/query_strategies/adversarial_base.py::rank_by_distance` ranks by distance with
+a random permutation as secondary key (`np.lexsort((rng.permutation(len(dis)), dis))`); `rng` is created once per run by
+`build_strategy` from `derive_seed(config.seed, "adversarial_ties")` and injected through the constructor of
+`AdversarialBIM`, so it advances across rounds. `inf` still ranks last; with no ties the order equals the old
+stable argsort. `AdversarialDeepFool` (not re-run) gets no generator and keeps the stable argsort, i.e. its pre-fix code
+path: its distances are continuous, but 1,269 of the 8,086 DANINHAS training files are byte-identical copies of another file (588 groups, never across classes) and duplicates tie exactly, so a random tie-break could change
+which copy it selects; the pool order among identical copies carries no class bias. Tests:
+`tests/test_adversarial_strategies.py`. Re-run: `p1/AdversarialBIM/nq{100,50}` in part `paper1_rerun_a`,
+`p1/AdversarialBIM/nq10` in `paper1_rerun_b` (9 runs). The record below describes the first execution.
 
 **Location**: `dalmax/query_strategies/adversarial_base.py::PerSampleAdversarialStrategy.query`, l. 72
 (`return unlabeled_idxs[dis.argsort(kind="stable")[:n]]`); distance computed in
@@ -480,7 +521,8 @@ selection, an implementation artefact, not the BIM criterion.
 strategy is affected in practice (DeepFool distances are continuous and show no index bias); papers 2/3 do not
 use BIM.
 
-**Status**: Accepted as-is (orchestrator/author decision 2026-11-11, same policy as KI-41/KI-42): runs kept as
+**Status**: Fixed in code 2026-11-11 (ADR 0014), re-run prepared, not executed (see the fix paragraph at the top).
+History: first accepted as-is (orchestrator/author decision 2026-11-11, same policy as KI-41/KI-42): runs kept as
 executed (append-only), behaviour disclosed in the thesis (paper 1 results footnote, method and limitations,
 appendix C, chapters 1, 9 and 10, where BIM is listed with the other strategies evaluated in a degenerate form);
 fix deferred to a future campaign. Fix option: break ties at random (e.g. add a tiny seeded jitter from

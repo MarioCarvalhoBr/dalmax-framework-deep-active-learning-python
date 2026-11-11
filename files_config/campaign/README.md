@@ -12,12 +12,18 @@
   them) and by `make lab-check`/`colab-check` (SSRAEKmeansHCSampling reads `config_kmh`).
 - `params_kmh.json` -- ResNet-ImageNet features + hierarchical k-means, reference hierarchy;
   used by the KMH groups (paper 1) which are also papers 2/3's "w/o representation module" row.
-- `params_paper1_micro.json`, `params_kmh_micro.json` -- micro mirrors (`n_drop` 2 in the paper-1
-  micro file for smoke speed).
+- `params_paper1_mc_dropout.json` -- `params_paper1.json` plus `"model_args": {"dropout_p": 0.5}` (a dropout layer
+  before the ResNet-50 classifier); used only by the four MC-dropout strategies of part `paper1_rerun_b`
+  (KI-41, ADR 0014).
+- `params_paper1_micro.json`, `params_paper1_mc_dropout_micro.json`, `params_kmh_micro.json` -- micro mirrors (`n_drop` 2
+  in the paper-1 micro files for smoke speed).
+- Parts `paper1_rerun_a` (24 runs) / `paper1_rerun_b` (39 runs) (ADR 0014): the 21 groups of the seven paper-1
+  baselines fixed on 2026-11-11, same ids and results paths as in their first execution; run them after
+  `make campaign-archive-superseded` (`COLAB_RUNBOOK.md` section 6d).
 
 Run `python -m dalmax.campaign list` for the job table (add `--exclude-strategy A,B` to drop strategies from
 `list`/`run`/`verify`). `make campaign-smoke` passes `AdversarialBIM,AdversarialDeepFool` by default: those
-two baselines are far too slow on CPU, so the CPU smoke runs 64 of the 70 micro jobs (seed 1); the real GPU
+two baselines are far too slow on CPU, so the CPU smoke runs 68 of the 74 micro jobs (seed 1); the real GPU
 campaign runs them (`SMOKE_EXCLUDE=` includes them in the smoke too). KMH at n_query 10/50 lives under
 `paper1/nq{N}/` like the other paper-1 strategies. Each group: `id`, `part`, `params_json`,
 `strategy_name`, `n_query`, `n_init_labeled`, `n_round`, `seeds`, `dir_results`, `used_by`, `note`.
