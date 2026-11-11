@@ -3,9 +3,11 @@
 This is a drop-in reader for the params JSON files already on disk
 (`files_config/benchmark/params_df_gpu_0.json`, `files_config/benchmark/params_df_gpu_1.json`,
 `files_config/params_micro.json`) — the on-disk schema is not changed by this
-module. It only adds two backward-compatible, optional keys per dataset:
+module. It only adds backward-compatible, optional keys per dataset:
 `"embedding"` and `"selection"` (see `.specs/architecture/target-architecture.md`
-§2 and `.specs/architecture/refactor-plan.md` Phase 2, item 1).
+§2 and `.specs/architecture/refactor-plan.md` Phase 2, item 1), and
+`"model_args"` (ADR 0014: model constructor arguments, today only
+`{"dropout_p": <float in [0, 1)>}`; absent = the model class's own defaults).
 
 Backward-compatibility rule
 ----------------------------
@@ -41,6 +43,7 @@ from dalmax.config.schema import (
     EmbeddingConfig,
     ExperimentConfig,
     HierarchyConfig,
+    ModelArgs,
     OptimizerArgs,
     SelectionConfig,
     TrainArgs,
@@ -161,6 +164,28 @@ def _build_selection_config(dataset_dict: dict[str, Any], context: str) -> Selec
     return SelectionConfig(method="flat_closest", hierarchy=None)
 
 
+_MODEL_ARGS_KEYS = tuple(field.name for field in dataclasses.fields(ModelArgs))
+
+
+def _build_model_args(d: Any, context: str) -> ModelArgs:
+    """Parse the optional `"model_args"` block (absent -> every argument unset).
+
+    Fails fast on a non-object block, an unknown key (`"_comment"`-style keys
+    excepted) or a non-numeric `dropout_p`; the range check is `ModelArgs`'s.
+    """
+    if d is None:
+        return ModelArgs()
+    if not isinstance(d, dict):
+        raise ConfigError(f"{context} must be a JSON object, got {d!r}")
+    unknown = sorted(k for k in d if k not in _MODEL_ARGS_KEYS and not str(k).startswith("_"))
+    if unknown:
+        raise ConfigError(f"{context}: unknown key(s) {unknown}; valid keys: {list(_MODEL_ARGS_KEYS)}")
+    dropout_p = d.get("dropout_p")
+    if dropout_p is not None and (isinstance(dropout_p, bool) or not isinstance(dropout_p, (int, float))):
+        raise ConfigError(f"{context}.dropout_p must be a number, got {dropout_p!r}")
+    return ModelArgs(dropout_p=None if dropout_p is None else float(dropout_p))
+
+
 def _resolve_device(device: str) -> str:
     if device == "auto":
         return "cuda" if torch.cuda.is_available() else "cpu"
@@ -231,6 +256,7 @@ def load_experiment_config(
     )
     embedding = _build_embedding_config(dataset_dict.get("embedding"))
     selection = _build_selection_config(dataset_dict, context)
+    model_args = _build_model_args(dataset_dict.get("model_args"), f"{context}.model_args")
 
     dataset_config = DatasetConfig(
         name=dataset_name,
@@ -243,6 +269,7 @@ def load_experiment_config(
         optimizer_args=optimizer_args,
         embedding=embedding,
         selection=selection,
+        model_args=model_args,
     )
 
     return ExperimentConfig(

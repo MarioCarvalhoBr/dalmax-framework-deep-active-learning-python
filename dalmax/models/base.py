@@ -1,3 +1,4 @@
+from collections.abc import Callable, Mapping
 from typing import Any
 
 import numpy as np
@@ -8,13 +9,25 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dalmax.models.checkpoint import load_checkpoint, save_checkpoint
+from dalmax.models.mc_dropout import mc_dropout_mode
 
 
 class DeepLearning:
-    def __init__(self, net, params, device):
+    def __init__(
+        self,
+        net: Callable[..., torch.nn.Module],
+        params: dict[str, Any],
+        device: torch.device,
+        model_kwargs: Mapping[str, Any] | None = None,
+    ) -> None:
+        """`net` is the model class, instantiated at every `train()` call as
+        `net(params["n_classes"], **model_kwargs)`. `model_kwargs` carries the
+        params JSON's `model_args` (e.g. `{"dropout_p": 0.5}`, KI-41, ADR 0014);
+        empty (the default) builds the model exactly as before that option existed."""
         self.net = net
         self.params = params
         self.device = device
+        self.model_kwargs: dict[str, Any] = dict(model_kwargs or {})
 
     def save_model(
         self,
@@ -44,6 +57,7 @@ class DeepLearning:
             class_names=class_names,
             img_size=img_size,
             extra=extra,
+            model_kwargs=self.model_kwargs,
         )
 
     def load_model(self, path: str) -> dict[str, Any]:
@@ -62,7 +76,7 @@ class DeepLearning:
     def train(self, data):
         n_epoch = self.params['n_epoch']
         n_classes = self.params['n_classes']
-        self.clf = self.net(n_classes).to(self.device)
+        self.clf = self.net(n_classes, **self.model_kwargs).to(self.device)
         self.clf.train()
         optimizer = optim.SGD(self.clf.parameters(), **self.params['optimizer_args'])
 
@@ -117,37 +131,48 @@ class DeepLearning:
                 probs[idxs] = prob.cpu()
         return probs
 
-    def predict_prob_dropout(self, data, n_drop):
-        n_drop = self.params['n_drop']
+    def predict_prob_dropout(self, data, n_drop: int) -> torch.Tensor:
+        """Mean softmax over `n_drop` MC-dropout passes (dropout active, the rest
+        of the model, BatchNorm included, in eval mode; KI-41, ADR 0014).
+
+        Raises `dalmax.models.mc_dropout.MCDropoutError` if the model has no
+        dropout module with `p > 0`, and `ValueError` if `n_drop < 1`.
+        """
+        _check_n_drop(n_drop)
         print("predict_prob_dropout with n_drop", n_drop)
-        self.clf.train()
         probs = torch.zeros([len(data), len(np.unique(data.Y))])
         loader = DataLoader(data, shuffle=False, **self.params['test_args'])
-        for _i in range(n_drop):
-            with torch.no_grad():
-                for x, y, idxs in loader:
-                    x, y = x.to(self.device), y.to(self.device)
-                    out, e1 = self.clf(x)
-                    prob = F.softmax(out, dim=1)
-                    probs[idxs] += prob.cpu()
+        with mc_dropout_mode(self.clf):
+            for _i in range(n_drop):
+                with torch.no_grad():
+                    for x, y, idxs in loader:
+                        x, y = x.to(self.device), y.to(self.device)
+                        out, e1 = self.clf(x)
+                        prob = F.softmax(out, dim=1)
+                        probs[idxs] += prob.cpu()
         probs /= n_drop
         return probs
 
-    def predict_prob_dropout_split(self, data, n_drop):
-        n_drop = self.params['n_drop']
+    def predict_prob_dropout_split(self, data, n_drop: int) -> torch.Tensor:
+        """Softmax of each of `n_drop` MC-dropout passes, shape
+        `[n_drop, len(data), n_classes]` (same mode handling and errors as
+        `predict_prob_dropout`)."""
+        _check_n_drop(n_drop)
         print("predict_prob_dropout_split with n_drop", n_drop)
-        self.clf.train()
         probs = torch.zeros([n_drop, len(data), len(np.unique(data.Y))])
         loader = DataLoader(data, shuffle=False, **self.params['test_args'])
-        for i in range(n_drop):
-            with torch.no_grad():
-                for x, y, idxs in loader:
-                    x, y = x.to(self.device), y.to(self.device)
-                    out, e1 = self.clf(x)
-                    probs[i][idxs] += F.softmax(out, dim=1).cpu()
+        with mc_dropout_mode(self.clf):
+            for i in range(n_drop):
+                with torch.no_grad():
+                    for x, y, idxs in loader:
+                        x, y = x.to(self.device), y.to(self.device)
+                        out, e1 = self.clf(x)
+                        probs[i][idxs] += F.softmax(out, dim=1).cpu()
         return probs
 
-    def get_embeddings(self, data):
+    def get_embeddings(self, data) -> torch.Tensor:
+        """The model's `e1` for every sample, in eval mode (for the DANINHAS
+        ResNet-50: the 2048-d pooled features that feed the classifier, KI-42)."""
         self.clf.eval()
         embeddings = torch.zeros([len(data), self.clf.get_embedding_dim()])
         loader = DataLoader(data, shuffle=False, **self.params['test_args'])
@@ -158,3 +183,8 @@ class DeepLearning:
                 embeddings[idxs] = e1.cpu()
         return embeddings
 
+
+def _check_n_drop(n_drop: int) -> None:
+    """Fail fast on a pass count that would average nothing (division by zero)."""
+    if isinstance(n_drop, bool) or not isinstance(n_drop, int) or n_drop < 1:
+        raise ValueError(f"n_drop (MC-dropout passes) must be an int >= 1, got {n_drop!r}")

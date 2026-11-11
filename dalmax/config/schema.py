@@ -14,7 +14,7 @@ construction.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 VALID_EXTRACTORS = ("ssrae", "vctex", "resnet_imagenet")
 VALID_EMBEDDING_VARIANTS = ("full", "spatial", "spectral")
@@ -188,6 +188,33 @@ class SelectionConfig:
 
 
 @dataclass(frozen=True)
+class ModelArgs:
+    """Optional constructor arguments of the dataset's model class (params JSON
+    ``"model_args"`` block, ADR 0014).
+
+    ``None`` means "not set": the argument is not passed and the model class
+    uses its own default, so a params JSON without ``"model_args"`` builds the
+    model exactly as before this block existed.
+
+    - ``dropout_p``: probability of the dropout layer applied before the final
+      classifier, in ``[0, 1)``. Default of the DANINHAS ResNet-50: ``0.0`` (no
+      dropout layer); the CIFAR10 CNN has its built-in DeepAL dropout ``0.5``.
+      ``files_config/campaign/params_paper1_mc_dropout.json`` sets ``0.5`` for the
+      four MC-dropout strategies (KI-41).
+    """
+
+    dropout_p: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.dropout_p is not None and not 0.0 <= self.dropout_p < 1.0:
+            raise ConfigError(f"ModelArgs.dropout_p must be in [0, 1), got {self.dropout_p!r}")
+
+    def as_kwargs(self) -> dict[str, float]:
+        """The arguments that are set, as keyword arguments for the model class."""
+        return {} if self.dropout_p is None else {"dropout_p": self.dropout_p}
+
+
+@dataclass(frozen=True)
 class DatasetConfig:
     """Everything the existing params JSON specifies for one dataset."""
 
@@ -201,6 +228,7 @@ class DatasetConfig:
     optimizer_args: OptimizerArgs
     embedding: EmbeddingConfig
     selection: SelectionConfig
+    model_args: ModelArgs = field(default_factory=ModelArgs)
 
     def __post_init__(self) -> None:
         if not self.name:

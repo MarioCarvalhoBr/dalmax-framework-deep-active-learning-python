@@ -87,7 +87,7 @@ distinct from "hierarchical" and matters for the ablation in
 
 - The paper under revision is `phd_files/Artigo_melhorias_Active_Learning_Mario.pdf`
   (LaTeX sources: `phd_files/Active_Learning_Mario/`).
-- **Implementation findings, accepted as-is (2026-11-02, author decision)**: the ResNet-50 model has no dropout (the 4 MC-dropout/BALD strategies are degenerate, KI-41) and `KMeansSampling`/`KCenterGreedy` use an untrained random embedding (KI-42); paper-1 numbers are reported as executed with disclosure, see `quality/known-issues.md`.
+- **Implementation findings, accepted as-is (2026-11-02, author decision)**: the ResNet-50 model has no dropout (the 4 MC-dropout/BALD strategies are degenerate, KI-41) and `KMeansSampling`/`KCenterGreedy` use an untrained random embedding (KI-42); paper-1 numbers are reported as executed with disclosure, see `quality/known-issues.md`. **Reversed 2026-11-11 (ADR 0014)**: KI-41, KI-42 and KI-45 (AdversarialBIM ties) are fixed in code and the 63 affected runs are prepared as campaign parts `paper1_rerun_a`/`paper1_rerun_b` (not executed).
 - **Campaign executed (2026-09-30 to 2026-10-05, verified 2026-11-01; part `texhal_q17` executed 2026-11-01, verified 2026-11-02: 210/210)**: all runs of the three
   papers (one manifest, 3 seeds, Google Colab Pro) completed, 0 incomplete/missing, seed audit PASS;
   numbers in `.specs/experiments/campaign.md` (execution record), reports in `docs/results/campaign/`

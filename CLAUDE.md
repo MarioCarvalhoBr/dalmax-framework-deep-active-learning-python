@@ -68,8 +68,12 @@ make lab-check GPU=0                  # one short real-data GPU run (n_round=1) 
 # The campaign (2026-09-29) -- the ONLY path for the final execution of all three papers
 # (one manifest, no redundant runs; see .specs/experiments/campaign.md and COLAB_RUNBOOK.md):
 make campaign-list                    # job table + run counts per part (222 runs / 74 groups)
-make campaign-run PART=all            # PART=paper1|upper_bound|rnhal|texhal|texhal_q17|hier_transfer (comma-separated ok); resume = re-run
-make campaign-verify                  # OK/INCOMPLETE/MISSING per job + seed audit (exit 0 ok / 1 fail / 2 warn)
+make campaign-run PART=all            # PART=paper1|paper1_rerun_a|paper1_rerun_b|upper_bound|rnhal|texhal|texhal_q17|hier_transfer (comma-separated ok); resume = re-run
+make campaign-archive-superseded DRY=1   # ADR 0014: report the superseded leaves of the re-run parts (then without DRY: move
+make campaign-archive-superseded CHECK=1 #   them to results/old_results_broken/; CHECK=1: exit 1 while a stale leaf remains)
+make campaign-verify                  # OK/INCOMPLETE/MISSING/STALE per job + seed audit (exit 0 ok / 1 fail / 2 warn)
+make campaign-archive-superseded DRY=1  # ADR 0014: superseded re-run leaves -> results/old_results_broken/ (then without DRY, then CHECK=1);
+                                      # campaign-run refuses (exit 3) and verify says STALE while one is live
 make campaign-report                  # docs/results/campaign/ (tables md/tex/csv, mean confusion matrices)
 make campaign-list MANIFEST=files_config/campaign/manifest_control_ki43.json   # any other manifest, e.g. the KI-43 control (prepared, not run)
 make campaign-list MANIFEST=files_config/campaign/manifest_kmh_sweep.json     # KMH parameter sweep (ADR 0012; stage 1 executed 2026-11-07/08, 135/135 OK; stage 2 executed 2026-11-09/10, 165/165 verified 2026-11-10): 165 runs / 55 groups
@@ -170,7 +174,10 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   ReportBuilder harness), plan in `thesis_drafts/WRITING_PLAN.md`. Found 2026-11-02; author decision
   2026-11-02: runs kept as executed, behaviour disclosed in paper 1, no re-run (fix deferred to a future campaign): KI-41 (no dropout layer, so the MC-dropout
   strategies and BALD are degenerate) and KI-42 (`KMeansSampling`/`KCenterGreedy` use an untrained
-  embedding layer), see `.specs/quality/known-issues.md`.
+  embedding layer), see `.specs/quality/known-issues.md`. **Reversed 2026-11-11 (author decision, ADR 0014)**: KI-41,
+  KI-42 and KI-45 (AdversarialBIM ties broken in pool order) are fixed in code and the 63 affected runs are prepared as
+  the parts `paper1_rerun_a`/`paper1_rerun_b` (two Colab accounts in parallel, `COLAB_RUNBOOK.md` section 6d; not
+  executed yet).
 - **KMH parameter sweep** (prepared 2026-11-07, ADR 0012; stage 1 executed 2026-11-07 to 2026-11-08 and verified locally 135/135, after the 6 `init_random` runs were re-run following KI-44: empty clusters under random k-means init crashed the hierarchical sampling, fixed in the vendored `hierarchical_sampling.py`): 45 groups / 135 runs at nq
   10/50/100 (hierarchy shapes incl. budget-matched, k-means init, leaf sampling, resampling) plus stage 2 (prepared
   2026-11-08, executed 2026-11-09 to 2026-11-10 and verified locally 165/165, nq100 only, 10 groups / 30 runs: deeper hierarchies, coarse level below budget, resampling on L=4;
@@ -255,6 +262,19 @@ outstanding.
   the main manifest (`make campaign-run PART=hier_transfer`): the KMH-sweep nq100 winner shape `k=[600,100]`, `sample_sizes=[30,5]`,
   `n_resamples=0` (0.8819 with ImageNet features) and the reference shape without resampling, each with SSRAE (`rnhal/6_2/`)
   and VCTex Q=17 (`texhal_q17/6_2/`); rows of table 6.2 of papers 3 and 2. Outcome: the shape does not transfer; under `k=[600,100]` without resampling the descriptors (SSRAE 0.8592, VCTex Q=17 0.8544) are below the ImageNet features (0.8819); no canonical configuration changes. It ran on a third runtime image with a different GPU model (see `run_metadata.json`). Runbook: `COLAB_RUNBOOK.md` section 6c.
+- **Fixed baselines re-run (ADR 0014, prepared 2026-11-11, not executed)**: the 21 groups `p1/<S>/nq{10,50,100}` of
+  `AdversarialBIM`, `KMeansSampling`, `KCenterGreedy` and the four MC-dropout strategies moved from `paper1` (now 54 runs /
+  18 groups) to `paper1_rerun_a` (BIM nq100/nq50 + KMeans + KCenter, 24 runs, ~4.3 GPU h) and `paper1_rerun_b` (BIM nq10 +
+  MC dropout with `files_config/campaign/params_paper1_mc_dropout.json`, 39 runs, ~4.2 GPU h); same ids, results paths and
+  table rows (222 runs / 74 groups unchanged). Before running, `make campaign-archive-superseded` moves the superseded
+  first-execution leaves (started before `SUPERSEDED_BEFORE = 2026-11-11T19:12:28Z`) to `results/old_results_broken/`
+  (the one sanctioned move under `results/`, `.claude/rules/data-safety.md`; never run it against the real tree from an
+  agent session).
+- **Model `model_args` and MC dropout (ADR 0014)**: optional params-JSON block `"model_args": {"dropout_p": <[0,1)>}`
+  (absent = the model's defaults, resolved `{"dropout_p": null}`); `DaninhasModelResNet50` returns the 2048-d pooled
+  features as embedding (`embedding_layer` kept unused for the RNG stream/checkpoint keys); `predict_prob_dropout*` run in
+  eval mode with only dropout active and raise `MCDropoutError` without dropout; `AdversarialBIM` breaks distance ties
+  with `derive_seed(seed, "adversarial_ties")` (`AdversarialDeepFool` keeps its pool-order tie-break, not re-run).
 - **Optional `selection.hierarchy` keys (ADR 0012)**: `n_resamples` (default 10), `init_method`
   (`kmeans++`|`random`), `resample_strategy` (`closest`|`random`), `leaf_sampling` (`random`|`closest`);
   the defaults reproduce the previous behaviour, so existing params JSONs and executed runs are unchanged.

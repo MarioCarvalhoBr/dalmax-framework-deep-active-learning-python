@@ -32,6 +32,14 @@ amendment.
   the regenerated `tests/golden/ssrae_kmeans_micro_seed1.json` fixture, whose `round_1_query_idxs_sorted`
   changed once seed-derivation replaced the literal `3` (old value kept in that fixture's
   `legacy_phase1_values` block).
+- **Adversarial tie-break (2026-11-11, ADR 0014, KI-45)**: `AdversarialBIM` breaks exact distance ties with
+  `np.random.default_rng(derive_seed(config.seed, "adversarial_ties"))`, created once per run by
+  `dalmax/query_strategies/registry.py::build_strategy` and injected through the constructor (it advances across
+  rounds). Without ties the ranking equals the old stable argsort. `AdversarialDeepFool` is built without it
+  (`rng=None`: stable argsort, its executed runs stay reproducible; its only ties are byte-identical duplicate images). `KMeansSampling` keeps
+  `KMeans(n_clusters=n)` without `random_state`: it draws from NumPy's legacy global RNG, which `seed_everything`
+  seeds, so it is reproducible (it is the one legacy strategy still reading that ambient state; do not copy that
+  pattern into new code).
 - `SSRAEKmeansHCSampling`/`VCTexKmeansHCSampling`
   (was `core/query_strategies/ssl_ssrae_sampling.py`, deleted in Phase 4) delegated clustering to
   what is now `dalmax/tools/SSL/src/hierarchical_kmeans_gpu.py` (moved, not deleted, in Phase 4) —

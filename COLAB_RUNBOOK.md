@@ -266,7 +266,9 @@ seeds (1,2,3) and one protocol in one environment. Sections 0-5 (runtime, Drive,
 
    | Part | Runs | Run groups |
    |---|---|---|
-   | `paper1` | 117 | 39 |
+   | `paper1` | 54 | 18 |
+   | `paper1_rerun_a` | 24 | 8 |
+   | `paper1_rerun_b` | 39 | 13 |
    | `upper_bound` | 3 | 1 |
    | `rnhal` | 42 | 14 |
    | `texhal` | 30 | 10 |
@@ -279,8 +281,10 @@ seeds (1,2,3) and one protocol in one environment. Sections 0-5 (runtime, Drive,
    logging to `results/campaign/campaign.log` and failures to `results/campaign/failures.log`
    (the batch continues after a failure). **Resume after a disconnect = redo sections 0-4 and
    re-run the same command** (`results/` is the Drive symlink of `make colab-setup`). Order: paper 1
-   at nq100 first (shared runs land early), then rnhal, texhal, texhal_q17, hier_transfer, paper 1 at nq50 and nq10, then the
-   upper bound.
+   at nq100 first (shared runs land early), then rnhal, texhal, texhal_q17, hier_transfer, paper 1 at nq50 and nq10, then
+   `paper1_rerun_a` and `paper1_rerun_b`, then the upper bound. Since 2026-11-11 (ADR 0014) the 21 groups of the seven
+   paper-1 baselines fixed that day (63 of the first execution's 117 `paper1` runs) are the parts `paper1_rerun_a` /
+   `paper1_rerun_b`; they keep their ids and results paths, see section 6d.
 3. **Check the environment before leaving it unattended**: the notebook prints the GPU identity
    right after `!make colab-check` (section 5), from that run's `run_metadata.json`
    (`environment.gpus[0]`: name, `total_memory_gb`, `driver_version`; `environment.torch.cuda`; the
@@ -289,15 +293,16 @@ seeds (1,2,3) and one protocol in one environment. Sections 0-5 (runtime, Drive,
    block, so the GPU used is always recoverable per run. Determinism is best-effort: an op without a
    deterministic kernel only warns and is listed in `nondeterministic_op_warnings`; re-runs on a
    different GPU model are not bit-identical.
-4. **Per-part launches** to split across sessions (the notebook defaults to `PART = "paper1"`).
-   Recommended order: `PART=paper1` (117 runs), `PART=rnhal` (42), `PART=texhal` (30),
+4. **Per-part launches** to split across sessions (the notebook defaults to `PART = "paper1_rerun_a"` since
+   2026-11-11, section 6d). Order used for the first execution: `PART=paper1` (then 117 runs; since ADR 0014
+   `paper1` is 54 runs plus `paper1_rerun_a` 24 and `paper1_rerun_b` 39), `PART=rnhal` (42), `PART=texhal` (30),
    `PART=texhal_q17` (18; TexHAL Q=17 re-run of 6.2/6.3, ADR 0011), `PART=upper_bound` (3); comma-separated works (`PART=rnhal,texhal`). Re-running the same `PART`
    resumes (completed runs are skipped), so a disconnect loses at most the run in progress.
    Papers 2/3 comparison tables need paper 1's `shared/*` runs and `shared/texhal_full`, so run
    `paper1` and `texhal` (and `texhal_q17` for the Q=17 6.2/6.3 rows) before reporting.
 5. **Progress / monitor** (the notebook's Progress cell): `!make campaign-verify PART=...` plus
    `!tail -n 20 results/campaign/campaign.log`; failures go to `results/campaign/failures.log`.
-6. **Verify**: `!make campaign-verify` -- OK/INCOMPLETE/MISSING per job with the artifact checks of
+6. **Verify**: `!make campaign-verify` -- OK/INCOMPLETE/MISSING/STALE per job (STALE: a superseded leaf of a re-run part, section 6d) with the artifact checks of
    `dalmax/reporting/leaf_check.py`, plus the **seed-consistency audit** (for every seed, all runs
    must have started from the identical initial labeled set; PASS/WARN/FAIL per seed, offenders
    listed). Exit code 0 = all OK, 1 = an incomplete/missing job or a FAIL audit, 2 = only audit
@@ -334,8 +339,8 @@ Prepared 2026-11-10; estimated 2 to 4 GPU hours, about 1.1 GB of checkpoints.
 
 **Executed** 2026-11-11 (UTC) in one Colab session (code commit `eee5d4e`), on a third runtime image with a different GPU model than the earlier campaign runs (see `environment.gpus[0].name` in `run_metadata.json`). `make campaign-verify PART=hier_transfer` gave `OK=12`, and after merging into the main `results/` tree `make campaign-verify` gave `OK=222 INCOMPLETE=0 MISSING=0`, seed audit PASS for seeds 1, 2, 3. Outcome in `.specs/experiments/campaign.md` (section "Hierarchy transfer part").
 
-**Notebook setup.** The Parameters cell of `notebooks/colab_runbook.ipynb` already defaults to `MANIFEST = ""` and
-`PART = "hier_transfer"` (since 2026-11-10; nothing to edit). Do sections 0-5 first (runtime, Drive, clone,
+**Notebook setup.** In the Parameters cell of `notebooks/colab_runbook.ipynb` keep `MANIFEST = ""` and set
+`PART = "hier_transfer"` (it was the default from 2026-11-10 until 2026-11-11; the default is now `paper1_rerun_a`, section 6d). Do sections 0-5 first (runtime, Drive, clone,
 Poetry, `make colab-setup`, `make test`, `make colab-check`) and confirm the GPU (`<gpu-name>`) as in section 6.
 
 1. Pull the latest commit: `!cd /content/dalmax && git pull` (or redo sections 0-4, which clone `main` fresh).
@@ -344,6 +349,151 @@ Poetry, `make colab-setup`, `make test`, `make colab-check`) and confirm the GPU
 4. Verify: `!make campaign-verify PART=hier_transfer` (expect `OK=12 INCOMPLETE=0 MISSING=0`; without `PART`, `OK=222`
    once the 210 runs executed earlier are present on the same `results/` tree) and the seed audit PASS.
 5. Report: `!make campaign-report`, then copy to Drive: `!cp -r docs/results/campaign "$DRIVE_ROOT/results/campaign_tables"`.
+
+---
+
+## 6d. Re-run of the seven fixed paper-1 baselines (`paper1_rerun_a` + `paper1_rerun_b`; ADR 0014)
+
+**Prepared 2026-11-11, not executed.** Seven paper-1 baselines ran in a degenerate form in the first execution and were
+fixed on 2026-11-11 (`.specs/quality/known-issues.md`): the four MC-dropout strategies had no dropout layer (KI-41),
+`KMeansSampling`/`KCenterGreedy` clustered an untrained random projection (KI-42), and `AdversarialBIM` broke its many
+distance ties in pool order, i.e. by class (KI-45). Their 21 groups (`p1/<Strategy>/nq{10,50,100}`, 63 runs) are re-run;
+everything else of the campaign is not. The new runs land in the **same leaf paths** as the first execution
+(`results/campaign/paper1/nq{10,50,100}/daninhas_full/SEED_<s>/NQ_<nq>_NIL_100_NR_8_NE_10/<Strategy>/`), so the tables and
+the thesis keep working, and the superseded leaves are first **moved** (never deleted) to `results/old_results_broken/`
+with the same path below `results/`.
+
+The work is split over **two Colab accounts running at the same time**, balanced by the GPU time measured in the first
+execution (per run: BIM about 2,300 s, MC-dropout strategies about 230 s, KMeans/KCenter about 90 s):
+
+| Account | `PART` | Runs | Groups | Content | GPU time (estimate) | Checkpoints |
+|---|---|---|---|---|---|---|
+| A | `paper1_rerun_a` | 24 | 8 | `AdversarialBIM` nq100 and nq50; `KMeansSampling`, `KCenterGreedy` at nq 10/50/100 | about 4.3 h (6 x 2,300 s + 18 x 90 s) | about 2.3 GB (24 x ~95 MB) |
+| B | `paper1_rerun_b` | 39 | 13 | `AdversarialBIM` nq10; `LeastConfidenceDropout`, `MarginSamplingDropout`, `EntropySamplingDropout`, `BALDDropout` at nq 10/50/100 | about 4.2 h (3 x 2,300 s + 36 x 230 s) | about 3.7 GB (39 x ~95 MB) |
+
+The times are for the GPU class of the first execution; on another `<gpu-name>` they scale accordingly (check
+`environment.gpus[0].name` in the first run's `run_metadata.json`). KMeans/KCenter will be somewhat slower than measured
+because they now work on the 2048-d trained features instead of a 50-d projection. Add about 15 minutes per session for
+sections 0-5. The MC-dropout groups use `files_config/campaign/params_paper1_mc_dropout.json` (= `params_paper1.json` plus
+`"model_args": {"dropout_p": 0.5}`): only these four strategies train with a dropout layer, so their round-0 model differs
+from the other strategies' (inherent to MC dropout). The new runs execute on a later runtime image than the five unchanged
+paper-1 strategies (KI-43: compare seed means, not single runs).
+
+> **WARNING, second account.** The notebook defaults to `PART = "paper1_rerun_a"`. On account **B** set
+> `PART = "paper1_rerun_b"` in the Parameters cell and check that its banner prints
+> `SELECTED PART: paper1_rerun_b  ->  expect 39 runs (13 run groups)` (account A: `24 runs (8 run groups)`).
+> If both accounts run `paper1_rerun_a`, half the credits are spent twice and part B is never run.
+
+**On first use run the notebook cell by cell**, not "Run all", and read each output before the next cell. The
+safeguards (ADR 0014 addendum) stop a wrong session anyway: the archive check cell and the gate cell right before the
+run cell raise on failure, the gate asserts the `campaign-list` count for `PART`, `campaign-run` itself refuses to start
+(exit 3, nothing launched) while a superseded or unreadable leaf of a re-run part is live, and `campaign-verify` reports
+such a leaf as `STALE`, never `OK`.
+
+**Per account (A and B do the same steps with their own `PART`):**
+
+1. **Drive prerequisites.** Each account has its own Google Drive, so the dataset must be on THAT account's Drive:
+   the folder `$DRIVE_ROOT/DATA/daninhas_full/` (the section 1 check cell asserts it). `make colab-setup` (section 4)
+   builds `$DRIVE_ROOT/DATA/daninhas_full.zip` from that folder on the account's first session (slow once, through Drive's
+   FUSE mount) and reuses the zip in every later session; to skip the slow build, also copy `daninhas_full.zip` (~47 MB,
+   e.g. from the other account's Drive or the local `DATA/daninhas_full.zip`) next to the folder. If the second account's
+   Drive does not use the same folder path, set `DRIVE_ROOT` in the Parameters cell to the folder that holds `DATA/` on
+   that Drive. `results/` becomes a symlink to `$DRIVE_ROOT/results` of that account. Free Drive space: 2.3 GB (A) or
+   3.7 GB (B) plus the zip of the same size (step 10); archiving the old runs is a rename, it takes no extra space.
+2. **Parameters cell** of `notebooks/colab_runbook.ipynb`: `MANIFEST = ""` (default) and `PART = "paper1_rerun_a"` (default,
+   account A) or `PART = "paper1_rerun_b"` (account B). The fix must be on the branch the notebook clones (`BRANCH`):
+   `main` once `fix/degenerate-baselines` is merged, or set `BRANCH = "fix/degenerate-baselines"` until then.
+3. **Sections 0-5** (runtime, Drive, clone, Poetry, `make colab-setup`, `make test`, `make smoke`, `make colab-check`, GPU
+   identity check). In a still-alive runtime, update the code instead: `!cd /content/dalmax && git pull`, then
+   `!git log --oneline -1`.
+4. **Archive, dry run**: `!make campaign-archive-superseded DRY=1`. On the Drive that holds the first-execution results
+   (`results/campaign/paper1/` complete) it lists `WOULD MOVE` for the 63 superseded leaves (`would move=63`); on a Drive
+   without old campaign results it reports `missing=63` and nothing to move, which is fine.
+5. **Archive**: `!make campaign-archive-superseded`. Expect `moved=63` (or `moved=0 ... missing=63` on a Drive without old
+   results). Every move is logged in `results/old_results_broken/ARCHIVE_LOG.tsv`. Re-running is safe
+   (`already_archived=63`), and leaves of the fixed code (started after the cutoff, with `config.dataset.model_args`
+   in `run_metadata.json`) are never moved. A leaf is superseded when its `run_metadata.json` started before the cutoff
+   **or** lacks `config.dataset.model_args` (only the fixed code writes it), one definition in `dalmax/superseded.py`
+   shared by the script and the engine. Exit status 1 means a `CONFLICT` (the destination already exists; nothing is
+   merged or overwritten) or an `UNREADABLE` leaf; see "Unreadable or interrupted leaves" below.
+6. **Check**: `!make campaign-archive-superseded CHECK=1` must print `CHECK OK` (the notebook cell raises otherwise).
+   A `STALE` leaf would otherwise be skipped as complete; `campaign-run` now refuses to start while one exists.
+7. **List**: `!make campaign-list PART=paper1_rerun_a` (B: `PART=paper1_rerun_b`). Expect `paper1_rerun_a 24 runs (8 run
+   groups)` and `TOTAL 24 runs (8 run groups)` (B: 39 runs, 13 groups). Without `PART`: `paper1 54 runs (18 run groups)`,
+   `TOTAL 222 runs (74 run groups)`. The notebook's gate cell (right before the run cell) re-runs the check and asserts
+   this count; it raises on a mismatch.
+8. **Run**: `!make campaign-run PART=paper1_rerun_a` (the notebook's run cell). After a disconnect or a session limit:
+   redo sections 0-4, run steps 4-6 again (they find nothing more to move) and the same `campaign-run` command:
+   skip-existing resumes, at most the run in progress is lost.
+9. **Verify**: `!make campaign-verify PART=paper1_rerun_a`: expect `OK=24 INCOMPLETE=0 MISSING=0 STALE=0` (B: `OK=39`)
+   and the seed audit PASS for seeds 1-3. `OK` for a re-run part can only be a run of the fixed code. Without `PART` the other parts show up as MISSING on a Drive that does not hold them;
+   that is expected.
+10. **Zip only the new leaves of the part, plus this account's `campaign.log`.** The notebook's 6d zip cell does all of
+    it and refuses (raises) unless the check passes and verify reports `OK=24` / `OK=39` (set `ZIP_PARTIAL = True` in
+    that cell only to ship an incomplete part on purpose). It also adds `results/campaign/campaign.log` (and
+    `failures.log` if any) under a part-specific name, `results/campaign/campaign_<PART>.log`, so the measured run times
+    of both accounts survive the merge (the two logs, and the merge target's own `campaign.log`, would otherwise
+    collide). By hand:
+
+    Account A:
+    ```python
+    !make campaign-archive-superseded CHECK=1
+    !cd /content/dalmax && zip -qr /content/paper1_rerun_a.zip \
+        results/campaign/paper1/nq100/*/SEED_*/NQ_100_*/AdversarialBIM \
+        results/campaign/paper1/nq50/*/SEED_*/NQ_50_*/AdversarialBIM \
+        results/campaign/paper1/nq*/*/SEED_*/NQ_*/KMeansSampling \
+        results/campaign/paper1/nq*/*/SEED_*/NQ_*/KCenterGreedy
+    !mkdir -p /content/stage_a/results/campaign && \
+        cp /content/dalmax/results/campaign/campaign.log /content/stage_a/results/campaign/campaign_paper1_rerun_a.log && \
+        cd /content/stage_a && zip -qr /content/paper1_rerun_a.zip results
+    !unzip -l /content/paper1_rerun_a.zip | grep -c saved_model.pth   # expect 24
+    !cp /content/paper1_rerun_a.zip "$DRIVE_ROOT/"                    # about 2.3 GB
+    ```
+
+    Account B:
+    ```python
+    !make campaign-archive-superseded CHECK=1
+    !cd /content/dalmax && zip -qr /content/paper1_rerun_b.zip \
+        results/campaign/paper1/nq10/*/SEED_*/NQ_10_*/AdversarialBIM \
+        results/campaign/paper1/nq*/*/SEED_*/NQ_*/LeastConfidenceDropout \
+        results/campaign/paper1/nq*/*/SEED_*/NQ_*/MarginSamplingDropout \
+        results/campaign/paper1/nq*/*/SEED_*/NQ_*/EntropySamplingDropout \
+        results/campaign/paper1/nq*/*/SEED_*/NQ_*/BALDDropout
+    !mkdir -p /content/stage_b/results/campaign && \
+        cp /content/dalmax/results/campaign/campaign.log /content/stage_b/results/campaign/campaign_paper1_rerun_b.log && \
+        cd /content/stage_b && zip -qr /content/paper1_rerun_b.zip results
+    !unzip -l /content/paper1_rerun_b.zip | grep -c saved_model.pth   # expect 39
+    !cp /content/paper1_rerun_b.zip "$DRIVE_ROOT/"                    # about 3.7 GB
+    ```
+
+    The zip stores the paths as `results/campaign/paper1/...` (it follows the `results/` symlink); download it from Drive.
+
+**Unreadable or interrupted leaves** (reported by steps 4-6, by `campaign-run`'s refusal and by `campaign-verify`):
+
+- `INTERRUPTED` (no readable `run_metadata.json` and no `results.json`): a run that died before it finished. It is not
+  superseded and not moved; `campaign-run` re-runs it as an incomplete leaf. Nothing to do.
+- `UNREADABLE` (no readable `run_metadata.json`, or one without a valid `started_at`, but `results.json` present): a
+  finished run whose provenance cannot be told, so the script refuses to move it and the engine refuses to run. Inspect
+  it: `!ls -la <leaf>` and `!head -c 400 <leaf>/run_metadata.json`. If it is a first-execution run (files dated
+  2026-09-30 to 2026-10-05), move it by hand to the archive path, never delete it:
+  `!mkdir -p "$(dirname results/old_results_broken/<path below results/>)" && mv <leaf> results/old_results_broken/<path below results/>`
+  and append a line to `results/old_results_broken/ARCHIVE_LOG.tsv` (`<utc time>\t<leaf>\t<destination>\tunreadable metadata, archived by hand`).
+  If it is a new run with a corrupted file, move it the same way (it is re-run). Then repeat step 6 until `CHECK OK`.
+
+**Merging the downloads into the authoritative `results/` tree** (the machine that holds all 222 runs, e.g. the local one),
+in this order:
+
+1. **Archive locally first**: `make campaign-archive-superseded DRY=1` (expect `would move=63`), then
+   `make campaign-archive-superseded` (`moved=63`): the 63 old leaves of that tree go to `results/old_results_broken/`.
+   **This must happen before unzipping.** `unzip -n` never overwrites, so unzipping over un-archived old leaves would not
+   replace them: it would silently skip every file the old leaf already has (`results.json`, `saved_model.pth`, ...) and
+   add only the files the old leaf lacks, leaving a mix of old results and new-only files in the same leaf.
+2. At the repo root: `unzip -n paper1_rerun_a.zip` and `unzip -n paper1_rerun_b.zip` (`-n`: never overwrite). The logs
+   land as `results/campaign/campaign_paper1_rerun_a.log` and `campaign_paper1_rerun_b.log`, next to the local
+   `campaign.log`.
+3. `make campaign-archive-superseded CHECK=1`: `CHECK OK` (`current=63`).
+4. `make campaign-verify`: `OK=222 INCOMPLETE=0 MISSING=0 STALE=0`, seed audit PASS for seeds 1-3. Then
+   `make campaign-report`.
 
 ---
 

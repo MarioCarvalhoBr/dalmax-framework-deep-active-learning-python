@@ -132,10 +132,13 @@ These are the exact `--strategy_name` choices exposed by `tools/trainer.py`.
   initialization, requires `--n_round 0`) and evaluates on the test set; it never
   queries. It is the reference "maximum achievable" score of the benchmark.
 
-Known limitation: the ResNet-50 head has no dropout layer, so the MC-dropout
-strategies and `BALDDropout` are degenerate, and `KMeansSampling`/`KCenterGreedy` use an
-untrained embedding layer; the executed runs were kept as is and the behaviour is
-disclosed (KI-41, KI-42 in [`.specs/quality/known-issues.md`](.specs/quality/known-issues.md)).
+Known limitation of the first campaign execution: the ResNet-50 head had no dropout layer, so the MC-dropout
+strategies and `BALDDropout` were degenerate, `KMeansSampling`/`KCenterGreedy` used an
+untrained embedding layer, and `AdversarialBIM` broke its distance ties in pool order
+(KI-41, KI-42, KI-45 in [`.specs/quality/known-issues.md`](.specs/quality/known-issues.md)). All three are
+fixed in code since 2026-11-11 (ADR 0014; optional params block `"model_args": {"dropout_p": ...}` for the
+MC-dropout strategies) and the 63 affected runs are prepared for re-execution as the campaign parts
+`paper1_rerun_a` / `paper1_rerun_b` (`COLAB_RUNBOOK.md` section 6d), not executed yet.
 
 ## Installation
 
@@ -246,7 +249,8 @@ deterministic kernel), so report seed-averaged numbers.
 ## The campaign
 
 Everything the three papers need runs from ONE manifest,
-`files_config/campaign/manifest.json` (222 runs in 74 run groups, all executed, seeds 1 to 3;
+`files_config/campaign/manifest.json` (222 runs in 74 run groups, all executed, seeds 1 to 3; the 63 runs of the
+seven paper-1 baselines fixed on 2026-11-11 are prepared for re-execution as parts `paper1_rerun_a`/`paper1_rerun_b`, ADR 0014;
 configurations shared by several papers run once and are aliased), driven by the
 engine `dalmax/campaign.py`. See
 [`.specs/experiments/campaign.md`](.specs/experiments/campaign.md) and ADR 0008/0009/0010.
@@ -254,7 +258,7 @@ engine `dalmax/campaign.py`. See
 ```bash
 make campaign-list                 # job table + run counts per part
 make campaign-run PART=all         # sequential, skip-existing: re-run the same command to resume
-make campaign-verify               # OK/INCOMPLETE/MISSING per job + seed audit
+make campaign-verify               # OK/INCOMPLETE/MISSING/STALE per job + seed audit
 make campaign-report               # tables + mean confusion matrices -> docs/results/campaign/
 make campaign-smoke                # CPU micro campaign (skips the two adversarial baselines)
 ```

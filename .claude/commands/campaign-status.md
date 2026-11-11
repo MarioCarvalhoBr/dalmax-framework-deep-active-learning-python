@@ -1,5 +1,5 @@
 ---
-description: Report campaign progress (files_config/campaign/manifest.json vs results/campaign/): per-part run counts, OK/INCOMPLETE/MISSING, seed audit. Read-only.
+description: Report campaign progress (files_config/campaign/manifest.json vs results/campaign/): per-part run counts, OK/INCOMPLETE/MISSING/STALE, seed audit. Read-only.
 ---
 
 Report the state of the campaign (ADR 0008/0009/0010, `.specs/experiments/campaign.md`). Treat `$ARGUMENTS`
@@ -9,7 +9,9 @@ default `all`). This command is read-only: it never runs training and never writ
 Steps:
 
 1. `poetry run python -m dalmax.campaign list --part <part>` -- the expected job table and the counts
-   (full scale: 222 runs / 74 groups: `paper1` 117, `upper_bound` 3, `rnhal` 42, `texhal` 30, `texhal_q17` 18, `hier_transfer` 12).
+   (full scale: 222 runs / 74 groups: `paper1` 54, `paper1_rerun_a` 24, `paper1_rerun_b` 39, `upper_bound` 3, `rnhal` 42,
+   `texhal` 30, `texhal_q17` 18, `hier_transfer` 12; the two re-run parts hold the seven paper-1 baselines fixed on
+   2026-11-11, ADR 0014, prepared, not executed).
 2. `poetry run python -m dalmax.campaign verify --part <part>` -- per job OK / INCOMPLETE / MISSING
    (`dalmax/reporting/leaf_check.py` artifact check) plus the seed-consistency audit. Exit code:
    0 all OK, 1 an incomplete/missing job or a FAIL audit, 2 only audit WARNs.

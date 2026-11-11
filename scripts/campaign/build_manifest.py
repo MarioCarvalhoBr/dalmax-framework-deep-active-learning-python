@@ -24,6 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 from dalmax.campaign import Alias, derive_used_by  # noqa: E402
+from dalmax.superseded import RERUN_PARTS as SUPERSEDED_RERUN_PARTS  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_kmh_sweep_configs as sweep  # noqa: E402
@@ -43,6 +44,38 @@ KMH_LABEL = "KMH (hierarchical k-means, ImageNet ResNet-50 features)"
 # Paper-1 methods eligible for "best paper-1 method @ nq=100": 12 classical + KMH.
 PAPER1_METHODS = [*CLASSICAL_STRATEGIES, KMH]
 
+# Re-run of the seven baselines fixed on 2026-11-11 (ADR 0014; KI-41 MC dropout, KI-42 embeddings,
+# KI-45 BIM ties). Their 21 groups keep id, dir_results and table rows, and move from part `paper1` to
+# two parts balanced by the GPU time of the first execution (BIM ~2,300 s per run, MC-dropout ~230 s,
+# k-means/k-center ~90 s), one per Colab account: A = BIM nq100/nq50 + KMeans/KCenter (24 runs),
+# B = BIM nq10 + the four MC-dropout strategies (39 runs).
+# The part names come from dalmax/superseded.py (one definition, shared with the campaign engine's
+# run guard / STALE verify status and with archive_superseded_runs.py).
+RERUN_PART_A, RERUN_PART_B = SUPERSEDED_RERUN_PARTS
+MC_DROPOUT_STRATEGIES = ["LeastConfidenceDropout", "MarginSamplingDropout", "EntropySamplingDropout", "BALDDropout"]
+PAPER1_BUDGETS = (10, 50, 100)
+# strategy -> {paper nq -> part}; a (strategy, nq) absent here stays in part `paper1`.
+RERUN_PARTS: dict[str, dict[int, str]] = {
+    "AdversarialBIM": {100: RERUN_PART_A, 50: RERUN_PART_A, 10: RERUN_PART_B},
+    "KMeansSampling": dict.fromkeys(PAPER1_BUDGETS, RERUN_PART_A),
+    "KCenterGreedy": dict.fromkeys(PAPER1_BUDGETS, RERUN_PART_A),
+    **{strat: dict.fromkeys(PAPER1_BUDGETS, RERUN_PART_B) for strat in MC_DROPOUT_STRATEGIES},
+}
+RERUN_NOTES: dict[str, str] = {
+    "AdversarialBIM": "Re-run (ADR 0014, KI-45): BIM distance ties broken at random with a seed-derived generator "
+                      "(they were broken in pool order, i.e. by class).",
+    "KMeansSampling": "Re-run (ADR 0014, KI-42): clusters the trained 2048-d pooled features (was an untrained "
+                      "random 50-d projection).",
+    "KCenterGreedy": "Re-run (ADR 0014, KI-42): k-center on the trained 2048-d pooled features (was an untrained "
+                     "random 50-d projection); NaN-free distances.",
+    **dict.fromkeys(MC_DROPOUT_STRATEGIES,
+                    "Re-run (ADR 0014, KI-41): trains and predicts with a dropout layer (p=0.5) before the "
+                    "classifier, MC passes with only dropout active (params_paper1_mc_dropout.json); the "
+                    "network had no dropout before."),
+}
+SUPERSEDED_NOTE = ("The executed run of this group (2026-09-30 to 2026-10-05) is superseded and archived to "
+                   "results/old_results_broken/ by scripts/campaign/archive_superseded_runs.py.")
+
 
 @dataclass(frozen=True)
 class Scale:
@@ -51,6 +84,7 @@ class Scale:
     name: str
     results_root: str
     paper1_params: str
+    paper1_mc_dropout_params: str
     kmh_params: str
     abl_subdir: str  # "" or "micro/"
     nq_by_paper_nq: dict[int, int]  # paper nq -> actual --n_query
@@ -61,12 +95,13 @@ class Scale:
 
 FULL = Scale(
     "campaign", "results/campaign", "files_config/campaign/params_paper1.json",
-    "files_config/campaign/params_kmh.json", "",
+    "files_config/campaign/params_paper1_mc_dropout.json", "files_config/campaign/params_kmh.json", "",
     {10: 10, 50: 50, 100: 100}, 100, 8, 8086,
 )
 MICRO = Scale(
     "campaign_micro", "results/smoke_campaign", "files_config/campaign/params_paper1_micro.json",
-    "files_config/campaign/params_kmh_micro.json", "micro/",
+    "files_config/campaign/params_paper1_mc_dropout_micro.json", "files_config/campaign/params_kmh_micro.json",
+    "micro/",
     {10: 3, 50: 4, 100: 5}, 10, 1, 806,
 )
 
@@ -142,8 +177,11 @@ def build(scale: Scale) -> dict[str, Any]:
         for strat in CLASSICAL_STRATEGIES:
             if paper_nq == 100 and strat == "RandomSampling":
                 continue  # shared/random_nq100 (below): baseline of papers 1, 2 and 3
-            add_group(f"p1/{strat}/nq{paper_nq}", "paper1", scale.paper1_params, strat, nq,
-                      scale.n_init, scale.n_round, f"{root}/paper1/nq{paper_nq}/")
+            part = RERUN_PARTS.get(strat, {}).get(paper_nq, "paper1")
+            params = scale.paper1_mc_dropout_params if strat in MC_DROPOUT_STRATEGIES else scale.paper1_params
+            note = f"{RERUN_NOTES[strat]} {SUPERSEDED_NOTE}" if part != "paper1" else ""
+            add_group(f"p1/{strat}/nq{paper_nq}", part, params, strat, nq,
+                      scale.n_init, scale.n_round, f"{root}/paper1/nq{paper_nq}/", note)
         if paper_nq == 100:
             add_group("shared/kmh_nq100", "paper1", kmh_params, "RepresentationStrategy", nq,
                       scale.n_init, scale.n_round, f"{root}/shared/kmh_nq100/",

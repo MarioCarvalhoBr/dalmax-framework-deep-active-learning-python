@@ -74,11 +74,69 @@ def test_parameters_cell_defines_campaign_part() -> None:
     nb = _load_notebook()
     code_cells = [c for c in nb["cells"] if c["cell_type"] == "code"]
     first_source = "".join(code_cells[0]["source"])
-    # Since 2026-11-07 the notebook defaults to the KMH sweep (ADR 0012) with PART = "all".
-    # Defaults since 2026-11-10 (ADR 0013): the hierarchy-transfer part of the main campaign, no edits needed.
-    assert 'PART = "hier_transfer"' in first_source
+    # Since 2026-11-07 the notebook defaulted to the KMH sweep (ADR 0012) with PART = "all", since 2026-11-10 to
+    # hier_transfer (ADR 0013). Defaults since 2026-11-11 (ADR 0014): the re-run of the seven fixed paper-1
+    # baselines, account A; the second account sets paper1_rerun_b.
+    assert 'PART = "paper1_rerun_a"' in first_source
+    assert 'PART = "paper1_rerun_b"' in first_source  # documented for the second account
     assert 'MANIFEST = ""' in first_source
     assert "resumes" in first_source
+
+
+CHECK_RAISES = 'subprocess.run(["make", "campaign-archive-superseded", "CHECK=1"], cwd=REPO_DIR, check=True)'
+
+
+def _code_sources() -> list[str]:
+    return ["".join(c["source"]) for c in _load_notebook()["cells"] if c["cell_type"] == "code"]
+
+
+def test_archive_cells_run_dry_then_move_then_check_before_the_campaign_run() -> None:
+    sources = _code_sources()
+    dry = sources.index("!make campaign-archive-superseded DRY=1")
+    move = sources.index("!make campaign-archive-superseded")
+    check = next(i for i, s in enumerate(sources) if CHECK_RAISES in s and "campaign-list" not in s)
+    run_idx = next(i for i, s in enumerate(sources) if "make campaign-run" in s)
+    assert dry < move < check < run_idx
+    # ADR 0014 safeguard: the check RAISES (not a `!` shell line whose failure "Run all" ignores).
+    assert not any(s.strip() == "!make campaign-archive-superseded CHECK=1" for s in sources)
+
+
+def test_cell_right_before_the_run_raises_on_check_and_asserts_the_part_count() -> None:
+    sources = _code_sources()
+    run_idx = next(i for i, s in enumerate(sources) if "make campaign-run" in s)
+    gate = sources[run_idx - 1]
+    assert CHECK_RAISES in gate
+    assert '"campaign-list", f"PART={PART}"' in gate and "check=True" in gate
+    assert "assert (int(total.group(1)), int(total.group(2))) == (EXPECTED_RUNS, EXPECTED_GROUPS)" in gate
+
+
+def test_parameters_cell_announces_the_part_and_the_expected_count() -> None:
+    params = _code_sources()[0]
+    assert 'RERUN_EXPECTED = {"paper1_rerun_a": (24, 8), "paper1_rerun_b": (39, 13)}' in params
+    assert "SELECTED PART: {PART}" in params and "expect {EXPECTED_RUNS} runs" in params
+
+
+def test_rerun_zip_cell_covers_both_parts_after_verify() -> None:
+    sources = _code_sources()
+    verify = sources.index("!make campaign-verify {MANIFEST_ARG} PART={PART}")
+    zip_idx = next(i for i, s in enumerate(sources) if "RERUN_LEAF_GLOBS" in s)
+    assert verify < zip_idx
+    zip_cell = sources[zip_idx]
+    assert '"paper1_rerun_a"' in zip_cell and '"paper1_rerun_b"' in zip_cell
+    assert "zip -qr" in zip_cell
+    for strategy in ("AdversarialBIM", "KMeansSampling", "KCenterGreedy", "LeastConfidenceDropout",
+                     "MarginSamplingDropout", "EntropySamplingDropout", "BALDDropout"):
+        assert strategy in zip_cell
+
+
+def test_rerun_zip_cell_refuses_unless_check_and_verify_pass_and_ships_the_log() -> None:
+    zip_cell = next(s for s in _code_sources() if "RERUN_LEAF_GLOBS" in s)
+    check, verify, archive = (zip_cell.index(CHECK_RAISES), zip_cell.index('"campaign-verify"'),
+                              zip_cell.index("zip -qr {zip_path}"))
+    assert check < verify < archive
+    assert "if n_ok != EXPECTED_RUNS and not ZIP_PARTIAL:" in zip_cell and "ZIP_PARTIAL = False" in zip_cell
+    assert "{name}_{PART}.log" in zip_cell and '("campaign", "failures")' in zip_cell
+    assert "!" not in zip_cell.replace("!=", "")  # every step is a raising subprocess call
 
 
 def test_campaign_cells_use_the_part_parameter() -> None:

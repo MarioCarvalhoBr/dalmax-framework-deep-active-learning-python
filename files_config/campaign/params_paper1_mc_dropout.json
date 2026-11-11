@@ -1,0 +1,37 @@
+{
+    "_comment": "Paper-1 params for the four MC-dropout strategies (LeastConfidenceDropout, MarginSamplingDropout, EntropySamplingDropout, BALDDropout) of the re-run part paper1_rerun_b: identical to params_paper1.json plus model_args.dropout_p = 0.5, a dropout layer on the 2048-d pooled features right before the classifier of the DANINHAS ResNet-50, active during training and during the n_drop MC passes, as in DeepAL. Without it these strategies were degenerate (KI-41, .specs/quality/known-issues.md; ADR 0014). Only these four strategies train with this layer, so their round-0 model differs from the other strategies' (inherent to MC dropout). See .specs/experiments/campaign.md.",
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_full/",
+        "n_epoch": 10,
+        "n_drop": 10,
+        "n_classes": 5,
+        "train_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "test_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "optimizer_args": {
+            "lr": 0.05,
+            "momentum": 0.3
+        },
+        "model_args": {
+            "dropout_p": 0.5
+        },
+        "config_kmh": {
+            "n_clusters": [
+                600,
+                200,
+                100
+            ],
+            "n_levels": 3,
+            "sample_sizes": [
+                30,
+                15,
+                2
+            ]
+        }
+    }
+}

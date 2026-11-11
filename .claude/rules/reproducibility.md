@@ -29,6 +29,14 @@ locations.
   `KMeans(random_state=...)` from `np.random.default_rng(dalmax.seeding.derive_seed(config.seed,
   "selection"))` — verified by the regenerated `tests/golden/ssrae_kmeans_micro_seed1.json` fixture.
   Any new strategy code must follow this pattern, not the legacy literal.
+- **Adversarial tie-break (2026-11-11, ADR 0014, KI-45)**: `AdversarialBIM` breaks exact distance ties with
+  `np.random.default_rng(derive_seed(config.seed, "adversarial_ties"))`, created once per run by
+  `dalmax/query_strategies/registry.py::build_strategy` and injected through the constructor (it advances across
+  rounds). Without ties the ranking equals the old stable argsort. `AdversarialDeepFool` is built without it
+  (`rng=None`: stable argsort, its executed runs stay reproducible; its only ties are byte-identical duplicate images). `KMeansSampling` keeps
+  `KMeans(n_clusters=n)` without `random_state`: it draws from NumPy's legacy global RNG, which `seed_everything`
+  seeds, so it is reproducible (it is the one legacy strategy still reading that ambient state; do not copy that
+  pattern into new code).
 - `torch.backends.cudnn.enabled = False` was used as a determinism
   shortcut in the historical `demo.py:59` (line no longer exists); it globally disabled cuDNN and cost performance on the
   the lab GPUs. **Now uses** `torch.backends.cudnn.deterministic = True` +

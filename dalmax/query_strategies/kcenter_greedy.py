@@ -5,10 +5,13 @@ from .base import Strategy
 
 
 class KCenterGreedy(Strategy):
-    def __init__(self, dataset, net, logger):
+    """Greedy k-center (core-set) selection on the model embeddings (DeepAL port);
+    for DANINHAS the embeddings are the 2048-d trained pooled features (KI-42)."""
+
+    def __init__(self, dataset, net, logger) -> None:
         super().__init__(dataset, net, logger)
 
-    def query(self, n):
+    def query(self, n: int) -> np.ndarray:
         labeled_idxs, train_data = self.dataset.get_train_data()
         embeddings = self.get_embeddings(train_data)
         embeddings = embeddings.numpy()
@@ -18,6 +21,9 @@ class KCenterGreedy(Strategy):
         dist_mat *= -2
         dist_mat += sq
         dist_mat += sq.transpose()
+        # Float cancellation in |a|^2 + |b|^2 - 2ab can leave tiny negative squared
+        # distances (NaN after the sqrt, ADR 0014); clamp them to 0 first.
+        np.maximum(dist_mat, 0, out=dist_mat)
         dist_mat = np.sqrt(dist_mat)
 
         mat = dist_mat[~labeled_idxs, :][:, labeled_idxs]

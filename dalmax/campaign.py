@@ -12,15 +12,23 @@ computation). Nothing runs twice.
 CLI (`python -m dalmax.campaign <cmd>`):
 
 - `list`: print the job table (counts per part and in total).
-- `run --part {paper1,upper_bound,rnhal,texhal,texhal_q17,hier_transfer,control,kmh_nq100,kmh_nq50,kmh_nq10,all}[,...] [--micro] [--dry-run]
+- `run --part {paper1,paper1_rerun_a,paper1_rerun_b,upper_bound,rnhal,texhal,texhal_q17,hier_transfer,control,kmh_nq100,kmh_nq50,kmh_nq10,all}[,...] [--micro] [--dry-run]
   [--skip-existing|--no-skip-existing] [--device cuda]`: execute the jobs
   sequentially through `tools/trainer.py` (subprocess), logging to
   `<results_root>/campaign.log` and `<results_root>/failures.log`, continuing
   after a failure.
-- `verify [--part ...] [--micro]`: per job OK / INCOMPLETE / MISSING, reusing
+- `verify [--part ...] [--micro]`: per job OK / INCOMPLETE / MISSING / STALE, reusing
   `dalmax.reporting.leaf_check.check_leaf`, plus the seed-consistency audit.
-  Exit code: 0 all OK; 1 an incomplete/missing job or a FAIL audit; 2 only
+  `STALE` (ADR 0014): a job of a re-run part (`dalmax.superseded.RERUN_PARTS`) whose
+  existing leaf is superseded (pre-fix run) or unreadable (`dalmax.superseded.classify_leaf`),
+  so `OK` for those parts can only mean a run of the fixed code.
+  Exit code: 0 all OK; 1 an incomplete/missing/stale job or a FAIL audit; 2 only
   audit WARNs (a run whose initial-labeled-set log line is missing/unreadable).
+- Run guard (ADR 0014): `run` (also with `--dry-run` or `--no-skip-existing`) refuses to
+  start, before any job, while a selected job of a re-run part has a superseded or
+  unreadable leaf (it would be skipped as complete or overwritten in place): it exits 3,
+  listing the count and the first leaves; the operator archives them first with
+  `make campaign-archive-superseded`. Other parts are never inspected.
 - Every subcommand accepts `--exclude-strategy A,B` (e.g. the two adversarial
   baselines, far too slow for a CPU smoke run): jobs of those strategies are
   dropped from the list/run/verify/audit. The full manifest still contains them.
@@ -28,7 +36,8 @@ CLI (`python -m dalmax.campaign <cmd>`):
 Execution order (fixed, independent of `--part`): paper 1 at n_query=100
 first (the shared canonical runs -- KMH and RandomSampling, which papers 2/3 reuse --
 land early, so papers 2/3 comparisons can already be read), then rnhal, texhal, texhal_q17, hier_transfer,
-then paper 1 at n_query=50 and 10, then the upper bound. If a session
+then paper 1 at n_query=50 and 10, then the two re-run parts of the seven fixed paper-1
+baselines (`paper1_rerun_a`, `paper1_rerun_b`, ADR 0014), then the upper bound. If a session
 budget runs out, what is missing is the least reusable part.
 """
 
@@ -56,6 +65,7 @@ from dalmax.query_strategies.registry import (
 )
 from dalmax.reporting.leaf_check import check_leaf
 from dalmax.seeding import CUBLAS_WORKSPACE_CONFIG
+from dalmax.superseded import RERUN_PARTS, LeafVerdict, classify_leaf, leaf_pattern
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_MANIFEST = "files_config/campaign/manifest.json"
@@ -65,8 +75,12 @@ TRAINER_SCRIPT = "tools/trainer.py"
 # Layout/ownership rule: a run group lives under the FIRST paper that consumes
 # it (paper 1 < 2 < 3) and its `used_by` lists every consumer; e.g. paper 1's
 # `KMH@100` is also the "w/o representation module" row of papers 2 and 3.
-PARTS: tuple[str, ...] = ("paper1", "upper_bound", "rnhal", "texhal", "texhal_q17", "hier_transfer",
-                          "control", "kmh_nq100", "kmh_nq50", "kmh_nq10")
+# `paper1_rerun_a` / `paper1_rerun_b` (ADR 0014): the seven paper-1 baselines fixed on 2026-11-11
+# (KI-41/KI-42/KI-45), split in two GPU-time-balanced halves, one per Colab account.
+# The re-run part names come from `dalmax.superseded.RERUN_PARTS` (one definition, shared with the
+# archive script and the manifest builder).
+PARTS: tuple[str, ...] = ("paper1", *RERUN_PARTS, "upper_bound", "rnhal", "texhal",
+                          "texhal_q17", "hier_transfer", "control", "kmh_nq100", "kmh_nq50", "kmh_nq10")
 
 # Execution phases (see module docstring). Index = order of execution.
 PHASE_LABELS: tuple[str, ...] = (
@@ -76,6 +90,7 @@ PHASE_LABELS: tuple[str, ...] = (
     "texhal_q17",
     "hier_transfer",
     "paper1_other_nq",
+    *RERUN_PARTS,
     "upper_bound",
     "control",
     "kmh_nq100",
@@ -505,22 +520,24 @@ def count_by_part(jobs: Sequence[Job]) -> dict[str, int]:
 
 def leaf_glob(group: RunGroup, seed: int) -> str:
     """Glob (relative to the group's `dir_results`) matching this job's leaf dir."""
-    return (
-        f"*/SEED_{seed}/NQ_{group.n_query}_NIL_{group.n_init_labeled}_NR_{group.n_round}_NE_*/"
-        f"{group.strategy_name}"
-    )
+    return leaf_pattern(group.strategy_name, group.n_query, group.n_init_labeled, group.n_round, seed)
 
 
-def find_leaf(group: RunGroup, seed: int, *, base: Path | None = None) -> Path | None:
-    """The existing leaf directory of a job (any dataset folder / n_epoch), or None.
+def find_leaves(group: RunGroup, seed: int, *, base: Path | None = None) -> list[Path]:
+    """Every existing leaf directory of a job (any dataset folder / n_epoch), sorted.
 
     `base` overrides the directory `dir_results` is resolved against (default
     the repo root); used by the report/tests to point at another tree.
     """
     root = (base if base is not None else REPO_ROOT) / group.dir_results
     if not root.is_dir():
-        return None
-    matches = sorted(root.glob(leaf_glob(group, seed)))
+        return []
+    return sorted(root.glob(leaf_glob(group, seed)))
+
+
+def find_leaf(group: RunGroup, seed: int, *, base: Path | None = None) -> Path | None:
+    """The first existing leaf directory of a job (see `find_leaves`), or None."""
+    matches = find_leaves(group, seed, base=base)
     return matches[0] if matches else None
 
 
@@ -533,6 +550,73 @@ def job_done(job: Job) -> bool:
         return False
     missing, _warnings = check_leaf(leaf)
     return not missing
+
+
+# --- superseded leaves of the re-run parts (ADR 0014) -------------------------
+
+
+class SupersededLeavesError(CampaignError):
+    """A selected job of a re-run part still has a superseded or unreadable leaf."""
+
+
+@dataclass(frozen=True)
+class BlockingLeaf:
+    job: Job
+    leaf: Path
+    verdict: LeafVerdict
+
+
+def blocking_leaves(
+    jobs: Sequence[Job], *, base: Path | None = None, cutoff: datetime | None = None
+) -> list[BlockingLeaf]:
+    """Leaves of re-run-part jobs that `classify_leaf` calls superseded or unreadable.
+
+    Jobs of any other part are never inspected. Every matching leaf of a job is
+    checked, not only the first one `find_leaf` returns.
+    """
+    found: list[BlockingLeaf] = []
+    for job in jobs:
+        if job.group.part not in RERUN_PARTS:
+            continue
+        for leaf in find_leaves(job.group, job.seed, base=base):
+            verdict = classify_leaf(leaf, cutoff)
+            if verdict.blocking:
+                found.append(BlockingLeaf(job, leaf, verdict))
+    return found
+
+
+def _display_path(path: Path, base: Path) -> str:
+    try:
+        return path.relative_to(base).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def ensure_no_blocking_leaves(
+    jobs: Sequence[Job], *, base: Path | None = None, cutoff: datetime | None = None, show: int = 5
+) -> None:
+    """Raise `SupersededLeavesError` (listing the count and the first `show` leaves) if any."""
+    found = blocking_leaves(jobs, base=base, cutoff=cutoff)
+    if not found:
+        return
+    root = base if base is not None else REPO_ROOT
+    lines = [
+        f"refusing to run: {len(found)} leaf/leaves of the re-run parts ({', '.join(RERUN_PARTS)}) "
+        "hold a superseded (pre-fix) or unreadable run that skip-existing would keep as complete "
+        "or a new run would overwrite in place (ADR 0014):"
+    ]
+    lines += [
+        f"  {b.verdict.status.upper()} {_display_path(b.leaf, root)} ({b.verdict.reason})"
+        for b in found[:show]
+    ]
+    if len(found) > show:
+        lines.append(f"  ... and {len(found) - show} more")
+    lines.append(
+        "Archive them first: `make campaign-archive-superseded DRY=1`, then "
+        "`make campaign-archive-superseded`, then `make campaign-archive-superseded CHECK=1` "
+        "(must print CHECK OK); see COLAB_RUNBOOK.md section 6d. Nothing was launched."
+    )
+    raise SupersededLeavesError("\n".join(lines))
 
 
 # --- running ------------------------------------------------------------------
@@ -599,7 +683,13 @@ def run_jobs(
     executor: Callable[[list[str], dict[str, str]], int] = _default_executor,
     echo: Callable[[str], None] = print,
 ) -> RunSummary:
-    """Execute jobs sequentially; a failing job is logged and the batch continues."""
+    """Execute jobs sequentially; a failing job is logged and the batch continues.
+
+    Raises `SupersededLeavesError` before anything is launched or logged (also in
+    `dry_run` and without `skip_existing`) when a job of a re-run part still has a
+    superseded or unreadable leaf (ADR 0014).
+    """
+    ensure_no_blocking_leaves(jobs)
     root = REPO_ROOT / manifest.results_root
     campaign_log = root / "campaign.log"
     failures_log = root / "failures.log"
@@ -649,15 +739,23 @@ def run_jobs(
 @dataclass(frozen=True)
 class JobStatus:
     job: Job
-    status: str  # OK | INCOMPLETE | MISSING
+    status: str  # OK | INCOMPLETE | MISSING | STALE
     missing_files: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
+    detail: str = ""
 
 
-def verify_job(job: Job, *, base: Path | None = None) -> JobStatus:
+def verify_job(job: Job, *, base: Path | None = None, cutoff: datetime | None = None) -> JobStatus:
     leaf = find_leaf(job.group, job.seed, base=base)
     if leaf is None:
         return JobStatus(job, "MISSING")
+    stale = blocking_leaves([job], base=base, cutoff=cutoff)
+    if stale:
+        root = base if base is not None else REPO_ROOT
+        detail = "; ".join(
+            f"{b.verdict.status}: {_display_path(b.leaf, root)} ({b.verdict.reason})" for b in stale
+        )
+        return JobStatus(job, "STALE", detail=detail)
     missing, warnings = check_leaf(leaf)
     if missing:
         return JobStatus(job, "INCOMPLETE", tuple(missing), tuple(warnings))
@@ -745,11 +843,21 @@ def render_verify(statuses: Sequence[JobStatus]) -> str:
             extra = f" (missing {', '.join(st.missing_files)})"
         if st.warnings:
             extra += f" [warnings: {'; '.join(st.warnings)}]"
+        if st.detail:
+            extra += f" [{st.detail}]"
         lines.append(f"{st.status:<10} {st.job.label()}{extra}")
     ok = sum(s.status == "OK" for s in statuses)
     inc = sum(s.status == "INCOMPLETE" for s in statuses)
     mis = sum(s.status == "MISSING" for s in statuses)
-    lines.append(f"Totals: OK={ok} INCOMPLETE={inc} MISSING={mis} (of {len(statuses)} jobs)")
+    stale = sum(s.status == "STALE" for s in statuses)
+    lines.append(
+        f"Totals: OK={ok} INCOMPLETE={inc} MISSING={mis} STALE={stale} (of {len(statuses)} jobs)"
+    )
+    if stale:
+        lines.append(
+            f"{stale} job(s) of the re-run parts ({', '.join(RERUN_PARTS)}) still hold a superseded "
+            "(pre-fix) or unreadable leaf: archive with `make campaign-archive-superseded` (ADR 0014)."
+        )
     return "\n".join(lines)
 
 
@@ -766,10 +874,11 @@ def render_job_table(jobs: Sequence[Job], primary_nq: int) -> str:
         )
     counts = count_by_part(jobs)
     lines.append("")
+    width = max(len(part) for part in (*PARTS, "TOTAL"))
     for part in PARTS:
         groups = len({j.group.id for j in jobs if j.group.part == part})
-        lines.append(f"  {part:<12} {counts[part]:>4} runs ({groups} run groups)")
-    lines.append(f"  {'TOTAL':<12} {len(jobs):>4} runs ({len({j.group.id for j in jobs})} run groups)")
+        lines.append(f"  {part:<{width}} {counts[part]:>4} runs ({groups} run groups)")
+    lines.append(f"  {'TOTAL':<{width}} {len(jobs):>4} runs ({len({j.group.id for j in jobs})} run groups)")
     return "\n".join(lines)
 
 
@@ -780,7 +889,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     def common(p: argparse.ArgumentParser) -> None:
         p.add_argument("--manifest", default=None, help=f"manifest path (default {DEFAULT_MANIFEST})")
         p.add_argument("--micro", action="store_true", help=f"use {DEFAULT_MICRO_MANIFEST} (CPU smoke)")
-        p.add_argument("--part", default="all", help="paper1,upper_bound,rnhal,texhal,texhal_q17,hier_transfer,control,kmh_nq100,kmh_nq50,kmh_nq10 (comma-separated) or all")
+        p.add_argument("--part", default="all", help=f"{','.join(PARTS)} (comma-separated) or all")
         p.add_argument("--seeds", default=None, help="comma-separated subset of the seeds (smoke); default all")
         p.add_argument(
             "--exclude-strategy", default=None,
@@ -797,12 +906,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     run_p.add_argument("--device", default=None, choices=["cuda", "cpu", "auto"],
                        help="default: cuda (cpu with --micro)")
-    common(sub.add_parser("verify", help="OK/INCOMPLETE/MISSING per job"))
+    common(sub.add_parser("verify", help="OK/INCOMPLETE/MISSING/STALE per job"))
     return parser
 
 
 def verify_exit_code(statuses: Sequence[JobStatus], audits: Sequence[SeedAudit]) -> int:
-    """0: everything OK; 1: an incomplete/missing job or a FAILed audit; 2: only audit WARNs."""
+    """0: everything OK; 1: an incomplete/missing/stale job or a FAILed audit; 2: only audit WARNs."""
     if any(s.status != "OK" for s in statuses) or any(a.status in ("FAIL", "NO_DATA") for a in audits):
         return 1
     return 2 if any(a.status == "WARN" for a in audits) else 0
@@ -835,9 +944,13 @@ def _dispatch(args: argparse.Namespace) -> int:
         return verify_exit_code(statuses, audits)
 
     device = args.device or ("cpu" if args.micro else "cuda")
-    summary = run_jobs(
-        jobs, manifest, device=device, skip_existing=args.skip_existing, dry_run=args.dry_run
-    )
+    try:
+        summary = run_jobs(
+            jobs, manifest, device=device, skip_existing=args.skip_existing, dry_run=args.dry_run
+        )
+    except SupersededLeavesError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 3
     return 1 if summary.failed else 0
 
 

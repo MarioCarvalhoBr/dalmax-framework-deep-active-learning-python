@@ -107,6 +107,19 @@ pretrained-weights flag — not read in this batch), trained per round via
 size 256, `num_workers=4` for DANINHAS (64 / 1000, `num_workers=1` for
 CIFAR10). `n_classes=5` for DANINHAS, `10` for CIFAR10.
 
+**Model head and `model_args` (2026-11-11, ADR 0014).** `DaninhasModelResNet50(n_classes, dropout_p=0.0)`: the
+ImageNet-pretrained ResNet-50 up to the global average pool (2048-d features), an optional `nn.Dropout(dropout_p)`
+on those features, then `classifier = nn.Linear(2048, n_classes)`. `forward` returns `(logits, e1)` with `e1` = the
+2048-d pooled features (what `get_embeddings` returns; KI-42). A legacy `embedding_layer = nn.Linear(2048, 50)` is
+still constructed (RNG stream and checkpoint keys) but unused. The optional params-JSON block of a dataset entry
+`"model_args": {"dropout_p": <float in [0, 1)>}` sets the model's constructor arguments (unknown keys and invalid
+values raise `ConfigError`; `"_comment"` keys allowed); absent = nothing passed = the model's own default (DANINHAS:
+no dropout layer, exactly the pre-2026-11-11 model; CIFAR10 CNN: its built-in DeepAL dropout 0.5). The resolved value
+appears in `run_metadata.json` under `config.dataset.model_args` (`{"dropout_p": null}` when absent) and in the
+checkpoint (`model_kwargs`). Only the four MC-dropout strategies of paper 1 train with `dropout_p = 0.5`
+(`files_config/campaign/params_paper1_mc_dropout.json`). MC prediction (`predict_prob_dropout*`) runs with the model
+in eval mode and only the dropout modules in train mode, `n_drop` passes (10 in the campaign).
+
 **Phase 2 update**: the old `torch.backends.cudnn.enabled = False` global
 disable (previously set in `demo.py` (historical)) is gone — `dalmax/seeding.py::seed_everything`
 sets `torch.backends.cudnn.deterministic = True` / `benchmark = False`
@@ -136,10 +149,16 @@ reads `"embedding"`/`"selection"` from the params JSON verbatim — see
 `.specs/experiments/ablation-study.md` for the exact syntax used by the
 ablations.
 
-Caveats on two families (found 2026-11-02, open): the MC-dropout strategies (`LeastConfidenceDropout`,
-`MarginSamplingDropout`, `EntropySamplingDropout`, `BALDDropout`) run on a model with no dropout layer, so
-they are not MC-dropout and BALD's mutual information is zero up to noise (`quality/known-issues.md` KI-41);
-`KMeansSampling` and `KCenterGreedy` use an untrained random projection as embedding (KI-42).
+Caveats on three families (found 2026-11-02 and 2026-11-11; **fixed in code 2026-11-11, ADR 0014**; the first
+campaign execution ran with the defects, the re-run is prepared as parts `paper1_rerun_a`/`paper1_rerun_b`): the
+MC-dropout strategies (`LeastConfidenceDropout`, `MarginSamplingDropout`, `EntropySamplingDropout`, `BALDDropout`)
+ran on a model with no dropout layer, so they were not MC-dropout and BALD's mutual information was zero up to
+noise (`quality/known-issues.md` KI-41); they now need `"model_args": {"dropout_p": ...}` (campaign:
+`files_config/campaign/params_paper1_mc_dropout.json`, p = 0.5) and fail fast without it. `KMeansSampling` and
+`KCenterGreedy` used an untrained random projection as embedding (KI-42); they now use the trained 2048-d pooled
+features. `AdversarialBIM` broke distance ties in pool order (KI-45); ties are now broken at random with a
+generator derived from the seed (`derive_seed(seed, "adversarial_ties")`); `AdversarialDeepFool` keeps the pool-order
+tie-break of its executed runs (its only exact ties are byte-identical duplicate images).
 
 ## New CLI flags (Phase 2, additive — every other flag/default is unchanged)
 

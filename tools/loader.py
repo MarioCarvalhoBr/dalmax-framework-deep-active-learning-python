@@ -71,6 +71,7 @@ def main(argv: list[str] | None = None) -> None:
     print(f"  n_classes:     {info['n_classes']}")
     print(f"  class_names:   {info['class_names']}")
     print(f"  img_size:      {info['img_size']}")
+    print(f"  model_kwargs:  {info['model_kwargs'] or '(none: architecture defaults)'}")
     print()
     extra = info["extra"]
     if extra:

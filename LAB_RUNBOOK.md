@@ -23,15 +23,17 @@ explicitly says "local notebook" (`.claude/rules/data-safety.md`,
 
 The campaign (`files_config/campaign/manifest.json`, ADR 0008/0009,
 [`.specs/experiments/campaign.md`](.specs/experiments/campaign.md)) is the single way to
-execute everything the three papers need (222 runs / 74 groups: `paper1` 117,
-`upper_bound` 3, `rnhal` 42, `texhal` 30, `texhal_q17` 18, `hier_transfer` 12) on ONE environment; see `COLAB_RUNBOOK.md`'s "The campaign"
+execute everything the three papers need (222 runs / 74 groups: `paper1` 54, `paper1_rerun_a` 24,
+`paper1_rerun_b` 39, `upper_bound` 3, `rnhal` 42, `texhal` 30, `texhal_q17` 18, `hier_transfer` 12; the two
+re-run parts are the seven paper-1 baselines fixed on 2026-11-11, ADR 0014, run after
+`make campaign-archive-superseded`, see `COLAB_RUNBOOK.md` section 6d) on ONE environment; see `COLAB_RUNBOOK.md`'s "The campaign"
 section for the step list (`make campaign-list` / `campaign-run` / `campaign-verify` /
 `campaign-report`). With two GPUs the parts can run concurrently, one process per
 GPU (the runner reads `CUDA_VISIBLE_DEVICES`, default 0); with one GPU run `PART=all`:
 
 ```bash
 # tmux pane 1 (GPU 0): paper 1 (117 runs + upper bound)
-CUDA_VISIBLE_DEVICES=0 make campaign-run PART=paper1,upper_bound
+CUDA_VISIBLE_DEVICES=0 make campaign-run PART=paper1,paper1_rerun_a,paper1_rerun_b,upper_bound
 # tmux pane 2 (GPU 1): papers 2 and 3
 CUDA_VISIBLE_DEVICES=1 make campaign-run PART=rnhal,texhal,texhal_q17
 # then, from either shell:

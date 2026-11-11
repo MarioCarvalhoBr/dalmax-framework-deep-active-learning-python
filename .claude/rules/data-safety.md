@@ -11,6 +11,16 @@
   scripts (`dalmax/reporting/*.py`, was `utils/report/*.py`) may read from `results/` and write new derived
   files (CSVs, averaged plots) but must not overwrite or remove existing raw
   `results.json` / `predictions.csv` / plot files from prior runs.
+- **One sanctioned exception (2026-11-11, ADR 0014): `scripts/campaign/archive_superseded_runs.py`**
+  (`make campaign-archive-superseded`) MOVES the superseded first-execution leaves of the re-run parts
+  `paper1_rerun_a`/`paper1_rerun_b` into `results/old_results_broken/<same path below results/>`, on the
+  author's explicit instruction to keep (not delete) them. It never deletes, never overwrites or merges into an
+  existing destination, never moves a current leaf of the fixed code, an interrupted or an unreadable leaf
+  ("superseded" has one definition, `dalmax/superseded.py::classify_leaf`, also used by the campaign engine's
+  run guard and `STALE` verify status; never re-implement it elsewhere), and logs every move in
+  `results/old_results_broken/ARCHIVE_LOG.tsv`. Agents never run it against the real `results/` tree (tests use
+  temporary trees); the operator runs it (`COLAB_RUNBOOK.md` section 6d). No other code may move or delete
+  anything under `results/`.
 - **`phd_files/` is read-only context** (the qualification PDF, the paper under
   revision, the LaTeX sources). Agents may read `phd_files/Active_Learning_Mario/
   method_full.tex` for notation but must never write there. The only paper-related
