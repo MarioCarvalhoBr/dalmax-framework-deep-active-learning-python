@@ -74,11 +74,35 @@ def test_parameters_cell_defines_campaign_part() -> None:
     nb = _load_notebook()
     code_cells = [c for c in nb["cells"] if c["cell_type"] == "code"]
     first_source = "".join(code_cells[0]["source"])
-    # Since 2026-11-07 the notebook defaults to the KMH sweep (ADR 0012) with PART = "all".
-    # Defaults since 2026-11-10 (ADR 0013): the hierarchy-transfer part of the main campaign, no edits needed.
-    assert 'PART = "hier_transfer"' in first_source
+    # Since 2026-11-07 the notebook defaulted to the KMH sweep (ADR 0012) with PART = "all", since 2026-11-10 to
+    # hier_transfer (ADR 0013). Defaults since 2026-11-11 (ADR 0014): the re-run of the seven fixed paper-1
+    # baselines, account A; the second account sets paper1_rerun_b.
+    assert 'PART = "paper1_rerun_a"' in first_source
+    assert 'PART = "paper1_rerun_b"' in first_source  # documented for the second account
     assert 'MANIFEST = ""' in first_source
     assert "resumes" in first_source
+
+
+def test_archive_cells_run_dry_then_move_then_check_before_the_campaign_run() -> None:
+    sources = ["".join(c["source"]) for c in _load_notebook()["cells"] if c["cell_type"] == "code"]
+    dry = sources.index("!make campaign-archive-superseded DRY=1")
+    move = sources.index("!make campaign-archive-superseded")
+    check = sources.index("!make campaign-archive-superseded CHECK=1")
+    run_idx = next(i for i, s in enumerate(sources) if "make campaign-run" in s)
+    assert dry < move < check < run_idx
+
+
+def test_rerun_zip_cell_covers_both_parts_after_verify() -> None:
+    sources = ["".join(c["source"]) for c in _load_notebook()["cells"] if c["cell_type"] == "code"]
+    verify = sources.index("!make campaign-verify {MANIFEST_ARG} PART={PART}")
+    zip_idx = next(i for i, s in enumerate(sources) if "RERUN_LEAF_GLOBS" in s)
+    assert verify < zip_idx
+    zip_cell = sources[zip_idx]
+    assert '"paper1_rerun_a"' in zip_cell and '"paper1_rerun_b"' in zip_cell
+    assert "campaign-archive-superseded CHECK=1" in zip_cell and "zip -qr" in zip_cell
+    for strategy in ("AdversarialBIM", "KMeansSampling", "KCenterGreedy", "LeastConfidenceDropout",
+                     "MarginSamplingDropout", "EntropySamplingDropout", "BALDDropout"):
+        assert strategy in zip_cell
 
 
 def test_campaign_cells_use_the_part_parameter() -> None:
