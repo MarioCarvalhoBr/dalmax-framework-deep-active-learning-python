@@ -13,8 +13,9 @@ paper-1 upper bound -- not active learning, see `full_supervised.py`):
 - The 12 legacy strategies (`RandomSampling` ... `AdversarialDeepFool`) are
   constructed as the historical `demo.py` always has,
   `LegacyClass(dataset, net, logger)`, plus the extra keyword arguments listed
-  in `LEGACY_STRATEGY_KWARGS` (today only the two adversarial strategies, which
-  receive their tie-break generator `rng`, KI-45, ADR 0014).
+  in `LEGACY_STRATEGY_KWARGS` (today only `AdversarialBIM`, which receives its
+  tie-break generator `rng`, KI-45, ADR 0014; `AdversarialDeepFool` keeps the
+  pool-order tie-break of its executed runs, see `adversarial_base`).
 - The 4 legacy `*Kmeans*Sampling` names (`SSRAEKmeansSampling`,
   `VCTexKmeansSampling`, `SSRAEKmeansHCSampling`, `VCTexKmeansHCSampling`)
   become **presets**: fixed `(extractor, selection method)` pairs that
@@ -85,8 +86,8 @@ LEGACY_STRATEGY_REGISTRY: dict[str, type[Strategy]] = {
 
 
 def _tie_break_rng_kwargs(config: ExperimentConfig) -> dict[str, Any]:
-    """The adversarial strategies' tie-break generator (KI-45): one per run,
-    derived from the experiment seed, advancing across query rounds."""
+    """`AdversarialBIM`'s tie-break generator (KI-45): one per run, derived
+    from the experiment seed, advancing across query rounds."""
     return {"rng": np.random.default_rng(derive_seed(config.seed, TIE_BREAK_SEED_TAG))}
 
 
@@ -94,7 +95,6 @@ def _tie_break_rng_kwargs(config: ExperimentConfig) -> dict[str, Any]:
 # config (explicit injection, no `setattr`). Absent name = no extra arguments.
 LEGACY_STRATEGY_KWARGS: dict[str, Callable[[ExperimentConfig], dict[str, Any]]] = {
     "AdversarialBIM": _tie_break_rng_kwargs,
-    "AdversarialDeepFool": _tie_break_rng_kwargs,
 }
 
 # Not active learning: the paper-1 upper bound (train once on the whole pool).
@@ -199,9 +199,9 @@ def build_strategy(
     `rng` is accepted for every name (uniform signature across the
     registry) but never consumed: representation strategies derive their own
     generator from `dalmax.seeding.derive_seed(config.seed, "selection")` and
-    the adversarial strategies from `derive_seed(config.seed,
-    "adversarial_ties")` (`LEGACY_STRATEGY_KWARGS`), so building a strategy
-    never advances the run's main generator.
+    `AdversarialBIM` from `derive_seed(config.seed, "adversarial_ties")`
+    (`LEGACY_STRATEGY_KWARGS`), so building a strategy never advances the
+    run's main generator.
 
     Raises
     ------

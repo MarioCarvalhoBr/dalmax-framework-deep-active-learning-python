@@ -31,8 +31,10 @@ class AdversarialDeepFool(PerSampleAdversarialStrategy):
     """
 
     def __init__(
-        self, dataset, net, logger, max_iter: int = 50, *, rng: np.random.Generator
+        self, dataset, net, logger, max_iter: int = 50, *, rng: np.random.Generator | None = None
     ) -> None:
+        # rng=None (the default, what the registry builds): ties keep the pool order, as in the
+        # executed campaign runs; see `adversarial_base` (ADR 0014) for why that is harmless here.
         super().__init__(dataset, net, logger, rng=rng)
         self.max_iter = max_iter
         self._n_zero_grad = 0

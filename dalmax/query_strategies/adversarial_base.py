@@ -10,7 +10,14 @@ step moves each input element by exactly `eps`), so many samples tie, and the
 DANINHAS pool is stored class by class: the selection degenerated into "the
 lowest unlabeled indices". `rank_by_distance` breaks ties uniformly at random
 with a generator derived from the experiment seed; without ties the order is
-exactly the stable argsort, so continuous distances (DeepFool) are unaffected.
+exactly the stable argsort.
+
+Only `AdversarialBIM` receives that generator. `AdversarialDeepFool` (not re-run,
+its first-execution runs must stay reproducible) keeps the pool-order tie-break
+(`rng=None`): its distances are continuous, and its only exact ties are between
+byte-identical duplicate images of the pool (1,269 of the 8,086 DANINHAS
+training files have a twin, always in the same class), whose order does not
+change what is selected (same image, same label), only which copy.
 """
 
 import time
@@ -49,15 +56,16 @@ class PerSampleAdversarialStrategy(Strategy):
     train/eval mode is restored afterwards. The math is unchanged, except the
     non-convergence handling documented on the subclasses (KI-39): samples
     that cannot reach the boundary get distance `inf` and are ranked last;
-    and the tie-break (KI-45): equal distances are ordered at random by
-    `rng`, see `rank_by_distance`.
+    and the tie-break (KI-45): with a generator `rng`, equal distances are
+    ordered at random (`rank_by_distance`); with `rng=None`, in pool order
+    (`argsort(kind="stable")`, the first-execution behaviour).
 
-    `rng` is the tie-break generator, created once per run by
-    `dalmax.query_strategies.registry.build_strategy` from
-    `derive_seed(config.seed, TIE_BREAK_SEED_TAG)`.
+    `rng` must be passed explicitly. For `AdversarialBIM` it is created once
+    per run by `dalmax.query_strategies.registry.build_strategy` from
+    `derive_seed(config.seed, TIE_BREAK_SEED_TAG)` and advances across rounds.
     """
 
-    def __init__(self, dataset, net, logger, *, rng: np.random.Generator) -> None:
+    def __init__(self, dataset, net, logger, *, rng: np.random.Generator | None) -> None:
         super().__init__(dataset, net, logger)
         self.rng = rng
 
@@ -102,8 +110,9 @@ class PerSampleAdversarialStrategy(Strategy):
                 f"boundary (distance=inf, ranked last): {self._query_summary()}"
             )
         # inf ranks last; if fewer than n finite distances exist the remaining
-        # picks come from the inf samples, in random order (they all tie).
-        return unlabeled_idxs[rank_by_distance(dis, self.rng)[:n]]
+        # picks come from the inf samples (they all tie: random or pool order).
+        order = dis.argsort(kind="stable") if self.rng is None else rank_by_distance(dis, self.rng)
+        return unlabeled_idxs[order[:n]]
 
     def _device(self) -> torch.device:
         return next(self.net.clf.parameters()).device

@@ -279,16 +279,41 @@ def test_adversarial_strategies_require_a_generator() -> None:
         AdversarialBIM(None, _Net(_Clf(1, 2)), logging.getLogger("t"))  # no rng: must not build
 
 
-@pytest.mark.parametrize("name", ["AdversarialBIM", "AdversarialDeepFool"])
-def test_registry_injects_a_seed_derived_tie_break_generator(name: str) -> None:
-    def build(seed: int):
-        config = load_experiment_config(
-            "files_config/params_micro.json", "DANINHAS", strategy_name=name, seed=seed,
-            n_init_labeled=10, n_query=5, n_round=1, dir_results="results/unused/", device="cpu",
-        )
-        return build_strategy(name, None, _Net(_Clf(1, 2)), config, logger=None, rng=_rng(123))
+def _built_by_registry(name: str, seed: int):
+    config = load_experiment_config(
+        "files_config/params_micro.json",
+        "DANINHAS",
+        strategy_name=name,
+        seed=seed,
+        n_init_labeled=10,
+        n_query=5,
+        n_round=1,
+        dir_results="results/unused/",
+        device="cpu",
+    )
+    return build_strategy(name, None, _Net(_Clf(1, 2)), config, logger=None, rng=_rng(123))
 
+
+def test_registry_injects_a_seed_derived_tie_break_generator_into_bim() -> None:
     expected = np.random.default_rng(derive_seed(1, TIE_BREAK_SEED_TAG)).permutation(100)
     assert TIE_BREAK_SEED_TAG == "adversarial_ties"
-    assert build(1).rng.permutation(100).tolist() == expected.tolist()
-    assert build(2).rng.permutation(100).tolist() != expected.tolist()
+    assert _built_by_registry("AdversarialBIM", 1).rng.permutation(100).tolist() == expected.tolist()
+    assert _built_by_registry("AdversarialBIM", 2).rng.permutation(100).tolist() != expected.tolist()
+
+
+def test_deepfool_keeps_the_pool_order_tie_break_of_its_executed_runs() -> None:
+    # DeepFool is not re-run (ADR 0014): its only exact ties are byte-identical duplicate
+    # images, so the registry builds it exactly as before, without a generator.
+    strategy = _built_by_registry("AdversarialDeepFool", 1)
+    assert strategy.rng is None
+
+    class _TiedDeepFool(AdversarialDeepFool):
+        def cal_dis(self, x: torch.Tensor) -> float:
+            return 0.5 if int(x.sum().item()) % 2 else 0.25
+
+    ids = np.arange(10, 30)
+    xs = torch.arange(30, dtype=torch.float32).reshape(30, 1)
+    deepfool = _TiedDeepFool(_Dataset(xs, ids), _Net(_Clf(1, 2)), logging.getLogger("t"))
+    picked = deepfool.query(4)
+    dis = np.array([0.5 if i % 2 else 0.25 for i in ids])
+    assert picked.tolist() == ids[dis.argsort(kind="stable")[:4]].tolist() == [10, 12, 14, 16]
