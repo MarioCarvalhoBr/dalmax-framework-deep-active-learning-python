@@ -340,7 +340,7 @@ Poetry, `make colab-setup`, `make test`, `make colab-check`) and confirm the GPU
 2. List: `!make campaign-list` (expect `TOTAL 222 runs (74 run groups)`, `hier_transfer 12 runs (4 run groups)`).
 3. Run: `!make campaign-run PART=hier_transfer`. Skip-existing: re-running after a disconnect resumes.
 4. Verify: `!make campaign-verify PART=hier_transfer` (expect `OK=12 INCOMPLETE=0 MISSING=0`; without `PART`, `OK=222`
-   once the other 210 runs are present on the same `results/` tree) and the seed audit PASS.
+   once the 210 runs executed earlier are present on the same `results/` tree) and the seed audit PASS.
 5. Report: `!make campaign-report`, then copy to Drive: `!cp -r docs/results/campaign "$DRIVE_ROOT/results/campaign_tables"`.
 
 ---

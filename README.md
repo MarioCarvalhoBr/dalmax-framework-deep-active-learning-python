@@ -491,9 +491,11 @@ hierarchy, stage contribution) are a matter of configuration, not new code:
 
 **Phase 1 (safety net) done, Phase 2 (core refactor) done, Phase 3 (ablations) executed
 2026-08-26, Phase 4 (polish, single `dalmax/` package) done**, followed by the CLI/`tools/`
-cleanup and the checkpoint/inference tools. The one-shot campaign (210 runs for the three
-papers) was executed 2026-09-30 to 2026-11-01 and verified. Next: writing the thesis from
-the campaign results and advisor review of the ablation section.
+cleanup and the checkpoint/inference tools. The one-shot campaign (222 runs for the three
+papers: 210 executed 2026-09-30 to 2026-11-01 and verified, plus the 12-run `hier_transfer`
+part prepared 2026-11-10, ADR 0013, not yet executed) and the 165-run KMH configuration
+study (ADR 0012, executed and verified 2026-11-10). Next: writing the thesis from the
+campaign results and advisor review of the ablation section.
 
 Plan and acceptance criteria: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refactor-plan.md);
 papers: [`.specs/experiments/papers-roadmap.md`](.specs/experiments/papers-roadmap.md).
