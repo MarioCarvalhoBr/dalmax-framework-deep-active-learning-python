@@ -25,6 +25,9 @@ FULL = REPO_ROOT / C.DEFAULT_MANIFEST
 MICRO = REPO_ROOT / C.DEFAULT_MICRO_MANIFEST
 SWEEP = REPO_ROOT / "files_config/campaign/manifest_kmh_sweep.json"
 SWEEP_MICRO = REPO_ROOT / "files_config/campaign/manifest_kmh_sweep_micro.json"
+# Paper 1's run groups: part `paper1` plus the re-run of the seven fixed baselines (ADR 0014).
+PAPER1_PARTS = ("paper1", "paper1_rerun_a", "paper1_rerun_b")
+MC_DROPOUT = ("LeastConfidenceDropout", "MarginSamplingDropout", "EntropySamplingDropout", "BALDDropout")
 
 
 def _builder():
@@ -102,14 +105,14 @@ def test_kmh_sweep_parts_filter_and_order() -> None:
 def test_run_counts_per_part(which: str, request: pytest.FixtureRequest) -> None:
     manifest: C.Manifest = request.getfixturevalue(which)
     counts = C.count_by_part(C.expand_jobs(manifest))
-    assert counts == {"paper1": 117, "upper_bound": 3, "rnhal": 42, "texhal": 30, "texhal_q17": 18, "hier_transfer": 12,
-                      "control": 0,
+    assert counts == {"paper1": 54, "paper1_rerun_a": 24, "paper1_rerun_b": 39, "upper_bound": 3, "rnhal": 42,
+                      "texhal": 30, "texhal_q17": 18, "hier_transfer": 12, "control": 0,
                       "kmh_nq10": 0, "kmh_nq50": 0, "kmh_nq100": 0}
-    assert sum(counts.values()) == 222
+    assert sum(counts.values()) == 222 and len(manifest.groups) == 74
 
 
 def test_paper1_is_12_classical_plus_kmh_and_no_rnhal_texhal_presets(full_manifest: C.Manifest) -> None:
-    p1 = [g for g in full_manifest.groups if g.part == "paper1"]
+    p1 = [g for g in full_manifest.groups if g.part in PAPER1_PARTS]
     strategies = {g.strategy_name for g in p1}
     assert "SSRAEKmeansHCSampling" not in strategies and "VCTexKmeansHCSampling" not in strategies
     classical = {g.id for g in p1 if g.strategy_name != "RepresentationStrategy"}
@@ -220,10 +223,48 @@ def test_execution_order_paper1_nq100_first_upper_bound_last(full_manifest: C.Ma
     phases = [C.phase_index(j.group, full_manifest.primary_nq) for j in jobs]
     assert phases == sorted(phases)
     assert jobs[0].group.id == "shared/random_nq100"
-    assert all(j.group.n_query == 100 for j in jobs[:39] if j.group.part == "paper1")
+    assert all(j.group.n_query == 100 for j in jobs[:18]) and jobs[18].group.part == "rnhal"
     assert jobs[-1].group.part == "upper_bound"
     assert [C.PHASE_LABELS[p] for p in dict.fromkeys(phases)] == [
-        "paper1_nq100", "rnhal", "texhal", "texhal_q17", "hier_transfer", "paper1_other_nq", "upper_bound"]
+        "paper1_nq100", "rnhal", "texhal", "texhal_q17", "hier_transfer", "paper1_other_nq",
+        "paper1_rerun_a", "paper1_rerun_b", "upper_bound"]
+
+
+@pytest.mark.parametrize("which", ["full_manifest", "micro_manifest"])
+def test_rerun_parts_hold_the_seven_fixed_baselines(which: str, request: pytest.FixtureRequest) -> None:
+    manifest: C.Manifest = request.getfixturevalue(which)
+    by_part = {part: {g.id: g for g in manifest.groups if g.part == part}
+               for part in ("paper1_rerun_a", "paper1_rerun_b")}
+    assert sorted(by_part["paper1_rerun_a"]) == sorted(
+        ["p1/AdversarialBIM/nq100", "p1/AdversarialBIM/nq50"]
+        + [f"p1/{s}/nq{nq}" for s in ("KMeansSampling", "KCenterGreedy") for nq in (10, 50, 100)])
+    assert sorted(by_part["paper1_rerun_b"]) == sorted(
+        ["p1/AdversarialBIM/nq10"] + [f"p1/{s}/nq{nq}" for s in MC_DROPOUT for nq in (10, 50, 100)])
+    micro = which == "micro_manifest"
+    root = "results/smoke_campaign" if micro else "results/campaign"
+    suffix = "_micro" if micro else ""
+    for group in [*by_part["paper1_rerun_a"].values(), *by_part["paper1_rerun_b"].values()]:
+        paper_nq = group.id.rsplit("/nq", 1)[1]
+        # Same leaf paths as the first execution: results land where the tables already look.
+        assert group.dir_results == f"{root}/paper1/nq{paper_nq}/"
+        expected = "params_paper1_mc_dropout" if group.strategy_name in MC_DROPOUT else "params_paper1"
+        assert group.params_json == f"files_config/campaign/{expected}{suffix}.json"
+        assert group.used_by and "ADR 0014" in group.note and "old_results_broken" in group.note
+    # Nothing of the fixed strategies is left in part paper1; nothing else moved.
+    fixed = {"AdversarialBIM", "KMeansSampling", "KCenterGreedy", *MC_DROPOUT}
+    assert not [g.id for g in manifest.groups if g.part == "paper1" and g.strategy_name in fixed]
+    assert {g.strategy_name for g in manifest.groups if g.part == "paper1"} == {
+        "RandomSampling", "LeastConfidence", "MarginSampling", "EntropySampling", "AdversarialDeepFool",
+        "RepresentationStrategy"}
+
+
+def test_rerun_parts_are_balanced_by_first_execution_gpu_time(full_manifest: C.Manifest) -> None:
+    # Measured per-run GPU seconds of the first execution (BIM ~2,300, MC dropout ~230, k-means/k-center ~90).
+    seconds = {"AdversarialBIM": 2300, **dict.fromkeys(MC_DROPOUT, 230), "KMeansSampling": 90, "KCenterGreedy": 90}
+    hours = {part: sum(seconds[j.group.strategy_name] for j in C.expand_jobs(full_manifest, (part,))) / 3600
+             for part in ("paper1_rerun_a", "paper1_rerun_b")}
+    assert hours["paper1_rerun_a"] == pytest.approx(4.28, abs=0.01)
+    assert hours["paper1_rerun_b"] == pytest.approx(4.22, abs=0.01)
 
 
 def test_hier_transfer_part_is_four_no_resampling_groups(full_manifest: C.Manifest) -> None:

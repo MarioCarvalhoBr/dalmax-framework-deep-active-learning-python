@@ -12,7 +12,7 @@ computation). Nothing runs twice.
 CLI (`python -m dalmax.campaign <cmd>`):
 
 - `list`: print the job table (counts per part and in total).
-- `run --part {paper1,upper_bound,rnhal,texhal,texhal_q17,hier_transfer,control,kmh_nq100,kmh_nq50,kmh_nq10,all}[,...] [--micro] [--dry-run]
+- `run --part {paper1,paper1_rerun_a,paper1_rerun_b,upper_bound,rnhal,texhal,texhal_q17,hier_transfer,control,kmh_nq100,kmh_nq50,kmh_nq10,all}[,...] [--micro] [--dry-run]
   [--skip-existing|--no-skip-existing] [--device cuda]`: execute the jobs
   sequentially through `tools/trainer.py` (subprocess), logging to
   `<results_root>/campaign.log` and `<results_root>/failures.log`, continuing
@@ -28,7 +28,8 @@ CLI (`python -m dalmax.campaign <cmd>`):
 Execution order (fixed, independent of `--part`): paper 1 at n_query=100
 first (the shared canonical runs -- KMH and RandomSampling, which papers 2/3 reuse --
 land early, so papers 2/3 comparisons can already be read), then rnhal, texhal, texhal_q17, hier_transfer,
-then paper 1 at n_query=50 and 10, then the upper bound. If a session
+then paper 1 at n_query=50 and 10, then the two re-run parts of the seven fixed paper-1
+baselines (`paper1_rerun_a`, `paper1_rerun_b`, ADR 0014), then the upper bound. If a session
 budget runs out, what is missing is the least reusable part.
 """
 
@@ -65,8 +66,10 @@ TRAINER_SCRIPT = "tools/trainer.py"
 # Layout/ownership rule: a run group lives under the FIRST paper that consumes
 # it (paper 1 < 2 < 3) and its `used_by` lists every consumer; e.g. paper 1's
 # `KMH@100` is also the "w/o representation module" row of papers 2 and 3.
-PARTS: tuple[str, ...] = ("paper1", "upper_bound", "rnhal", "texhal", "texhal_q17", "hier_transfer",
-                          "control", "kmh_nq100", "kmh_nq50", "kmh_nq10")
+# `paper1_rerun_a` / `paper1_rerun_b` (ADR 0014): the seven paper-1 baselines fixed on 2026-11-11
+# (KI-41/KI-42/KI-45), split in two GPU-time-balanced halves, one per Colab account.
+PARTS: tuple[str, ...] = ("paper1", "paper1_rerun_a", "paper1_rerun_b", "upper_bound", "rnhal", "texhal",
+                          "texhal_q17", "hier_transfer", "control", "kmh_nq100", "kmh_nq50", "kmh_nq10")
 
 # Execution phases (see module docstring). Index = order of execution.
 PHASE_LABELS: tuple[str, ...] = (
@@ -76,6 +79,8 @@ PHASE_LABELS: tuple[str, ...] = (
     "texhal_q17",
     "hier_transfer",
     "paper1_other_nq",
+    "paper1_rerun_a",
+    "paper1_rerun_b",
     "upper_bound",
     "control",
     "kmh_nq100",
@@ -766,10 +771,11 @@ def render_job_table(jobs: Sequence[Job], primary_nq: int) -> str:
         )
     counts = count_by_part(jobs)
     lines.append("")
+    width = max(len(part) for part in (*PARTS, "TOTAL"))
     for part in PARTS:
         groups = len({j.group.id for j in jobs if j.group.part == part})
-        lines.append(f"  {part:<12} {counts[part]:>4} runs ({groups} run groups)")
-    lines.append(f"  {'TOTAL':<12} {len(jobs):>4} runs ({len({j.group.id for j in jobs})} run groups)")
+        lines.append(f"  {part:<{width}} {counts[part]:>4} runs ({groups} run groups)")
+    lines.append(f"  {'TOTAL':<{width}} {len(jobs):>4} runs ({len({j.group.id for j in jobs})} run groups)")
     return "\n".join(lines)
 
 
@@ -780,7 +786,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     def common(p: argparse.ArgumentParser) -> None:
         p.add_argument("--manifest", default=None, help=f"manifest path (default {DEFAULT_MANIFEST})")
         p.add_argument("--micro", action="store_true", help=f"use {DEFAULT_MICRO_MANIFEST} (CPU smoke)")
-        p.add_argument("--part", default="all", help="paper1,upper_bound,rnhal,texhal,texhal_q17,hier_transfer,control,kmh_nq100,kmh_nq50,kmh_nq10 (comma-separated) or all")
+        p.add_argument("--part", default="all", help=f"{','.join(PARTS)} (comma-separated) or all")
         p.add_argument("--seeds", default=None, help="comma-separated subset of the seeds (smoke); default all")
         p.add_argument(
             "--exclude-strategy", default=None,
