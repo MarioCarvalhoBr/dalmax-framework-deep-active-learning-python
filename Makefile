@@ -148,7 +148,7 @@ campaign-report:
 	poetry run python -m dalmax.reporting.campaign_report $(if $(MANIFEST),--manifest $(MANIFEST) --root $(REPORT_ROOT) --out $(REPORT_OUT),$(if $(MICRO),--micro --root results/smoke_campaign --out results/smoke_campaign/report,--root $(REPORT_ROOT) --out $(REPORT_OUT)))
 
 # Micro campaign on CPU, seed 1 only, into results/smoke_campaign/ (every run
-# group once; the two adversarial baselines are skipped by default: 58 of the 64
+# group once; the two adversarial baselines are skipped by default: 62 of the 68
 # jobs). Verify afterwards with `make campaign-verify MICRO=1 SEEDS=1`.
 campaign-smoke:
 	poetry run python -m dalmax.campaign run --part all --micro --seeds 1 $(if $(SMOKE_EXCLUDE),--exclude-strategy $(SMOKE_EXCLUDE))

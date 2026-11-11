@@ -1668,6 +1668,98 @@
       "note": ""
     },
     {
+      "id": "rnhal/6_2/hier_L2_matched__no_resampling",
+      "part": "hier_transfer",
+      "params_json": "files_config/ablations/rnhal/hier_L2_matched__no_resampling.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 100,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign/rnhal/6_2/hier_L2_matched__no_resampling/",
+      "used_by": [
+        {
+          "paper": "paper3",
+          "table": "6_2",
+          "row": "L=2, k=[600,100], no resampling (KMH sweep winner)"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "id": "rnhal/6_2/hier_L3__no_resampling",
+      "part": "hier_transfer",
+      "params_json": "files_config/ablations/rnhal/hier_L3__no_resampling.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 100,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign/rnhal/6_2/hier_L3__no_resampling/",
+      "used_by": [
+        {
+          "paper": "paper3",
+          "table": "6_2",
+          "row": "L=3, k=[600,200,100] (reference), no resampling"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "id": "texhal_q17/6_2/hier_L2_matched__no_resampling",
+      "part": "hier_transfer",
+      "params_json": "files_config/ablations/texhal_q17/hier_L2_matched__no_resampling.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 100,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign/texhal_q17/6_2/hier_L2_matched__no_resampling/",
+      "used_by": [
+        {
+          "paper": "paper2",
+          "table": "6_2",
+          "row": "L=2, k=[600,100], no resampling (KMH sweep winner)"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "id": "texhal_q17/6_2/hier_L3__no_resampling",
+      "part": "hier_transfer",
+      "params_json": "files_config/ablations/texhal_q17/hier_L3__no_resampling.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 100,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign/texhal_q17/6_2/hier_L3__no_resampling/",
+      "used_by": [
+        {
+          "paper": "paper2",
+          "table": "6_2",
+          "row": "L=3, k=[600,200,100] (reference), no resampling"
+        }
+      ],
+      "note": ""
+    },
+    {
       "id": "shared/texhal_full",
       "part": "texhal",
       "params_json": "files_config/ablations/texhal/stage_full.json",
@@ -2034,6 +2126,14 @@
             {
               "label": "L=4, k=[300,100,50,25]",
               "run": "texhal_q17/6_2/hier_L4"
+            },
+            {
+              "label": "L=2, k=[600,100], no resampling (KMH sweep winner)",
+              "run": "texhal_q17/6_2/hier_L2_matched__no_resampling"
+            },
+            {
+              "label": "L=3, k=[600,200,100] (reference), no resampling",
+              "run": "texhal_q17/6_2/hier_L3__no_resampling"
             }
           ]
         },
@@ -2252,6 +2352,14 @@
             {
               "label": "L=4, k=[800,600,200,100]",
               "run": "rnhal/6_2/hier_L4_k800_600_200_100"
+            },
+            {
+              "label": "L=2, k=[600,100], no resampling (KMH sweep winner)",
+              "run": "rnhal/6_2/hier_L2_matched__no_resampling"
+            },
+            {
+              "label": "L=3, k=[600,200,100] (reference), no resampling",
+              "run": "rnhal/6_2/hier_L3__no_resampling"
             }
           ]
         },

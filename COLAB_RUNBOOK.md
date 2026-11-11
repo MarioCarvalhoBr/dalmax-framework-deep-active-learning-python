@@ -271,14 +271,15 @@ seeds (1,2,3) and one protocol in one environment. Sections 0-5 (runtime, Drive,
    | `rnhal` | 42 | 14 |
    | `texhal` | 30 | 10 |
    | `texhal_q17` | 18 | 6 |
-   | **Total** | **210** | **70** |
+   | `hier_transfer` | 12 | 4 |
+   | **Total** | **222** | **74** |
 
 2. **Run a part** (or everything with `PART=all`): `!make campaign-run PART=paper1`. Jobs run sequentially, skip-existing (a job is
    done only when its leaf holds the **full** artifact set; `results.json` is written last),
    logging to `results/campaign/campaign.log` and failures to `results/campaign/failures.log`
    (the batch continues after a failure). **Resume after a disconnect = redo sections 0-4 and
    re-run the same command** (`results/` is the Drive symlink of `make colab-setup`). Order: paper 1
-   at nq100 first (shared runs land early), then rnhal, texhal, texhal_q17, paper 1 at nq50 and nq10, then the
+   at nq100 first (shared runs land early), then rnhal, texhal, texhal_q17, hier_transfer, paper 1 at nq50 and nq10, then the
    upper bound.
 3. **Check the environment before leaving it unattended**: the notebook prints the GPU identity
    right after `!make colab-check` (section 5), from that run's `run_metadata.json`
@@ -308,19 +309,39 @@ seeds (1,2,3) and one protocol in one environment. Sections 0-5 (runtime, Drive,
 
 **CPU smoke (not on Colab).** The micro campaign (`make campaign-smoke`, local CPU, seed 1) skips
 the two adversarial baselines (`AdversarialBIM`, `AdversarialDeepFool`) because they are far too slow on
-CPU; it runs 64 of the 70 micro jobs. The real GPU campaign above runs them (`--exclude-strategy`
+CPU; it runs 68 of the 74 micro jobs. The real GPU campaign above runs them (`--exclude-strategy`
 is only passed by the smoke targets).
 
 **Wall-clock: TBD.** Record the measured hours (and the `<gpu-name>` from step 3) here after the
 first full run; the adversarial/dropout baselines are likely the slowest jobs (unmeasured).
 
-**Drive quota.** Every run writes a `saved_model.pth` checkpoint (ResNet-50, ~95 MB): 210 runs is
+**Drive quota.** Every run writes a `saved_model.pth` checkpoint (ResNet-50, ~95 MB): 222 runs is
 about **20 GB** on Drive, plus the embedding caches and logs/plots. Check your Drive quota before
 starting `PART=all` (or split by part across sessions).
 
 The upper bound (`FullSupervised`) trains once on all 8,086 pool images (ResNet-50, 10 epochs, batch
 256) -- if the GPU runs out of memory, lower nothing silently: report it, it is the same batch size as
 every other run.
+
+---
+
+## 6c. Hierarchy transfer runs (main campaign, `hier_transfer`; ADR 0013)
+
+Twelve runs (4 groups x seeds 1-3, `n_query=100`): the KMH-sweep winner shape (`k=[600,100]`, `sample_sizes=[30,5]`,
+no resampling) and the reference shape without resampling, with the SSRAE (RNHAL, `results/campaign/rnhal/6_2/`) and VCTex
+Q=17 (TexHAL, `results/campaign/texhal_q17/6_2/`) descriptors. They are a part of the MAIN manifest, not of the sweep.
+Prepared 2026-11-10, not executed; estimated 2 to 4 GPU hours, about 1.1 GB of checkpoints.
+
+**Notebook setup.** The Parameters cell of `notebooks/colab_runbook.ipynb` already defaults to `MANIFEST = ""` and
+`PART = "hier_transfer"` (since 2026-11-10; nothing to edit). Do sections 0-5 first (runtime, Drive, clone,
+Poetry, `make colab-setup`, `make test`, `make colab-check`) and confirm the GPU (`<gpu-name>`) as in section 6.
+
+1. Pull the latest commit: `!cd /content/dalmax && git pull` (or redo sections 0-4, which clone `main` fresh).
+2. List: `!make campaign-list` (expect `TOTAL 222 runs (74 run groups)`, `hier_transfer 12 runs (4 run groups)`).
+3. Run: `!make campaign-run PART=hier_transfer`. Skip-existing: re-running after a disconnect resumes.
+4. Verify: `!make campaign-verify PART=hier_transfer` (expect `OK=12 INCOMPLETE=0 MISSING=0`; without `PART`, `OK=222`
+   once the other 210 runs are present on the same `results/` tree) and the seed audit PASS.
+5. Report: `!make campaign-report`, then copy to Drive: `!cp -r docs/results/campaign "$DRIVE_ROOT/results/campaign_tables"`.
 
 ---
 

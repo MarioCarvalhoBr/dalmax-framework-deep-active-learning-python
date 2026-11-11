@@ -24,6 +24,10 @@ files_config/ablations/
     ├── stage_no_hierarchy.json                                   (§6.3)
     └── micro/           # CPU smoke mirrors of the 6 files above
 
+Hierarchy-transfer rows (ADR 0013, 2026-11-10, campaign part `hier_transfer`; prepared, not executed):
+    rnhal/hier_L2_matched__no_resampling.json, rnhal/hier_L3__no_resampling.json,
+    texhal_q17/hier_L2_matched__no_resampling.json, texhal_q17/hier_L3__no_resampling.json (+ their micro/ mirrors)
+
 files_config/campaign/   # the campaign (manifest + params_paper1/params_kmh); see its README
 ```
 
@@ -195,6 +199,21 @@ TexHAL's canonical configuration is VCTex `Q=17` (single RAE). The six files are
 `texhal_q17/6_2/hier_ref`, `texhal_q17/6_3/stage_full`); "w/o representation" stays the shared KMH run.
 Run with `make campaign-run PART=texhal_q17` (18 runs). Validated by
 `tests/test_ablation_configs.py` (`q == [17]`, selection equal to the `texhal/` twin).
+
+## Hierarchy-transfer rows (2026-11-10, ADR 0013)
+
+Four configs (plus micro mirrors), in `rnhal/` (SSRAE `q=13`) and `texhal_q17/` (VCTex `q=[17]`), copies of the method's
+other 6.2 rows except the `selection.hierarchy` block (each carries a `_comment`):
+
+| File | n_clusters | n_levels | sample_sizes | n_resamples | micro n_clusters / sample_sizes |
+|---|---|---|---|---|---|
+| `hier_L2_matched__no_resampling.json` | `[600, 100]` | 2 | `[30, 5]` | 0 | `[60, 10]` / `[3, 2]` |
+| `hier_L3__no_resampling.json` | `[600, 200, 100]` | 3 | `[30, 15, 2]` | 0 | `[60, 20, 10]` / `[3, 2, 2]` |
+
+The first is the winner of the KMH sweep stage 2 at nq100 (same hierarchy as the sweep's
+`hier_L2_matched__no_resampling`, there over ImageNet features); the second is the reference hierarchy with only
+`n_resamples=0`. Executed only through the campaign (`make campaign-run PART=hier_transfer`); validated by
+`tests/test_ablation_configs.py`.
 
 ## `kmh_sweep/` (2026-11-07; stage 1 executed 2026-11-07/08, stage 2 executed 2026-11-09/10, 165/165 verified)
 

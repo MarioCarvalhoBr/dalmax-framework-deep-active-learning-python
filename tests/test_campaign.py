@@ -102,9 +102,10 @@ def test_kmh_sweep_parts_filter_and_order() -> None:
 def test_run_counts_per_part(which: str, request: pytest.FixtureRequest) -> None:
     manifest: C.Manifest = request.getfixturevalue(which)
     counts = C.count_by_part(C.expand_jobs(manifest))
-    assert counts == {"paper1": 117, "upper_bound": 3, "rnhal": 42, "texhal": 30, "texhal_q17": 18, "control": 0,
+    assert counts == {"paper1": 117, "upper_bound": 3, "rnhal": 42, "texhal": 30, "texhal_q17": 18, "hier_transfer": 12,
+                      "control": 0,
                       "kmh_nq10": 0, "kmh_nq50": 0, "kmh_nq100": 0}
-    assert sum(counts.values()) == 210
+    assert sum(counts.values()) == 222
 
 
 def test_paper1_is_12_classical_plus_kmh_and_no_rnhal_texhal_presets(full_manifest: C.Manifest) -> None:
@@ -222,7 +223,17 @@ def test_execution_order_paper1_nq100_first_upper_bound_last(full_manifest: C.Ma
     assert all(j.group.n_query == 100 for j in jobs[:39] if j.group.part == "paper1")
     assert jobs[-1].group.part == "upper_bound"
     assert [C.PHASE_LABELS[p] for p in dict.fromkeys(phases)] == [
-        "paper1_nq100", "rnhal", "texhal", "texhal_q17", "paper1_other_nq", "upper_bound"]
+        "paper1_nq100", "rnhal", "texhal", "texhal_q17", "hier_transfer", "paper1_other_nq", "upper_bound"]
+
+
+def test_hier_transfer_part_is_four_no_resampling_groups(full_manifest: C.Manifest) -> None:
+    groups = [g for g in full_manifest.groups if g.part == "hier_transfer"]
+    assert sorted(g.id for g in groups) == [
+        "rnhal/6_2/hier_L2_matched__no_resampling", "rnhal/6_2/hier_L3__no_resampling",
+        "texhal_q17/6_2/hier_L2_matched__no_resampling", "texhal_q17/6_2/hier_L3__no_resampling"]
+    assert all(g.seeds == (1, 2, 3) or list(g.seeds) == [1, 2, 3] for g in groups)
+    assert all(g.used_by for g in groups)
+    assert C.parse_parts("hier_transfer,texhal_q17") == ("texhal_q17", "hier_transfer")
 
 
 def test_parse_parts_and_seed_subset(full_manifest: C.Manifest) -> None:
@@ -449,7 +460,7 @@ def test_exclude_strategy_filter_drops_only_those_groups(full_manifest: C.Manife
     dropped = [j for j in jobs if j not in kept]
     assert dropped and {j.group.strategy_name for j in dropped} == set(ADVERSARIAL)
     assert len(dropped) == 2 * 3 * 3  # 2 strategies x 3 n_query x 3 seeds
-    assert len(kept) == len(jobs) - len(dropped) == 210 - 18
+    assert len(kept) == len(jobs) - len(dropped) == 222 - 18
     assert all(j.group.strategy_name not in ADVERSARIAL for j in kept)
     assert [j for j in jobs if j in kept] == kept  # order preserved
 
@@ -466,7 +477,7 @@ def test_cli_exclude_strategy_applies_to_list(capsys: pytest.CaptureFixture[str]
     out = capsys.readouterr().out
     assert "excluded strategies: AdversarialBIM, AdversarialDeepFool" in out
     assert "Adversarial" not in out.split("excluded strategies:")[1].split("\n", 1)[1]
-    assert "TOTAL" in out and "64 runs" in out  # 70 micro seed-1 jobs - 2 strategies x 3 n_query
+    assert "TOTAL" in out and "68 runs" in out  # 74 micro seed-1 jobs - 2 strategies x 3 n_query
     assert C.main(["list", "--micro", "--exclude-strategy", "Nope"]) == 2
 
 

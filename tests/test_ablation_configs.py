@@ -49,6 +49,9 @@ EXPECTED_RNHAL: dict[str, tuple[str, int | None, str, str, tuple[int, ...] | Non
     "hier_L1_k600": ("ssrae", 13, "full", "hierarchical", (600,)),
     "hier_L2_k200_100": ("ssrae", 13, "full", "hierarchical", (200, 100)),
     "hier_L4_k800_600_200_100": ("ssrae", 13, "full", "hierarchical", (800, 600, 200, 100)),
+    # Hierarchy-transfer rows (ADR 0013): n_resamples=0, the KMH sweep nq100 winner shape and the reference shape.
+    "hier_L2_matched__no_resampling": ("ssrae", 13, "full", "hierarchical", (600, 100)),
+    "hier_L3__no_resampling": ("ssrae", 13, "full", "hierarchical", (600, 200, 100)),
     "stage_full": ("ssrae", 13, "full", "hierarchical", (600, 200, 100)),
     "stage_no_hierarchy": ("ssrae", 13, "full", "flat_proportional", None),
 }
@@ -92,6 +95,8 @@ EXPECTED_MICRO_N_CLUSTERS_RNHAL: dict[str, tuple[int, ...] | None] = {
     "hier_L1_k600": (60,),
     "hier_L2_k200_100": (20, 10),
     "hier_L4_k800_600_200_100": (80, 60, 20, 10),
+    "hier_L2_matched__no_resampling": (60, 10),
+    "hier_L3__no_resampling": (60, 20, 10),
     "stage_full": (60, 20, 10),
     "stage_no_hierarchy": None,
 }
@@ -238,6 +243,8 @@ def test_no_ablation_folder_carries_stage_no_representation() -> None:
 
 
 TEXHAL_Q17_NAMES = ("hier_L1", "hier_L2a", "hier_L2b", "hier_L3", "hier_L4", "stage_no_hierarchy")
+# ADR 0013 hierarchy-transfer rows: texhal_q17-only (no texhal/ twin), n_resamples=0.
+TEXHAL_Q17_TRANSFER = {"hier_L2_matched__no_resampling": (600, 100), "hier_L3__no_resampling": (600, 200, 100)}
 
 
 @pytest.mark.parametrize("name", TEXHAL_Q17_NAMES)
@@ -255,4 +262,15 @@ def test_texhal_q17_configs_use_single_rae_and_match_texhal_twin(name: str) -> N
 def test_texhal_q17_folder_has_exactly_the_rerun_configs() -> None:
     for sub in ("", "micro"):
         on_disk = {p.stem for p in (ABLATIONS_DIR / "texhal_q17" / sub).glob("*.json")}
-        assert on_disk == set(TEXHAL_Q17_NAMES)
+        assert on_disk == set(TEXHAL_Q17_NAMES) | set(TEXHAL_Q17_TRANSFER)
+
+
+@pytest.mark.parametrize("name", sorted(TEXHAL_Q17_TRANSFER))
+def test_hierarchy_transfer_configs_disable_resampling(name: str) -> None:
+    for sub in ("", "micro"):
+        for method in ("rnhal", "texhal_q17"):
+            h = _load(ABLATIONS_DIR / method / sub / f"{name}.json").dataset.selection.hierarchy
+            assert h is not None and h.n_resamples == 0
+    full = _load(ABLATIONS_DIR / "texhal_q17" / f"{name}.json")
+    assert tuple(full.dataset.embedding.q) == (17,)
+    assert full.dataset.selection.hierarchy.n_clusters == TEXHAL_Q17_TRANSFER[name]

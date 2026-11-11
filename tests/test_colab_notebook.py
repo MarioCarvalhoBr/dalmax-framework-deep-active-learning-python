@@ -75,8 +75,9 @@ def test_parameters_cell_defines_campaign_part() -> None:
     code_cells = [c for c in nb["cells"] if c["cell_type"] == "code"]
     first_source = "".join(code_cells[0]["source"])
     # Since 2026-11-07 the notebook defaults to the KMH sweep (ADR 0012) with PART = "all".
-    assert 'PART = "all"' in first_source
-    assert 'MANIFEST = "files_config/campaign/manifest_kmh_sweep.json"' in first_source
+    # Defaults since 2026-11-10 (ADR 0013): the hierarchy-transfer part of the main campaign, no edits needed.
+    assert 'PART = "hier_transfer"' in first_source
+    assert 'MANIFEST = ""' in first_source
     assert "resumes" in first_source
 
 

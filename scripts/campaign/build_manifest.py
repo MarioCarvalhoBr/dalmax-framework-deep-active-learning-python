@@ -95,6 +95,13 @@ HIER_ORDER_RNHAL = [
     "hier_L4", "hier_L4_k800_600_200_100",
 ]
 HIER_ORDER_TEXHAL = ["hier_L1", "hier_L2a", "hier_L2b", "hier_L3", "ref", "hier_L4"]
+# Rows appended to the 6.2 tables of the canonical methods (RNHAL, TexHAL Q=17) by the hier_transfer part.
+HIER_TRANSFER_ORDER = ["hier_L2_matched__no_resampling", "hier_L3__no_resampling"]
+HIER_TRANSFER_LABELS = {
+    "hier_L2_matched__no_resampling": "L=2, k=[600,100], no resampling (KMH sweep winner)",
+    "hier_L3__no_resampling": "L=3, k=[600,200,100] (reference), no resampling",
+}
+HIER_TRANSFER = list(HIER_TRANSFER_LABELS)
 REF_LABEL = "L=3, k=[600,200,100] (reference)"
 
 
@@ -178,6 +185,10 @@ def build(scale: Scale) -> dict[str, Any]:
         "6_2": [c for c, _ in HIER_COMMON],
         "6_3": ["stage_no_hierarchy"],
     })
+    # Hierarchy transfer (ADR 0013): the KMH-sweep nq100 winner shape (L=2 [600,100], no resampling) and the
+    # reference shape without resampling, with each paper's learned representation (SSRAE Q=13, VCTex Q=17).
+    ablation_groups("rnhal", {"6_2": HIER_TRANSFER}, "hier_transfer")
+    ablation_groups("texhal_q17", {"6_2": HIER_TRANSFER}, "hier_transfer")
     # TexHAL 'full' is consumed by paper 2 (6.1/6.2/6.3 + comparison) AND paper 3 (comparison).
     add_group("shared/texhal_full", "texhal", (abl % "texhal") + "stage_full.json",
               "RepresentationStrategy", primary, scale.n_init, scale.n_round,
@@ -231,7 +242,7 @@ def build(scale: Scale) -> dict[str, Any]:
             "title": f"Paper 1 -- DAL benchmark, n_query={paper_nq}", "rows": rows,
         })
 
-    hier_labels = dict(HIER_COMMON + HIER_NEW_RNHAL)
+    hier_labels = dict(HIER_COMMON + HIER_NEW_RNHAL) | HIER_TRANSFER_LABELS
 
     def hier_rows(method: str, order: list[str], ref_id: str | None = None) -> list[dict[str, str]]:
         ref = ref_id or f"{method}/6_2/ref"
@@ -275,7 +286,8 @@ def build(scale: Scale) -> dict[str, Any]:
     # Paper 2 (ADR 0011): 6.1 unchanged; 6.2/6.3 from the texhal_q17 groups; the executed Q=[5,17]
     # 6.2/6.3 stay reachable as `6_2_q5_17` / `6_3_q5_17`.
     q17_6_2 = {"id": "6_2", "kind": "ablation", "title": "6.2 Hierarchy ablation",
-               "rows": hier_rows("texhal_q17", HIER_ORDER_TEXHAL, "texhal_q17/6_2/hier_ref")}
+               "rows": hier_rows("texhal_q17", HIER_ORDER_TEXHAL + HIER_TRANSFER_ORDER,
+                                 "texhal_q17/6_2/hier_ref")}
     q17_6_3 = {"id": "6_3", "kind": "ablation", "title": "6.3 Contribution of the two stages", "rows": [
         row("TexHAL (full)", "texhal_q17/6_3/stage_full"),
         row("w/o representation module", "texhal_q17/6_3/stage_no_representation"),
@@ -287,7 +299,7 @@ def build(scale: Scale) -> dict[str, Any]:
         "title": "Paper 2 -- TexHAL vs. paper-1 methods, n_query=100",
         "rows": [texhal_full, best, random_row],
     }]
-    paper3 = method_tables("rnhal", "RNHAL", rnhal_rep, HIER_ORDER_RNHAL) + [{
+    paper3 = method_tables("rnhal", "RNHAL", rnhal_rep, HIER_ORDER_RNHAL + HIER_TRANSFER_ORDER) + [{
         "id": "comparison", "kind": "comparison",
         "title": "Paper 3 -- RNHAL vs. TexHAL vs. RandomSampling, n_query=100",
         "rows": [rnhal_full, texhal_full, random_row, best],

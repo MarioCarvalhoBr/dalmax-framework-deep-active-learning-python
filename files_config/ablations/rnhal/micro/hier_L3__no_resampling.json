@@ -1,0 +1,43 @@
+{
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_micro/",
+        "n_epoch": 1,
+        "n_drop": 10,
+        "n_classes": 5,
+        "train_args": {
+            "batch_size": 16,
+            "num_workers": 0
+        },
+        "test_args": {
+            "batch_size": 16,
+            "num_workers": 0
+        },
+        "optimizer_args": {
+            "lr": 0.05,
+            "momentum": 0.3
+        },
+        "embedding": {
+            "extractor": "ssrae",
+            "q": 13,
+            "variant": "full"
+        },
+        "selection": {
+            "method": "hierarchical",
+            "hierarchy": {
+                "_comment": "Hierarchy-transfer run (ADR 0013): reference hierarchy k=[600,200,100], n_resamples=0 (no centroid resampling), same representation and training recipe as the other rnhal 6.2 rows. Micro-scaled analog (k/10).",
+                "n_clusters": [
+                    60,
+                    20,
+                    10
+                ],
+                "n_levels": 3,
+                "sample_sizes": [
+                    3,
+                    2,
+                    2
+                ],
+                "n_resamples": 0
+            }
+        }
+    }
+}

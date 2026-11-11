@@ -17,12 +17,15 @@ SSRAE `q=13`, VCTex `q=(5,17)`. Fixed test set; the pool is the 8,086 training i
 **no validation split** in this project's protocol (pool/test only, as in the thesis) and none is
 invented here, including for the upper bound.
 
-## What runs (210 runs, 70 run groups)
+## What runs (222 runs, 74 run groups)
 
 > **2026-11-01 (ADR 0011, KI-40)**: the first 192 runs (the 64 groups before the `texhal_q17` row below)
 > were executed 2026-09-30 to 2026-10-05; part `texhal_q17` (18 runs, 6 groups) was added afterwards and
 > **executed on 2026-11-01** (18/18 OK; verified 2026-11-02: 210/210 OK, seed audit PASS). All 210 runs
 > are now done.
+>
+> **2026-11-10 (ADR 0013)**: part `hier_transfer` (12 runs, 4 groups) was added (prepared, **not executed**);
+> the manifest totals are now 222 runs / 74 groups, of which the first 210 are executed.
 
 | Part | Groups x seeds | Runs | Content |
 |---|---|---|---|
@@ -31,7 +34,8 @@ invented here, including for the upper bound.
 | `rnhal` | 14 x 3 | 42 | paper 3 ablations at nq=100: 6.1 spatial/spectral; 6.2 five existing + five new hierarchy rows; 6.3 full + w/o hierarchical |
 | `texhal` | 10 x 3 | 30 | paper 2 ablations at nq=100: 6.1 q5/q13/q17; 6.2 L1/L2a/L2b/L3/L4; 6.3 w/o hierarchical; plus `shared/texhal_full` |
 | `texhal_q17` | 6 x 3 | 18 | paper 2, TexHAL canonical `Q=17` (ADR 0011, accepted by the author 2026-11-01, advisor review pending; **executed 2026-11-01**): 6.2 L1/L2a/L2b/L3/L4 and 6.3 w/o hierarchical re-run with VCTex `q=[17]` (`files_config/ablations/texhal_q17/`) |
-| **Total** | **70 x 3** | **210** | |
+| `hier_transfer` | 4 x 3 | 12 | ADR 0013 (author decision 2026-11-10, **not executed**): the KMH-sweep winner shape and the reference shape, both with `n_resamples=0`, for RNHAL and TexHAL Q=17 (see below) |
+| **Total** | **74 x 3** | **222** | |
 
 Paper 1 = the 12 classical strategies (RandomSampling, LeastConfidence, MarginSampling,
 EntropySampling, LeastConfidenceDropout, MarginSamplingDropout, EntropySamplingDropout,
@@ -109,11 +113,11 @@ results/campaign/
 ```bash
 make campaign-list                        # job table + counts per part
 make campaign-run PART=all                # everything, skip-existing (re-run = resume)
-make campaign-run PART=paper1|upper_bound|rnhal|texhal|texhal_q17   # or comma-separated (+ control, kmh_nq10|50|100 for the other manifests)
+make campaign-run PART=paper1|upper_bound|rnhal|texhal|texhal_q17|hier_transfer   # or comma-separated (+ control, kmh_nq10|50|100 for the other manifests)
 make campaign-verify                      # OK/INCOMPLETE/MISSING per job + seed-consistency audit
 make campaign-report                      # docs/results/campaign/ (tables md/tex/csv, confusion matrices)
 make campaign-smoke                       # micro campaign on CPU (seed 1) -> results/smoke_campaign/;
-                                          # skips AdversarialBIM/AdversarialDeepFool (64 of 70 jobs)
+                                          # skips AdversarialBIM/AdversarialDeepFool (68 of 74 jobs)
 ```
 
 `python -m dalmax.campaign {list,run,verify} --part ... [--micro] [--seeds 1] [--exclude-strategy A,B]
@@ -123,7 +127,7 @@ changed, so the GPU campaign still runs them. `make campaign-smoke` (and `MICRO=
 `AdversarialBIM,AdversarialDeepFool` by default because they are far too slow on CPU
 (`SMOKE_EXCLUDE=` includes them); with the same exclusion `verify` does not report them MISSING.
 Execution order (independent of `--part`): paper 1 at nq100
-first (the shared canonical runs land early), then rnhal, texhal, texhal_q17, then paper 1 at nq50 and nq10,
+first (the shared canonical runs land early), then rnhal, texhal, texhal_q17, hier_transfer, then paper 1 at nq50 and nq10,
 then the upper bound -- what is missing if a budget runs out is the least reusable part. Papers 2/3
 comparison tables need paper 1's `shared/*` runs and `shared/texhal_full`: run those parts before
 reporting.
@@ -155,6 +159,28 @@ rows; papers 2/3: 6.1/6.2/6.3 + comparison; paper 2 comparison = TexHAL-full vs 
 RNHAL-full vs TexHAL-full vs RandomSampling@100 + best paper-1 @100 as context). Since ADR 0011 "TexHAL-full" = `texhal/6_1/rep_q17` (VCTex Q=17 + hierarchical); paper 2's 6.2/6.3 tables are built from the `texhal_q17` groups (reference/full rows are aliases of `texhal/6_1/rep_q17`; w/o representation = shared KMH), and the executed Q=[5,17] 6.2/6.3 stay reachable as tables `6_2_q5_17`/`6_3_q5_17` (history, groups unchanged in part `texhal`); 6.1 labels are `Q=[5,17]` and `Q=17 (TexHAL)`. Rows without runs
 render `TBD`. `docs/results/campaign/summary.csv` lists every (paper, table, row) with its
 resolved run.
+
+## Hierarchy transfer part (`hier_transfer`, prepared 2026-11-10, not executed)
+
+ADR 0013. Motivation: KMH sweep stage 2 found `k=[600,100]`, `sample_sizes=[30,5]`, `n_resamples=0` over frozen
+ImageNet features at 0.8819 weighted F1 (nq100), above RNHAL (0.8805) and TexHAL Q=17 (0.8745); the learned descriptors
+were never run at that configuration and the "no resampling" knob was confounded with the shape. Four groups (3 seeds
+each, nq100, NIL 100, NR 8, `RepresentationStrategy`), params in `files_config/ablations/{rnhal,texhal_q17}/` (+ `micro/`),
+all with a hierarchy `_comment`:
+
+| Group id | Representation | Hierarchy | Table row |
+|---|---|---|---|
+| `rnhal/6_2/hier_L2_matched__no_resampling` | SSRAE q=13 | `[600,100]`, `[30,5]`, no resampling | paper 3, 6.2: `L=2, k=[600,100], no resampling (KMH sweep winner)` |
+| `rnhal/6_2/hier_L3__no_resampling` | SSRAE q=13 | `[600,200,100]`, `[30,15,2]`, no resampling | paper 3, 6.2: `L=3, k=[600,200,100] (reference), no resampling` |
+| `texhal_q17/6_2/hier_L2_matched__no_resampling` | VCTex q=[17] | `[600,100]`, `[30,5]`, no resampling | paper 2, 6.2 (Q=17 table), same label |
+| `texhal_q17/6_2/hier_L3__no_resampling` | VCTex q=[17] | `[600,200,100]`, `[30,15,2]`, no resampling | paper 2, 6.2 (Q=17 table), same label |
+
+Note: the reference `sample_sizes` are `[30,15,2]` (as in `hier_L3_ref` of the sweep and `params_kmh.json`), kept in the
+`L=3` rows so the knob is the only difference. The sweep's `kmh/nq100/hier_L2_matched__no_resampling` (ImageNet extractor)
+is a different computation, so there is no alias. Results dirs: `results/campaign/{rnhal,texhal_q17}/6_2/<name>/`.
+Run: `make campaign-run PART=hier_transfer` (12 runs, about 2 to 4 GPU hours on Colab); verify with
+`make campaign-verify PART=hier_transfer` (or without `PART`: `OK=222` once everything is present); then
+`make campaign-report`. Runbook: `COLAB_RUNBOOK.md` section 6c. Results: TBD.
 
 ## Control run for KI-43 (prepared 2026-11-04, not executed)
 

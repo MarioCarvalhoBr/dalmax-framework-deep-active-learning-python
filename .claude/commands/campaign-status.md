@@ -9,7 +9,7 @@ default `all`). This command is read-only: it never runs training and never writ
 Steps:
 
 1. `poetry run python -m dalmax.campaign list --part <part>` -- the expected job table and the counts
-   (full scale: 210 runs / 70 groups: `paper1` 117, `upper_bound` 3, `rnhal` 42, `texhal` 30, `texhal_q17` 18).
+   (full scale: 222 runs / 74 groups: `paper1` 117, `upper_bound` 3, `rnhal` 42, `texhal` 30, `texhal_q17` 18, `hier_transfer` 12).
 2. `poetry run python -m dalmax.campaign verify --part <part>` -- per job OK / INCOMPLETE / MISSING
    (`dalmax/reporting/leaf_check.py` artifact check) plus the seed-consistency audit. Exit code:
    0 all OK, 1 an incomplete/missing job or a FAIL audit, 2 only audit WARNs.

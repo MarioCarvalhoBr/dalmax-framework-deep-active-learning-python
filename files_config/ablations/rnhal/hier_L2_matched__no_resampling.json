@@ -1,0 +1,41 @@
+{
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_full/",
+        "n_epoch": 10,
+        "n_drop": 10,
+        "n_classes": 5,
+        "train_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "test_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "optimizer_args": {
+            "lr": 0.05,
+            "momentum": 0.3
+        },
+        "embedding": {
+            "extractor": "ssrae",
+            "q": 13,
+            "variant": "full"
+        },
+        "selection": {
+            "method": "hierarchical",
+            "hierarchy": {
+                "_comment": "Hierarchy-transfer run (ADR 0013): budget-matched two-level hierarchy k=[600,100] (the KMH sweep nq100 winner), n_resamples=0 (no centroid resampling), same representation and training recipe as the other rnhal 6.2 rows.",
+                "n_clusters": [
+                    600,
+                    100
+                ],
+                "n_levels": 2,
+                "sample_sizes": [
+                    30,
+                    5
+                ],
+                "n_resamples": 0
+            }
+        }
+    }
+}

@@ -246,7 +246,7 @@ deterministic kernel), so report seed-averaged numbers.
 ## The campaign
 
 Everything the three papers need runs from ONE manifest,
-`files_config/campaign/manifest.json` (210 runs in 70 run groups, seeds 1 to 3;
+`files_config/campaign/manifest.json` (222 runs in 74 run groups, 210 executed, seeds 1 to 3;
 configurations shared by several papers run once and are aliased), driven by the
 engine `dalmax/campaign.py`. See
 [`.specs/experiments/campaign.md`](.specs/experiments/campaign.md) and ADR 0008/0009/0010.

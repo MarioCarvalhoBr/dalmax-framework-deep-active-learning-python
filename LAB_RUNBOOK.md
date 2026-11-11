@@ -23,8 +23,8 @@ explicitly says "local notebook" (`.claude/rules/data-safety.md`,
 
 The campaign (`files_config/campaign/manifest.json`, ADR 0008/0009,
 [`.specs/experiments/campaign.md`](.specs/experiments/campaign.md)) is the single way to
-execute everything the three papers need (210 runs / 70 groups: `paper1` 117,
-`upper_bound` 3, `rnhal` 42, `texhal` 30, `texhal_q17` 18) on ONE environment; see `COLAB_RUNBOOK.md`'s "The campaign"
+execute everything the three papers need (222 runs / 74 groups: `paper1` 117,
+`upper_bound` 3, `rnhal` 42, `texhal` 30, `texhal_q17` 18, `hier_transfer` 12) on ONE environment; see `COLAB_RUNBOOK.md`'s "The campaign"
 section for the step list (`make campaign-list` / `campaign-run` / `campaign-verify` /
 `campaign-report`). With two GPUs the parts can run concurrently, one process per
 GPU (the runner reads `CUDA_VISIBLE_DEVICES`, default 0); with one GPU run `PART=all`:
@@ -54,10 +54,10 @@ the same `results/campaign/` tree; groups never overlap between the two commands
   `FullSupervised` upper bound (all 8,086 images). A job that runs out of memory is logged to
   `failures.log` and the batch continues -- do not lower the batch size silently (it would change
   the protocol); report it (see Troubleshooting).
-- **Disk**: 210 checkpoints (~95 MB each) are about 20 GB under `results/campaign/`.
+- **Disk**: 222 checkpoints (~95 MB each) are about 21 GB under `results/campaign/`.
 - **CPU smoke** (any machine, no GPU): `make campaign-smoke` runs the micro campaign, skipping the
-  two adversarial baselines (`AdversarialBIM`, `AdversarialDeepFool`; far too slow on CPU) -- 64 of the
-  70 micro jobs; the real campaign runs them.
+  two adversarial baselines (`AdversarialBIM`, `AdversarialDeepFool`; far too slow on CPU) -- 68 of the
+  74 micro jobs; the real campaign runs them.
 - Wall-clock: TBD (unmeasured). Record it here with the `<gpu-name>` after the first full run.
 - **KMH parameter sweep** (paper 1, ADR 0012; 135 runs, results in `results/campaign_kmh/`): same commands with
   `MANIFEST=files_config/campaign/manifest_kmh_sweep.json` and `PART=kmh_nq100|kmh_nq50|kmh_nq10`; see

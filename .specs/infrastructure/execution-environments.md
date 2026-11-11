@@ -198,7 +198,7 @@ the lab machine.
 git pull
 poetry install                            # same as local dev — Poetry only
 make lab-check GPU=0                      # one short real-data sanity run
-make campaign-list                        # 210 runs / 70 groups
+make campaign-list                        # 222 runs / 74 groups
 make campaign-run PART=all                # or one process per GPU: PART=paper1,upper_bound | PART=rnhal,texhal
 make campaign-verify && make campaign-report
 ```

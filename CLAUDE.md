@@ -67,8 +67,8 @@ make lab-check GPU=0                  # one short real-data GPU run (n_round=1) 
 
 # The campaign (2026-09-29) -- the ONLY path for the final execution of all three papers
 # (one manifest, no redundant runs; see .specs/experiments/campaign.md and COLAB_RUNBOOK.md):
-make campaign-list                    # job table + run counts per part (210 runs / 70 groups)
-make campaign-run PART=all            # PART=paper1|upper_bound|rnhal|texhal (comma-separated ok); resume = re-run
+make campaign-list                    # job table + run counts per part (222 runs / 74 groups)
+make campaign-run PART=all            # PART=paper1|upper_bound|rnhal|texhal|texhal_q17|hier_transfer (comma-separated ok); resume = re-run
 make campaign-verify                  # OK/INCOMPLETE/MISSING per job + seed audit (exit 0 ok / 1 fail / 2 warn)
 make campaign-report                  # docs/results/campaign/ (tables md/tex/csv, mean confusion matrices)
 make campaign-list MANIFEST=files_config/campaign/manifest_control_ki43.json   # any other manifest, e.g. the KI-43 control (prepared, not run)
@@ -77,7 +77,7 @@ make campaign-run MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=al
 make campaign-report MANIFEST=files_config/campaign/manifest_kmh_sweep.json REPORT_ROOT=results/campaign_kmh REPORT_OUT=docs/results/campaign_kmh
 make campaign-smoke-kmh               # micro KMH sweep on CPU (seed 1) -> results/smoke_campaign_kmh/
 make campaign-smoke                   # micro campaign on CPU (seed 1) -> results/smoke_campaign/;
-                                      # skips AdversarialBIM/AdversarialDeepFool by default (64 of 70 jobs; SMOKE_EXCLUDE= to include)
+                                      # skips AdversarialBIM/AdversarialDeepFool by default (68 of 74 jobs; SMOKE_EXCLUDE= to include)
 
 # Colab targets (see COLAB_RUNBOOK.md for the full notebook-cell guide):
 make colab-setup                      # verify Drive mount, build/reuse dataset zip, symlink results/ -> Drive
@@ -241,13 +241,17 @@ outstanding.
   the one-shot re-execution of everything the three papers need: paper 1 = 12 classical strategies +
   **KMH** (hierarchical k-means over ImageNet ResNet-50 features, confirmed by the user) x nq {10,50,100}
   + the `FullSupervised` upper bound; papers 2/3 = TexHAL/RNHAL ablations at nq100 (+ 5 new RNHAL
-  hierarchy rows). 210 runs / 70 groups (all executed; the 18-run `texhal_q17` part ran 2026-11-01, ADR 0011), results under `results/campaign/`; groups consumed by
+  hierarchy rows). 222 runs / 74 groups (210 executed; the 18-run `texhal_q17` part ran 2026-11-01, ADR 0011; the 12-run `hier_transfer` part, prepared 2026-11-10, ADR 0013, is not executed), results under `results/campaign/`; groups consumed by
   several papers live under `shared/` (`shared/kmh_nq100`, `shared/random_nq100`,
   `shared/texhal_full`) and every alias row points to the one run. `stage_no_representation` is ONE
   shared run (2026-09-01 per-paper decision superseded by ADR 0009; its only config is
   `files_config/campaign/params_kmh.json`). Engine `dalmax/campaign.py`, reports
   `dalmax/reporting/campaign_report.py`. `seed_everything` now also sets `CUBLAS_WORKSPACE_CONFIG` and
   `torch.use_deterministic_algorithms(True, warn_only=True)`; `run_metadata.json` has a `determinism` block.
+- **Hierarchy transfer part `hier_transfer` (ADR 0013, prepared 2026-11-10, not executed)**: 4 groups / 12 runs appended to
+  the main manifest (`make campaign-run PART=hier_transfer`): the KMH-sweep nq100 winner shape `k=[600,100]`, `sample_sizes=[30,5]`,
+  `n_resamples=0` (0.8819 with ImageNet features) and the reference shape without resampling, each with SSRAE (`rnhal/6_2/`)
+  and VCTex Q=17 (`texhal_q17/6_2/`); rows of table 6.2 of papers 3 and 2. Runbook: `COLAB_RUNBOOK.md` section 6c.
 - **Optional `selection.hierarchy` keys (ADR 0012)**: `n_resamples` (default 10), `init_method`
   (`kmeans++`|`random`), `resample_strategy` (`closest`|`random`), `leaf_sampling` (`random`|`closest`);
   the defaults reproduce the previous behaviour, so existing params JSONs and executed runs are unchanged.
