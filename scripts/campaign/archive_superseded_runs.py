@@ -4,7 +4,9 @@ The seven paper-1 baselines fixed on 2026-11-11 (KI-41 MC dropout, KI-42 embeddi
 ties) are re-run into the SAME leaf paths as their first execution (parts `paper1_rerun_a` and
 `paper1_rerun_b` of `files_config/campaign/manifest.json`). The campaign engine skips a complete
 leaf, so the old leaves must leave the live tree first. This script MOVES every leaf of those parts
-whose `run_metadata.json` `started_at` is earlier than the cutoff to
+that `dalmax.superseded.classify_leaf` calls superseded (its `run_metadata.json` `started_at` is
+earlier than the cutoff, or it lacks `config.dataset.model_args`, which only the fixed code writes;
+the same definition the campaign engine's run guard and `verify` STALE status use) to
 `results/old_results_broken/<path relative to results/>`, e.g.
 `results/campaign/paper1/nq100/daninhas_full/SEED_1/NQ_100_NIL_100_NR_8_NE_10/AdversarialBIM/` ->
 `results/old_results_broken/campaign/paper1/nq100/daninhas_full/SEED_1/NQ_100_NIL_100_NR_8_NE_10/AdversarialBIM/`.
@@ -12,9 +14,12 @@ It is the one sanctioned exception to "results/ is append-only" (`.claude/rules/
 an explicit author instruction to keep the old runs, not to delete them.
 
 Rules: nothing is ever deleted or overwritten; a leaf whose destination already exists is reported
-and skipped (exit 1); a leaf started at or after the cutoff is never moved (safe to re-run once new
-runs exist); a leaf without a readable `run_metadata.json` start time is reported and skipped
-(exit 1); re-running is idempotent (an archived leaf is reported as already archived). One line per
+and skipped (exit 1); a current leaf (started at or after the cutoff by the fixed code) is never
+moved (safe to re-run once new runs exist); a leaf without a readable `run_metadata.json` is never
+moved either: with `results.json` it is UNREADABLE (a finished run of unknown provenance, exit 1,
+resolve by hand, COLAB_RUNBOOK.md section 6d), without it INTERRUPTED (not superseded: the
+campaign re-runs it, exit 0); `dir_results` must lie under `results/` with no `..` component;
+re-running is idempotent (an archived leaf is reported as already archived). One line per
 moved leaf is appended to `results/old_results_broken/ARCHIVE_LOG.tsv`. Paths are handled relative
 to the repo root and never resolved, so on Colab (`results/` is a symlink to Drive) the move is a
 rename inside Drive and the logs show repo-relative paths.
@@ -40,16 +45,18 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT))
+
+# One definition of "superseded" (stdlib-only module), shared with dalmax/campaign.py.
+from dalmax import superseded as sup  # noqa: E402
+from dalmax.superseded import RERUN_PARTS, SUPERSEDED_BEFORE, parse_utc  # noqa: E402, F401
+
 DEFAULT_MANIFEST = "files_config/campaign/manifest.json"
-RERUN_PARTS: tuple[str, ...] = ("paper1_rerun_a", "paper1_rerun_b")
 RESULTS_DIR = "results"
 ARCHIVE_DIR = "results/old_results_broken"
 ARCHIVE_LOG_NAME = "ARCHIVE_LOG.tsv"
 ARCHIVE_LOG_HEADER = "utc_time\tsource\tdestination\treason"
 REASON = "superseded by the KI-41/KI-42/KI-45 fix"
-# UTC time the KI-41/KI-42/KI-45 code fix was finished (ADR 0014, `date -u` on 2026-11-11): every
-# leaf of the re-run parts that started before it was produced by the degenerate code.
-SUPERSEDED_BEFORE = "2026-11-11T19:12:28Z"
 
 # Per-leaf outcomes.
 MOVED = "moved"
@@ -58,7 +65,8 @@ STALE = "stale"
 CURRENT = "current"
 ALREADY_ARCHIVED = "already archived"
 CONFLICT = "conflict"
-UNREADABLE = "unreadable"
+UNREADABLE = sup.UNREADABLE
+INTERRUPTED = sup.INTERRUPTED
 MISSING = "missing"
 ERROR = "error"
 FAILURES = frozenset({CONFLICT, UNREADABLE, ERROR})
@@ -88,14 +96,6 @@ class Report:
         return bool(statuses & FAILURES) or (check and STALE in statuses)
 
 
-def parse_utc(value: str) -> datetime:
-    """Parse an ISO-8601 timestamp with an explicit offset (`Z` accepted); naive is rejected."""
-    stamp = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
-    if stamp.tzinfo is None:
-        raise ValueError(f"timestamp {value!r} has no UTC offset")
-    return stamp.astimezone(timezone.utc)
-
-
 def _rerun_groups(manifest: dict[str, Any], parts: Sequence[str]) -> list[dict[str, Any]]:
     groups = [g for g in manifest.get("groups", []) if g.get("part") in parts]
     for g in groups:
@@ -104,14 +104,19 @@ def _rerun_groups(manifest: dict[str, Any], parts: Sequence[str]) -> list[dict[s
             raise ArchiveError(
                 f"{g['id']}: dir_results {g['dir_results']!r} is not under {RESULTS_DIR}/"
             )
+        if ".." in rel.parts:
+            raise ArchiveError(f"{g['id']}: dir_results {g['dir_results']!r} has a '..' component")
     return groups
 
 
 def _leaf_pattern(group: dict[str, Any], seed: int) -> str:
-    """Same leaf glob as `dalmax.campaign.leaf_glob` (any dataset folder / n_epoch)."""
-    return (
-        f"*/SEED_{seed}/NQ_{group['n_query']}_NIL_{group['n_init_labeled']}_NR_{group['n_round']}_NE_*/"
-        f"{group['strategy_name']}"
+    """The leaf glob `dalmax.campaign.leaf_glob` also uses (any dataset folder / n_epoch)."""
+    return sup.leaf_pattern(
+        group["strategy_name"],
+        int(group["n_query"]),
+        int(group["n_init_labeled"]),
+        int(group["n_round"]),
+        seed,
     )
 
 
@@ -128,11 +133,6 @@ def _matches(root: Path, base: PurePosixPath, pattern: str) -> list[PurePosixPat
 
 def _archived_path(source: PurePosixPath) -> PurePosixPath:
     return PurePosixPath(ARCHIVE_DIR) / source.relative_to(RESULTS_DIR)
-
-
-def _started_at(leaf: Path) -> datetime:
-    metadata = json.loads((leaf / "run_metadata.json").read_text())
-    return parse_utc(metadata["started_at"])
 
 
 def _jobs(manifest: dict[str, Any], parts: Sequence[str]) -> Iterator[tuple[dict[str, Any], int]]:
@@ -155,15 +155,12 @@ def _append_log(root: Path, source: PurePosixPath, destination: PurePosixPath) -
 
 def _handle_leaf(root: Path, source: PurePosixPath, cutoff: datetime, mode: str) -> Outcome:
     destination = _archived_path(source)
-    try:
-        started = _started_at(root / source)
-    except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
-        return Outcome(
-            UNREADABLE, str(source), detail=f"no readable run_metadata.json started_at ({exc})"
-        )
-    if started >= cutoff:
-        return Outcome(CURRENT, str(source), detail=f"started {started:%Y-%m-%dT%H:%M:%SZ}")
-    detail = f"started {started:%Y-%m-%dT%H:%M:%SZ}"
+    verdict = sup.classify_leaf(root / source, cutoff)
+    if verdict.status == sup.CURRENT:
+        return Outcome(CURRENT, str(source), detail=verdict.reason)
+    if verdict.status in (sup.UNREADABLE, sup.INTERRUPTED):
+        return Outcome(verdict.status, str(source), detail=verdict.reason)
+    detail = verdict.reason
     if mode == "check":
         return Outcome(STALE, str(source), str(destination), detail)
     if os.path.lexists(root / destination):
@@ -220,13 +217,13 @@ def render(report: Report, *, mode: str, cutoff: datetime, parts: Sequence[str])
         f"Summary ({mode}; parts {', '.join(parts)}; cutoff {cutoff:%Y-%m-%dT%H:%M:%SZ}): "
         f"{'would move' if mode == 'dry-run' else 'moved'}={moved} stale={report.count(STALE)} "
         f"already_archived={report.count(ALREADY_ARCHIVED)} current={report.count(CURRENT)} "
-        f"skipped={skipped} missing={report.count(MISSING)}"
+        f"interrupted={report.count(INTERRUPTED)} skipped={skipped} missing={report.count(MISSING)}"
     )
     if mode == "check":
         lines.append(
             "CHECK FAILED: stale or unreadable leaves in the live tree (archive them first)"
             if report.failed(check=True)
-            else "CHECK OK: no leaf of these parts predates the cutoff"
+            else "CHECK OK: no superseded or unreadable leaf of these parts in the live tree"
         )
     elif skipped:
         lines.append(
@@ -254,7 +251,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     mode.add_argument(
         "--check",
         action="store_true",
-        help="move nothing; exit 1 if a live leaf of the re-run parts predates the cutoff",
+        help="move nothing; exit 1 if a live leaf of the re-run parts is superseded or unreadable",
     )
     parser.add_argument(
         "--before",

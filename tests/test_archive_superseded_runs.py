@@ -55,15 +55,28 @@ def _leaf_rel(strategy: str, seed: int, nq: int = 5) -> str:
     return f"results/campaign/paper1/nq{nq}/daninhas_full/SEED_{seed}/NQ_{nq}_NIL_10_NR_1_NE_10/{strategy}"
 
 
-def _write_leaf(root: Path, rel: str, started_at: str | None, tag: str = "old") -> Path:
+def _metadata(started_at: object, *, fixed: bool) -> str:
+    # The fixed code always writes config.dataset.model_args; the pre-fix code never did.
+    dataset = {"name": "DANINHAS", **({"model_args": {"dropout_p": None}} if fixed else {})}
+    return json.dumps({"started_at": started_at, "config": {"dataset": dataset}})
+
+
+def _write_leaf(
+    root: Path,
+    rel: str,
+    started_at: str | None,
+    tag: str = "old",
+    *,
+    fixed: bool | None = None,
+    files: tuple[str, ...] = LEAF_FILES,
+) -> Path:
     leaf = root / rel
     leaf.mkdir(parents=True)
-    for name in LEAF_FILES:
+    for name in files:
         (leaf / name).write_text(f"{tag}:{name}")
     if started_at is not None:
-        (leaf / "run_metadata.json").write_text(
-            json.dumps({"started_at": started_at, "config": {}})
-        )
+        is_fixed = tag == "new" if fixed is None else fixed
+        (leaf / "run_metadata.json").write_text(_metadata(started_at, fixed=is_fixed))
     return leaf
 
 
@@ -134,11 +147,12 @@ def test_leaf_without_readable_metadata_is_skipped(tmp_path: Path, capsys) -> No
     bad = _write_leaf(tmp_path, _leaf_rel("BALDDropout", 1), None)
     (bad / "run_metadata.json").write_text("{not json")
     naive = _write_leaf(tmp_path, _leaf_rel("BALDDropout", 2), None)
-    (naive / "run_metadata.json").write_text(json.dumps({"started_at": "2026-10-01T10:00:00"}))
+    # Fixed-code metadata (model_args present) but a naive start time: provenance unknown.
+    (naive / "run_metadata.json").write_text(_metadata("2026-10-01T10:00:00", fixed=True))
     (tmp_path / "manifest.json").write_text(json.dumps(MANIFEST))
     assert _run(tmp_path) == 1
     out = capsys.readouterr().out
-    assert out.count("UNREADABLE") == 3 and "moved=0" in out
+    assert out.count("UNREADABLE") == 3 and "moved=0" in out and "results.json present" in out
     assert (tmp_path / _leaf_rel("KMeansSampling", 1)).is_dir()
     assert not (tmp_path / "results/old_results_broken").exists()
 
@@ -163,10 +177,51 @@ def test_check_fails_on_stale_leaves_and_passes_after_archiving(tree: Path, caps
     assert "CHECK OK" in capsys.readouterr().out
 
 
-def test_before_override_keeps_leaves_started_at_or_after_it(tree: Path, capsys) -> None:
-    assert _run(tree, "--before", OLD) == 0  # at the cutoff: not moved
+def test_before_override_keeps_leaves_started_at_or_after_it(tmp_path: Path, capsys) -> None:
+    # Fixed-code leaves (model_args present), so only the start time decides.
+    _write_leaf(tmp_path, _leaf_rel("KMeansSampling", 1), OLD, fixed=True)
+    _write_leaf(tmp_path, _leaf_rel("BALDDropout", 1), OLD, fixed=True)
+    (tmp_path / "manifest.json").write_text(json.dumps(MANIFEST))
+    assert _run(tmp_path, "--before", OLD) == 0  # at the cutoff: not moved
     out = capsys.readouterr().out
-    assert "moved=0" in out and "current=3" in out
+    assert "moved=0" in out and "current=2" in out
+    assert _run(tmp_path) == 0  # the default cutoff is later: both predate it
+    assert "moved=2" in capsys.readouterr().out
+
+
+def test_leaf_after_the_cutoff_without_model_args_is_superseded(tmp_path: Path, capsys) -> None:
+    # Pre-fix code run after the cutoff (e.g. an old checkout): rule (b) catches it.
+    rel = _leaf_rel("KMeansSampling", 1)
+    _write_leaf(tmp_path, rel, NEW, tag="new", fixed=False)
+    (tmp_path / "manifest.json").write_text(json.dumps(MANIFEST))
+    assert _run(tmp_path, "--check") == 1
+    out = capsys.readouterr().out
+    assert "STALE" in out and "lacks config.dataset.model_args" in out
+    assert _run(tmp_path) == 0
+    assert "moved=1" in capsys.readouterr().out
+    assert (tmp_path / _archived(rel) / "results.json").read_text() == "new:results.json"
+
+
+def test_interrupted_leaf_is_neither_moved_nor_blocking(tmp_path: Path, capsys) -> None:
+    # No run_metadata.json and no results.json: an interrupted run, the campaign re-runs it.
+    rel = _leaf_rel("KMeansSampling", 1)
+    _write_leaf(tmp_path, rel, None, files=("log-dalmax.log",))
+    (tmp_path / "manifest.json").write_text(json.dumps(MANIFEST))
+    for extra in ((), ("--dry-run",), ("--check",)):
+        assert _run(tmp_path, *extra) == 0
+        out = capsys.readouterr().out
+        assert "INTERRUPTED" in out and "interrupted=1" in out
+    assert "CHECK OK" in out
+    assert (tmp_path / rel / "log-dalmax.log").is_file()
+    assert not (tmp_path / "results/old_results_broken").exists()
+
+
+def test_classification_matches_the_engine_module() -> None:
+    from dalmax import superseded
+
+    assert A.RERUN_PARTS is superseded.RERUN_PARTS
+    assert A.SUPERSEDED_BEFORE is superseded.SUPERSEDED_BEFORE
+    assert A.sup.classify_leaf is superseded.classify_leaf
 
 
 def test_move_works_through_a_symlinked_results_dir(tmp_path: Path, capsys) -> None:
@@ -196,6 +251,16 @@ def test_dir_results_outside_results_is_rejected(tmp_path: Path) -> None:
     }
     (tmp_path / "manifest.json").write_text(json.dumps(bad))
     assert _run(tmp_path) == 2
+
+
+@pytest.mark.parametrize("dir_results", ["results/../elsewhere/", "results/campaign/../../x/"])
+def test_dir_results_with_dotdot_is_rejected(tmp_path: Path, dir_results: str, capsys) -> None:
+    bad = {
+        "groups": [dict(_group("x", "paper1_rerun_a", "KMeansSampling"), dir_results=dir_results)]
+    }
+    (tmp_path / "manifest.json").write_text(json.dumps(bad))
+    assert _run(tmp_path) == 2
+    assert "'..'" in capsys.readouterr().err
 
 
 def test_real_manifest_covers_the_63_rerun_leaves(tmp_path: Path, capsys) -> None:

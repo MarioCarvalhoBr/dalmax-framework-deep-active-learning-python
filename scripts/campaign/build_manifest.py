@@ -24,6 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
 from dalmax.campaign import Alias, derive_used_by  # noqa: E402
+from dalmax.superseded import RERUN_PARTS as SUPERSEDED_RERUN_PARTS  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_kmh_sweep_configs as sweep  # noqa: E402
@@ -48,8 +49,9 @@ PAPER1_METHODS = [*CLASSICAL_STRATEGIES, KMH]
 # two parts balanced by the GPU time of the first execution (BIM ~2,300 s per run, MC-dropout ~230 s,
 # k-means/k-center ~90 s), one per Colab account: A = BIM nq100/nq50 + KMeans/KCenter (24 runs),
 # B = BIM nq10 + the four MC-dropout strategies (39 runs).
-RERUN_PART_A = "paper1_rerun_a"
-RERUN_PART_B = "paper1_rerun_b"
+# The part names come from dalmax/superseded.py (one definition, shared with the campaign engine's
+# run guard / STALE verify status and with archive_superseded_runs.py).
+RERUN_PART_A, RERUN_PART_B = SUPERSEDED_RERUN_PARTS
 MC_DROPOUT_STRATEGIES = ["LeastConfidenceDropout", "MarginSamplingDropout", "EntropySamplingDropout", "BALDDropout"]
 PAPER1_BUDGETS = (10, 50, 100)
 # strategy -> {paper nq -> part}; a (strategy, nq) absent here stays in part `paper1`.
