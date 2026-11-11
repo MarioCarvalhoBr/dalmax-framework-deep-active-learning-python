@@ -1,6 +1,7 @@
 .PHONY: setup lint format test test-all smoke clean micro-dataset \
 	lab-setup lab-check colab-setup colab-check \
-	campaign-list campaign-run campaign-verify campaign-report campaign-smoke campaign-smoke-kmh campaign-manifest kmh-sweep-configs
+	campaign-list campaign-run campaign-verify campaign-report campaign-smoke campaign-smoke-kmh campaign-manifest kmh-sweep-configs \
+	campaign-archive-superseded
 
 # GPU index used by `lab-check` (sets CUDA_VISIBLE_DEVICES).
 # Override on the command line, e.g. `make lab-check GPU=1`.
@@ -103,7 +104,9 @@ colab-check:
 # execution of everything papers 1-3 need -- no redundant runs. See
 # .specs/experiments/campaign.md, COLAB_RUNBOOK.md and LAB_RUNBOOK.md.
 # Variables (all optional):
-#   PART=all|paper1|upper_bound|rnhal|texhal|texhal_q17|control|kmh_nq10|kmh_nq50|kmh_nq100 (comma-separated allowed; default all)
+#   PART=all|paper1|paper1_rerun_a|paper1_rerun_b|upper_bound|rnhal|texhal|texhal_q17|hier_transfer|control|kmh_nq10|kmh_nq50|kmh_nq100
+#               (comma-separated allowed; default all). paper1_rerun_a / paper1_rerun_b: the re-run of the seven
+#               paper-1 baselines fixed on 2026-11-11 (ADR 0014), one part per Colab account (COLAB_RUNBOOK.md 6d).
 #   MICRO=1     -> files_config/campaign/manifest_micro.json (CPU smoke, results/smoke_campaign/)
 #   MANIFEST=path -> any other manifest (overrides MICRO), e.g. the KI-43 control (3 RandomSampling
 #                  nq100 runs into results/campaign_control/, see .specs/experiments/campaign.md):
@@ -148,7 +151,7 @@ campaign-report:
 	poetry run python -m dalmax.reporting.campaign_report $(if $(MANIFEST),--manifest $(MANIFEST) --root $(REPORT_ROOT) --out $(REPORT_OUT),$(if $(MICRO),--micro --root results/smoke_campaign --out results/smoke_campaign/report,--root $(REPORT_ROOT) --out $(REPORT_OUT)))
 
 # Micro campaign on CPU, seed 1 only, into results/smoke_campaign/ (every run
-# group once; the two adversarial baselines are skipped by default: 62 of the 68
+# group once; the two adversarial baselines are skipped by default: 68 of the 74
 # jobs). Verify afterwards with `make campaign-verify MICRO=1 SEEDS=1`.
 campaign-smoke:
 	poetry run python -m dalmax.campaign run --part all --micro --seeds 1 $(if $(SMOKE_EXCLUDE),--exclude-strategy $(SMOKE_EXCLUDE))
@@ -158,6 +161,17 @@ campaign-smoke:
 # `make campaign-verify MANIFEST=files_config/campaign/manifest_kmh_sweep_micro.json SEEDS=1`.
 campaign-smoke-kmh:
 	poetry run python -m dalmax.campaign run --part all --manifest files_config/campaign/manifest_kmh_sweep_micro.json --seeds 1 --device cpu
+
+# Re-run of the seven fixed paper-1 baselines (ADR 0014): MOVE the superseded leaves of the parts
+# paper1_rerun_a / paper1_rerun_b (run_metadata.json started_at before the fix cutoff) from the live
+# tree to results/old_results_broken/<same path below results/>, never deleting or overwriting
+# anything (scripts/campaign/archive_superseded_runs.py; log: results/old_results_broken/ARCHIVE_LOG.tsv).
+#   DRY=1    -> report what would move, move nothing
+#   CHECK=1  -> move nothing; exit 1 if a live leaf of those parts predates the cutoff (run it before
+#               campaign-run and after merging downloaded results)
+#   BEFORE=<ISO-8601 UTC> -> override the cutoff; MANIFEST=path -> another manifest (e.g. the micro one)
+campaign-archive-superseded:
+	poetry run python scripts/campaign/archive_superseded_runs.py $(if $(MANIFEST),--manifest $(MANIFEST),$(if $(MICRO),--manifest files_config/campaign/manifest_micro.json)) $(if $(DRY),--dry-run) $(if $(CHECK),--check) $(if $(BEFORE),--before $(BEFORE))
 
 # Regenerate the KMH sweep params files (files_config/ablations/kmh_sweep/, full + micro).
 kmh-sweep-configs:
