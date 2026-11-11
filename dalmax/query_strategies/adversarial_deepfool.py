@@ -30,8 +30,10 @@ class AdversarialDeepFool(PerSampleAdversarialStrategy):
     as maximally far).
     """
 
-    def __init__(self, dataset, net, logger, max_iter: int = 50) -> None:
-        super().__init__(dataset, net, logger)
+    def __init__(
+        self, dataset, net, logger, max_iter: int = 50, *, rng: np.random.Generator
+    ) -> None:
+        super().__init__(dataset, net, logger, rng=rng)
         self.max_iter = max_iter
         self._n_zero_grad = 0
 

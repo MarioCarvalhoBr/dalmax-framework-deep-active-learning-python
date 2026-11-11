@@ -11,8 +11,10 @@ Three kinds of names are registered (the third, `FullSupervised`, is the
 paper-1 upper bound -- not active learning, see `full_supervised.py`):
 
 - The 12 legacy strategies (`RandomSampling` ... `AdversarialDeepFool`) are
-  constructed exactly as the historical `demo.py` always has:
-  `LegacyClass(dataset, net, logger)`, no `dalmax` involvement.
+  constructed as the historical `demo.py` always has,
+  `LegacyClass(dataset, net, logger)`, plus the extra keyword arguments listed
+  in `LEGACY_STRATEGY_KWARGS` (today only the two adversarial strategies, which
+  receive their tie-break generator `rng`, KI-45, ADR 0014).
 - The 4 legacy `*Kmeans*Sampling` names (`SSRAEKmeansSampling`,
   `VCTexKmeansSampling`, `SSRAEKmeansHCSampling`, `VCTexKmeansHCSampling`)
   become **presets**: fixed `(extractor, selection method)` pairs that
@@ -40,12 +42,14 @@ refactor fixes, see `.claude/rules/reproducibility.md`).
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
 
 from dalmax.config.schema import FULL_SUPERVISED_STRATEGY, ConfigError, ExperimentConfig
 from dalmax.embeddings.registry import get_embedding_provider
+from dalmax.query_strategies.adversarial_base import TIE_BREAK_SEED_TAG
 from dalmax.query_strategies.adversarial_bim import AdversarialBIM
 from dalmax.query_strategies.adversarial_deepfool import AdversarialDeepFool
 from dalmax.query_strategies.base import Strategy
@@ -77,6 +81,20 @@ LEGACY_STRATEGY_REGISTRY: dict[str, type[Strategy]] = {
     "BALDDropout": BALDDropout,
     "AdversarialBIM": AdversarialBIM,
     "AdversarialDeepFool": AdversarialDeepFool,
+}
+
+
+def _tie_break_rng_kwargs(config: ExperimentConfig) -> dict[str, Any]:
+    """The adversarial strategies' tie-break generator (KI-45): one per run,
+    derived from the experiment seed, advancing across query rounds."""
+    return {"rng": np.random.default_rng(derive_seed(config.seed, TIE_BREAK_SEED_TAG))}
+
+
+# Extra constructor keyword arguments of a legacy strategy, built from the run's
+# config (explicit injection, no `setattr`). Absent name = no extra arguments.
+LEGACY_STRATEGY_KWARGS: dict[str, Callable[[ExperimentConfig], dict[str, Any]]] = {
+    "AdversarialBIM": _tie_break_rng_kwargs,
+    "AdversarialDeepFool": _tie_break_rng_kwargs,
 }
 
 # Not active learning: the paper-1 upper bound (train once on the whole pool).
@@ -179,10 +197,11 @@ def build_strategy(
     """Construct the `Strategy` instance for `--strategy_name` `name`.
 
     `rng` is accepted for every name (uniform signature across the
-    registry) but only consumed indirectly, for representation strategies,
-    via `dalmax.seeding.derive_seed(config.seed, "selection")` — legacy
-    strategies never touch it, matching their unchanged
-    `LegacyClass(dataset, net, logger)` construction.
+    registry) but never consumed: representation strategies derive their own
+    generator from `dalmax.seeding.derive_seed(config.seed, "selection")` and
+    the adversarial strategies from `derive_seed(config.seed,
+    "adversarial_ties")` (`LEGACY_STRATEGY_KWARGS`), so building a strategy
+    never advances the run's main generator.
 
     Raises
     ------
@@ -194,7 +213,8 @@ def build_strategy(
         equivalent) is missing.
     """
     if name in LEGACY_STRATEGY_REGISTRY:
-        return LEGACY_STRATEGY_REGISTRY[name](dataset, net, logger)
+        extra_kwargs = LEGACY_STRATEGY_KWARGS[name](config) if name in LEGACY_STRATEGY_KWARGS else {}
+        return LEGACY_STRATEGY_REGISTRY[name](dataset, net, logger, **extra_kwargs)
 
     if name in NON_ACTIVE_STRATEGY_REGISTRY:
         return NON_ACTIVE_STRATEGY_REGISTRY[name](dataset, net, logger)

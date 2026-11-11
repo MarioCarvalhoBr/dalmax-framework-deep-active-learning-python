@@ -5,6 +5,7 @@ Method: Basic Iterative Method (Kurakin et al., 2016) used as an
 active-learning distance as in DFAL (Ducoffe & Precup, 2018).
 """
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 
@@ -39,8 +40,17 @@ class AdversarialBIM(PerSampleAdversarialStrategy):
     flip (capped / zero-gradient).
     """
 
-    def __init__(self, dataset, net, logger, eps: float = 0.05, max_iter: int = 50) -> None:
-        super().__init__(dataset, net, logger)
+    def __init__(
+        self,
+        dataset,
+        net,
+        logger,
+        eps: float = 0.05,
+        max_iter: int = 50,
+        *,
+        rng: np.random.Generator,
+    ) -> None:
+        super().__init__(dataset, net, logger, rng=rng)
         self.eps = eps
         self.max_iter = max_iter
         self._n_capped = 0
