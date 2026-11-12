@@ -18,11 +18,10 @@ sugarcane fields**, built for a PhD project at UFMS (Brazil). It supports the th
 3. **RNHAL** (Randomized Network-guided Hierarchical Active Learning): SSRAE randomized-network
    spatio-spectral descriptors + hierarchical k-means batch selection, the main contribution.
 
-![DalMax framework: data, round loop, pluggable components, run outputs and campaign engine](assets/active-learning-framework.png)
+![DalMax: pool-based active learning loop, strategy families, lab methods, controls and protocol of the clean campaign](assets/active-learning-framework.png)
 
-*Figure: the DalMax framework (round loop, registries, campaign engine). The figure predates the current
-code: its pool/test sizes and run count are those of the first campaign on the original dataset, and its
-strategy box shows only the DeepAL strategies. The text of this README is the current reference.*
+*Figure: the pool-based active learning loop of DalMax on `daninhas_full_fixed`, with the query-strategy
+families of the benchmark, the lab methods, the controls and the protocol of the clean campaign.*
 
 ## Contents
 
