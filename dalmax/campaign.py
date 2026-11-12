@@ -46,7 +46,13 @@ plan: by GPU stage for a GPU part, manifest by manifest otherwise):
   `required_leaf_files`), the seed-consistency audit (round-0 image paths from
   `round_queries.json`, pool indices from the log as fallback) and the data-order
   audit (`run_metadata.json` `data_order` hashes, KI-47) over every selected job;
-  with several manifests also the duplicate-pair report (informational).
+  with several manifests also the duplicate-pair report (informational). A leaf with
+  an integrity problem (truncated/empty JSON, wrong round count, empty checkpoint)
+  is INCOMPLETE and re-run on resume; leaves are looked up only under the dataset
+  folder of the group's params (`basename(data_dir)`), and a leaf of the plan under
+  another dataset folder FAILs the data-order audit. The code-version audit prints
+  the distinct `git_commit` values of the OK leaves (more than one, or a missing
+  one, is a WARN that does not change the exit code; also in `pilot-report`).
   Exit code: 0 all OK; 1 an incomplete/missing job or a FAIL audit; 2 only audit
   WARNs (a run whose initial set or data order cannot be read).
 - `pilot-report`: read-only summary of the pilot leaves (wall time vs estimate,
@@ -156,6 +162,9 @@ class RunGroup:
     note: str = ""
     gpu_part: str | None = None  # one of GPU_PARTS, or None (manifest without GPU parts)
     gpu_stage: int | None = None  # execution stage inside the GPU part (lower runs first)
+    # `basename(data_dir)` of the group's params (`params_dataset_folder`), the folder the trainer writes the
+    # leaves under; set by `load_manifest`. Leaves are looked up only there (`find_leaves`).
+    dataset_folder: str = ""
 
 
 @dataclass(frozen=True)
@@ -211,7 +220,21 @@ class Job:
 # --- loading ------------------------------------------------------------------
 
 
-def _to_group(raw: dict[str, Any], default_seeds: tuple[int, ...]) -> RunGroup:
+def params_dataset_folder(params_json: str, dataset_name: str) -> str:
+    """The dataset folder a run of `params_json` writes its leaf under: `basename(data_dir)` of the
+    params' `dataset_name` block, the derivation of `dalmax.experiment.runner` and the loaders."""
+    path = _resolve_path(params_json)
+    try:
+        data_dir = json.loads(path.read_text())[dataset_name]["data_dir"]
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        raise CampaignError(f"cannot read {dataset_name}.data_dir of params {path}: {exc!r}") from exc
+    folder = os.path.basename(str(data_dir).rstrip("/"))
+    if not folder:
+        raise CampaignError(f"params {path}: {dataset_name}.data_dir {data_dir!r} names no folder")
+    return folder
+
+
+def _to_group(raw: dict[str, Any], default_seeds: tuple[int, ...], dataset_name: str) -> RunGroup:
     try:
         return RunGroup(
             id=raw["id"],
@@ -227,6 +250,7 @@ def _to_group(raw: dict[str, Any], default_seeds: tuple[int, ...]) -> RunGroup:
             note=raw.get("note", ""),
             gpu_part=raw.get("gpu_part"),
             gpu_stage=int(raw["gpu_stage"]) if raw.get("gpu_stage") is not None else None,
+            dataset_folder=params_dataset_folder(raw["params_json"], dataset_name),
         )
     except KeyError as exc:
         raise CampaignError(f"run group {raw.get('id')!r} is missing key {exc}") from exc
@@ -243,13 +267,14 @@ def load_manifest(path: str | Path, *, validate: bool = True) -> Manifest:
         raise CampaignError(f"cannot read manifest {p}: {exc}") from exc
 
     seeds = tuple(int(s) for s in raw.get("seeds", (1, 2, 3)))
+    dataset_name = raw.get("dataset_name", "DANINHAS")
     manifest = Manifest(
         name=raw.get("name", p.stem),
-        dataset_name=raw.get("dataset_name", "DANINHAS"),
+        dataset_name=dataset_name,
         results_root=raw["results_root"],
         seeds=seeds,
         primary_nq=int(raw.get("primary_nq", 100)),
-        groups=tuple(_to_group(g, seeds) for g in raw["groups"]),
+        groups=tuple(_to_group(g, seeds, dataset_name) for g in raw["groups"]),
         aliases=tuple(
             Alias(
                 id=a["id"],
@@ -722,22 +747,49 @@ def estimated_hours(jobs: Sequence[Job], estimates: dict[str, float]) -> tuple[f
 # --- paths / skip-existing ----------------------------------------------------
 
 
-def leaf_glob(group: RunGroup, seed: int) -> str:
-    """Glob (relative to the group's `dir_results`) matching this job's leaf dir (any dataset folder / n_epoch)."""
-    return (f"*/SEED_{seed}/NQ_{group.n_query}_NIL_{group.n_init_labeled}_NR_{group.n_round}_NE_*/"
+def _own_dataset_folder(group: RunGroup) -> str:
+    if not group.dataset_folder:
+        raise CampaignError(f"run group {group.id!r} has no dataset_folder (build it with load_manifest, or set "
+                            "dataset_folder=params_dataset_folder(params_json, dataset_name))")
+    return group.dataset_folder
+
+
+def leaf_glob(group: RunGroup, seed: int, dataset_folder: str | None = None) -> str:
+    """Glob (relative to the group's `dir_results`) matching this job's leaf dir under `dataset_folder`
+    (default: the group's own, from its params' `data_dir`; `"*"` = any folder) and any n_epoch."""
+    folder = dataset_folder if dataset_folder is not None else _own_dataset_folder(group)
+    return (f"{folder}/SEED_{seed}/NQ_{group.n_query}_NIL_{group.n_init_labeled}_NR_{group.n_round}_NE_*/"
             f"{group.strategy_name}")
 
 
-def find_leaves(group: RunGroup, seed: int, *, base: Path | None = None) -> list[Path]:
-    """Every existing leaf directory of a job (any dataset folder / n_epoch), sorted.
-
-    `base` overrides the directory `dir_results` is resolved against (default
-    the repo root); used by the report/tests to point at another tree.
-    """
+def _leaves(group: RunGroup, seed: int, dataset_folder: str, base: Path | None) -> list[Path]:
     root = (base if base is not None else REPO_ROOT) / group.dir_results
     if not root.is_dir():
         return []
-    return sorted(root.glob(leaf_glob(group, seed)))
+    return sorted(root.glob(leaf_glob(group, seed, dataset_folder)))
+
+
+def find_leaves(group: RunGroup, seed: int, *, base: Path | None = None) -> list[Path]:
+    """Every existing leaf directory of a job under the group's OWN dataset folder (any n_epoch), sorted.
+
+    A leaf under another dataset folder (e.g. `daninhas_full`, which sorts before
+    `daninhas_full_fixed`) is never returned: it is another computation
+    (`find_foreign_leaves`, a data-order audit FAIL). `base` overrides the
+    directory `dir_results` is resolved against (default the repo root); used by
+    the report/tests to point at another tree.
+    """
+    return _leaves(group, seed, _own_dataset_folder(group), base)
+
+
+def find_foreign_leaves(group: RunGroup, seed: int, *, base: Path | None = None) -> list[Path]:
+    """Leaves of this job under a dataset folder that is NOT the group's own, sorted."""
+    own = _own_dataset_folder(group)
+    return [leaf for leaf in _leaves(group, seed, "*", base) if leaf_dataset_folder(leaf) != own]
+
+
+def leaf_dataset_folder(leaf: Path) -> str:
+    """`<dataset>` of `<dir_results>/<dataset>/SEED_s/NQ_.../<strategy>`."""
+    return leaf.parent.parent.parent.name
 
 
 def find_leaf(group: RunGroup, seed: int, *, base: Path | None = None) -> Path | None:
@@ -747,15 +799,14 @@ def find_leaf(group: RunGroup, seed: int, *, base: Path | None = None) -> Path |
 
 
 def job_done(job: Job, required_extra: tuple[str, ...] = ()) -> bool:
-    """True iff the job's leaf carries the FULL artifact set (`check_leaf`, plus the
-    manifest's `required_leaf_files` passed as `required_extra`), so a run killed
-    mid-report is re-run on resume instead of being skipped. (`results.json` is
-    written last by the reporter.)"""
+    """True iff the job's leaf carries the FULL, intact artifact set (`check_leaf(...).complete`,
+    plus the manifest's `required_leaf_files` passed as `required_extra`), so a run killed
+    mid-report or a leaf with a truncated/empty file is re-run on resume (into the same leaf,
+    rewriting its files) instead of being skipped. (`results.json` is written last by the reporter.)"""
     leaf = find_leaf(job.group, job.seed)
     if leaf is None:
         return False
-    missing, _warnings = check_leaf(leaf, required_extra)
-    return not missing
+    return check_leaf(leaf, required_extra).complete
 
 
 # --- running ------------------------------------------------------------------
@@ -954,16 +1005,75 @@ class JobStatus:
     status: str  # OK | INCOMPLETE | MISSING
     missing_files: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
+    problems: tuple[str, ...] = ()  # integrity problems (`LeafCheck.problems`): they make the job INCOMPLETE
+    leaf: Path | None = None
 
 
 def verify_job(job: Job, *, base: Path | None = None, required_extra: tuple[str, ...] = ()) -> JobStatus:
     leaf = find_leaf(job.group, job.seed, base=base)
     if leaf is None:
         return JobStatus(job, "MISSING")
-    missing, warnings = check_leaf(leaf, required_extra)
-    if missing:
-        return JobStatus(job, "INCOMPLETE", tuple(missing), tuple(warnings))
-    return JobStatus(job, "OK", (), tuple(warnings))
+    check = check_leaf(leaf, required_extra)
+    status = "OK" if check.complete else "INCOMPLETE"
+    return JobStatus(job, status, check.missing, check.warnings, check.problems, leaf)
+
+
+# --- code-version audit (git_commit of every OK leaf) ---------------------------
+
+
+@dataclass(frozen=True)
+class CommitAudit:
+    """Which code versions (`run_metadata.json` `git_commit`) produced the leaves."""
+
+    status: str  # PASS | WARN | NO_DATA
+    counts: tuple[tuple[str, int, str], ...] = ()  # (commit, number of leaves, first job label)
+    unknown: tuple[str, ...] = ()  # job labels whose git_commit is missing / None / unreadable
+
+
+def read_git_commit(leaf: Path) -> str | None:
+    """`git_commit` of `<leaf>/run_metadata.json`, or None (missing, null, unreadable)."""
+    try:
+        commit = json.loads((leaf / "run_metadata.json").read_text()).get("git_commit")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return str(commit) if commit else None
+
+
+def audit_git_commits(leaves: Sequence[tuple[str, Path]]) -> CommitAudit:
+    """Distinct `git_commit` values over `(job label, leaf)` pairs. More than one value, or a leaf
+    without one, is a WARN (mixed or unknown code versions); it never changes `verify`'s exit code."""
+    by_commit: dict[str, list[str]] = {}
+    unknown: list[str] = []
+    for label, leaf in leaves:
+        commit = read_git_commit(leaf)
+        if commit is None:
+            unknown.append(label)
+        else:
+            by_commit.setdefault(commit, []).append(label)
+    if not leaves:
+        return CommitAudit("NO_DATA")
+    counts = tuple(sorted(((c, len(ls), ls[0]) for c, ls in by_commit.items()), key=lambda t: (-t[1], t[0])))
+    status = "WARN" if len(counts) > 1 or unknown else "PASS"
+    return CommitAudit(status, counts, tuple(unknown))
+
+
+def render_commit_audit(audit: CommitAudit, max_listed: int = 5) -> str:
+    lines = ["Code-version audit (run_metadata.json git_commit of every OK leaf):"]
+    if audit.status == "NO_DATA":
+        lines.append("  no OK leaves")
+        return "\n".join(lines)
+    n_leaves = sum(n for _, n, _ in audit.counts) + len(audit.unknown)
+    lines.append(f"  {audit.status} ({n_leaves} leaves, {len(audit.counts)} distinct commit(s))")
+    for commit, count, example in audit.counts:
+        lines.append(f"    {commit}: {count} leaves, e.g. {example}")
+    if audit.unknown:
+        shown = ", ".join(audit.unknown[:max_listed]) + (" ..." if len(audit.unknown) > max_listed else "")
+        lines.append(f"    no git_commit ({len(audit.unknown)} leaves): {shown}")
+    if len(audit.counts) > 1:
+        lines.append("  WARN: the leaves were produced by more than one code version (mixed commits)")
+    if audit.unknown:
+        lines.append("  WARN: some leaves do not record the code version (git_commit missing or null)")
+    return "\n".join(lines)
 
 
 # --- seed-consistency audit ---------------------------------------------------
@@ -1104,6 +1214,8 @@ class DataOrderAudit:
     # (train hash, test hash) -> (number of leaves, first job label), one entry per distinct order
     variants: tuple[tuple[str, str, int, str], ...] = ()
     missing: tuple[str, ...] = ()  # job labels whose run_metadata.json has no `data_order`
+    # job labels with a leaf under THIS folder although their params' data_dir names another one
+    foreign: tuple[str, ...] = ()
 
 
 def read_data_order(leaf: Path) -> tuple[str, str] | None:
@@ -1119,15 +1231,22 @@ def audit_data_order(jobs: Sequence[Job], *, base: Path | None = None) -> list[D
     """Per dataset folder, every leaf (every strategy, the upper bound included) must
     record the same `data_order` hashes: otherwise the same index named different
     images in different runs (FAIL). Leaves without the record (written before
-    KI-47) give WARN."""
+    KI-47) give WARN. A leaf of a job under a dataset folder other than the one of
+    its params' `data_dir` (e.g. a `daninhas_full` leaf next to the
+    `daninhas_full_fixed` ones, never picked by `find_leaf`) is a FAIL of that folder:
+    the results root mixes leaves of more than one dataset."""
     by_dataset: dict[str, list[tuple[str, tuple[str, str] | None]]] = {}
+    foreign: dict[str, list[str]] = {}
     for job in jobs:
+        for leaf in find_foreign_leaves(job.group, job.seed, base=base):
+            foreign.setdefault(leaf_dataset_folder(leaf), []).append(job.label())
         leaf = find_leaf(job.group, job.seed, base=base)
         if leaf is None:
             continue
-        dataset = leaf.parent.parent.parent.name  # <dir_results>/<dataset>/SEED_s/NQ_.../<strategy>
-        by_dataset.setdefault(dataset, []).append((job.label(), read_data_order(leaf)))
+        by_dataset.setdefault(leaf_dataset_folder(leaf), []).append((job.label(), read_data_order(leaf)))
     audits: list[DataOrderAudit] = []
+    for dataset, labels in sorted(foreign.items()):
+        audits.append(DataOrderAudit(dataset, "FAIL", len(labels), foreign=tuple(labels)))
     for dataset, runs in sorted(by_dataset.items()):
         counts: dict[tuple[str, str], list[str]] = {}
         for label, order in runs:
@@ -1145,6 +1264,11 @@ def render_data_order_audit(audits: Sequence[DataOrderAudit], max_listed: int = 
     if not audits:
         lines.append("  no leaves")
     for a in audits:
+        if a.foreign:
+            shown = ", ".join(a.foreign[:max_listed]) + (" ..." if len(a.foreign) > max_listed else "")
+            lines.append(f"  {a.dataset}: {a.status} ({len(a.foreign)} leaves of the plan under a dataset folder that "
+                         f"is not their params' data_dir: the results root mixes datasets): {shown}")
+            continue
         lines.append(f"  {a.dataset}: {a.status} ({a.n_runs} runs, {len(a.variants)} distinct order(s))")
         for train, test, count, example in a.variants:
             lines.append(f"    train {train} / test {test}: {count} runs, e.g. {example}")
@@ -1223,6 +1347,8 @@ def render_verify(statuses: Sequence[JobStatus]) -> str:
         extra = ""
         if st.missing_files:
             extra = f" (missing {', '.join(st.missing_files)})"
+        if st.problems:
+            extra += f" (integrity: {'; '.join(st.problems)})"
         if st.warnings:
             extra += f" [warnings: {'; '.join(st.warnings)}]"
         lines.append(f"{st.status:<10} {st.job.label()}{extra}")
@@ -1320,7 +1446,9 @@ def verify_exit_code(
     audits: Sequence[SeedAudit],
     data_order_audits: Sequence[DataOrderAudit] = (),
 ) -> int:
-    """0: everything OK; 1: an incomplete/missing job or a FAILed audit; 2: only audit WARNs."""
+    """0: everything OK; 1: an incomplete/missing job (integrity problems included) or a FAILed audit
+    (a data-order FAIL includes leaves under a foreign dataset folder); 2: only seed/data-order audit
+    WARNs. The code-version audit (`audit_git_commits`) is informational and never changes it."""
     if any(s.status != "OK" for s in statuses) or any(a.status in ("FAIL", "NO_DATA") for a in audits):
         return 1
     if any(a.status == "FAIL" for a in data_order_audits):
@@ -1373,7 +1501,10 @@ def _dispatch(args: argparse.Namespace) -> int:
         return 2
 
     if args.command == "pilot-report":
-        print(render_pilot_report(_pilot_rows(plan, estimates, groups)))
+        rows = _pilot_rows(plan, estimates, groups)
+        print(render_pilot_report(rows))
+        print()
+        print(render_commit_audit(audit_git_commits([(r.label, r.leaf) for r in rows if r.leaf is not None])))
         return 0
     if args.command == "space":
         checks = space_checks(plan)
@@ -1402,6 +1533,9 @@ def _dispatch(args: argparse.Namespace) -> int:
         statuses = [verify_job(j, required_extra=seg.manifest.required_leaf_files)
                     for seg in plan for j in seg.jobs]
         print(render_verify(statuses))
+        print()
+        print(render_commit_audit(audit_git_commits(
+            [(s.job.label(), s.leaf) for s in statuses if s.status == "OK" and s.leaf is not None])))
         audits = audit_seed_consistency(jobs)
         print()
         print(render_seed_audit(audits))

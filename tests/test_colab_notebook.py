@@ -177,3 +177,32 @@ def test_kernel_python_version_is_not_forced_to_3_12() -> None:
     sources = _code_sources()
     assert not any("sys.version_info" in s and "raise" in s for s in sources)
     assert any('startswith("3.12")' in s and "poetry" in s for s in sources)
+
+
+def test_every_session_checks_out_the_pinned_git_ref_detached() -> None:
+    """2026-11-12: one code version for the whole campaign; a push during it must not reach a session."""
+    sources = _code_sources()
+    params = sources[0]
+    assert 'GIT_REF = "campaign-fixed-v1"' in params and "BRANCH" not in params
+    clone = next(s for s in sources if "git" in s and "clone" in s)
+    assert '"clone", REPO_URL, REPO_DIR' in clone and "--branch" not in clone
+    assert '"fetch", "--tags", "origin"' in clone and '"checkout", "--detach", GIT_REF' in clone
+    assert '"rev-parse", "HEAD"' in clone and "raise RuntimeError" in clone and "-> commit" in clone
+    # The dirty-checkout gate runs before the checkout, and the checkout is not inside the "clone only" branch.
+    assert clone.index("--untracked-files=no") < clone.index('"--detach"')
+    assert '    subprocess.run(["git", "-C", REPO_DIR, "checkout"' not in clone
+    full = "\n".join(sources)
+    assert '"pull"' not in full and "git pull origin" not in full and "BRANCH" not in full
+
+
+def test_run_cell_surfaces_a_non_zero_exit_code() -> None:
+    sources = _code_sources()
+    run_idx = next(i for i, s in enumerate(sources) if "make campaign-run-gpu-part" in s)
+    run = sources[run_idx]
+    exit_file = _builder().RUN_EXIT_FILE
+    assert f"!make campaign-run-gpu-part GPU_PART={{GPU_PART}}; echo $? > {exit_file}" in run
+    assert f"!rm -f {exit_file}" in run  # a stale code of an earlier session is never read
+    check = sources[run_idx + 1]
+    assert f'open("{exit_file}")' in check and 'if run_exit != "0":' in check
+    assert '"campaign-space-gpu-part"' in check and "SHORT OF SPACE" in check
+    assert "campaign.log" in check and "failures.log" in check and "raise RuntimeError" in check

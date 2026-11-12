@@ -126,6 +126,21 @@ Every leaf holds the artifact set of `dalmax/reporting/leaf_check.py::REQUIRED_F
 of this campaign (`required_leaf_files`), `round_predictions.json` and `round_queries.json` (per-round test predictions
 and queried pool indices; format in `experimental-protocol.md`). A leaf without them is incomplete and is re-run.
 
+**Leaf integrity, dataset folder and code version (pre-flight hardening, 2026-11-12).** `check_leaf` returns a
+`LeafCheck` (`missing`, `problems`, `warnings`). Integrity problems make the leaf incomplete (resume re-runs it into the
+same leaf, rewriting its files; `verify` reports `INCOMPLETE ... (integrity: ...)`, exit 1): an unparsable, empty or
+non-object `results.json` / `run_metadata.json` / required round file, a key the reporter always writes missing
+(`all_acc`, `all_f1_score`, `all_f1_macro`, `rounds`; `config`, `git_commit`), a round count different from the leaf's
+`NR_<n>` + 1, an empty `predictions.csv` or `saved_model.pth`. The only soft warning left is a non-empty checkpoint
+below 10 MB (the KI-22 hint). Round files are inspected only when the manifest requires them, so the first campaign's
+trees keep verifying (checked 2026-11-12: all 222 + 165 first-campaign leaves still complete). Leaves are looked up only
+under the group's own dataset folder, `basename(data_dir)` of its params (`RunGroup.dataset_folder`, set by
+`load_manifest`; the trainer's derivation); a leaf of the plan under another dataset folder of the same results root is
+never picked and FAILs the data-order audit. `verify` also prints a code-version audit: the distinct
+`run_metadata.json` `git_commit` values of the OK leaves with counts; more than one, or a leaf without one, is a `WARN:`
+line that does not change the exit code (also printed by `pilot-report`). The notebook pins the code with `GIT_REF`
+(default tag `campaign-fixed-v1`): every session fetches the tags and checks it out detached, no branch is pulled.
+
 **Data order, cache identity and audits (KI-47, ADR 0016 amendment of 2026-11-12).** The first campaign's loaders
 listed each class folder in file-system order, which differed between Colab sessions: the same seed selected the same
 pool indices but other images in each session, and the Drive-resident embedding cache, keyed on indices, served
@@ -175,8 +190,8 @@ make campaign-space-gpu-part  GPU_PART=part_1_gpu   # free space vs remaining ru
 make campaign-pilot           GPU_PART=part_1_gpu   # seed 1 of VAAL/WAAL (+ RandomSampling) before the long runs
 make campaign-pilot-report    GPU_PART=part_1_gpu   # wall time vs estimate, strategy_diagnostics, flags (read only)
 make campaign-run-gpu-part    GPU_PART=part_1_gpu   # resumable: re-run the same command
-make campaign-verify-gpu-part GPU_PART=part_1_gpu   # OK/INCOMPLETE/MISSING + seed audit + data-order audit
-make campaign-verify-all                            # after merging both parts: OK=459, audits PASS, duplicate pairs
+make campaign-verify-gpu-part GPU_PART=part_1_gpu   # OK/INCOMPLETE/MISSING + commits + seed audit + data-order audit
+make campaign-verify-all                            # after merging both parts: OK=459, one commit, audits PASS, duplicate pairs
 make campaign-report-all                            # docs/results/campaign_fixed/ + docs/results/campaign_kmh_fixed/
 make campaign-list                                  # main manifest alone (PART=paper1|... or part_1_gpu|part_2_gpu)
 make campaign-smoke-gpu-part GPU_PART=part_2_gpu    # CPU micro plan of one GPU part, seed 1

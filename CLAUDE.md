@@ -75,8 +75,9 @@ make campaign-pilot GPU_PART=part_1_gpu             # first: seed 1 of the part'
 make campaign-pilot-report GPU_PART=part_1_gpu      # read only: wall time vs estimate, strategy_diagnostics, degeneracy flags
 make campaign-run-gpu-part GPU_PART=part_1_gpu      # cheap groups, ablations, KMH sweep, then BIM/VAAL/WAAL/DeepFool; resume = re-run
                                                     #   (refuses to start / stops with exit 4 when the Drive is short of space)
-make campaign-verify-gpu-part GPU_PART=part_1_gpu   # OK/INCOMPLETE/MISSING + seed audit (image paths) + data-order audit (0/1/2)
-make campaign-verify-all                            # after merging both parts locally: expect OK=459, both audits PASS, + the
+make campaign-verify-gpu-part GPU_PART=part_1_gpu   # OK/INCOMPLETE/MISSING (integrity problems = INCOMPLETE) + git_commit audit
+                                                    #   (WARN only) + seed audit (image paths) + data-order audit (0/1/2)
+make campaign-verify-all                            # after merging both parts locally: expect OK=459, one commit, both audits PASS, + the
                                                     #   3 intentional KMH duplicate pairs (SAME/DIFFERENT, informational)
 make campaign-report-all                            # docs/results/campaign_fixed/ + docs/results/campaign_kmh_fixed/
 make campaign-list                                  # main manifest alone; PART=paper1|upper_bound|rnhal|texhal|texhal_q17|hier_transfer
@@ -210,6 +211,11 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   `dalmax/data_order.py`), `run_metadata.json` `data_order` hashes, an order-keyed and path-validated cache with
   atomic writes, the seed audit by round-0 image paths plus a data-order audit in `campaign verify`; also a Drive
   quota gate (`campaign run` exit 4), a pilot (`make campaign-pilot`) and CEAL estimated at 3x a plain run.
+- **Pre-flight fix KI-48** (2026-11-12, ADR 0016 amendment, second pass): a leaf with a truncated/empty JSON, a wrong
+  round count or an empty checkpoint is INCOMPLETE (re-run on resume); leaves are looked up only under the dataset
+  folder of the group's params (a plan leaf under another folder FAILs the data-order audit); `verify`/`pilot-report`
+  print the distinct `git_commit` values (WARN on more than one); the notebook checks out `GIT_REF` (tag
+  `campaign-fixed-v1`) detached on every session instead of pulling `main`, and surfaces a non-zero run exit.
 
 Next milestone: execute the clean re-run (`COLAB_RUNBOOK.md` section 6), then rewrite the thesis numbers from its reports; advisor review of the ablation section
 (`paper_drafts/ablation_section.tex`, weighted-primary/macro-secondary framing still pending

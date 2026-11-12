@@ -179,9 +179,9 @@ def test_round_queries_hold_the_initial_set_and_every_query(leaf) -> None:
 
 def test_leaf_check_accepts_the_files_and_results_json_is_unchanged(leaf) -> None:
     path, _, _ = leaf
-    missing, warnings = check_leaf(path, ROUND_HISTORY_FILES)
-    assert missing == []
-    assert not [w for w in warnings if "round_" in w]
+    check = check_leaf(path, ROUND_HISTORY_FILES)
+    assert check.missing == () and check.problems == () and check.complete
+    assert not [w for w in check.warnings if "round_" in w]
     payload = json.loads((path / "results.json").read_text())
     assert "round_predictions" not in payload and "round_queries" not in payload
     assert payload["rounds"] == [0, 1, 2]

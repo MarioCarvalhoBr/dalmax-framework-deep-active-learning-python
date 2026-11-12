@@ -50,7 +50,9 @@ def get_DANINHAS(handler, data_dir, img_size=128):
                     labels.append(class_to_idx[class_name])  # Obter índice da classe
                     images_path.append(img_path)
                 except Exception as e:
-                    print(f"Erro ao carregar a imagem {img_path}: {e}")
+                    # Fail fast (KI-47): skipping an unreadable file would shift every
+                    # later index, so the same index would name another image.
+                    raise RuntimeError(f"cannot load image {img_path}: {e}") from e
         return np.array(images), np.array(labels), images_path
 
     # Diretórios de treino e teste
@@ -104,7 +106,9 @@ def get_CIFAR10(handler, data_dir, img_size=32):
                     labels.append(class_to_idx[class_name])  # Obter índice da classe
                     images_path.append(img_path)
                 except Exception as e:
-                    print(f"Erro ao carregar a imagem {img_path}: {e}")
+                    # Fail fast (KI-47): skipping an unreadable file would shift every
+                    # later index, so the same index would name another image.
+                    raise RuntimeError(f"cannot load image {img_path}: {e}") from e
         return np.array(images), np.array(labels), images_path
 
     # Diretórios de treino e teste

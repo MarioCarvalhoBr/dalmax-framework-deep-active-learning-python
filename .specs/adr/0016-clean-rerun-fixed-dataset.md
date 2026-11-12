@@ -169,3 +169,22 @@ Consequences: the two golden fixtures were regenerated deliberately (round-1 que
 weighted precision/F1 of `RandomSampling`; old values kept in `pre_ki47_unsorted_listing_values`; the micro dataset
 was not regenerated). `make campaign-verify-all` now expects `OK=459`, the seed audit PASS for seeds 1-3 by image
 paths, the data-order audit PASS with one order per dataset, and reports the three duplicate pairs.
+
+### Second pre-flight pass (2026-11-12): leaf integrity, dataset folder, code version, pinned ref
+
+A second pre-flight audit found four gaps, each reproduced by execution, closed before any run:
+
+8. **Corrupt leaves counted as complete.** An unparsable or empty JSON artifact, a round-count mismatch or a 0-byte
+   `saved_model.pth` only warned, so resume skipped the leaf forever and `verify` said OK. `check_leaf` now returns a
+   `LeafCheck`; its integrity `problems` make the leaf incomplete (re-run into the same leaf; `INCOMPLETE ...
+   (integrity: ...)`). The checkpoint rule is "exists and is not empty" (no model-specific size threshold); the
+   below-10 MB KI-22 hint stays a soft warning. Round files are inspected only when `required_leaf_files` lists them.
+9. **Mixed code versions were invisible.** `verify` (and `pilot-report`) print the distinct `git_commit` values of the
+   OK leaves; more than one, or a missing one, is a WARN that leaves the exit code unchanged.
+10. **Foreign dataset folder.** The leaf glob matched any dataset folder (`daninhas_full` sorts before
+    `daninhas_full_fixed`). Leaves are now looked up under `basename(data_dir)` of the group's params only
+    (`RunGroup.dataset_folder`), and a leaf of the plan under another folder FAILs the data-order audit. Recording the
+    expected `data_order` hashes in the manifest was not done: the generators and their `--check` run without `DATA/`.
+11. **Pinned ref.** The notebook checks out `GIT_REF` (default tag `campaign-fixed-v1`) detached on every session
+    instead of `git pull --ff-only origin main`, prints the resolved commit, and its run cell prints a non-zero exit of
+    `make campaign-run-gpu-part`, re-runs the space check (exit 4 = Drive short) and points to both logs.

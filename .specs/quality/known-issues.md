@@ -105,6 +105,7 @@ accepted as-is (author decision 2026-11-02)**, so they leave the open list (docu
 (Update 2026-11-11b: author decision of the same day reverses the "accepted as-is" status of **KI-41, KI-42 and KI-45**: all three are **fixed in code (2026-11-11, ADR 0014)** and their 63 runs are prepared for re-execution as campaign parts `paper1_rerun_a` / `paper1_rerun_b` (not executed yet). They stay out of the open count: 10 open, 45 tracked items.)
 (Update 2026-11-11d: author decision on **KI-46**: everything is re-run on the new canonical dataset `DATA/daninhas_full_fixed` (ADR 0016), so KI-46 is **resolved for future runs**; the first campaign's results stay as history. The KI-41/KI-42/KI-45 re-run now happens inside that campaign (the parts `paper1_rerun_a/b` and the archive step of ADR 0014 were retired before execution). 10 open, 46 tracked items.)
 (Update 2026-11-12: **KI-47** (pool/test order followed the file system; the embedding cache served features of other images across sessions; the seed audit compared indices only) added and **fixed in code** before the clean campaign (ADR 0016 amendment); it affects the first campaign, which stays as history. KI-43 stays open until the clean campaign confirms that its cause 2 is KI-47. 10 open, 47 tracked items.)
+(Update 2026-11-12b: **KI-48** (corrupt leaves counted as complete, leaf lookup across dataset folders, mixed code versions invisible, notebook pulled a branch) added and **fixed** before the clean campaign: 10 open, 48 tracked items.)
 
 34 tracked items total (KI-34 added 2026-08-26, while reconciling the Phase 3 ablation execution
 batch; KI-33 added/resolved 2026-08-25). Of these, **27 are now fully resolved**: KI-1 through
@@ -656,3 +657,25 @@ indices, which named other images there. The brief that reported the defect also
 
 **Status**: fixed in code; to be confirmed by the clean campaign (expect one `data_order` per dataset over all 459
 leaves and, per seed, identical round-0 images across both GPU parts).
+
+### KI-48 — campaign completeness and code-version gaps: corrupt leaves counted as complete, foreign dataset folder picked, mixed commits invisible, notebook pulled a branch (FIXED 2026-11-12, before the clean campaign; found 2026-11-12)
+
+Found by the second pre-flight audit of the clean campaign, each reproduced by execution. (1) `check_leaf` only
+warned on an unparsable or empty `results.json` / `run_metadata.json` / round file, a round-count mismatch or a 0-byte
+`saved_model.pth`, so resume skipped such a leaf forever and `verify` reported it OK. (2) The leaf glob matched any
+dataset folder (`*/SEED_...`), so a leaf under `daninhas_full` (sorted before `daninhas_full_fixed`) was picked first
+and verified. (3) Nothing compared the `git_commit` of the leaves. (4) The notebook ran `git pull --ff-only origin
+main` on every session, so a push during the campaign would mix code versions, and the run cell did not surface a
+non-zero exit of `make campaign-run-gpu-part`.
+
+**Fix** (ADR 0016 amendment, second pre-flight pass): `check_leaf` returns a `LeafCheck` whose integrity `problems` make
+the leaf incomplete (re-run into the same leaf; `INCOMPLETE ... (integrity: ...)`; the KI-22 below-10 MB hint stays a
+soft warning; round files checked only when required); leaves are looked up under `basename(data_dir)` of the group's
+params only (`RunGroup.dataset_folder`) and a plan leaf under another dataset folder FAILs the data-order audit;
+`verify` and `pilot-report` print the distinct `git_commit` values of the OK leaves (WARN, exit code unchanged, on more
+than one or a missing value); the notebook checks out `GIT_REF` (tag `campaign-fixed-v1`) detached on every session,
+prints the commit, and its run cell prints a non-zero exit, re-runs the space check and points to both logs. The
+first campaign's 222 + 165 leaves were re-checked read-only with the new rule: all still complete. Tests:
+`tests/test_campaign.py` (corruptions parametrized, commit audit, foreign folder), `tests/test_colab_notebook.py`.
+
+**Status**: fixed.

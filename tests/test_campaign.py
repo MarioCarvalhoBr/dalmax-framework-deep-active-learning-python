@@ -402,11 +402,15 @@ def test_parse_parts_and_seed_subset(full_manifest: C.Manifest) -> None:
 # --- running (fake executor) -----------------------------------------------------
 
 
+MICRO_PARAMS = "files_config/campaign/params_paper1_micro.json"  # data_dir DATA/daninhas_micro/
+
+
 def _tiny_manifest(tmp_path: Path) -> C.Manifest:
     def group(gid: str, strategy: str) -> C.RunGroup:
-        return C.RunGroup(id=gid, part="paper1", params_json="files_config/campaign/params_paper1_micro.json",
+        return C.RunGroup(id=gid, part="paper1", params_json=MICRO_PARAMS,
                           strategy_name=strategy, n_query=5, n_init_labeled=10, n_round=1, seeds=(1, 2),
-                          dir_results=str(tmp_path / "paper1" / "nq5") + "/", used_by=())
+                          dir_results=str(tmp_path / "paper1" / "nq5") + "/", used_by=(),
+                          dataset_folder=C.params_dataset_folder(MICRO_PARAMS, "DANINHAS"))
     return C.Manifest(name="tiny", dataset_name="DANINHAS", results_root=str(tmp_path), seeds=(1, 2), primary_nq=5,
                       groups=(group("p1/RandomSampling/nq5", "RandomSampling"),
                               group("p1/MarginSampling/nq5", "MarginSampling")),
@@ -448,7 +452,7 @@ def _write_leaf(leaf: Path, *, omit: tuple[str, ...] = (), initial: str | None =
 
 
 def _leaf_of(group: C.RunGroup, seed: int) -> Path:
-    return Path(group.dir_results) / "daninhas_micro" / f"SEED_{seed}" / (
+    return Path(group.dir_results) / group.dataset_folder / f"SEED_{seed}" / (
         f"NQ_{group.n_query}_NIL_{group.n_init_labeled}_NR_{group.n_round}_NE_1") / group.strategy_name
 
 
@@ -694,17 +698,170 @@ def test_required_leaf_files_make_old_style_leaves_incomplete(tmp_path: Path, mo
     assert (summary.executed, summary.skipped) == (1, 1) and len(calls) == 1  # the old-style leaf is re-run
 
 
-def test_round_history_with_a_wrong_round_count_warns(tmp_path: Path) -> None:
+def test_round_history_with_a_wrong_round_count_is_an_integrity_problem(tmp_path: Path) -> None:
     from dalmax.reporting.leaf_check import check_leaf
 
     manifest = _tiny_manifest(tmp_path)
     leaf = _leaf_of(manifest.groups[0], 1)
     _write_leaf(leaf, round_files=True)
     (leaf / "round_queries.json").write_text(json.dumps({"rounds": [{"round": 0}]}))  # NR_1 needs 2 rounds
-    missing, warnings = check_leaf(leaf, ROUND_HISTORY_FILES)
-    assert not missing and any("round_queries.json: 1 rounds" in w for w in warnings)
+    check = check_leaf(leaf, ROUND_HISTORY_FILES)
+    assert not check.missing and not check.complete
+    assert any("round_queries.json: 1 rounds" in p for p in check.problems)
+    assert check_leaf(leaf).complete  # without the requirement the round files are not inspected (older trees)
     with pytest.raises(ValueError, match="unknown extra"):
         check_leaf(leaf, ("nope.json",))
+
+
+# --- integrity problems make a leaf incomplete and re-runnable (2026-11-12) ---------------------
+
+CORRUPTIONS: dict[str, tuple[str, str, str]] = {
+    # case -> (file, content written over it, expected substring of the problem)
+    "results_truncated": ("results.json", '{"all_acc": [0.5, 0.6], "all_f1', "results.json: failed to parse"),
+    "results_empty": ("results.json", "", "results.json: empty"),
+    "results_missing_key": ("results.json", json.dumps({"all_acc": [1], "all_f1_score": [1], "rounds": [0, 1]}),
+                            "results.json: missing key 'all_f1_macro'"),
+    "results_round_count": ("results.json", json.dumps({"all_acc": [1], "all_f1_score": [1], "all_f1_macro": [1],
+                                                        "rounds": [0, 1, 2]}), "results.json: 3 rounds"),
+    "metadata_truncated": ("run_metadata.json", '{"config": {', "run_metadata.json: failed to parse"),
+    "metadata_empty": ("run_metadata.json", "", "run_metadata.json: empty"),
+    "predictions_empty": ("predictions.csv", "", "predictions.csv: empty"),
+    "checkpoint_empty": ("saved_model.pth", "", "saved_model.pth: empty"),
+    "round_predictions_truncated": ("round_predictions.json", '{"predictions": [[0]', "round_predictions.json: failed"),
+    "round_queries_empty": ("round_queries.json", "", "round_queries.json: empty"),
+    "round_queries_not_object": ("round_queries.json", "[]", "round_queries.json: not a JSON object"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(CORRUPTIONS))
+def test_corrupt_leaf_is_incomplete_and_rerun_into_the_same_leaf(
+    case: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fname, content, expected = CORRUPTIONS[case]
+    manifest = replace(_tiny_manifest(tmp_path), required_leaf_files=ROUND_HISTORY_FILES)
+    monkeypatch.setattr(C, "REPO_ROOT", tmp_path)
+    job = C.Job(manifest.groups[0], 1)
+    leaf = _leaf_of(job.group, 1)
+    _write_leaf(leaf, round_files=True)
+    assert C.job_done(job, manifest.required_leaf_files)
+    (leaf / fname).write_text(content)
+
+    status = C.verify_job(job, required_extra=manifest.required_leaf_files)
+    assert status.status == "INCOMPLETE" and status.missing_files == ()
+    assert any(expected in p for p in status.problems), status.problems
+    assert f"INCOMPLETE {job.label()} (integrity: " in C.render_verify([status])
+    assert C.verify_exit_code([status], []) == 1
+    assert not C.job_done(job, manifest.required_leaf_files)
+
+    def executor(cmd: list[str], env: dict[str, str]) -> int:  # the trainer rewrites the files of the same leaf
+        _write_leaf(leaf, round_files=True)
+        return 0
+
+    summary = C.run_jobs([job], manifest, device="cpu", executor=executor, echo=lambda _: None,
+                         free_space=lambda p: 10**12)
+    assert (summary.executed, summary.skipped) == (1, 0)
+    assert C.find_leaves(job.group, 1) == [leaf]  # re-run into the same leaf, no second leaf
+    assert C.verify_job(job, required_extra=manifest.required_leaf_files).status == "OK"
+
+
+def test_small_checkpoint_stays_a_soft_warning(tmp_path: Path) -> None:
+    manifest = _tiny_manifest(tmp_path)
+    job = C.Job(manifest.groups[0], 1)
+    _write_leaf(_leaf_of(job.group, 1))  # saved_model.pth = 1 byte: not empty, smaller than a real checkpoint
+    status = C.verify_job(job)
+    assert status.status == "OK" and status.problems == ()
+    assert any("saved_model.pth" in w and "KI-22" in w for w in status.warnings)
+
+
+# --- code-version audit: distinct git_commit values of the OK leaves ---------------------------
+
+
+def _set_commit(leaf: Path, commit: str | None, *, drop: bool = False) -> None:
+    meta = json.loads((leaf / "run_metadata.json").read_text())
+    if drop:
+        meta.pop("git_commit")
+    else:
+        meta["git_commit"] = commit
+    (leaf / "run_metadata.json").write_text(json.dumps(meta))
+
+
+def test_commit_audit_warns_on_two_commits_and_on_a_null_commit(tmp_path: Path) -> None:
+    manifest = _tiny_manifest(tmp_path)
+    jobs = C.expand_jobs(manifest)
+    for job in jobs:
+        _write_leaf(_leaf_of(job.group, job.seed))
+    statuses = [C.verify_job(j) for j in jobs]
+    pairs = [(s.job.label(), s.leaf) for s in statuses]
+    single = C.audit_git_commits(pairs)
+    assert single.status == "PASS" and single.counts == (("abc", 4, jobs[0].label()),)
+    assert "WARN" not in C.render_commit_audit(single)
+
+    _set_commit(_leaf_of(jobs[1].group, jobs[1].seed), "def")
+    mixed = C.audit_git_commits(pairs)
+    assert mixed.status == "WARN" and [(c, n) for c, n, _ in mixed.counts] == [("abc", 3), ("def", 1)]
+    text = C.render_commit_audit(mixed)
+    assert "abc: 3 leaves" in text and "def: 1 leaves" in text and "more than one code version" in text
+    audits = C.audit_seed_consistency(jobs)
+    assert C.verify_exit_code(statuses, audits) == 0  # informational: the exit code is unchanged
+
+    _set_commit(_leaf_of(jobs[1].group, jobs[1].seed), None)
+    unknown = C.audit_git_commits(pairs)
+    assert unknown.status == "WARN" and unknown.unknown == (jobs[1].label(),)
+    assert "git_commit missing or null" in C.render_commit_audit(unknown)
+    assert C.audit_git_commits([]).status == "NO_DATA"
+
+
+def test_cli_verify_prints_the_commit_audit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                            capsys: pytest.CaptureFixture[str]) -> None:
+    manifest = _tiny_manifest(tmp_path)
+    for job in C.expand_jobs(manifest):
+        _write_leaf(_leaf_of(job.group, job.seed))
+    _set_commit(_leaf_of(manifest.groups[0], 2), "def")
+    monkeypatch.setattr(C, "load_manifest", lambda path: manifest)
+    assert C.main(["verify", "--manifest", "tiny.json"]) == 0
+    out = capsys.readouterr().out
+    assert "Code-version audit" in out and "WARN (4 leaves, 2 distinct commit(s))" in out
+
+
+# --- leaves are looked up under the dataset folder of the group's params ------------------------
+
+
+def test_params_dataset_folder_is_the_basename_of_data_dir(tmp_path: Path) -> None:
+    assert C.params_dataset_folder(MICRO_PARAMS, "DANINHAS") == "daninhas_micro"
+    assert C.params_dataset_folder("files_config/campaign/params_paper1.json", "DANINHAS") == "daninhas_full_fixed"
+    with pytest.raises(C.CampaignError, match="data_dir"):
+        C.params_dataset_folder(MICRO_PARAMS, "CIFAR10")
+    no_folder = replace(_tiny_manifest(tmp_path).groups[0], dataset_folder="")
+    with pytest.raises(C.CampaignError, match="dataset_folder"):
+        C.find_leaf(no_folder, 1)
+
+
+def test_committed_manifests_resolve_their_dataset_folder(full_manifest: C.Manifest,
+                                                         micro_manifest: C.Manifest) -> None:
+    assert {g.dataset_folder for g in full_manifest.groups} == {"daninhas_full_fixed"}
+    assert {g.dataset_folder for g in micro_manifest.groups} == {"daninhas_micro"}
+
+
+def test_foreign_dataset_folder_is_not_picked_and_fails_the_data_order_audit(tmp_path: Path) -> None:
+    manifest = _tiny_manifest(tmp_path)
+    g = manifest.groups[0]
+    own = _leaf_of(g, 1)
+    # "daninhas_full" sorts before "daninhas_micro"/"daninhas_full_fixed": the old `*/SEED_...` glob picked it first.
+    foreign = Path(g.dir_results) / "daninhas_full" / own.relative_to(Path(g.dir_results) / g.dataset_folder)
+    _write_leaf(foreign)
+    job = C.Job(g, 1)
+    assert C.find_leaf(g, 1) is None and C.verify_job(job).status == "MISSING"
+    assert C.find_foreign_leaves(g, 1) == [foreign]
+
+    _write_leaf(own)
+    assert C.find_leaf(g, 1) == own and C.verify_job(job).status == "OK"
+    audits = C.audit_data_order([job])
+    by_dataset = {a.dataset: a for a in audits}
+    assert by_dataset["daninhas_full"].status == "FAIL" and by_dataset["daninhas_full"].foreign == (job.label(),)
+    assert by_dataset["daninhas_micro"].status == "PASS"
+    assert "mixes datasets" in C.render_data_order_audit(audits)
+    statuses = [C.verify_job(job)]
+    assert C.verify_exit_code(statuses, C.audit_seed_consistency([job]), audits) == 1
 
 
 def test_validate_rejects_unknown_required_files_and_half_gpu_fields(tmp_path: Path) -> None:
@@ -923,9 +1080,10 @@ def test_only_group_restricts_and_fails_fast(both_full, capsys) -> None:
 
 def test_full_run_after_the_pilot_skips_the_completed_pilot_leaves(tmp_path: Path) -> None:
     def group(gid: str, strategy: str) -> C.RunGroup:
-        return C.RunGroup(id=gid, part="paper1", params_json="files_config/campaign/params_paper1_micro.json",
+        return C.RunGroup(id=gid, part="paper1", params_json=MICRO_PARAMS,
                           strategy_name=strategy, n_query=5, n_init_labeled=10, n_round=1, seeds=(1, 2),
-                          dir_results=str(tmp_path / gid) + "/", used_by=())
+                          dir_results=str(tmp_path / gid) + "/", used_by=(),
+                          dataset_folder=C.params_dataset_folder(MICRO_PARAMS, "DANINHAS"))
 
     groups = tuple(group(f"p1/{s}/nq5", s) for s in ("RandomSampling", "VAAL", "WAAL", "MarginSampling"))
     manifest = C.Manifest(name="tiny", dataset_name="DANINHAS", results_root=str(tmp_path), seeds=(1, 2),

@@ -15,6 +15,10 @@ The notebook runs ONE GPU part of the clean campaign on `DATA/daninhas_full_fixe
 Drive, a job count that differs from the manifests, too little free Drive space for the remaining
 runs (`make campaign-space-gpu-part`), or an unreviewed pilot (`PILOT_REVIEWED`, 2026-11-12: the pilot
 runs seed 1 of the part's VAAL/WAAL groups and one cheap strategy before the long runs).
+
+Every session checks out ONE pinned ref (`GIT_REF`, default `DEFAULT_GIT_REF`, a tag created after the
+merge) detached, instead of pulling a branch, so a push during the campaign cannot mix code versions;
+the run cell prints a non-zero exit code of `make campaign-run-gpu-part` and points to the logs.
 """
 
 from __future__ import annotations
@@ -42,6 +46,8 @@ from dalmax.campaign import (  # noqa: E402
 OUT = "notebooks/colab_runbook.ipynb"
 MANIFESTS = ("files_config/campaign/manifest.json", "files_config/campaign/manifest_kmh_sweep.json")
 REPO_URL = "https://github.com/MarioCarvalhoBr/dalmax-framework-deep-active-learning-python.git"
+DEFAULT_GIT_REF = "campaign-fixed-v1"  # the tag both accounts check out for the whole campaign
+RUN_EXIT_FILE = "/content/campaign_run_exit_code"  # local runtime disk, not the repo or Drive
 DRIVE_ROOT_PLACEHOLDER = "/content/drive/MyDrive/<FOLDER_THAT_HOLDS_DATA>"
 DATASET = "daninhas_full_fixed"
 DATASET_FILES = 8240  # 7,230 train + 1,008 test images + MANIFEST.csv + README.txt (scripts/colab/setup_colab.sh)
@@ -113,7 +119,9 @@ def cells() -> list[dict[str, Any]]:
             DRIVE_ROOT = "{DRIVE_ROOT_PLACEHOLDER}"  # REQUIRED, per account: the Drive folder holding DATA/{DATASET}/
             REPO_URL = "{REPO_URL}"
             REPO_DIR = "/content/dalmax"
-            BRANCH = "main"  # must contain ADR 0016 (the clean campaign on {DATASET})
+            # The code version of the WHOLE campaign: a tag (or a commit SHA), checked out detached on every session
+            # and on both accounts, so a later push cannot mix code versions. Do not use a branch name here.
+            GIT_REF = "{DEFAULT_GIT_REF}"
             GPU_PART = "{part1}"  # account A: "{part1}"; account B: "{part2}" (ADR 0016). Re-running resumes.
             # Set to True only after reading the pilot report of section 6 (wall times vs estimates, no degeneracy
             # flag); until then "Run all" stops right before the full run.
@@ -140,7 +148,7 @@ def cells() -> list[dict[str, Any]]:
 
             print("DRIVE_ROOT:", DRIVE_ROOT)
             print("REPO_URL:  ", REPO_URL)
-            print("BRANCH:    ", BRANCH)
+            print("GIT_REF:   ", GIT_REF)
             print()
             print("#" * 78)
             print(f"#  GPU PART: {{GPU_PART}}  ->  expect {{EXPECTED_RUNS}} runs ({{EXPECTED_GROUPS}} run groups)")
@@ -183,28 +191,36 @@ def cells() -> list[dict[str, Any]]:
             print("Dataset found on Drive:", folder if os.path.isdir(folder) else zip_path)
             '''),
         md("""
-            ## 2. Clone or pull the repo
+            ## 2. Clone the repo and check out `GIT_REF`
 
-            Clones into `/content/dalmax` (local runtime disk, not Drive) or pulls `BRANCH` if this runtime already
-            has it. The gate refuses a checkout with modified tracked files. See `COLAB_RUNBOOK.md` section 2.
+            Clones into `/content/dalmax` (local runtime disk, not Drive) if this runtime does not have it yet, then on
+            EVERY session fetches the tags and checks out `GIT_REF` detached (no branch is pulled, so both accounts and
+            every session run the same commit, printed below). The gate refuses a checkout with modified tracked files.
+            See `COLAB_RUNBOOK.md` section 2.
             """),
         code('''
             import subprocess
 
-            if os.path.isdir(os.path.join(REPO_DIR, ".git")):
-                print(f"{REPO_DIR} already exists -- pulling {BRANCH}...")
-                subprocess.run(["git", "-C", REPO_DIR, "fetch", "origin", BRANCH], check=True)
-                subprocess.run(["git", "-C", REPO_DIR, "checkout", BRANCH], check=True)
-                subprocess.run(["git", "-C", REPO_DIR, "pull", "--ff-only", "origin", BRANCH], check=True)
-            else:
-                print(f"Cloning {REPO_URL} (branch {BRANCH}) into {REPO_DIR}...")
-                subprocess.run(["git", "clone", "--branch", BRANCH, REPO_URL, REPO_DIR], check=True)
+            if not os.path.isdir(os.path.join(REPO_DIR, ".git")):
+                print(f"Cloning {REPO_URL} into {REPO_DIR}...")
+                subprocess.run(["git", "clone", REPO_URL, REPO_DIR], check=True)
 
             # Gate: no modified tracked file (results/ symlink and DATA/ are untracked and do not count).
             dirty = subprocess.run(["git", "-C", REPO_DIR, "status", "--porcelain", "--untracked-files=no"],
                                    check=True, capture_output=True, text=True).stdout.strip()
             if dirty:
                 raise RuntimeError("The checkout has local modifications; reset them before running:\\n" + dirty)
+
+            # Pin the code version: the same GIT_REF on every session (no `git pull` of a branch).
+            subprocess.run(["git", "-C", REPO_DIR, "fetch", "--tags", "origin"], check=True)
+            subprocess.run(["git", "-C", REPO_DIR, "checkout", "--detach", GIT_REF], check=True)
+            head = subprocess.run(["git", "-C", REPO_DIR, "rev-parse", "HEAD"],
+                                  check=True, capture_output=True, text=True).stdout.strip()
+            wanted = subprocess.run(["git", "-C", REPO_DIR, "rev-parse", f"{GIT_REF}^{{commit}}"],
+                                    check=True, capture_output=True, text=True).stdout.strip()
+            if head != wanted:
+                raise RuntimeError(f"HEAD is {head}, but {GIT_REF} resolves to {wanted}")
+            print(f"GIT_REF {GIT_REF} -> commit {head} (every run records it as git_commit in run_metadata.json)")
 
             os.chdir(REPO_DIR)
             %cd $REPO_DIR
@@ -384,19 +400,42 @@ def cells() -> list[dict[str, Any]]:
                                    "re-run that cell and continue from here.")
             print(f"Pilot reviewed -- launching the full {GPU_PART} run (completed pilot leaves are skipped).")
             '''),
-        code('''
+        code(f'''
             import time
 
             start = time.time()
-            !make campaign-run-gpu-part GPU_PART={GPU_PART}
+            !rm -f {RUN_EXIT_FILE}
+            !make campaign-run-gpu-part GPU_PART={{GPU_PART}}; echo $? > {RUN_EXIT_FILE}
             '''),
-        code('''
+        code(f'''
+            import subprocess
+
             elapsed_hours = (time.time() - start) / 3600
-            print(f"{GPU_PART}: this session ran {elapsed_hours:.2f} hours.")
+            print(f"{{GPU_PART}}: this session ran {{elapsed_hours:.2f}} hours.")
+            # Surface a failed run. make exits 2 whenever `python -m dalmax.campaign run` fails; the campaign's own code
+            # is on the `make: *** [...] Error N` line above: 4 = the Drive is short of space (nothing was started, or
+            # the batch stopped), 1 = at least one run failed (the batch went on with the others).
+            run_exit = open("{RUN_EXIT_FILE}").read().strip() if os.path.exists("{RUN_EXIT_FILE}") else "unknown"
+            if run_exit != "0":
+                space = subprocess.run(["make", "campaign-space-gpu-part", f"GPU_PART={{GPU_PART}}"], cwd=REPO_DIR,
+                                       capture_output=True, text=True)
+                print("#" * 78)
+                print(f"#  make campaign-run-gpu-part exited with code {{run_exit}} (the campaign's code: `Error N` above)")
+                if space.returncode != 0:
+                    print("#  The Drive is SHORT OF SPACE for the remaining runs (exit 4): free space on this account's")
+                    print("#  Drive, then re-run the run cell (it resumes).")
+                    print(space.stdout.strip())
+                else:
+                    print("#  Some runs failed: read failures.log / campaign.log, then re-run the run cell (it resumes).")
+                for root in RESULTS_ROOTS:
+                    print(f"#  logs: {{REPO_DIR}}/{{root}}/campaign.log and {{REPO_DIR}}/{{root}}/failures.log")
+                print("#" * 78)
+                raise RuntimeError(f"make campaign-run-gpu-part exited with code {{run_exit}} (see the lines above)")
+            print("make campaign-run-gpu-part exited with code 0")
             '''),
         md("**Progress** (usable anytime, e.g. after a disconnect):"),
         code('''
-            !make campaign-verify-gpu-part GPU_PART={GPU_PART} 2>&1 | grep -E "^Totals|seed [0-9]|distinct order"
+            !make campaign-verify-gpu-part GPU_PART={GPU_PART} 2>&1 | grep -E "^Totals|seed [0-9]|distinct order|distinct commit|WARN:"
             for root in RESULTS_ROOTS:
                 log = f"{REPO_DIR}/{root}/campaign.log"
                 tail = open(log).read().splitlines()[-5:] if os.path.exists(log) else ["no campaign.log yet"]
@@ -410,8 +449,11 @@ def cells() -> list[dict[str, Any]]:
         md("""
             **Verify**: OK/INCOMPLETE/MISSING per job, the seed-consistency audit (every run of a seed must start
             from the identical initial labeled IMAGES, compared by path) and the data-order audit (every leaf must
-            index the same ordered image lists, KI-47). Exit code 0 = all OK, 1 = an incomplete/missing job or a FAIL
-            audit, 2 = only audit WARNs. Re-run the run cell to redo failed or missing jobs.
+            index the same ordered image lists, KI-47). A leaf with an integrity problem (truncated or empty file, wrong
+            round count) is `INCOMPLETE (integrity: ...)` and is re-run by the run cell. The code-version audit lists the
+            `git_commit` of the OK leaves: it must show ONE commit (the one printed by section 2) and no `WARN:` line.
+            Exit code 0 = all OK, 1 = an incomplete/missing job or a FAIL audit, 2 = only audit WARNs. Re-run the run
+            cell to redo failed or missing jobs.
             """),
         code("!make campaign-verify-gpu-part GPU_PART={GPU_PART}"),
         md("""

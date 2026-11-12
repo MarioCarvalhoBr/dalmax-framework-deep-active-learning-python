@@ -58,6 +58,12 @@ locations.
   the round-0 image PATHS (`round_queries.json`), not only indices. Before KI-47 the files came from an unsorted
   `os.listdir`, whose order differed between Colab sessions: equal indices named other images (first campaign).
   Compare runs by `dalmax.data_order.relative_image_path` (`<class>/<file>`), never by index alone.
+- **One code version per campaign (2026-11-12, KI-48)**: every Colab session checks out the campaign's tag (`GIT_REF`,
+  default `campaign-fixed-v1`) detached, never pulls a branch; `campaign verify` lists the distinct `run_metadata.json`
+  `git_commit` values of the OK leaves and a second value (or a missing one) is a WARN that must be explained before
+  the results are used. A leaf counts as complete only when its JSON artifacts parse with the expected round count
+  and its checkpoint is non-empty (`dalmax/reporting/leaf_check.py::LeafCheck`), and a job's leaf is looked up only
+  under the dataset folder of its own params (`RunGroup.dataset_folder`).
 - `torch.backends.cudnn.enabled = False` was used as a determinism
   shortcut in the historical `demo.py:59` (line no longer exists); it globally disabled cuDNN and cost performance on the
   the lab GPUs. **Now uses** `torch.backends.cudnn.deterministic = True` +

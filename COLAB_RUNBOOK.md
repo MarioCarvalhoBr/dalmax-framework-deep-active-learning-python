@@ -117,12 +117,15 @@ disk, not Drive, per the architecture decision above):
 %cd /content/dalmax
 ```
 
-Cell (a later session, if `/content/dalmax` already exists from an earlier
-run in the *same* still-alive runtime — rare, since Colab runtimes are
-usually fresh each session, but harmless to check):
+Then, on **every** session (fresh clone or a still-alive runtime), check out the campaign's pinned ref
+detached instead of pulling a branch (since 2026-11-12; `GIT_REF` in the notebook's Parameters cell,
+default the tag `campaign-fixed-v1`), so a push during the campaign never reaches a session:
 ```python
 %cd /content/dalmax
-!git pull origin main
+!git status --porcelain --untracked-files=no   # must print nothing (the notebook raises otherwise)
+!git fetch --tags origin
+!git checkout --detach campaign-fixed-v1
+!git rev-parse HEAD                             # the commit every run records as git_commit
 ```
 
 ---
@@ -292,8 +295,9 @@ except the long baselines' rows. Add about 15 minutes per session for sections 0
    batch instead of continuing when the Drive fills up mid-part (`STOP no space` in `campaign.log`; free space and
    re-run the run cell, it resumes).
 2. **Parameters cell** of `notebooks/colab_runbook.ipynb`: `DRIVE_ROOT = "<DRIVE_ROOT>"` (the folder that holds
-   `DATA/`; the placeholder fails fast), `GPU_PART = "part_1_gpu"` (A) or `"part_2_gpu"` (B), `BRANCH` = a branch that
-   contains ADR 0016 (`main` once merged).
+   `DATA/`; the placeholder fails fast), `GPU_PART = "part_1_gpu"` (A) or `"part_2_gpu"` (B), `GIT_REF` = the tag of
+   the campaign's code (default `campaign-fixed-v1`, created on `main` after the merge; the same on both accounts and
+   for the whole campaign). Section 2 checks it out detached on every session and prints the resolved commit.
 3. **Sections 0-5** (runtime, Drive, clone, Poetry, `make colab-setup`, `make dataset-check`, `make test`,
    `make colab-check`, GPU identity check). The gate cells raise on: a wrong `GPU_PART`, an unfilled `DRIVE_ROOT`, the
    dataset missing on Drive, a wrong local file count or a repeated MD5, a checkout with modified tracked files, a venv
@@ -315,14 +319,21 @@ except the long baselines' rows. Add about 15 minutes per session for sections 0
    stops before the full run until then). The pilot leaves are normal leaves: the full run skips them.
 6. **Run**: `!make campaign-run-gpu-part GPU_PART=part_1_gpu`. Logs: `results/campaign_fixed/campaign.log` and
    `results/campaign_kmh_fixed/campaign.log` (failures in `failures.log` next to them; the batch continues after a
-   failure, except a lack of space: then it stops with exit 4 and `STOP no space` in `campaign.log`).
+   failure, except a lack of space: then it stops with exit 4 and `STOP no space` in `campaign.log`). The cell after
+   the run prints the exit code (`make` reports any failure as 2; the campaign's own code is on its
+   `make: *** [...] Error N` line), re-runs the space check to say whether the Drive is short (exit 4), points to
+   both logs and raises, so a failed session is never silent.
 7. **Resume after a session drop or limit**: open a new runtime, keep the Parameters cell as it is, redo sections 0-5
    and run the same run cell: complete leaves (full artifact set, including `round_predictions.json` and
-   `round_queries.json`) are skipped, so at most the run in progress is lost. A failed job is retried by re-running.
+   `round_queries.json`, every JSON parsable with the right round count, no empty `predictions.csv` or
+   `saved_model.pth`) are skipped, so at most the run in progress is lost. A failed job, or a leaf with a truncated or
+   empty file, is re-run into the same leaf by re-running.
 8. **Verify**: `!make campaign-verify-gpu-part GPU_PART=part_1_gpu`: expect `Totals: OK=282 INCOMPLETE=0 MISSING=0`
-   (B: `OK=177`), the seed audit PASS for seeds 1-3 (`compared by image paths`) and the data-order audit PASS
-   (`daninhas_full_fixed: PASS`, one distinct order). The Progress cell shows the totals and the tail of both logs
-   at any time.
+   (B: `OK=177`), the code-version audit with ONE commit (the one section 2 printed) and no `WARN:` line, the seed
+   audit PASS for seeds 1-3 (`compared by image paths`) and the data-order audit PASS (`daninhas_full_fixed: PASS`,
+   one distinct order; a leaf of the plan under another dataset folder is a FAIL). A leaf with an integrity problem
+   shows as `INCOMPLETE ... (integrity: ...)`. The Progress cell shows the totals and the tail of both logs at any
+   time.
 9. **Zip and download.** The notebook's zip cell refuses (raises) unless verify reports every run of the part `OK`
    (`ZIP_PARTIAL = True` ships an incomplete part on purpose), checks the free space, zips both results roots without
    their `campaign.log`/`failures.log` and adds those as `campaign_<GPU_PART>.log` / `failures_<GPU_PART>.log`, checks
@@ -353,6 +364,19 @@ except the long baselines' rows. Add about 15 minutes per session for sections 0
     orders.) The last block lists the three intentional duplicate computations (paper-1 KMH vs the sweep's
     `hier_L3_ref` at nq100/50/10, ADR 0016 amendment): `SAME` = both selected the same images in every round; a
     `DIFFERENT` is not a failure (the nq50 pair ran on the two accounts) but is worth reporting.
+
+**Operator notes (2026-11-12).**
+
+- **One runtime per account at a time.** Nothing locks a results tree: two runtimes of the same account (or a second
+  browser tab running the run cell) would write the same leaves at once. Close a runtime before starting another.
+- **After the pilot**, compare the `data_order` block of the pilot leaves' `run_metadata.json` with the reference of
+  `DATA/daninhas_full_fixed`: `train_paths_hash` `805314e2dae2`, `test_paths_hash` `17ac35b4b1b3`, `n_train` 7230,
+  `n_test` 1008 (derived 2026-11-12 with `dalmax.data_order` over the loaders' sorted listing). A different value
+  means the runtime indexes other images: stop and report.
+  `!grep -h -A5 '"data_order"' results/campaign_fixed/daninhas_full_fixed/SEED_1/*/*/run_metadata.json`
+- **Before zipping**, `make campaign-verify-gpu-part` must print no integrity problem (`INCOMPLETE ... (integrity:`)
+  and no code-version `WARN:` line (more than one `git_commit`, or a leaf without one). The zip cell already refuses
+  an incomplete part; the commit warning is only printed, so read it.
 
 **Optional per-account report**: `!make campaign-report-all` on one account renders the tables of its part only (rows of
 the other part read `TBD`).
@@ -642,7 +666,7 @@ disk and must be downloaded before the runtime ends).
   in `dalmax/__init__.py` (`_ensure_matplotlib_backend` falls back to the
   headless `Agg` backend when the configured module is unimportable) and
   `MPLBACKEND=Agg` is exported into every `dalmax.campaign` subprocess (`dalmax/campaign.py::build_env`). If you see it again, you are
-  running a checkout older than that fix: `git pull origin main`.
+  running a checkout older than that fix: check that section 2 checked out the campaign's `GIT_REF`.
 - **Drive FUSE slowness.** Never read `daninhas_full_fixed`'s individual files
   directly from `/content/drive/...` during training — that's exactly why
   §4 copies a single zip to local disk instead. If you ever see very slow
