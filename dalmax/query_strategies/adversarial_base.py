@@ -28,6 +28,7 @@ import torch
 from tqdm import tqdm
 
 from .base import Strategy
+from .ranking import rank_ascending
 
 # `dalmax.seeding.derive_seed` tag of the tie-break generator, injected by
 # `dalmax.query_strategies.registry.build_strategy`.
@@ -41,9 +42,10 @@ def rank_by_distance(dis: np.ndarray, rng: np.random.Generator) -> np.ndarray:
     `permutation(len(dis))` call per ranking, so the generator advances every
     query round). `inf` (did not reach the boundary, KI-39) still ranks after
     every finite distance; with no ties the result equals
-    `dis.argsort(kind="stable")`.
+    `dis.argsort(kind="stable")`. Generalised (ADR 0015) as
+    `dalmax.query_strategies.ranking.rank_ascending`, which this delegates to.
     """
-    return np.lexsort((rng.permutation(len(dis)), dis))
+    return rank_ascending(dis, rng)
 
 
 class PerSampleAdversarialStrategy(Strategy):

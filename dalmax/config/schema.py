@@ -214,6 +214,176 @@ class ModelArgs:
         return {} if self.dropout_p is None else {"dropout_p": self.dropout_p}
 
 
+# Base strategies `CEALSampling` may query with (ADR 0015): the plain, single-pass
+# uncertainty strategies, resolved through the strategy registry.
+CEAL_BASE_STRATEGIES = ("LeastConfidence", "MarginSampling", "EntropySampling")
+
+
+def _check_positive(owner: str, **values: float) -> None:
+    for name, value in values.items():
+        if not value > 0:
+            raise ConfigError(f"{owner}.{name} must be > 0, got {value!r}")
+
+
+def _check_non_negative(owner: str, **values: float) -> None:
+    for name, value in values.items():
+        if not value >= 0:
+            raise ConfigError(f"{owner}.{name} must be >= 0, got {value!r}")
+
+
+@dataclass(frozen=True)
+class CEALArgs:
+    """``CEALSampling`` (Wang et al., 2017; DeepAL+ defaults).
+
+    - ``base_strategy``: strategy that picks the queried samples, one of
+      ``CEAL_BASE_STRATEGIES``.
+    - ``delta``: initial entropy threshold ``delta_0`` (nats) below which an
+      unlabeled sample is pseudo-labelled for the next training.
+    - ``delta_decay``: ``dr``; the threshold of query round ``t`` (1-based) is
+      ``delta_0 - dr * t`` (linear, as in the original paper; see ADR 0015 for
+      DeepAL+'s cumulative variant).
+    """
+
+    base_strategy: str = "EntropySampling"
+    delta: float = 5e-5
+    delta_decay: float = 0.033e-5
+
+    def __post_init__(self) -> None:
+        if self.base_strategy not in CEAL_BASE_STRATEGIES:
+            raise ConfigError(
+                f"CEALArgs.base_strategy must be one of {list(CEAL_BASE_STRATEGIES)}, "
+                f"got {self.base_strategy!r}"
+            )
+        _check_positive("CEALArgs", delta=self.delta)
+        _check_non_negative("CEALArgs", delta_decay=self.delta_decay)
+
+
+@dataclass(frozen=True)
+class KCenterGreedyPCAArgs:
+    """``KCenterGreedyPCA``: embeddings wider than ``n_components`` are reduced by PCA."""
+
+    n_components: int = 50
+
+    def __post_init__(self) -> None:
+        _check_positive("KCenterGreedyPCAArgs", n_components=self.n_components)
+
+
+@dataclass(frozen=True)
+class LossPredictionArgs:
+    """``LossPredictionLoss`` (Yoo & Kweon, 2019).
+
+    - ``margin``/``weight``: margin of the pairwise ranking loss and its weight in
+      ``CE + weight * ranking``.
+    - ``detach_fraction``: the module's gradient reaches the backbone during the
+      first ``floor(detach_fraction * n_epoch)`` epochs only (120/200 = 0.6 in the
+      original paper).
+    - ``interm_dim``: width of each per-stage FC of the module.
+    - ``module_lr``: learning rate of the module's Adam optimizer (DeepAL+).
+    """
+
+    margin: float = 1.0
+    weight: float = 1.0
+    detach_fraction: float = 0.6
+    interm_dim: int = 128
+    module_lr: float = 0.01
+
+    def __post_init__(self) -> None:
+        _check_positive("LossPredictionArgs", interm_dim=self.interm_dim, module_lr=self.module_lr)
+        _check_non_negative("LossPredictionArgs", margin=self.margin, weight=self.weight)
+        if not 0.0 <= self.detach_fraction <= 1.0:
+            raise ConfigError(
+                f"LossPredictionArgs.detach_fraction must be in [0, 1], got {self.detach_fraction!r}"
+            )
+
+
+@dataclass(frozen=True)
+class VAALArgs:
+    """``VAAL`` (Sinha et al., 2019): VAE + latent discriminator trained at every query.
+
+    ``epochs``/``latent_dim``/``beta``/``adversary_param``/``num_vae_steps``/
+    ``num_adv_steps`` are the DeepAL+/original defaults; ``lr`` is the Adam learning
+    rate of both networks (original VAAL; DeepAL+ reuses the task optimizer);
+    ``image_size`` is the side the images are resized to for the VAE (a multiple of
+    16; 64 = the ``VAE_ImageNet``-style network).
+    """
+
+    epochs: int = 30
+    latent_dim: int = 32
+    beta: float = 1.0
+    adversary_param: float = 1.0
+    num_vae_steps: int = 2
+    num_adv_steps: int = 1
+    lr: float = 5e-4
+    image_size: int = 64
+
+    def __post_init__(self) -> None:
+        _check_positive(
+            "VAALArgs",
+            epochs=self.epochs,
+            latent_dim=self.latent_dim,
+            num_vae_steps=self.num_vae_steps,
+            num_adv_steps=self.num_adv_steps,
+            lr=self.lr,
+            image_size=self.image_size,
+        )
+        _check_non_negative("VAALArgs", beta=self.beta, adversary_param=self.adversary_param)
+        if self.image_size % 16:
+            raise ConfigError(f"VAALArgs.image_size must be a multiple of 16, got {self.image_size}")
+
+
+@dataclass(frozen=True)
+class WAALArgs:
+    """``WAAL`` (Shui et al., 2020; DeepAL+ defaults).
+
+    - ``alpha``: weight of the Wasserstein terms in both min-max steps.
+    - ``gp_weight_task``/``gp_weight_critic``: gradient-penalty weights of the task
+      step (``+ alpha * gp * 5``) and of the critic step (``- alpha * gp * 2``, sign
+      as in the original code, see ADR 0015).
+    - ``gamma_ratio``: weight of the labelled critic mean in the Wasserstein term
+      (DeepAL+ fixes 1; the original WAAL uses ``|L| / |U|``).
+    - ``selection``: weight of the critic score in the query score.
+    """
+
+    alpha: float = 1e-3
+    gp_weight_task: float = 5.0
+    gp_weight_critic: float = 2.0
+    gamma_ratio: float = 1.0
+    selection: float = 10.0
+
+    def __post_init__(self) -> None:
+        _check_positive("WAALArgs", alpha=self.alpha)
+        _check_non_negative(
+            "WAALArgs",
+            gp_weight_task=self.gp_weight_task,
+            gp_weight_critic=self.gp_weight_critic,
+            gamma_ratio=self.gamma_ratio,
+            selection=self.selection,
+        )
+
+
+@dataclass(frozen=True)
+class StrategyArgs:
+    """Optional per-strategy hyperparameters (params JSON ``"strategy_args"`` block,
+    ADR 0015), one sub-block per strategy name; absent = the defaults above. Each
+    block is read only by its own strategy."""
+
+    ceal: CEALArgs = field(default_factory=CEALArgs)
+    kcenter_greedy_pca: KCenterGreedyPCAArgs = field(default_factory=KCenterGreedyPCAArgs)
+    loss_prediction: LossPredictionArgs = field(default_factory=LossPredictionArgs)
+    vaal: VAALArgs = field(default_factory=VAALArgs)
+    waal: WAALArgs = field(default_factory=WAALArgs)
+
+
+# params JSON key (= the strategy's registry name) -> `StrategyArgs` field.
+STRATEGY_ARGS_KEYS: dict[str, str] = {
+    "CEALSampling": "ceal",
+    "KCenterGreedyPCA": "kcenter_greedy_pca",
+    "LossPredictionLoss": "loss_prediction",
+    "VAAL": "vaal",
+    "WAAL": "waal",
+}
+
+
 @dataclass(frozen=True)
 class DatasetConfig:
     """Everything the existing params JSON specifies for one dataset."""
@@ -229,6 +399,7 @@ class DatasetConfig:
     embedding: EmbeddingConfig
     selection: SelectionConfig
     model_args: ModelArgs = field(default_factory=ModelArgs)
+    strategy_args: StrategyArgs = field(default_factory=StrategyArgs)
 
     def __post_init__(self) -> None:
         if not self.name:

@@ -1,0 +1,47 @@
+{
+    "_comment": "Micro (CPU smoke) mirror of params_paper1_vaal.json: identical to params_paper1_micro.json plus strategy_args.VAAL with epochs 1 instead of 30 (smoke speed, like n_epoch 1 and n_drop 2 in the micro files; every other VAAL key as in the full file). See .specs/adr/0015-deepalplus-strategies.md.",
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_micro/",
+        "n_epoch": 1,
+        "n_drop": 2,
+        "n_classes": 5,
+        "train_args": {
+            "batch_size": 16,
+            "num_workers": 0
+        },
+        "test_args": {
+            "batch_size": 16,
+            "num_workers": 0
+        },
+        "optimizer_args": {
+            "lr": 0.05,
+            "momentum": 0.3
+        },
+        "config_kmh": {
+            "_comment": "Micro analog of config_kmh [600,200,100]/[30,15,2] (same as files_config/ablations/*/micro/stage_full.json's hierarchy), so the paper-1 SSRAE/VCTex presets and the ablation 'full' rows are the same computation in the micro smoke too.",
+            "n_clusters": [
+                60,
+                20,
+                10
+            ],
+            "n_levels": 3,
+            "sample_sizes": [
+                3,
+                2,
+                2
+            ]
+        },
+        "strategy_args": {
+            "VAAL": {
+                "epochs": 1,
+                "latent_dim": 32,
+                "beta": 1.0,
+                "adversary_param": 1.0,
+                "num_vae_steps": 2,
+                "num_adv_steps": 1,
+                "lr": 0.0005,
+                "image_size": 64
+            }
+        }
+    }
+}

@@ -71,6 +71,11 @@ def _write_results_json(result: RunResult, dir_results: str) -> str:
         "all_recall_macro": result.all_recall_macro,
         "all_f1_macro": result.all_f1_macro,
     }
+    # ADR 0015: strategy-specific per-round reporting (e.g. CEAL's pseudo-labels);
+    # absent for every strategy that reports nothing, so their schema is unchanged.
+    diagnostics = result.strategy.diagnostics()
+    if diagnostics:
+        payload["strategy_diagnostics"] = diagnostics
     json_path = os.path.join(dir_results, "results.json")
     with open(json_path, "w") as f:
         json.dump(payload, f, indent=4)

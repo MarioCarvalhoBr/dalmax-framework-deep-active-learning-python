@@ -17,6 +17,11 @@
   (KI-41, ADR 0014).
 - `params_paper1_micro.json`, `params_paper1_mc_dropout_micro.json`, `params_kmh_micro.json` -- micro mirrors (`n_drop` 2
   in the paper-1 micro files for smoke speed).
+- `params_paper1_vaal.json` / `params_paper1_vaal_micro.json` (ADR 0015) -- `params_paper1(_micro).json` plus an explicit
+  `"strategy_args": {"VAAL": {...}}` block (the defaults; the micro file uses 1 VAE/discriminator epoch instead of 30).
+  The other DeepAL+ ports need no extra keys: `VarRatio`/`MeanSTD` use `params_paper1_mc_dropout(_micro).json`,
+  `KCenterGreedyPCA`/`BadgeSampling`/`CEALSampling`/`LossPredictionLoss`/`WAAL` use `params_paper1(_micro).json`.
+  Not yet referenced by any manifest.
 - Parts `paper1_rerun_a` (24 runs) / `paper1_rerun_b` (39 runs) (ADR 0014): the 21 groups of the seven paper-1
   baselines fixed on 2026-11-11, same ids and results paths as in their first execution; run them after
   `make campaign-archive-superseded` (`COLAB_RUNBOOK.md` section 6d).

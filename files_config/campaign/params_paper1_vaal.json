@@ -1,0 +1,46 @@
+{
+    "_comment": "Paper-1 params for VAAL (ADR 0015): identical to params_paper1.json plus an explicit strategy_args.VAAL block holding the defaults of dalmax.config.schema.VAALArgs (DeepAL+/original VAAL: 30 VAE/discriminator epochs per query over the joint labeled/unlabeled loader, latent 32, beta 1, adversary weight 1, 2 VAE steps and 1 discriminator step per batch, Adam lr 5e-4, images resized 128 -> 64 for the VAE). Spelled out so the per-query cost driver (epochs) is visible; params_paper1.json gives the same computation. The task model is trained exactly as for every other strategy. See .specs/adr/0015-deepalplus-strategies.md.",
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_full/",
+        "n_epoch": 10,
+        "n_drop": 10,
+        "n_classes": 5,
+        "train_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "test_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "optimizer_args": {
+            "lr": 0.05,
+            "momentum": 0.3
+        },
+        "config_kmh": {
+            "n_clusters": [
+                600,
+                200,
+                100
+            ],
+            "n_levels": 3,
+            "sample_sizes": [
+                30,
+                15,
+                2
+            ]
+        },
+        "strategy_args": {
+            "VAAL": {
+                "epochs": 30,
+                "latent_dim": 32,
+                "beta": 1.0,
+                "adversary_param": 1.0,
+                "num_vae_steps": 2,
+                "num_adv_steps": 1,
+                "lr": 0.0005,
+                "image_size": 64
+            }
+        }
+    }
+}

@@ -56,6 +56,15 @@ class Strategy:
         probs = self.net.predict_prob_dropout_split(data, n_drop=n_drop)
         return probs
 
+    def diagnostics(self) -> dict[str, list[Any]]:
+        """Per-round, strategy-specific values to report in `results.json` under
+        `strategy_diagnostics` (ADR 0015; e.g. `CEALSampling`'s pseudo-label counts).
+
+        Reporting only: nothing here may feed selection or training. Default: none,
+        and `results.json` then has no `strategy_diagnostics` key at all.
+        """
+        return {}
+
     def get_embeddings(self, data):
         self.logger.warning("Getting embeddings with the DAL strategy")
         embeddings = self.net.get_embeddings(data)

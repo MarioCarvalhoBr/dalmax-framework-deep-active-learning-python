@@ -89,6 +89,9 @@ class _FakeStrategy:
     def update(self, pos_idxs, neg_idxs=None) -> None:
         raise AssertionError("strategy.update() must not be called when n_round=0")
 
+    def diagnostics(self) -> dict:
+        return {}  # `Strategy.diagnostics` default (ADR 0015): nothing to report
+
     def save_model(self, dir_results: str, *, model_name, class_names, img_size, extra=None) -> None:
         self.net.save_model(
             dir_results + "/saved_model.pth",

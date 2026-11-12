@@ -7,7 +7,9 @@ module. It only adds backward-compatible, optional keys per dataset:
 `"embedding"` and `"selection"` (see `.specs/architecture/target-architecture.md`
 §2 and `.specs/architecture/refactor-plan.md` Phase 2, item 1), and
 `"model_args"` (ADR 0014: model constructor arguments, today only
-`{"dropout_p": <float in [0, 1)>}`; absent = the model class's own defaults).
+`{"dropout_p": <float in [0, 1)>}`; absent = the model class's own defaults), and
+`"strategy_args"` (ADR 0015: per-strategy hyperparameters, one optional sub-block per
+strategy name, e.g. `{"VAAL": {"epochs": 30}}`; absent = `StrategyArgs()` defaults).
 
 Backward-compatibility rule
 ----------------------------
@@ -38,6 +40,7 @@ from typing import Any
 import torch
 
 from dalmax.config.schema import (
+    STRATEGY_ARGS_KEYS,
     ConfigError,
     DatasetConfig,
     EmbeddingConfig,
@@ -46,6 +49,7 @@ from dalmax.config.schema import (
     ModelArgs,
     OptimizerArgs,
     SelectionConfig,
+    StrategyArgs,
     TrainArgs,
 )
 
@@ -186,6 +190,67 @@ def _build_model_args(d: Any, context: str) -> ModelArgs:
     return ModelArgs(dropout_p=None if dropout_p is None else float(dropout_p))
 
 
+def _parse_typed_value(value: Any, default: Any, key: str) -> Any:
+    """Coerce a JSON value to the type of the dataclass field's default, failing fast.
+
+    `int` fields take integers only, `float` fields take any number, `str` fields
+    take strings only; booleans are never numbers here.
+    """
+    if isinstance(default, bool) or isinstance(value, bool):
+        raise ConfigError(f"{key} must be a {type(default).__name__}, got {value!r}")
+    if isinstance(default, int):
+        return _as_int(value, key)
+    if isinstance(default, float):
+        if not isinstance(value, (int, float)):
+            raise ConfigError(f"{key} must be a number, got {value!r}")
+        return float(value)
+    if isinstance(default, str):
+        if not isinstance(value, str):
+            raise ConfigError(f"{key} must be a string, got {value!r}")
+        return value
+    raise ConfigError(f"{key}: unsupported field type {type(default).__name__}")
+
+
+def _build_args_block(block_cls: type, d: Any, context: str) -> Any:
+    """Build one `StrategyArgs` sub-dataclass from its JSON object (absent keys keep
+    their defaults; unknown keys, `_comment`-style keys excepted, are rejected)."""
+    if not isinstance(d, dict):
+        raise ConfigError(f"{context} must be a JSON object, got {d!r}")
+    defaults = block_cls()
+    valid = [f.name for f in dataclasses.fields(block_cls)]
+    unknown = sorted(k for k in d if k not in valid and not str(k).startswith("_"))
+    if unknown:
+        raise ConfigError(f"{context}: unknown key(s) {unknown}; valid keys: {valid}")
+    values = {
+        name: _parse_typed_value(d[name], getattr(defaults, name), f"{context}.{name}")
+        for name in valid
+        if name in d
+    }
+    return block_cls(**values)
+
+
+def _build_strategy_args(d: Any, context: str) -> StrategyArgs:
+    """Parse the optional `"strategy_args"` block (ADR 0015), keyed by strategy name."""
+    if d is None:
+        return StrategyArgs()
+    if not isinstance(d, dict):
+        raise ConfigError(f"{context} must be a JSON object, got {d!r}")
+    unknown = sorted(k for k in d if k not in STRATEGY_ARGS_KEYS and not str(k).startswith("_"))
+    if unknown:
+        raise ConfigError(
+            f"{context}: unknown strategy name(s) {unknown}; valid: {sorted(STRATEGY_ARGS_KEYS)}"
+        )
+    field_types = {f.name: f.default_factory for f in dataclasses.fields(StrategyArgs)}
+    blocks = {
+        STRATEGY_ARGS_KEYS[name]: _build_args_block(
+            field_types[STRATEGY_ARGS_KEYS[name]], d[name], f"{context}.{name}"
+        )
+        for name in STRATEGY_ARGS_KEYS
+        if name in d
+    }
+    return StrategyArgs(**blocks)
+
+
 def _resolve_device(device: str) -> str:
     if device == "auto":
         return "cuda" if torch.cuda.is_available() else "cpu"
@@ -257,6 +322,9 @@ def load_experiment_config(
     embedding = _build_embedding_config(dataset_dict.get("embedding"))
     selection = _build_selection_config(dataset_dict, context)
     model_args = _build_model_args(dataset_dict.get("model_args"), f"{context}.model_args")
+    strategy_args = _build_strategy_args(
+        dataset_dict.get("strategy_args"), f"{context}.strategy_args"
+    )
 
     dataset_config = DatasetConfig(
         name=dataset_name,
@@ -270,6 +338,7 @@ def load_experiment_config(
         embedding=embedding,
         selection=selection,
         model_args=model_args,
+        strategy_args=strategy_args,
     )
 
     return ExperimentConfig(
