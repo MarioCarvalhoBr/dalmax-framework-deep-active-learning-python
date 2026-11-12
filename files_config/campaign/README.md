@@ -8,8 +8,11 @@ earlier). See `.specs/experiments/campaign.md` and `COLAB_RUNBOOK.md` section 6.
 - `manifest.json` -- the single source of truth for the campaign: run groups (one distinct computation each), aliases
   (same computation, different spelling), per-paper tables, the GPU part of every group (`gpu_part`, `gpu_stage`), the
   per-leaf required files (`required_leaf_files`: `round_predictions.json`, `round_queries.json`) and the GPU-time
-  estimate table it uses (`gpu_time_estimates`). Results under `results/campaign_fixed/`. 294 runs / 98 groups:
-  paper 1 = 20 strategies (12 classical + 8 DeepAL+ of ADR 0015) + KMH x nq {10,50,100} + the upper bound; papers 2/3 =
+  estimate table it uses (`gpu_time_estimates`). Results under `results/campaign_fixed/`. 297 runs / 99 groups:
+  paper 1 = 20 strategies (12 classical + 8 DeepAL+ of ADR 0015) + KMH x nq {10,50,100} + the upper bound; the paper-1
+  control part `paper1_control` = `WAALRandomQuery` at nq100 (3 runs, `p1_control/WAALRandomQuery/nq100`, WAAL's
+  training with a uniform random query, its own table `paper1_waal_control_nq100` with WAAL and RandomSampling, never a
+  row or `best_of` candidate of the benchmark tables; ADR 0015 amendment of 2026-11-12); papers 2/3 =
   `rnhal`, `texhal`, `texhal_q17`, `hier_transfer`. **Generated**: edit `scripts/campaign/build_manifest.py` and run
   `make campaign-manifest` (`tests/test_campaign.py` and `build_manifest.py --check` fail if a committed file drifts).
 - `manifest_kmh_sweep.json` -- the paper-1 KMH sweep (ADR 0012), 165 runs / 55 groups, results under
@@ -20,7 +23,8 @@ earlier). See `.specs/experiments/campaign.md` and `COLAB_RUNBOOK.md` section 6.
 - `manifest_control_ki43.json` -- KI-43 control (prepared, not run): RandomSampling nq100 into
   `results/campaign_control_fixed/`.
 - `gpu_time_estimates.json` -- estimated GPU seconds per run of every group of the two full-scale manifests
-  (`measured` on the first campaign, or `estimate` with its rule for the eight DeepAL+ strategies); built by
+  (`measured` on the first campaign, or `estimate` with its rule for the eight DeepAL+ strategies and the WAAL
+  control, which is estimated equal to `WAAL`); built by
   `scripts/campaign/build_gpu_time_estimates.py` (`make gpu-time-estimates`, read-only on the old trees). Used by
   `campaign list` (hours per part / GPU part) and by the balance test. No GPU model is named.
 
@@ -28,7 +32,8 @@ Params (full scale on `DATA/daninhas_full_fixed/`; the `_micro` mirrors on `DATA
 paper-1 micro files for smoke speed):
 
 - `params_paper1.json` -- DANINHAS reference params (n_epoch 10, batch 256, lr 0.05, momentum 0.3, `config_kmh`
-  reference hierarchy); used by every paper-1 strategy except the dropout family and VAAL, by the upper bound and by
+  reference hierarchy); used by every paper-1 strategy except the dropout family and VAAL, by the WAAL control
+  (the same file as `WAAL`, whose `strategy_args.WAAL` block it reads), by the upper bound and by
   `make lab-check`/`colab-check` (SSRAEKmeansHCSampling reads `config_kmh`; the other strategies ignore it).
 - `params_paper1_mc_dropout.json` -- `params_paper1.json` plus `"model_args": {"dropout_p": 0.5}` (a dropout layer
   before the ResNet-50 classifier, KI-41, ADR 0014); used by the dropout family: `LeastConfidenceDropout`,
@@ -41,10 +46,12 @@ paper-1 micro files for smoke speed):
   (paper 1), which are also papers 2/3's "w/o representation module" row.
 
 GPU parts (ADR 0016): `part_1_gpu` (account A: paper 1 at nq100, the upper bound, every ablation part, KMH sweep nq100
-and nq50; 282 runs, about 47.6 estimated GPU h) and `part_2_gpu` (account B: paper 1 at nq50 and nq10, KMH sweep nq10;
+and nq50, the WAAL control; 285 runs, about 49.9 estimated GPU h) and `part_2_gpu` (account B: paper 1 at nq50 and
+nq10, KMH sweep nq10;
 177 runs, about 48.8 h). `make campaign-run-gpu-part GPU_PART=...` runs both manifests for one part in stage order
-(cheap groups, ablations, KMH sweep, then `AdversarialBIM`, `VAAL`/`WAAL`, `AdversarialDeepFool`); run
-`make campaign-pilot GPU_PART=...` first (seed 1 of the part's VAAL/WAAL groups + RandomSampling) and read
+(cheap groups, ablations, KMH sweep, then `AdversarialBIM`, `VAAL`/`WAAL`/the WAAL control, `AdversarialDeepFool`);
+run `make campaign-pilot GPU_PART=...` first (seed 1 of the part's VAAL/WAAL groups + RandomSampling; not the
+control) and read
 `make campaign-pilot-report GPU_PART=...`. The three groups `shared/kmh_nq100`, `p1/KMH/nq50`, `p1/KMH/nq10` of the
 main manifest repeat the sweep's `kmh/nq{100,50,10}/hier_L3_ref` on purpose (ADR 0016 amendment).
 

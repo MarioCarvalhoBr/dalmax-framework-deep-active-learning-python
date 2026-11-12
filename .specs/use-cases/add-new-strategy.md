@@ -126,6 +126,20 @@ Unchanged in spirit since Phase 2, with paths updated for the Phase 4 package mo
    `pool_order_fraction` (the KI-45 pool-order signature) and a statistic that would expose your score collapsing
    (score std / number of distinct scores, a discriminator AUC, a correlation with the target). Rank the final scores
    with `ranking.rank_descending`/`rank_ascending` and a seeded generator, never a plain stable argsort.
+   **A control of an existing method** (2026-11-12; the method's training or scoring with another query, to
+   separate one effect from another; `WAALRandomQuery` is the example) is registered in
+   `CONTROL_STRATEGY_REGISTRY` / `CONTROL_STRATEGY_KWARGS` (same factory signature as the DeepAL+ ports), never in
+   the benchmark families. Reuse the method's code through a shared base class instead of copying it
+   (`waal.py::WAALTrainedStrategy` holds WAAL's training and critic diagnostics; `WAAL` and `WAALRandomQuery` differ
+   only in `query()`); give the control the method's own trainer tag and `strategy_args` block (map it in
+   `dalmax/config/schema.py::STRATEGY_ARGS_READ_BY`, not `STRATEGY_ARGS_KEYS`, so it has no block of its own and
+   cannot drift; the campaign signature reads `STRATEGY_ARGS_READ_BY`); give the new query its own tag; keep any
+   generator consumption of the shared code identical (the control still runs WAAL's reporting-only critic
+   evaluation, so WAAL's trainer generator advances equally); state in the docstring exactly what is and is not
+   shared; and test that for one seed the control reproduces the method's round-0 model. In a campaign manifest a
+   control gets its own semantic part and table (`paper1_control`, `paper1_waal_control_nq100`), never a row or a
+   `best_of` candidate of the benchmark tables (`scripts/campaign/build_manifest.py`), plus a GPU-time estimate
+   (`scripts/campaign/build_gpu_time_estimates.py::ESTIMATE_RULES`).
 6. Add a test asserting `dalmax.query_strategies.registry.build_strategy("<NewStrategyClass>", ...)`
    resolves without error — see `tests/test_strategy_registry.py` for the pattern (stub
    dataset/net, no real training). `tests/test_registry.py`/`tests/test_strategy_registry.py` parse
@@ -157,3 +171,7 @@ ratio, needs `model_args.dropout_p`), `MeanSTD` (MC-dropout mean per-class std, 
 `KCenterGreedyPCA`, `BadgeSampling`, `CEALSampling`, `LossPredictionLoss` (own trainer), `VAAL` (VAE +
 discriminator trained per query), `WAAL` (own min-max trainer). Not ported: DeepAL+'s `KMeansSamplingGPU`
 (same method as `KMeansSampling` with faiss GPU k-means; a GPU-only dependency and no new method).
+
+Controls (2026-11-12, ADR 0015 amendment; `CONTROL_STRATEGY_REGISTRY`, not benchmark strategies): `WAALRandomQuery`
+(WAAL's training unchanged, reading the `strategy_args.WAAL` block, query = uniform random draw from the unlabeled pool
+with `derive_seed(seed, "waal_random_query")`; campaign part `paper1_control`, nq100 only).

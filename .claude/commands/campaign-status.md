@@ -11,9 +11,9 @@ runs training and never writes under `results/`. Since ADR 0016 the manifests de
 Steps:
 
 1. `poetry run python -m dalmax.campaign list --manifest $M --part <part>` -- the expected job table, the counts and
-   the estimated GPU hours (full scale: main 294 runs / 98 groups: `paper1` 189, `upper_bound` 3, `rnhal` 42,
-   `texhal` 30, `texhal_q17` 18, `hier_transfer` 12; KMH sweep 165 / 55; GPU parts `part_1_gpu` 282 runs,
-   `part_2_gpu` 177 runs).
+   the estimated GPU hours (full scale: main 297 runs / 99 groups: `paper1` 189, `paper1_control` 3 (the WAAL
+   control `WAALRandomQuery`), `upper_bound` 3, `rnhal` 42, `texhal` 30, `texhal_q17` 18, `hier_transfer` 12; KMH
+   sweep 165 / 55; GPU parts `part_1_gpu` 285 runs, `part_2_gpu` 177 runs).
 2. `poetry run python -m dalmax.campaign verify --manifest $M --part <part>` -- per job OK / INCOMPLETE / MISSING
    (`dalmax/reporting/leaf_check.py` artifact and integrity check: a truncated/empty file shows as
    `INCOMPLETE ... (integrity: ...)`), the code-version audit (distinct `git_commit` of the OK leaves; WARN on more

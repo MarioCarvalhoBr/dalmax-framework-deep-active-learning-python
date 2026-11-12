@@ -357,6 +357,11 @@
    "runs": 3,
    "from_campaign_log": 3
   },
+  "p1_control/WAALRandomQuery/nq100": {
+   "seconds_per_run": 2700,
+   "basis": "estimate",
+   "rule": "equal to WAAL (same training; the random query is negligible)"
+  },
   "p1/upper_bound": {
    "seconds_per_run": 51,
    "basis": "measured",

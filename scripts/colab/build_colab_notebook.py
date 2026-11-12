@@ -46,11 +46,15 @@ from dalmax.campaign import (  # noqa: E402
 OUT = "notebooks/colab_runbook.ipynb"
 MANIFESTS = ("files_config/campaign/manifest.json", "files_config/campaign/manifest_kmh_sweep.json")
 REPO_URL = "https://github.com/MarioCarvalhoBr/dalmax-framework-deep-active-learning-python.git"
-DEFAULT_GIT_REF = "campaign-fixed-v1"  # the tag both accounts check out for the whole campaign
+# The tag both accounts check out for the whole campaign. v2 (2026-11-12) = v1 + the WAAL control
+# `WAALRandomQuery` and the `daninhas_full_fixed` metadata layout (logs/); v1 predates both.
+DEFAULT_GIT_REF = "campaign-fixed-v2"
 RUN_EXIT_FILE = "/content/campaign_run_exit_code"  # local runtime disk, not the repo or Drive
 DRIVE_ROOT_PLACEHOLDER = "/content/drive/MyDrive/<FOLDER_THAT_HOLDS_DATA>"
 DATASET = "daninhas_full_fixed"
-DATASET_FILES = 8240  # 7,230 train + 1,008 test images + MANIFEST.csv + README.txt (scripts/colab/setup_colab.sh)
+# Images per split of daninhas_full_fixed (scripts/colab/setup_colab.sh checks the same counts); the folder also
+# holds README.txt, MANIFEST.csv and logs/ (2 files), which `make dataset-check` verifies against the images.
+DATASET_SPLIT_IMAGES: dict[str, int] = {"train": 7230, "test": 1008}
 
 
 def expected_counts() -> dict[str, tuple[int, int]]:
@@ -61,6 +65,15 @@ def expected_counts() -> dict[str, tuple[int, int]]:
         jobs = [j for seg in plan_jobs(manifests, parse_selection(gpu_part)) for j in seg.jobs]
         counts[gpu_part] = (len(jobs), len({j.group.id for j in jobs}))
     return counts
+
+
+def manifest_totals() -> list[tuple[int, int]]:
+    """`(runs, run groups)` of each manifest of `MANIFESTS`, every group and seed."""
+    totals = []
+    for path in MANIFESTS:
+        groups = load_manifest(REPO_ROOT / path, validate=False).groups
+        totals.append((sum(len(g.seeds) for g in groups), len(groups)))
+    return totals
 
 
 def results_roots() -> list[str]:
@@ -92,6 +105,7 @@ def code(text: str) -> dict[str, Any]:
 def cells() -> list[dict[str, Any]]:
     expected = expected_counts()
     roots = results_roots()
+    (main_runs, main_groups), (sweep_runs, sweep_groups) = manifest_totals()
     pilot = pilot_hours()
     part1, part2 = GPU_PARTS
     expected_literal = "{" + ", ".join(f'"{p}": {expected[p]}' for p in GPU_PARTS) + "}"
@@ -132,7 +146,7 @@ def cells() -> list[dict[str, Any]]:
             EXPECTED = {expected_literal}  # (runs, run groups)
             RESULTS_ROOTS = {roots!r}
             DATASET = "{DATASET}"
-            DATASET_FILES = {DATASET_FILES}
+            DATASET_SPLIT_IMAGES = {DATASET_SPLIT_IMAGES!r}  # images per split
 
             # --- gate: fail fast on a wrong value ---
             if GPU_PART not in EXPECTED:
@@ -267,9 +281,11 @@ def cells() -> list[dict[str, Any]]:
             ## 4. Dataset and results/ (Drive)
 
             `make colab-setup` runs `scripts/colab/setup_colab.sh`: it builds `{DATASET}.zip` on Drive on the
-            first session only, unzips it onto the local runtime disk, checks the file count ({DATASET_FILES})
-            and that no MD5 repeats (`scripts/datasets/build_daninhas_full_fixed.py --check`), and symlinks
-            `results/` to `$DRIVE_ROOT/results`. Idempotent. See `COLAB_RUNBOOK.md` section 4.
+            first session only, unzips it onto the local runtime disk, checks the image count per split
+            ({DATASET_SPLIT_IMAGES["train"]} train, {DATASET_SPLIT_IMAGES["test"]} test), that the files on disk are
+            exactly the rows of its `MANIFEST.csv` (name and MD5) and that no MD5 repeats
+            (`scripts/datasets/build_daninhas_full_fixed.py --check`), and symlinks `results/` to
+            `$DRIVE_ROOT/results`. Idempotent. See `COLAB_RUNBOOK.md` section 4.
             """),
         code('''
             import subprocess
@@ -279,12 +295,14 @@ def cells() -> list[dict[str, Any]]:
         code('''
             import subprocess
 
-            # Gate: the local dataset copy is the canonical one.
-            n_files = sum(len(files) for _, _, files in os.walk(f"{REPO_DIR}/DATA/{DATASET}"))
-            if n_files != DATASET_FILES:
-                raise RuntimeError(f"DATA/{DATASET} has {n_files} files, expected {DATASET_FILES}")
+            # Gate: the local dataset copy is the canonical one (images per split, then disk == MANIFEST.csv,
+            # the metadata layout and no repeated MD5).
+            for split, expected_images in DATASET_SPLIT_IMAGES.items():
+                n_images = sum(len(files) for _, _, files in os.walk(f"{REPO_DIR}/DATA/{DATASET}/{split}"))
+                if n_images != expected_images:
+                    raise RuntimeError(f"DATA/{DATASET}/{split} has {n_images} files, expected {expected_images}")
             subprocess.run(["make", "dataset-check"], cwd=REPO_DIR, check=True)
-            print(f"DATA/{DATASET}: {n_files} files, no repeated MD5")
+            print(f"DATA/{DATASET}: {DATASET_SPLIT_IMAGES} images, matches MANIFEST.csv, no repeated MD5")
             '''),
         md("""
             ## 5. Sanity checks
@@ -330,9 +348,11 @@ def cells() -> list[dict[str, Any]]:
         md(f"""
             ## 6. The clean campaign on `{DATASET}` (ADR 0016)
 
-            Everything the three papers need, re-run on the duplicate-free dataset: 459 runs / 153 run groups over
-            two manifests (main campaign 294 / 98 into `{roots[0]}/`, KMH sweep 165 / 55 into `{roots[1]}/`),
-            split into two GPU parts of about equal estimated GPU time, one per Colab account:
+            Everything the three papers need, re-run on the duplicate-free dataset: {main_runs + sweep_runs} runs /
+            {main_groups + sweep_groups} run groups over two manifests (main campaign {main_runs} / {main_groups} into
+            `{roots[0]}/`, including the 3 runs of the WAAL control `WAALRandomQuery`; KMH sweep {sweep_runs} /
+            {sweep_groups} into `{roots[1]}/`), split into two GPU parts of about equal estimated GPU time, one per
+            Colab account:
 
             | GPU part | Account | Runs | Run groups |
             |---|---|---|---|
@@ -340,7 +360,7 @@ def cells() -> list[dict[str, Any]]:
             | `{part2}` | B | {expected[part2][0]} | {expected[part2][1]} |
 
             Inside a part the order is: cheap paper-1 groups, the ablations, the KMH sweep, then the long baselines
-            (`AdversarialBIM`, `VAAL`/`WAAL`, `AdversarialDeepFool`) last. Re-running the run cell resumes (complete
+            (`AdversarialBIM`, `VAAL`/`WAAL` and the WAAL control, `AdversarialDeepFool`) last. Re-running the run cell resumes (complete
             leaves are skipped). Estimated hours per part: printed by the list cell. Before the full run: the pre-run
             gate (job count, no leaf of the other part, free Drive space for the remaining runs: about 96 MB per run
             plus 20%), then the **pilot** (seed 1 of this part's `VAAL` and `WAAL` groups at its largest budget and one

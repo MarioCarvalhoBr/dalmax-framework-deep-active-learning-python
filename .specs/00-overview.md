@@ -91,9 +91,10 @@ distinct from "hierarchical" and matters for the ablation in
 - **Clean re-run prepared (2026-11-11, ADR 0016, not executed)**: the first campaign's dataset `DATA/daninhas_full` has
   byte-identical duplicates inside and across train and test (KI-46: 171 distinct images in both splits). Author
   decision: EVERYTHING is re-run on the duplicate-free `DATA/daninhas_full_fixed` (7,230 train / 1,008 test), with the
-  eight DeepAL+ strategies of ADR 0015 added to paper 1 (20 strategies + KMH x 3 budgets): main manifest 294 runs + KMH
+  eight DeepAL+ strategies of ADR 0015 added to paper 1 (20 strategies + KMH x 3 budgets) and, since 2026-11-12, the
+  WAAL training-budget control `WAALRandomQuery` at nq100 (3 runs, a separate control row): main manifest 297 runs + KMH
   sweep 165 runs into `results/campaign_fixed/` and `results/campaign_kmh_fixed/`, split into two GPU parts for two
-  Colab accounts (about 96 estimated GPU hours in total; `COLAB_RUNBOOK.md` section 6). Every number in the next bullet
+  Colab accounts (about 99 estimated GPU hours in total; `COLAB_RUNBOOK.md` section 6). Every number in the next bullet
   is history of the first campaign and is superseded for the papers by this re-run.
 - **Pre-flight fix KI-47 (2026-11-12, ADR 0016 amendment)**: the loaders listed each class folder in file-system order,
   which differed between Colab sessions, so in the first campaign the same seed started from other images in each

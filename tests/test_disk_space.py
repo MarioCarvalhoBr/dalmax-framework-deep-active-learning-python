@@ -14,7 +14,7 @@ from dalmax.experiment import disk_space as D
 def test_required_bytes_is_runs_times_size_times_margin() -> None:
     assert D.required_bytes(0) == 0
     assert D.required_bytes(10, run_bytes=100, margin=1.2) == 1200
-    assert D.required_bytes(282) == int(282 * D.RUN_DISK_BYTES * D.DISK_MARGIN)
+    assert D.required_bytes(285) == int(285 * D.RUN_DISK_BYTES * D.DISK_MARGIN)  # part_1_gpu
 
 
 def test_free_bytes_of_a_root_that_does_not_exist_yet(tmp_path: Path) -> None:

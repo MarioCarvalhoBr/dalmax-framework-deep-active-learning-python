@@ -188,3 +188,38 @@ A second pre-flight audit found four gaps, each reproduced by execution, closed 
 11. **Pinned ref.** The notebook checks out `GIT_REF` (default tag `campaign-fixed-v1`) detached on every session
     instead of `git pull --ff-only origin main`, prints the resolved commit, and its run cell prints a non-zero exit of
     `make campaign-run-gpu-part`, re-runs the space check (exit 4 = Drive short) and points to both logs.
+
+### Third change set (2026-11-12, author decisions, before any run): the WAAL control and the dataset metadata layout
+
+12. **WAAL control** (ADR 0015 amendment of 2026-11-12). The main manifest gains one group,
+    `p1_control/WAALRandomQuery/nq100` (seeds 1-3, `params_paper1.json`, leaves under
+    `results/campaign_fixed/paper1/control_nq100/`), in a new semantic part `paper1_control` (executed right after
+    `paper1_nq100` in the semantic order), `gpu_part` `part_1_gpu`, `gpu_stage` 5 (with VAAL/WAAL), GPU-time estimate
+    equal to WAAL (2,700 s per run, rule in `build_gpu_time_estimates.py`). It is a control, not a 21st benchmark
+    strategy: it has its own table `paper1_waal_control_nq100` (WAAL, the control, RandomSampling, all at nq100), is no
+    row of `paper1_nq{10,50,100}` and no `best_of` candidate (tested). Chosen over a flag on the group because the
+    semantic part is what every existing consumer already groups by (`campaign list` totals, `--part`, the reports'
+    tables), so no consumer can count it as a benchmark strategy by accident, while a flag would have to be honoured by
+    each consumer. Not in the pilot. New totals: main manifest **297 runs / 99 groups**, both manifests **462 runs /
+    154 groups**, `part_1_gpu` **285 runs / 95 groups, 49.9 estimated GPU h** (`part_2_gpu` unchanged: 177 / 59, 48.8
+    h; 98.7 h in total; Drive gate for a fresh `part_1_gpu` 32.8 GB; checkpoints about 44 GB over both parts).
+    `make campaign-verify-all` now expects `OK=462`. The notebook pins `GIT_REF` default `campaign-fixed-v2` (the tag
+    the author creates on the merge commit; `campaign-fixed-v1` predates this change set) and computes its section-6
+    totals from the manifests.
+13. **Dataset metadata layout** (author instruction; KI-49). `DATA/daninhas_full_fixed/` keeps `train/` and `test/`
+    unchanged; the top-level `README.txt` describes the dataset as it is (identity rule, counts per split and class,
+    how to verify; no source counts) and `MANIFEST.csv` has `split,class,file,md5` only; the provenance moves to
+    `logs/build_history.txt` (builder, exclusion list with its rows, and the previous README text word for word: source
+    file count, what was removed and why) and `logs/source_manifest.csv` (the previous `MANIFEST.csv` byte for byte).
+    8,242 files instead of 8,240. All four files are deterministic functions of the build data, so a fresh build and a
+    migrated folder are byte-identical (tested on a synthetic source with the builder of commit c7d2e9a). `--check` also
+    requires the layout and the files on disk equal to the rows of `MANIFEST.csv` (name and MD5), which the Colab check
+    lacked; the Colab setup and the notebook check the images per split (7,230 / 1,008) instead of a total file count
+    and refuse a Drive zip without `logs/`. The existing folder is converted once by the author with
+    `build_daninhas_full_fixed.py --migrate-metadata` (`--dry-run` first): it verifies that the image files are exactly
+    the rows of the old manifest and that the old `MANIFEST.csv`/`README.txt` are the builder's own output, aborts
+    without writing otherwise, never touches an image, writes `logs/` first (through a temporary folder), then the two
+    top-level files (atomic replaces), re-runs `--check`, and writes nothing on a second call (`logs/` exists).
+    One-off exception to `DATA/` immutability recorded in `.claude/rules/data-safety.md`. Run identity is unchanged:
+    loaders, `data_order` (train `805314e2dae2`, test `17ac35b4b1b3`, recomputed read-only on 2026-11-12) and cache keys
+    read only the paths under `train/` and `test/`.

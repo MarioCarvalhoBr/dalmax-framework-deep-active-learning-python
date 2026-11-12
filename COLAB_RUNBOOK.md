@@ -48,13 +48,13 @@ uses a **hybrid layout**, decided as follows:
   ephemeral `/content` disk. This is what makes relaunching a batch after a
   disconnect cheap (see §6's skip-existing behavior) rather than starting
   over.
-- **Dataset transfer avoids reading `daninhas_full_fixed`'s 8,240 individual
+- **Dataset transfer avoids reading `daninhas_full_fixed`'s 8,242 individual
   files through Drive's FUSE mount** (a well-known slow path — one-file-at-
   a-time I/O over a network filesystem). Instead: the first Colab session
   builds `daninhas_full_fixed.zip` from the Drive folder and stores the zip back
   on Drive (`$DRIVE_ROOT/DATA/daninhas_full_fixed.zip`); every later
   session copies that single zip to `/content` and unzips it locally in
-  seconds, then checks the file count and that no MD5 repeats. `scripts/colab/setup_colab.sh` (§4 below) implements this and is
+  seconds, then checks the images per split and the files against `MANIFEST.csv` (no MD5 repeats). `scripts/colab/setup_colab.sh` (§4 below) implements this and is
   idempotent — safe to re-run every session.
 
 This is all wired up by `make colab-setup` (§4) — you don't need to build
@@ -102,8 +102,9 @@ contains spaces):
 ```python
 !ls "$DRIVE_ROOT/DATA/daninhas_full_fixed" | head
 ```
-Expect `MANIFEST.csv`, `README.txt`, `test`, `train`. If this path doesn't exist, stop and
-upload the folder first (section 6, step 1) — every later step assumes it.
+Expect `MANIFEST.csv`, `README.txt`, `logs`, `test`, `train` (the metadata layout of 2026-11-12; a folder
+without `logs` is the previous layout and fails the setup's check: migrate it first, section 6, step 1). If this
+path doesn't exist, stop and upload the folder first (section 6, step 1) — every later step assumes it.
 
 ---
 
@@ -119,12 +120,13 @@ disk, not Drive, per the architecture decision above):
 
 Then, on **every** session (fresh clone or a still-alive runtime), check out the campaign's pinned ref
 detached instead of pulling a branch (since 2026-11-12; `GIT_REF` in the notebook's Parameters cell,
-default the tag `campaign-fixed-v1`), so a push during the campaign never reaches a session:
+default the tag `campaign-fixed-v2`; `campaign-fixed-v1` predates the WAAL control and the dataset's metadata
+layout and must not be used), so a push during the campaign never reaches a session:
 ```python
 %cd /content/dalmax
 !git status --porcelain --untracked-files=no   # must print nothing (the notebook raises otherwise)
 !git fetch --tags origin
-!git checkout --detach campaign-fixed-v1
+!git checkout --detach campaign-fixed-v2
 !git rev-parse HEAD                             # the commit every run records as git_commit
 ```
 
@@ -186,13 +188,17 @@ This runs `scripts/colab/setup_colab.sh`, which:
 3. **First session only**: builds `daninhas_full_fixed.zip` from the Drive
    dataset folder and stores it back on Drive
    (`$DRIVE_ROOT/DATA/daninhas_full_fixed.zip`) — slower this one time, since it
-   reads the 8,240 files through Drive's FUSE mount to build the zip.
-   **Later sessions reuse this zip** and skip straight to the fast path.
+   reads the 8,242 files through Drive's FUSE mount to build the zip (`logs/` included).
+   **Later sessions reuse this zip** and skip straight to the fast path; a zip without
+   `daninhas_full_fixed/logs/build_history.txt` predates the metadata layout and is refused
+   (delete it so the next run rebuilds it from the migrated folder).
 4. Copies the zip to `/content` and unzips it into this repo's
    `DATA/daninhas_full_fixed/` (local disk, fast reads for training).
-5. Verifies the local file count is exactly `8240` (7,230 train + 1,008 test images + `MANIFEST.csv` +
-   `README.txt`) and runs `scripts/datasets/build_daninhas_full_fixed.py --check` (no MD5 repeated inside or
-   across the splits); fails loudly otherwise (a stale Drive zip: delete it so the next run rebuilds it).
+5. Verifies the local image counts are exactly 7,230 (`train/`) and 1,008 (`test/`) and runs
+   `scripts/datasets/build_daninhas_full_fixed.py --check`: the files on disk are exactly the rows of
+   `MANIFEST.csv` (name and MD5, so a corrupted or incomplete upload is caught), the metadata layout
+   (`README.txt`, `MANIFEST.csv`, `logs/build_history.txt`, `logs/source_manifest.csv`) and no MD5 repeated
+   inside or across the splits; fails loudly otherwise (a stale Drive zip: delete it so the next run rebuilds it).
 6. Symlinks `results/` in the repo to `$DRIVE_ROOT/results` — refuses
    (rather than clobbering) if a real, non-empty `results/` directory
    already exists locally.
@@ -201,7 +207,7 @@ Expected output ends with something like:
 ```
 ============================================================
 Setup complete.
-  DATA/daninhas_full_fixed: 8240 files, duplicate check OK (local disk, fast reads)
+  DATA/daninhas_full_fixed: 7230 train + 1008 test images, matches MANIFEST.csv, no repeated MD5 (local disk)
   results/ -> <DRIVE_ROOT>/results (Drive, persists across disconnects)
 ============================================================
 ```
@@ -258,59 +264,67 @@ Only proceed to §6 (the campaign) once all of the above pass.
 ## 6. The clean campaign on `daninhas_full_fixed` (ADR 0016): two accounts, one GPU part each
 
 **Prepared 2026-11-11, not executed.** Everything the three papers need is re-run on the duplicate-free dataset
-(KI-46), no old result reused: the main manifest (`files_config/campaign/manifest.json`, 294 runs / 98 groups: paper 1
-= 20 strategies + KMH x n_query {10,50,100} + the upper bound; papers 2/3 ablations) and the KMH sweep
-(`manifest_kmh_sweep.json`, 165 runs / 55 groups), **459 runs**, into the NEW trees `results/campaign_fixed/` and
+(KI-46), no old result reused: the main manifest (`files_config/campaign/manifest.json`, 297 runs / 99 groups: paper 1
+= 20 strategies + KMH x n_query {10,50,100} + the upper bound, plus the WAAL control `WAALRandomQuery` at nq100, 3
+runs, part `paper1_control`, a control row of its own and not a 21st benchmark strategy; papers 2/3 ablations) and the
+KMH sweep (`manifest_kmh_sweep.json`, 165 runs / 55 groups), **462 runs**, into the NEW trees `results/campaign_fixed/` and
 `results/campaign_kmh_fixed/`. See [`.specs/experiments/campaign.md`](.specs/experiments/campaign.md) and ADR 0016.
 The work is split into two GPU parts of about equal estimated GPU time, one per Colab account, run at the same time:
 
 | Account | `GPU_PART` | Content | Runs / groups | Est. GPU h | Checkpoints |
 |---|---|---|---|---|---|
-| A | `part_1_gpu` | paper 1 at nq100 (with the shared runs), the upper bound, all papers 2/3 ablations, KMH sweep nq100 + nq50 | 282 / 94 | 47.6 | about 27 GB (gate: 32.5 GB free) |
+| A | `part_1_gpu` | paper 1 at nq100 (with the shared runs and the WAAL control), the upper bound, all papers 2/3 ablations, KMH sweep nq100 + nq50 | 285 / 95 | 49.9 | about 27 GB (gate: 32.8 GB free) |
 | B | `part_2_gpu` | paper 1 at nq50 and nq10, KMH sweep nq10 | 177 / 59 | 48.8 | about 17 GB (gate: 20.4 GB free) |
 
 Estimates: `files_config/campaign/gpu_time_estimates.json` (measured on the first campaign, on its GPU class and its
-larger dataset; the eight new strategies are rule-based estimates, `VAAL`/`WAAL` from FLOP counts), so expect the real
+larger dataset; the eight new strategies and the WAAL control are rule-based estimates, `VAAL`/`WAAL` from FLOP
+counts, the control equal to `WAAL`), so expect the real
 hours to differ, possibly on the low side for the measured groups (`CEALSampling` is estimated at 3x a plain run: it
 trains on the labeled plus pseudo-labelled samples). Each run writes a ~95 MB checkpoint. Inside a part
-the order is: cheap paper-1 groups, ablations, the KMH sweep, then `AdversarialBIM`, `VAAL`/`WAAL` and
-`AdversarialDeepFool` (about 14 h per DeepFool group) last, so an exhausted credit budget leaves complete tables
+the order is: cheap paper-1 groups, ablations, the KMH sweep, then `AdversarialBIM`, `VAAL`/`WAAL` and the WAAL
+control, and `AdversarialDeepFool` (about 14 h per DeepFool group) last, so an exhausted credit budget leaves complete tables
 except the long baselines' rows. Add about 15 minutes per session for sections 0-5.
 
 > **WARNING, second account.** The notebook defaults to `GPU_PART = "part_1_gpu"`. On account **B** set
 > `GPU_PART = "part_2_gpu"` in the Parameters cell; its banner must print `expect 177 runs (59 run groups)` (account A:
-> `282 runs (94 run groups)`). The gate cell before the run also refuses if the Drive already holds results of the
+> `285 runs (95 run groups)`). The gate cell before the run also refuses if the Drive already holds results of the
 > other part.
 
 **Per account (A and B do the same steps with their own `GPU_PART`):**
 
 1. **Upload the dataset to THIS account's Drive.** Each account has its own Drive. From the machine that built it
-   (`DATA/daninhas_full_fixed/`, 8,240 files, `make dataset-check` must print `OK: no repeated md5 inside or across
-   splits`), upload the folder to `<DRIVE_ROOT>/DATA/daninhas_full_fixed/`. Faster: zip it locally
+   (`DATA/daninhas_full_fixed/`, 8,242 files: 7,230 + 1,008 images, `README.txt`, `MANIFEST.csv`, `logs/` with 2
+   files; `make dataset-check` must print `OK: files on disk match MANIFEST.csv, no repeated md5 inside or across
+   splits`), upload the folder to `<DRIVE_ROOT>/DATA/daninhas_full_fixed/`. A folder of the previous metadata layout
+   (no `logs/`, 8,240 files) is migrated once, before anything is uploaded, with
+   `python scripts/datasets/build_daninhas_full_fixed.py --migrate-metadata` (images untouched; `--dry-run` first);
+   a zip or folder of the previous layout already on a Drive must be replaced (delete the old zip). Faster: zip it locally
    (`cd DATA && zip -qr daninhas_full_fixed.zip daninhas_full_fixed`) and upload the zip to
    `<DRIVE_ROOT>/DATA/daninhas_full_fixed.zip`; `make colab-setup` then never reads the folder through Drive (the
    folder is optional when the zip is present). Free Drive space: the results of the part (about 27 GB / 17 GB) plus,
    if you use the zip cell of step 9, the same again. The run refuses to start (exit 4, numbers printed) unless the
-   free space covers the remaining runs x 96 MB x 1.2 (a fresh part: 32.5 GB for A, 20.4 GB for B), and stops the
+   free space covers the remaining runs x 96 MB x 1.2 (a fresh part: 32.8 GB for A, 20.4 GB for B), and stops the
    batch instead of continuing when the Drive fills up mid-part (`STOP no space` in `campaign.log`; free space and
    re-run the run cell, it resumes).
 2. **Parameters cell** of `notebooks/colab_runbook.ipynb`: `DRIVE_ROOT = "<DRIVE_ROOT>"` (the folder that holds
    `DATA/`; the placeholder fails fast), `GPU_PART = "part_1_gpu"` (A) or `"part_2_gpu"` (B), `GIT_REF` = the tag of
-   the campaign's code (default `campaign-fixed-v1`, created on `main` after the merge; the same on both accounts and
+   the campaign's code (default `campaign-fixed-v2`, created on `main` after the merge; the same on both accounts and
    for the whole campaign). Section 2 checks it out detached on every session and prints the resolved commit.
 3. **Sections 0-5** (runtime, Drive, clone, Poetry, `make colab-setup`, `make dataset-check`, `make test`,
    `make colab-check`, GPU identity check). The gate cells raise on: a wrong `GPU_PART`, an unfilled `DRIVE_ROOT`, the
-   dataset missing on Drive, a wrong local file count or a repeated MD5, a checkout with modified tracked files, a venv
+   dataset missing on Drive, a wrong local image count, files that differ from `MANIFEST.csv` or a repeated MD5, a
+   checkout with modified tracked files, a venv
    that is not Python 3.12 or sees no GPU.
 4. **List**: `!make campaign-list-gpu-part GPU_PART=part_1_gpu` (B: `part_2_gpu`). Both manifests are merged into one
    plan of three segments (main manifest, KMH sweep, main manifest's long baselines); the `Combined:` block ends with
-   `TOTAL 282 runs (94 run groups)  est 47.6 GPU h` (B: `177 runs (59 run groups)  est 48.8 GPU h`).
+   `TOTAL 285 runs (95 run groups)  est 49.9 GPU h` (B: `177 runs (59 run groups)  est 48.8 GPU h`).
 5. **Pre-run gate** (the notebook cell after the list): re-runs the list and asserts that count, asserts that this
    Drive holds no leaf of the other GPU part (a wrong account or a wrong `GPU_PART`), and runs
    `make campaign-space-gpu-part GPU_PART=...` (free Drive space for the remaining runs, see step 1).
 
    **Then the pilot** (before the long runs): `!make campaign-pilot GPU_PART=part_1_gpu` runs seed 1 of the part's `VAAL` and
-   `WAAL` groups at its largest budget (A: nq100; B: nq50, the part has no nq100) plus `RandomSampling` at that budget,
+   `WAAL` groups at its largest budget (A: nq100; B: nq50, the part has no nq100) plus `RandomSampling` at that budget
+   (the WAAL control is not in the pilot: it trains exactly like `WAAL`),
    about 1.6 estimated GPU hours. Then `!make campaign-pilot-report GPU_PART=part_1_gpu` (read only) prints per pilot
    run the wall time against the estimate and the projected hours of that strategy over the part, the weighted F1 per
    round, every `strategy_diagnostics` series and degeneracy flags (`pool_order_fraction` close to 1 = the KI-45
@@ -328,7 +342,7 @@ except the long baselines' rows. Add about 15 minutes per session for sections 0
    `round_queries.json`, every JSON parsable with the right round count, no empty `predictions.csv` or
    `saved_model.pth`) are skipped, so at most the run in progress is lost. A failed job, or a leaf with a truncated or
    empty file, is re-run into the same leaf by re-running.
-8. **Verify**: `!make campaign-verify-gpu-part GPU_PART=part_1_gpu`: expect `Totals: OK=282 INCOMPLETE=0 MISSING=0`
+8. **Verify**: `!make campaign-verify-gpu-part GPU_PART=part_1_gpu`: expect `Totals: OK=285 INCOMPLETE=0 MISSING=0`
    (B: `OK=177`), the code-version audit with ONE commit (the one section 2 printed) and no `WARN:` line, the seed
    audit PASS for seeds 1-3 (`compared by image paths`) and the data-order audit PASS (`daninhas_full_fixed: PASS`,
    one distinct order; a leaf of the plan under another dataset folder is a FAIL). A leaf with an integrity problem
@@ -341,14 +355,14 @@ except the long baselines' rows. Add about 15 minutes per session for sections 0
    for a zip, download the two folders `<DRIVE_ROOT>/results/campaign_fixed/` and
    `<DRIVE_ROOT>/results/campaign_kmh_fixed/` directly (Drive splits large downloads into several zips) and rename
    their `campaign.log`/`failures.log` by hand to the `_<GPU_PART>` names before merging.
-10. **Merge locally and verify** (the machine that will hold all 459 runs; nothing of the first campaign is touched):
+10. **Merge locally and verify** (the machine that will hold all 462 runs; nothing of the first campaign is touched):
 
     ```bash
     cd <repo root>
     unzip -n part_1_gpu.zip        # -n: never overwrite; the two parts write disjoint leaves
     unzip -n part_2_gpu.zip        # one zip at a time, after the first one has finished extracting
     ls results/campaign_fixed/campaign_part_*_gpu.log results/campaign_kmh_fixed/campaign_part_*_gpu.log
-    make campaign-verify-all       # both manifests: expect OK=459 INCOMPLETE=0 MISSING=0, both audits PASS
+    make campaign-verify-all       # both manifests: expect OK=462 INCOMPLETE=0 MISSING=0, both audits PASS
     make campaign-report-all       # docs/results/campaign_fixed/ and docs/results/campaign_kmh_fixed/
     ```
 
@@ -358,7 +372,7 @@ except the long baselines' rows. Add about 15 minutes per session for sections 0
 
     The seed audit of `campaign-verify-all` compares the round-0 labeled IMAGES (paths in `round_queries.json`) of
     every run of a seed across BOTH accounts and both manifests, and the data-order audit compares the `data_order`
-    hashes of `run_metadata.json` (the ordered train and test image lists) of all 459 leaves: a FAIL in either means
+    hashes of `run_metadata.json` (the ordered train and test image lists) of all 462 leaves: a FAIL in either means
     two runs did not start from the same images or did not index the same ordered lists. (Before KI-47 the audit
     compared pool indices only, which the first campaign passed although its sessions indexed the images in different
     orders.) The last block lists the three intentional duplicate computations (paper-1 KMH vs the sweep's

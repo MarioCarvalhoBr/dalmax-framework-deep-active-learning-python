@@ -20,8 +20,9 @@ by `scripts/campaign/build_manifest.py`; micro mirror `manifest_micro.json`) plu
 
 **Why**: KI-46 (train/test leakage and duplicated test images in `DATA/daninhas_full`). Author decisions
 (2026-11-11): the new canonical dataset is `DATA/daninhas_full_fixed` (7,230 train / 1,008 test images, plus
-`MANIFEST.csv` and `README.txt` = 8,240 files; built by `scripts/datasets/build_daninhas_full_fixed.py`, `--check` =
-no repeated MD5); **everything** is re-run, no old result is reused; the eight DeepAL+ strategies of ADR 0015 join paper
+`README.txt`, `MANIFEST.csv` and, since the metadata layout of 2026-11-12, `logs/build_history.txt` and
+`logs/source_manifest.csv` = 8,242 files; built by `scripts/datasets/build_daninhas_full_fixed.py`, `--check` = no
+repeated MD5, the files on disk equal to `MANIFEST.csv` by name and MD5, and the layout; KI-49); **everything** is re-run, no old result is reused; the eight DeepAL+ strategies of ADR 0015 join paper
 1 at the three budgets; two GPU parts `part_1_gpu` / `part_2_gpu`, one per Colab account, run in parallel.
 
 **Dataset and params.** Every full-scale params JSON of the campaign, the KMH sweep and the ablations
@@ -37,17 +38,18 @@ bound's `n_init_labeled` is 7,230.
 | Manifest | Part | Groups x seeds | Runs | Content | Est. GPU h |
 |---|---|---|---|---|---|
 | main | `paper1` | 63 x 3 | 189 | the 20 strategies (12 classical + `VarRatio`, `MeanSTD`, `KCenterGreedyPCA`, `BadgeSampling`, `CEALSampling`, `LossPredictionLoss`, `VAAL`, `WAAL`) + KMH, x nq {10,50,100} | 68.1 |
+| main | `paper1_control` | 1 x 3 | 3 | the WAAL control `WAALRandomQuery` at nq100 (WAAL's training, random query; not a benchmark strategy, see below) | 2.25 |
 | main | `upper_bound` | 1 x 3 | 3 | `FullSupervised` on the whole pool (7,230) | 0.04 |
 | main | `rnhal` | 14 x 3 | 42 | paper 3 ablations at nq100 (unchanged content) | 4.4 |
 | main | `texhal` | 10 x 3 | 30 | paper 2 ablations at nq100, incl. `shared/texhal_full` | 3.3 |
 | main | `texhal_q17` | 6 x 3 | 18 | paper 2, TexHAL Q=17 6.2/6.3 (ADR 0011) | 1.2 |
 | main | `hier_transfer` | 4 x 3 | 12 | ADR 0013 rows of tables 6.2 of papers 2/3 | 0.6 |
-| main | **total** | **98 x 3** | **294** | | **77.6** |
+| main | **total** | **99 x 3** | **297** | | **79.8** |
 | sweep | `kmh_nq100` | 21 x 3 | 63 | KMH sweep stages 1 + 2 (ADR 0012) | 9.9 |
 | sweep | `kmh_nq50` | 17 x 3 | 51 | | 4.9 |
 | sweep | `kmh_nq10` | 17 x 3 | 51 | | 4.0 |
 | sweep | **total** | **55 x 3** | **165** | | **18.9** |
-| both | **total** | **153 x 3** | **459** | | **96.4** |
+| both | **total** | **154 x 3** | **462** | | **98.7** |
 
 Params per paper-1 strategy: the dropout family (`LeastConfidenceDropout`, `MarginSamplingDropout`,
 `EntropySamplingDropout`, `BALDDropout`, `VarRatio`, `MeanSTD`) `params_paper1_mc_dropout.json` (`model_args.dropout_p`
@@ -56,6 +58,22 @@ about 4x cheaper than 64; the VAE takes any multiple of 16); KMH `params_kmh.jso
 bound `params_paper1.json`. Group ids, aliases, table rows and the dedup table are those of the first campaign (section
 "Dedup table" below) plus the new `p1/<DeepAL+ strategy>/nq{10,50,100}` groups and rows; the "best paper-1 method"
 candidates are the 20 strategies + KMH. The KMH sweep keeps its 165 runs / 55 groups and its tables.
+
+**WAAL training-budget control (author decision 2026-11-12, ADR 0015 amendment).** WAAL trains the task model with
+its own min-max procedure, about 280 SGD steps per round against 10 to 40 for every other strategy, so a gain of WAAL
+over `RandomSampling` could come from the training rather than from which images it queries. The control
+`WAALRandomQuery` keeps WAAL's training unchanged (same params file `params_paper1.json`, same `strategy_args.WAAL`
+block, same trainer generator, so for each seed the round-0 model and metrics equal WAAL's) and replaces the query by a
+uniform random draw from the unlabeled pool (`derive_seed(seed, "waal_random_query")`). Group
+`p1_control/WAALRandomQuery/nq100` (3 runs, leaves under `results/campaign_fixed/paper1/control_nq100/`), `part_1_gpu`,
+stage 5 like VAAL/WAAL, estimated like WAAL (45 min per run). **Marking**: its own semantic part `paper1_control` and
+its own paper-1 table `paper1_waal_control_nq100` (rows `WAAL`, `WAAL training + random query (control)`,
+`RandomSampling`, all three at nq100 in `part_1_gpu`); it is never a row of the benchmark tables `paper1_nq{10,50,100}`
+nor a `best_of` candidate, so "20 strategies + KMH" stays true and every report shows it as a separate control row.
+Reading: WAAL vs control = the effect of WAAL's selection at equal training; control vs `RandomSampling` = the effect
+of WAAL's training at equal (random) selection. Not in the pilot (it trains exactly like `WAAL`, which the pilot
+measures). Only at the primary budget (nq100): the question is one of mechanism, and nq100 is the budget papers 2/3
+compare at.
 
 **Unchanged rules.** Protocol (`n_init_labeled` 100, `n_round` 8, `n_epoch` 10, batch 256, lr 0.05, momentum 0.3,
 reference hierarchy `[600,200,100]`/`[30,15,2]`, SSRAE `q=13`, VCTex as in ADR 0011), seeds and determinism and the
@@ -70,12 +88,12 @@ manifests carries `gpu_part` and `gpu_stage`. A group never splits (its three se
 
 | GPU part | Account | Content | Runs / groups | Est. GPU h |
 |---|---|---|---|---|
-| `part_1_gpu` | A | paper 1 at nq100 (incl. `shared/random_nq100`, `shared/kmh_nq100`), the upper bound, `rnhal`, `texhal`, `texhal_q17`, `hier_transfer`, KMH sweep at nq100 and nq50 | 282 / 94 | 47.6 |
+| `part_1_gpu` | A | paper 1 at nq100 (incl. `shared/random_nq100`, `shared/kmh_nq100`), the WAAL control, the upper bound, `rnhal`, `texhal`, `texhal_q17`, `hier_transfer`, KMH sweep at nq100 and nq50 | 285 / 95 | 49.9 |
 | `part_2_gpu` | B | paper 1 at nq50 and nq10, KMH sweep at nq10 | 177 / 59 | 48.8 |
 
 Execution order inside a part (`gpu_stage`; the main manifest and the sweep are merged into one plan): 1 paper-1
 strategies other than the long ones, KMH and the upper bound; 2 the ablations; 3 the KMH sweep; 4 `AdversarialBIM`;
-5 `VAAL`, `WAAL`; 6 `AdversarialDeepFool`. Cheap, table-critical groups first: an exhausted credit budget leaves complete
+5 `VAAL`, `WAAL`, the WAAL control `WAALRandomQuery`; 6 `AdversarialDeepFool`. Cheap, table-critical groups first: an exhausted credit budget leaves complete
 tables except the rows of the long baselines. Measured spread of the first execution between sessions: about 1.7
 weighted-F1 points (KI-43), hence the grouping rule below.
 
@@ -97,15 +115,15 @@ asserts this.
 `{"_comment", "unit", "subprocess_overhead_seconds", "groups": {<group id>: {"seconds_per_run", "basis", ...}}}`.
 `basis: "measured"` = mean wall time per run of the same group id in the first campaign (trainer subprocess,
 `campaign.log` `DONE elapsed=`; for the runs merged from other sessions, `Total time` of `log-dalmax.log` plus the
-median subprocess overhead of 11 s); `basis: "estimate"` (with a `rule`) = the eight DeepAL+ strategies, never run on
-a GPU: `LossPredictionLoss`, `BadgeSampling`, `KCenterGreedyPCA` about a plain uncertainty strategy (mean of
+median subprocess overhead of 11 s); `basis: "estimate"` (with a `rule`) = the eight DeepAL+ strategies and the WAAL
+control (equal to `WAAL`), never run on a GPU: `LossPredictionLoss`, `BadgeSampling`, `KCenterGreedyPCA` about a plain uncertainty strategy (mean of
 LeastConfidence/MarginSampling/EntropySampling at the same budget), `VarRatio`/`MeanSTD` about an MC-dropout one, CEAL
 3 x plain (revised 2026-11-12 from 1.25 x: CEAL trains on the labeled plus pseudo-labelled samples, up to about a
 quarter of the pool; the GPU-part rule is fixed per budget, so no group moved), `WAAL` about 45 min and `VAAL` (32 px)
 about 50 min per run (FLOP estimates; the pilot below measures them first). Caveats: measured on the
 dataset with duplicates (pool 8,086 / test 2,106, so the new runs should be somewhat shorter) and, for the ADR 0014
 strategies, with the pre-fix code; no GPU model is recorded. Main contributors: `AdversarialDeepFool` 3 groups =
-40.9 h, `VAAL` 7.5 h, `WAAL` 6.75 h, `AdversarialBIM` 5.7 h, KMH sweep 18.9 h. `campaign list` prints estimated hours
+40.9 h, `VAAL` 7.5 h, `WAAL` 6.75 h, `AdversarialBIM` 5.7 h, KMH sweep 18.9 h, the WAAL control 2.25 h. `campaign list` prints estimated hours
 per part, per GPU part and in total.
 
 **Results layout** (append-only; the first campaign's trees are never touched):
@@ -114,6 +132,7 @@ per part, per GPU part and in total.
 results/campaign_fixed/                         # main manifest
 ├── campaign.log, failures.log                  # per account; shipped as campaign_<gpu part>.log in the zips
 ├── paper1/nq{10,50,100}/daninhas_full_fixed/SEED_s/NQ_<n>_NIL_100_NR_8_NE_10/<Strategy>/
+├── paper1/control_nq100/daninhas_full_fixed/SEED_s/NQ_100_NIL_100_NR_8_NE_10/WAALRandomQuery/
 ├── paper1/upper_bound/daninhas_full_fixed/SEED_s/NQ_100_NIL_7230_NR_0_NE_10/FullSupervised/
 ├── shared/{random_nq100,kmh_nq100,texhal_full}/...
 ├── rnhal/<study>/<config>/..., texhal/<study>/<config>/..., texhal_q17/<study>/<config>/...
@@ -139,7 +158,8 @@ under the group's own dataset folder, `basename(data_dir)` of its params (`RunGr
 never picked and FAILs the data-order audit. `verify` also prints a code-version audit: the distinct
 `run_metadata.json` `git_commit` values of the OK leaves with counts; more than one, or a leaf without one, is a `WARN:`
 line that does not change the exit code (also printed by `pilot-report`). The notebook pins the code with `GIT_REF`
-(default tag `campaign-fixed-v1`): every session fetches the tags and checks it out detached, no branch is pulled.
+(default tag `campaign-fixed-v2` since 2026-11-12; `campaign-fixed-v1` predates the WAAL control and the dataset's
+metadata layout): every session fetches the tags and checks it out detached, no branch is pulled.
 
 **Data order, cache identity and audits (KI-47, ADR 0016 amendment of 2026-11-12).** The first campaign's loaders
 listed each class folder in file-system order, which differed between Colab sessions: the same seed selected the same
@@ -153,7 +173,7 @@ every leaf's `run_metadata.json` records `data_order` (`train_paths_hash`, `test
 by **image paths** (round 0 of `round_queries.json`; logged indices only for leaves without it), so equal indices
 naming other images FAIL, and (2) the **data-order audit**: per dataset folder, every leaf must record the same
 `data_order` hashes (FAIL otherwise, WARN for a leaf without the record). Exit codes as before: 0 / 1 (a job not OK or
-a FAIL) / 2 (only WARNs). After merging both parts expect one order for `daninhas_full_fixed` over all 459 leaves.
+a FAIL) / 2 (only WARNs). After merging both parts expect one order for `daninhas_full_fixed` over all 462 leaves.
 
 **Intentional duplicate computations.** Three groups of the main manifest have the effective signature of a KMH-sweep
 group: `shared/kmh_nq100` = `kmh/nq100/hier_L3_ref`, `p1/KMH/nq50` = `kmh/nq50/hier_L3_ref`, `p1/KMH/nq10` =
@@ -168,7 +188,7 @@ also reflect best-effort GPU determinism across two runtimes.
 
 **Drive quota gate.** About 95 MB per run (measured 95.1 MB per leaf in the first campaign, mostly the checkpoint):
 `campaign run` refuses to start (exit 4, numbers printed, nothing started) unless the free space of each results file
-system covers the remaining runs x 96 MB x 1.2 (`dalmax/experiment/disk_space.py`; a fresh part needs 32.5 GB for
+system covers the remaining runs x 96 MB x 1.2 (`dalmax/experiment/disk_space.py`; a fresh part needs 32.8 GB for
 `part_1_gpu`, 20.4 GB for `part_2_gpu`), and stops the batch (exit 4, `STOP no space` in `campaign.log`) before a run
 when less than one run's worth is free or after a run that failed with the trainer's no-space exit code 28. `campaign
 space` / `make campaign-space[-gpu-part]` print the check (read only); the notebook's pre-run gate runs it.
@@ -191,11 +211,11 @@ make campaign-pilot           GPU_PART=part_1_gpu   # seed 1 of VAAL/WAAL (+ Ran
 make campaign-pilot-report    GPU_PART=part_1_gpu   # wall time vs estimate, strategy_diagnostics, flags (read only)
 make campaign-run-gpu-part    GPU_PART=part_1_gpu   # resumable: re-run the same command
 make campaign-verify-gpu-part GPU_PART=part_1_gpu   # OK/INCOMPLETE/MISSING + commits + seed audit + data-order audit
-make campaign-verify-all                            # after merging both parts: OK=459, one commit, audits PASS, duplicate pairs
+make campaign-verify-all                            # after merging both parts: OK=462, one commit, audits PASS, duplicate pairs
 make campaign-report-all                            # docs/results/campaign_fixed/ + docs/results/campaign_kmh_fixed/
 make campaign-list                                  # main manifest alone (PART=paper1|... or part_1_gpu|part_2_gpu)
 make campaign-smoke-gpu-part GPU_PART=part_2_gpu    # CPU micro plan of one GPU part, seed 1
-make dataset-check                                  # builder --check on DATA/daninhas_full_fixed (read only)
+make dataset-check                                  # builder --check on DATA/daninhas_full_fixed (files == MANIFEST.csv, layout; read only)
 ```
 
 `python -m dalmax.campaign {list,run,verify,space,pilot-report} --manifest A[,B] --part <parts|gpu part> [--micro]

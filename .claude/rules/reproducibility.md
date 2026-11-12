@@ -44,7 +44,9 @@ locations.
   initialisation and data order stay exactly where they would be without the strategy (build on CPU inside the
   block, move to the device afterwards). Every other draw it makes is explicit: `dalmax.seeding.torch_generator(seed)`
   for noise (e.g. the VAE reparameterisation) and an explicit `generator=` on every auxiliary `DataLoader` (never the
-  ambient default generator). Tags in use: see `.specs/adr/0015-deepalplus-strategies.md`. New strategies follow the
+  ambient default generator). Tags in use: see `.specs/adr/0015-deepalplus-strategies.md` (the WAAL control
+  `WAALRandomQuery` adds `"waal_random_query"` for its random query and reuses WAAL's `"waal"` trainer tag, so a
+  control that must train like its method shares that method's trainer tag). New strategies follow the
   same pattern; a strategy that only ranks the task model's outputs needs none of this.
 - **Per-round history (2026-11-11, ADR 0016)**: every run also writes `round_predictions.json` (the test predictions of
   every round) and `round_queries.json` (the pool indices labeled in every round, with labels and image paths), so a
@@ -59,7 +61,7 @@ locations.
   `os.listdir`, whose order differed between Colab sessions: equal indices named other images (first campaign).
   Compare runs by `dalmax.data_order.relative_image_path` (`<class>/<file>`), never by index alone.
 - **One code version per campaign (2026-11-12, KI-48)**: every Colab session checks out the campaign's tag (`GIT_REF`,
-  default `campaign-fixed-v1`) detached, never pulls a branch; `campaign verify` lists the distinct `run_metadata.json`
+  default `campaign-fixed-v2` since 2026-11-12) detached, never pulls a branch; `campaign verify` lists the distinct `run_metadata.json`
   `git_commit` values of the OK leaves and a second value (or a missing one) is a WARN that must be explained before
   the results are used. A leaf counts as complete only when its JSON artifacts parse with the expected round count
   and its checkpoint is non-empty (`dalmax/reporting/leaf_check.py::LeafCheck`), and a job's leaf is looked up only
