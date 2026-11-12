@@ -8,523 +8,353 @@
 [![CI](https://github.com/MarioCarvalhoBr/dalmax-framework-deep-active-learning-python/actions/workflows/ci.yml/badge.svg)](https://github.com/MarioCarvalhoBr/dalmax-framework-deep-active-learning-python/actions/workflows/ci.yml)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/MarioCarvalhoBr/dalmax-framework-deep-active-learning-python/blob/main/notebooks/colab_runbook.ipynb)
 
-DalMax is a PyTorch framework for **pool-based deep active learning on image
-classification**, built for a PhD project (UFMS, Brazil) on weed recognition in
-UAV images of sugarcane fields. A query strategy, an image representation and a
-batch-selection module are interchangeable components of one experiment loop, so
-that a new method is a registry entry or a parameters file, not a new script. It
-supports the three papers of the thesis:
+DalMax is a PyTorch research framework for **pool-based deep active learning on UAV images of weeds in
+sugarcane fields**, built for a PhD project at UFMS (Brazil). It supports the three papers of the thesis:
 
-1. **A budget-aware benchmark of 13 strategies**: 12 classical strategies
-   (uncertainty, Bayesian, diversity and adversarial) plus **KMH** (hierarchical
-   k-means over ImageNet ResNet-50 features), at three query budgets, against a
-   full-supervision upper bound.
-2. **TexHAL**: VCTex color-texture representation + hierarchical k-means batch selection.
-3. **RNHAL** (Randomized Network-guided Hierarchical Active Learning): SSRAE
-   randomized-network spatio-spectral representation + hierarchical k-means batch
-   selection, the main contribution.
+1. **A benchmark of deep active learning strategies**: 20 query strategies (the 12 of DeepAL plus the 8 that
+   DeepAL+ adds) and **KMH** (hierarchical k-means over frozen ImageNet ResNet-50 features), at three query
+   budgets, against a fully supervised upper bound.
+2. **TexHAL**: VCTex color-texture descriptors + hierarchical k-means batch selection.
+3. **RNHAL** (Randomized Network-guided Hierarchical Active Learning): SSRAE randomized-network
+   spatio-spectral descriptors + hierarchical k-means batch selection, the main contribution.
 
 ![DalMax framework: data, round loop, pluggable components, run outputs and campaign engine](assets/active-learning-framework.png)
 
-*Figure: the DalMax framework. Data and the active learning round loop (top),
-the registries of interchangeable components (middle) and the campaign engine
-that runs, verifies and reports every experiment (bottom).*
+*Figure: the DalMax framework (round loop, registries, campaign engine). The figure predates the current
+code: its pool/test sizes and run count are those of the first campaign on the original dataset, and its
+strategy box shows only the DeepAL strategies. The text of this README is the current reference.*
 
-## Table of contents
+## Contents
 
-- [Overview](#overview)
-- [Implemented query strategies](#implemented-query-strategies)
+- [What DalMax is](#what-dalmax-is)
+- [Status](#status)
 - [Installation](#installation)
-- [Datasets](#datasets)
-- [Run an experiment](#run-an-experiment)
+- [Quick start](#quick-start)
+- [Query strategies](#query-strategies)
+- [Dataset](#dataset)
 - [The campaign](#the-campaign)
-- [Inference tools](#inference-tools)
-- [Params JSON schema](#params-json-schema)
-- [Results directory convention](#results-directory-convention)
-- [Execution environments](#execution-environments)
-- [Development](#development)
-- [Repository layout](#repository-layout)
-- [Roadmap](#roadmap)
-- [License](#license) / [Citing](#citing) / [Contact](#contact) / [Acknowledgements](#acknowledgements)
+- [Run outputs and inference tools](#run-outputs-and-inference-tools)
+- [Repository map](#repository-map)
+- [License](#license) / [How to cite](#how-to-cite) / [Contact](#contact) / [Acknowledgements](#acknowledgements)
+- [References](#references)
 
-## Overview
+## What DalMax is
 
-DalMax implements and compares acquisition (query) strategies for training a deep
-classifier (ResNet-50) under a limited annotation budget, on a domain dataset
-(`daninhas_full`, UAV weed image patches, five classes) and on CIFAR-10 as a
-secondary benchmark.
+In every round the loop trains a classifier (ResNet-50 [[22]](#ref-22) for the weed dataset) on the labeled
+set, scores or embeds the unlabeled pool, selects a batch with a query strategy, adds the oracle's labels and
+evaluates on a fixed test set (accuracy, weighted and macro precision/recall/F1, confusion matrix).
 
-In every round the loop (see the figure) trains the classifier on the labeled set,
-scores or embeds the unlabeled pool, selects a batch with the query strategy, lets
-the oracle label it, adds it to the labeled set and evaluates on a fixed test set
-(accuracy, weighted and macro precision/recall/F1, confusion matrix). Every
-dataset, model, strategy, embedding provider and selection module lives in a plain
-dict registry (`DATASET_REGISTRY`, `MODEL_REGISTRY`, `STRATEGY_REGISTRY`,
-`EMBEDDING_REGISTRY`, `SELECTION_REGISTRY`); unknown names fail with an explicit
-error instead of a silent fallback.
+- **One entry point**: `tools/trainer.py`, a thin shim over `dalmax.cli.main()`.
+- **One package**: all Python source lives in `dalmax/`. Datasets, models, query strategies, embedding
+  providers and selection modules are plain dict registries; an unknown name fails with an explicit error.
+- **Reproducibility features**:
+  - *Seeding*: `dalmax/seeding.py` seeds `random`, NumPy and PyTorch once per run; every component that needs
+    its own randomness derives a sub-seed from the run seed (`derive_seed`), and auxiliary networks of a strategy
+    are initialised in an isolated generator so they do not shift the classifier's random stream.
+  - *`run_metadata.json`* in every run: the fully resolved config, git commit, library versions, environment
+    (including the GPU actually used) and a `determinism` block. Bit-identical results are guaranteed on CPU
+    only; on GPU determinism is best-effort, so report seed-averaged numbers.
+  - *Data-order contract* (`dalmax/data_order.py`): class folders and file names are sorted, so a pool index
+    names the same image on every machine; `run_metadata.json` records hashes of both splits' order.
+  - *Keyed embedding cache* (`dalmax/embeddings/cache.py`): keyed on dataset, extractor, `Q`, variant, split,
+    data order and pool; the payload stores the image paths and a mismatch triggers recomputation.
+  - *Campaign manifests* (`files_config/campaign/`): every run the papers need is declared once, executed with
+    resume, verified (completeness, seed audit by initial image paths, data-order audit) and reported.
 
-**RNHAL** combines two stages:
+Specifications are the source of truth: [`.specs/00-overview.md`](.specs/00-overview.md) and
+[`.specs/README.md`](.specs/README.md); architecture decisions are ADRs in [`.specs/adr/`](.specs/adr/README.md).
 
-1. A **randomized-network spatio-spectral representation module**, instantiated
-   through the **SSRAE** formulation (code in `dalmax/tools/SSRAE/`). For an image
-   `x`, closed-form randomized autoencoders produce a spatial signature per channel
-   (`Θ_R`, `Θ_G`, `Θ_B`) and a spectral signature per adjacent channel pair
-   (`Ω_RG`, `Ω_GB`, `Ω_BR`); the embedding is conceptually their concatenation
-   `Φ(x) = [Θ_R, Θ_G, Θ_B, Ω_RG, Ω_GB, Ω_BR]`. **Implementation note**: the vector
-   produced by `dalmax/tools/SSRAE/extractor.py` is row-interleaved, not two
-   contiguous halves, so naive slicing such as `emb[:len(emb)//2]` does **not**
-   recover the spatial-only signatures; see
-   [`.specs/experiments/ablation-study.md`](.specs/experiments/ablation-study.md) §6.1 for
-   the slicing the representation ablation uses.
-2. A **hierarchical k-means batch selection mechanism** (`dalmax/tools/SSL/`) that
-   recursively partitions the embedding space of the unlabeled pool and samples the
-   query batch across the induced hierarchy, aiming for batches that are both
-   informative and structurally diverse rather than redundant in visually dense
-   regions.
+## Status
 
-**TexHAL** and **KMH** reuse the same hierarchical selection with a different
-representation (VCTex, ImageNet ResNet-50). They are not separate classes: RNHAL,
-TexHAL and KMH are three parameterisations of the generic
-`RepresentationStrategy` (an embedding provider plus a selection module), so the
-ablations of papers 2 and 3 differ from the full methods only in the params JSON.
+- A **first campaign** (main manifest and a KMH parameter sweep) was executed on Google Colab Pro between
+  2026-09-30 and 2026-11-11 on the original dataset `DATA/daninhas_full`.
+- Two defects were then found that affect those results:
+  - **KI-46**: the original dataset contains byte-identical duplicate images, including images present in both
+    train and test.
+  - **KI-47**: files were listed in an unsorted, session-dependent order, so the same seed started from other
+    images in different Colab sessions, and the embedding cache could serve features of other images.
 
-The experiment protocol and the ablation design are in
-[`.specs/experiments/experimental-protocol.md`](.specs/experiments/experimental-protocol.md)
-and [`.specs/experiments/ablation-study.md`](.specs/experiments/ablation-study.md); the
-architecture and the project status are in [`.specs/00-overview.md`](.specs/00-overview.md)
-and [`.specs/README.md`](.specs/README.md) (the specs are the source of truth).
-
-## Implemented query strategies
-
-These are the exact `--strategy_name` choices exposed by `tools/trainer.py`.
-
-**Uncertainty-based**
-- **`RandomSampling`**: random selection (baseline).
-- **`LeastConfidence`**: samples where the model is least confident [1].
-- **`MarginSampling`**: samples with the smallest margin between the two most likely classes [2].
-- **`EntropySampling`**: samples with the highest prediction entropy [3].
-- **`LeastConfidenceDropout`, `MarginSamplingDropout`, `EntropySamplingDropout`**:
-  the same criteria estimated with `n_drop` stochastic (MC-dropout) forward passes [4].
-
-**Bayesian**
-- **`BALDDropout`**: Bayesian Active Learning by Disagreement, epistemic uncertainty via MC dropout [4].
-
-**Diversity**
-- **`KMeansSampling`**: samples representative of feature-space clusters [5].
-- **`KCenterGreedy`**: core-set selection minimizing the covering radius [5].
-
-**Adversarial**
-- **`AdversarialBIM`**: samples closest to the decision boundary, via the Basic Iterative Method [6].
-- **`AdversarialDeepFool`**: samples with the smallest adversarial margin, via DeepFool [6].
-
-**Representation-based (RNHAL, TexHAL, KMH family)**
-- **`RepresentationStrategy`**: the generic strategy, driven by the params JSON's
-  `embedding`/`selection` blocks (see [Params JSON schema](#params-json-schema)).
-  RNHAL is `ssrae` + `hierarchical`, TexHAL is `vctex` + `hierarchical`, KMH is
-  `resnet_imagenet` + `hierarchical`.
-- Four fixed presets of it, kept for earlier scripts (they pin `Q` to the legacy value
-  and ignore `embedding.q`): **`SSRAEKmeansSampling`** and **`VCTexKmeansSampling`**
-  (flat k-means, `flat_closest`), **`SSRAEKmeansHCSampling`** and
-  **`VCTexKmeansHCSampling`** (hierarchical k-means).
-
-**Upper bound (not active learning)**
-- **`FullSupervised`**: trains once on the entire pool (every label known at
-  initialization, requires `--n_round 0`) and evaluates on the test set; it never
-  queries. It is the reference "maximum achievable" score of the benchmark.
-
-Known limitation of the first campaign execution: the ResNet-50 head had no dropout layer, so the MC-dropout
-strategies and `BALDDropout` were degenerate, `KMeansSampling`/`KCenterGreedy` used an
-untrained embedding layer, and `AdversarialBIM` broke its distance ties in pool order
-(KI-41, KI-42, KI-45 in [`.specs/quality/known-issues.md`](.specs/quality/known-issues.md)). All three are
-fixed in code since 2026-11-11 (ADR 0014; optional params block `"model_args": {"dropout_p": ...}` for the
-MC-dropout strategies). The first campaign also ran on a dataset with byte-identical duplicates inside and across
-train and test (KI-46); since 2026-11-11 (ADR 0016) everything is prepared for a clean re-run on the duplicate-free
-`DATA/daninhas_full_fixed`, with the eight DeepAL+ strategies (`VarRatio`, `MeanSTD`, `KCenterGreedyPCA`,
-`BadgeSampling`, `CEALSampling`, `LossPredictionLoss`, `VAAL`, `WAAL`, ADR 0015) added to paper 1 and a control
-of WAAL's training budget (`WAALRandomQuery`: WAAL's training with a uniform random query, a separate control row,
-2026-11-12) (`COLAB_RUNBOOK.md` section 6), not executed yet.
+  Both are documented in [`.specs/quality/known-issues.md`](.specs/quality/known-issues.md). The first
+  campaign's numbers are superseded and are not reported here.
+- A **clean re-run of everything** on the duplicate-free dataset `DATA/daninhas_full_fixed` is **prepared and
+  being executed** ([ADR 0016](.specs/adr/0016-clean-rerun-fixed-dataset.md)). Its code version is pinned at the
+  git tag `campaign-fixed-v2`, which the Colab notebook checks out. No results of the clean campaign are
+  reported yet.
 
 ## Installation
 
-DalMax is **Poetry-only** (the pip/`requirements.txt` path was retired), on every
-machine: dev notebook, lab machine or Colab. See [ADR 0001](.specs/adr/0001-adopt-poetry.md).
+DalMax is **Poetry-only** ([ADR 0001](.specs/adr/0001-adopt-poetry.md)).
 
-1. **Prerequisites**: Python **3.10 to 3.12** (upper-bounded by the `torch==2.5.0` pin;
-   check with `python3 --version`) and `git`.
+1. **Prerequisites**: Python **3.10 to 3.12** (`requires-python = ">=3.10,<3.13"`) and `git`.
 2. **Install Poetry**, preferably via [`pipx`](https://pipx.pypa.io/):
 
    ```bash
    sudo apt install pipx
    pipx ensurepath
    pipx install poetry
-   poetry --version   # developed against Poetry 2.x
    ```
 
-   or with the official installer: `curl -sSL https://install.python-poetry.org | python3 -`.
 3. **Clone and install**:
 
    ```bash
    git clone https://github.com/MarioCarvalhoBr/dalmax-framework-deep-active-learning-python.git
    cd dalmax-framework-deep-active-learning-python
-   poetry install
+   poetry install        # or: make setup
    ```
 
-`poetry install` resolves `pyproject.toml`/`poetry.lock` and creates an in-project
-virtualenv at `./.venv`. On Linux x86_64 it installs `torch==2.5.0` from the CUDA 12.4
-wheel index pinned in the lockfile; it also works on CPU-only machines (a large
-download, about 2.5 GB). Dependency versions are exact-pinned for reproducibility.
-Use `poetry run <cmd>` for every command in this README (or `poetry env activate`,
-or `source .venv/bin/activate`). No GPU is required for development, smoke tests or
-CPU-only strategies.
+`poetry install` creates an in-project virtualenv at `./.venv` from `poetry.lock` (exact pins, including
+`torch==2.5.0` and `torchvision==0.20.0`). Prefix commands with `poetry run`. No GPU is needed for
+development, tests or the CPU smoke run.
 
-## Datasets
-
-### daninhas_full_fixed (primary since 2026-11-11) and daninhas_full
-
-UAV weed image patches, five classes, `train/`/`test/` split. The canonical dataset is
-`daninhas_full_fixed` (8,238 images: 7,230 in the pool, 1,008 in the fixed test set, plus `README.txt`,
-`MANIFEST.csv` and `logs/` with the build's provenance), the duplicate-free version of the original `daninhas_full` (10,192 images: 8,086 / 2,106, with
-byte-identical copies inside and across the splits, KI-46), built by
-`scripts/datasets/build_daninhas_full_fixed.py` and checked by `make dataset-check`. Layout (both):
-
-```
-DATA/
-    daninhas_full_fixed/        (daninhas_full/: same train/ and test/ layout, no metadata files)
-        train/  test/
-            DATASET_BRACHIARIA/  DATASET_COLONIAO/  DATASET_GRAMINEA/
-            DATASET_MAMONA/      DATASET_OUTRAS_FOLHAS_LARGAS/
-        README.txt  MANIFEST.csv              (the dataset as it is: counts, split,class,file,md5)
-        logs/build_history.txt  logs/source_manifest.csv   (provenance of the build)
-```
-
-(`train/` and `test/` each hold the five class folders.) `DATA/` is immutable,
-read-only input and is not distributed with this repository; see
-[`.specs/research-rules/dataset-protocol.md`](.specs/research-rules/dataset-protocol.md)
-for the class definitions and imbalance notes.
-
-### CIFAR-10 (secondary benchmark)
+## Quick start
 
 ```bash
-mkdir -p DATA
-# Download DATA_CIFAR10.zip:
-# https://drive.google.com/file/d/1xNQS9QngkoxOPyQhtG6PzbAr9b83Bmk7/view?usp=sharing
-unzip DATA_CIFAR10.zip -d DATA
+make lint     # ruff check
+make format   # ruff format
+make test     # pytest, fast tests only
+make smoke    # builds DATA/daninhas_micro (needs DATA/daninhas_full), one CPU trainer.py run, then the fast tests
 ```
 
-Expected layout: `DATA/DATA_CIFAR10/{train,test}/{0,1,...,9}/`.
-
-## Run an experiment
-
-Entry point: `tools/trainer.py`, a thin shim over `dalmax.cli.main()`. Example
-(RNHAL hierarchical strategy on the weed dataset):
+One experiment (the same configuration as a paper-1 entropy run; needs the dataset and, in practice, a GPU):
 
 ```bash
 poetry run python tools/trainer.py \
     --dir_results results/scratch/ \
     --params_json files_config/campaign/params_paper1.json \
     --dataset_name DANINHAS \
-    --strategy_name SSRAEKmeansHCSampling \
+    --strategy_name EntropySampling \
     --n_query 100 --n_init_labeled 100 --n_round 8 \
     --seed 1 --device cuda
 ```
 
-CLI arguments: `--dir_results`, `--params_json`, `--seed`, `--n_init_labeled`,
-`--n_query`, `--n_round`, `--dataset_name {CIFAR10,DANINHAS}`, `--strategy_name` (any
-name of the previous section), plus:
+Arguments (`poetry run python tools/trainer.py --help`): `--dir_results`, `--params_json`, `--seed`,
+`--n_init_labeled`, `--n_query`, `--n_round`, `--dataset_name {CIFAR10,DANINHAS}`, `--strategy_name` (see the
+next section), `--device {auto,cuda,cpu}` (pass `cuda` explicitly on GPU machines) and
+`--embedding_variant {full,spatial,spectral}` (SSRAE only; overrides the params file).
 
-- `--device {auto,cuda,cpu}` (default `auto`, resolving to `cuda` iff available).
-  Pass `--device cuda` explicitly on GPU machines instead of relying on `auto`.
-- `--embedding_variant {full,spatial,spectral}` (default: no override): overrides the
-  params JSON's `embedding.variant` for the SSRAE extractor, so one params JSON
-  serves the three representation-ablation variants.
+The params JSON is keyed by dataset name and holds the training settings (`data_dir`, `n_epoch`, `n_drop`,
+`n_classes`, loader and optimizer args) plus optional blocks: `embedding` / `selection` (for
+`RepresentationStrategy`), `config_kmh` (legacy hierarchy, read as a hierarchical selection), `model_args`
+(e.g. `dropout_p` for the MC-dropout strategies) and `strategy_args` (hyperparameters of the DeepAL+ ports).
+The full schema is in [`.specs/experiments/experimental-protocol.md`](.specs/experiments/experimental-protocol.md);
+the ablation configs are explained in [`files_config/ablations/README.md`](files_config/ablations/README.md).
 
-The generic strategy reads its `(extractor, selection method)` pair from the params
-JSON, e.g. an SSRAE `spatial` variant, a `resnet_imagenet` embedding with
-hierarchical selection or SSRAE with `flat_proportional` selection:
+## Query strategies
 
-```bash
-poetry run python tools/trainer.py --dir_results results/scratch/ \
-    --params_json files_config/ablations/rnhal/rep_spatial.json \
-    --dataset_name DANINHAS --strategy_name RepresentationStrategy \
-    --n_query 100 --n_init_labeled 100 --n_round 8 --seed 1 --device cuda
+Every `--strategy_name` choice of `dalmax/query_strategies/registry.py`. "Changes training" says whether the
+classifier itself is trained differently from the standard recipe (not only which images are queried).
+Names marked **(+)** are the eight strategies ported from DeepAL+ [[16]](#ref-16)
+([ADR 0015](.specs/adr/0015-deepalplus-strategies.md)); the twelve unmarked benchmark strategies come from
+DeepAL [[26]](#ref-26).
+
+| `--strategy_name` | Method | Family | Changes training | Ref. |
+|---|---|---|---|---|
+| `RandomSampling` | Random sampling | random baseline | no | |
+| `LeastConfidence` | Least confidence | uncertainty | no | [[1]](#ref-1) |
+| `MarginSampling` | Margin sampling | uncertainty | no | [[2]](#ref-2) |
+| `EntropySampling` | Entropy sampling | uncertainty | no | [[3]](#ref-3) |
+| `LeastConfidenceDropout` | Least confidence, MC dropout | uncertainty with MC dropout | yes: dropout layer | [[4]](#ref-4) [[5]](#ref-5) |
+| `MarginSamplingDropout` | Margin, MC dropout | uncertainty with MC dropout | yes: dropout layer | [[4]](#ref-4) [[5]](#ref-5) |
+| `EntropySamplingDropout` | Entropy, MC dropout | uncertainty with MC dropout | yes: dropout layer | [[4]](#ref-4) [[5]](#ref-5) |
+| `BALDDropout` | BALD | uncertainty with MC dropout | yes: dropout layer | [[6]](#ref-6) [[5]](#ref-5) |
+| `VarRatio` (+) | Variation ratio | uncertainty with MC dropout | yes: dropout layer | [[7]](#ref-7) [[5]](#ref-5) |
+| `MeanSTD` (+) | Mean standard deviation | uncertainty with MC dropout | yes: dropout layer | [[8]](#ref-8) |
+| `AdversarialBIM` | DFAL with the basic iterative method | adversarial margin | no | [[9]](#ref-9) [[10]](#ref-10) |
+| `AdversarialDeepFool` | DFAL with DeepFool | adversarial margin | no | [[9]](#ref-9) [[11]](#ref-11) |
+| `LossPredictionLoss` (+) | Learning loss | learned loss | yes: joint training with a loss-prediction module | [[12]](#ref-12) |
+| `CEALSampling` (+) | CEAL | pseudo-labelling | yes: confident pool images pseudo-labelled for the next training | [[13]](#ref-13) |
+| `KMeansSampling` | k-means sampling | diversity | no | [[14]](#ref-14) |
+| `KCenterGreedy` | k-center greedy (core-set) | diversity | no | [[15]](#ref-15) |
+| `KCenterGreedyPCA` (+) | k-center greedy on 50 PCA components | diversity | no | [[15]](#ref-15) [[16]](#ref-16) |
+| `VAAL` (+) | Variational adversarial active learning | adversarial representation | no (trains its own VAE and discriminator) | [[17]](#ref-17) |
+| `BadgeSampling` (+) | BADGE | hybrid | no | [[18]](#ref-18) [[19]](#ref-19) |
+| `WAAL` (+) | Wasserstein adversarial active learning | hybrid | yes: min-max training with a critic | [[20]](#ref-20) |
+| `WAALRandomQuery` | WAAL's training with a uniform random query | control | yes: as `WAAL` | [[20]](#ref-20) |
+| `RepresentationStrategy` | Generic: embedding provider + selection module (KMH, TexHAL, RNHAL) | representation-based hierarchical selection | no | [[21]](#ref-21) |
+| `SSRAEKmeansSampling` | Preset: SSRAE + flat k-means | representation-based selection (flat) | no | [[25]](#ref-25) |
+| `VCTexKmeansSampling` | Preset: VCTex + flat k-means | representation-based selection (flat) | no | [[24]](#ref-24) |
+| `SSRAEKmeansHCSampling` | Preset: SSRAE + hierarchical k-means | representation-based hierarchical selection | no | [[25]](#ref-25) [[21]](#ref-21) |
+| `VCTexKmeansHCSampling` | Preset: VCTex + hierarchical k-means | representation-based hierarchical selection | no | [[24]](#ref-24) [[21]](#ref-21) |
+| `FullSupervised` | Full supervision on the whole pool | upper bound | trains once on every pool label | |
+
+Notes:
+
+- **MC-dropout family**: the ResNet-50 has no dropout layer of its own, so these six strategies need
+  `"model_args": {"dropout_p": ...}`; the campaign uses `files_config/campaign/params_paper1_mc_dropout.json`.
+- **`WAALRandomQuery`** is not a benchmark strategy. It keeps WAAL's training, hyperparameters and seeded
+  generators and replaces only the query by a uniform random draw. WAAL against the control isolates WAAL's
+  selection at equal training; the control against `RandomSampling` isolates WAAL's training at equal (random)
+  selection (ADR 0015, amendment of 2026-11-12).
+- **`FullSupervised`** is not active learning: the whole pool is labeled at initialization, it requires
+  `--n_round 0` and never queries. It is the upper bound of paper 1.
+- **The lab's own methods** are parameterisations of `RepresentationStrategy`, set in the params JSON's
+  `embedding` / `selection` blocks:
+  - **KMH**: hierarchical k-means [[21]](#ref-21) over frozen ImageNet [[23]](#ref-23) ResNet-50
+    [[22]](#ref-22) features (`resnet_imagenet`; `files_config/campaign/params_kmh.json`).
+  - **TexHAL**: VCTex descriptors [[24]](#ref-24) (`vctex`; canonical `Q = 17`,
+    [ADR 0011](.specs/adr/0011-texhal-canonical-q17.md); configs in `files_config/ablations/texhal_q17/`).
+  - **RNHAL**: SSRAE randomized-network descriptors [[25]](#ref-25) (`ssrae`, `Q = 13`; configs in
+    `files_config/ablations/rnhal/`).
+
+  The four presets pin the legacy `Q` (SSRAE `13`, VCTex `(5, 17)`) and ignore `embedding.q`.
+- **Deviations from DeepAL+** (detail and reasons in [ADR 0015](.specs/adr/0015-deepalplus-strategies.md)):
+  - `VarRatio` implements the MC-dropout variation ratio (DeepAL+ ranks like least confidence).
+  - `VAAL` uses the original method's discriminator targets (labeled 1, unlabeled 0), queries the lowest
+    discriminator outputs and uses Adam for both networks.
+  - `LossPredictionLoss` keeps the common `n_epoch` budget and detaches the module after a fraction of it.
+  - `CEALSampling` uses the paper's threshold values.
+  - All randomness is seeded from the run seed (PCA solver, k-means++ draws, auxiliary networks, tie-breaks).
+  - `KMeansSamplingGPU` (faiss) was not ported.
+
+## Dataset
+
+The canonical dataset is `DATA/daninhas_full_fixed/`: UAV image patches of five weed classes of sugarcane
+fields. It is built from the original `DATA/daninhas_full/` by
+[`scripts/datasets/build_daninhas_full_fixed.py`](scripts/datasets/build_daninhas_full_fixed.py)
+([ADR 0016](.specs/adr/0016-clean-rerun-fixed-dataset.md)), the only sanctioned way to create a dataset
+directory. **The images are not distributed in this repository** (`DATA/` is gitignored and treated as
+immutable input).
+
+```
+DATA/daninhas_full_fixed/
+    train/<class>/<file>     training pool
+    test/<class>/<file>      fixed test set, never queried
+    README.txt               counts and the identity rule
+    MANIFEST.csv             one row per image: split,class,file,md5
+    logs/                    build provenance: build_history.txt, source_manifest.csv
 ```
 
-Reproducibility: the params JSON, the CLI arguments, the seed and the git commit
-fully determine a run (`run_metadata.json` records them). Seeding is centralised in
-`dalmax/seeding.py`; on CPU results are bit-identical, on GPU determinism is
-best-effort (the `determinism` block of `run_metadata.json` lists any op without a
-deterministic kernel), so report seed-averaged numbers.
+| Folder | Class | Train | Test |
+|---|---|---:|---:|
+| `DATASET_BRACHIARIA` | *Brachiaria* spp. | 365 | 172 |
+| `DATASET_COLONIAO` | *Panicum maximum* | 982 | 89 |
+| `DATASET_GRAMINEA` | Gramineae spp. | 1,156 | 502 |
+| `DATASET_MAMONA` | *Ricinus communis* | 3,056 | 167 |
+| `DATASET_OUTRAS_FOLHAS_LARGAS` | Other broadleaf | 1,671 | 78 |
+| **Total** | | **7,230** | **1,008** |
+
+**Identity rule**: two files are the same image when their MD5 digests are equal. No MD5 occurs twice in the
+dataset, neither inside a split nor across train and test. The test split keeps one file per distinct image of
+the original test split. The train split keeps one file per distinct image of the original train split, minus
+every image also in test and minus the near-duplicates of test images listed in
+[`files_config/datasets/daninhas_full_fixed_near_duplicate_leaks.csv`](files_config/datasets/daninhas_full_fixed_near_duplicate_leaks.csv).
+
+Verify a copy (read only): `make dataset-check`. It compares the files on disk with `MANIFEST.csv` and
+checks for repeated MD5s. It must end with
+`OK: files on disk match MANIFEST.csv, no repeated md5 inside or across splits`.
+
+`DATA/daninhas_micro/` (a small stratified replica built by `make micro-dataset`) is used by the smoke tests.
+CIFAR-10 is still accepted by the CLI (`--dataset_name CIFAR10`, layout `DATA/DATA_CIFAR10/{train,test}/{0..9}/`)
+as a secondary benchmark, but the campaign does not use it.
 
 ## The campaign
 
-Everything the three papers need runs from ONE manifest,
-`files_config/campaign/manifest.json`, plus the paper-1 KMH sweep `manifest_kmh_sweep.json` (configurations shared by
-several papers run once and are aliased), driven by the engine `dalmax/campaign.py`. Since 2026-11-11 (ADR 0016) they
-describe the clean re-run on `DATA/daninhas_full_fixed` (297 + 165 = 462 runs, seeds 1 to 3, prepared, not executed)
-into `results/campaign_fixed/` and `results/campaign_kmh_fixed/`, split into two GPU parts (`part_1_gpu`,
-`part_2_gpu`) of about 49 estimated GPU hours each, one per Colab account. See
-[`.specs/experiments/campaign.md`](.specs/experiments/campaign.md) and ADR 0008/0009/0010/0016.
+The campaign is the only way the papers' runs are executed and reported. It is driven by the engine
+`dalmax/campaign.py` from two committed manifests (generated by `scripts/campaign/build_manifest.py`). Both
+run seeds 1 to 3 on `daninhas_full_fixed` into new results roots:
+
+| Manifest | Content | Runs / groups | Results root |
+|---|---|---|---|
+| `files_config/campaign/manifest.json` | paper 1 (20 strategies + KMH at `n_query` 10/50/100), the WAAL control, the upper bound, the TexHAL/RNHAL ablations | 297 / 99 | `results/campaign_fixed/` |
+| `files_config/campaign/manifest_kmh_sweep.json` | KMH parameter sweep ([ADR 0012](.specs/adr/0012-kmh-parameter-sweep.md)) | 165 / 55 | `results/campaign_kmh_fixed/` |
+
+The 462 runs are split into two **GPU parts** of similar estimated cost, one per Colab account, run in parallel.
+Counts are from `make campaign-list-gpu-part`; estimates from `files_config/campaign/gpu_time_estimates.json`:
+
+| `GPU_PART` | Content | Runs / groups | Est. GPU h |
+|---|---|---|---|
+| `part_1_gpu` | paper 1 at nq100 (with the WAAL control), upper bound, all ablations, KMH sweep nq100 + nq50 | 285 / 95 | 49.9 |
+| `part_2_gpu` | paper 1 at nq50 and nq10, KMH sweep nq10 | 177 / 59 | 48.8 |
+
+Inside a part the plan runs cheap paper-1 groups first, then ablations, the KMH sweep, and the long baselines
+(`AdversarialBIM`, `VAAL`/`WAAL`/`WAALRandomQuery`, `AdversarialDeepFool`) last.
 
 ```bash
-make campaign-list-gpu-part GPU_PART=part_1_gpu   # both manifests, plan order, estimated GPU hours
-make campaign-pilot GPU_PART=part_1_gpu           # seed 1 of the part's VAAL/WAAL (+ RandomSampling) first
-make campaign-pilot-report GPU_PART=part_1_gpu    # wall time vs estimate + strategy_diagnostics of the pilot
-make campaign-run-gpu-part GPU_PART=part_1_gpu    # sequential, skip-existing: re-run the same command to resume
-make campaign-verify-gpu-part GPU_PART=part_1_gpu # OK/INCOMPLETE/MISSING per job + seed audit + data-order audit
-make campaign-verify-all                          # both manifests after merging the two parts (expect OK=462)
-make campaign-report-all                          # tables + mean confusion matrices -> docs/results/campaign_fixed/ (+ _kmh_fixed/)
-make campaign-smoke                               # CPU micro campaign (skips the two adversarial baselines)
+make campaign-list-gpu-part   GPU_PART=part_1_gpu   # plan of both manifests, run counts, estimated GPU hours
+make campaign-space-gpu-part  GPU_PART=part_1_gpu   # free space vs remaining runs (exit 4 when short; read only)
+make campaign-pilot           GPU_PART=part_1_gpu   # first: seed 1 of the part's VAAL/WAAL + RandomSampling
+make campaign-pilot-report    GPU_PART=part_1_gpu   # read only: wall time vs estimate, strategy diagnostics
+make campaign-run-gpu-part    GPU_PART=part_1_gpu   # run the part; skips finished runs, re-run to resume
+make campaign-verify-gpu-part GPU_PART=part_1_gpu   # OK/INCOMPLETE/MISSING + seed audit + data-order audit
+make campaign-verify-all                            # after merging both parts: both manifests, every group
+make campaign-report-all                            # tables -> docs/results/campaign_fixed/ (+ campaign_kmh_fixed/)
+make campaign-smoke-gpu-part  GPU_PART=part_2_gpu   # micro plan of one part on CPU (seed 1)
 ```
 
-Variables: `PART=all|paper1|paper1_control|upper_bound|rnhal|texhal|texhal_q17|hier_transfer` (comma-separated
-allowed) or `PART=part_1_gpu|part_2_gpu`, `MICRO=1` (micro manifest on CPU, results in `results/smoke_campaign_fixed/`),
-`MANIFEST=path` (any other manifest, overrides `MICRO`; e.g. the KI-43 control:
-`make campaign-run MANIFEST=files_config/campaign/manifest_control_ki43.json PART=control`),
-`SEEDS=1`, `EXCLUDE=A,B`, `DEVICE=cuda|cpu|auto` and `RUN_ARGS='--dry-run'`.
-`make campaign-manifest` regenerates the committed manifests from
-`scripts/campaign/build_manifest.py`. The first campaign (222 runs on the dataset with duplicates, KI-46) was
-executed on Google Colab Pro (222 of 222 runs OK, seed audit passed); its results are tabulated in the campaign spec
-as history, superseded for the papers by the clean re-run.
+Single-manifest targets (`campaign-list`, `campaign-run`, `campaign-verify`, `campaign-space`,
+`campaign-report`) accept `PART=...`, `MANIFEST=path`, `MICRO=1`, `SEEDS=...`, `EXCLUDE=...`, `DEVICE=...` and
+`RUN_ARGS=...`; see the comments in the [`Makefile`](Makefile) and
+[`.specs/experiments/campaign.md`](.specs/experiments/campaign.md). Step-by-step operator guides:
 
-Step-by-step operator guides: **[`LAB_RUNBOOK.md`](LAB_RUNBOOK.md)** (lab machine) and
-**[`COLAB_RUNBOOK.md`](COLAB_RUNBOOK.md)** (Colab; the runnable notebook is
-[`notebooks/colab_runbook.ipynb`](notebooks/colab_runbook.ipynb)). Environment
-checks: `make lab-setup`, `make lab-check`, `make colab-setup`, `make colab-check`,
-`make micro-dataset`.
+- [`COLAB_RUNBOOK.md`](COLAB_RUNBOOK.md) (section 6: the clean campaign on two accounts), or the runnable
+  notebook [`notebooks/colab_runbook.ipynb`](notebooks/colab_runbook.ipynb);
+- [`LAB_RUNBOOK.md`](LAB_RUNBOOK.md) for a lab machine.
 
-## Inference tools
+Environment checks: `make lab-setup`, `make lab-check`, `make colab-setup`, `make colab-check`.
+The code is hardware-agnostic: the GPU actually used is recorded only in each run's `run_metadata.json`
+(`environment.gpus`).
 
-`trainer.py` writes a self-describing `dalmax-checkpoint` (`saved_model.pth`;
-`dalmax/models/checkpoint.py`: weights plus `model_name`/`n_classes`/`class_names`/
-`img_size`/provenance), consumed by three tools. All preprocessing is read from the
-same code training used, so predictions match what a real run would record. See
-[ADR 0006](.specs/adr/0006-checkpoint-format-and-inference-tools.md).
+## Run outputs and inference tools
 
-> Checkpoints written before 2026-08-23 (including the early `results/dalmax1/` and
-> `results/dalmax2/` runs) contain no weights (a saved class reference, KI-22 in
-> [`.specs/quality/known-issues.md`](.specs/quality/known-issues.md)) and cannot be recovered.
-
-**`tools/loader.py`**: inspect a checkpoint (format/version, model, labels, provenance,
-parameter counts per module, file size, CPU dummy-forward check; a clear error on a legacy file).
-
-```bash
-poetry run python tools/loader.py --model results/campaign/.../saved_model.pth
-```
-
-**`tools/predict.py`**: run a checkpoint on one image or a folder (searched recursively).
-
-```bash
-poetry run python tools/predict.py --model results/campaign/.../saved_model.pth \
-    --image DATA/daninhas_full_fixed/test/DATASET_GRAMINEA/some_image.jpg
-poetry run python tools/predict.py --model results/campaign/.../saved_model.pth \
-    --dir DATA/daninhas_full_fixed/test/DATASET_GRAMINEA --out results/predictions/
-```
-
-It writes `predictions.csv` (`Image Index,Predicted Class,Confidence,Path`, plus one
-probability column per class) and a `<stem>.pred.json` sidecar per image into `--out`
-(default: alongside the input); `--device {auto,cpu,cuda}` mirrors `trainer.py`.
-
-**`tools/gui.py`**: a `tkinter` mini-app (load a model, pick images or a folder, see a
-results table and per-class probabilities, export the same CSV). Runs on CPU by default;
-only `dalmax/inference/gui.py::main()` touches `tkinter`, so the module imports headless.
-
-```bash
-poetry run python tools/gui.py
-```
-
-## Params JSON schema
-
-Hyperparameters are keyed by dataset name (see `files_config/campaign/params_paper1.json`,
-the reference file of the campaign). `dalmax/config/loader.py` reads the schema below.
-
-```json
-{
-  "DANINHAS": {
-    "data_dir": "DATA/daninhas_full_fixed/",
-    "n_epoch": 10,
-    "n_drop": 10,
-    "n_classes": 5,
-    "train_args": { "batch_size": 256, "num_workers": 4 },
-    "test_args": { "batch_size": 256, "num_workers": 4 },
-    "optimizer_args": { "lr": 0.05, "momentum": 0.3 },
-    "config_kmh": {
-      "n_clusters": [600, 200, 100],
-      "n_levels": 3,
-      "sample_sizes": [30, 15, 2]
-    }
-  },
-  "CIFAR10": {
-    "data_dir": "DATA/DATA_CIFAR10/",
-    "n_epoch": 20,
-    "n_drop": 10,
-    "n_classes": 10,
-    "train_args": { "batch_size": 64, "num_workers": 1 },
-    "test_args": { "batch_size": 1000, "num_workers": 1 },
-    "optimizer_args": { "lr": 0.05, "momentum": 0.3 }
-  }
-}
-```
-
-`config_kmh` (hierarchical k-means config, needed only by the `*HCSampling` presets)
-sets the clusters per level (`n_clusters`), the number of levels (`n_levels`) and the
-samples drawn per level (`sample_sizes`). The CIFAR-10 block is exercised by
-`files_config/benchmark/params_df_gpu_*.json`, kept for the tests.
-
-**Optional per-dataset keys**, consumed by `--strategy_name RepresentationStrategy`
-(the presets mostly ignore them):
-
-```json
-{
-  "DANINHAS": {
-    "...": "... same required keys as above ...",
-    "embedding": { "extractor": "ssrae", "q": 13, "variant": "full" },
-    "selection": {
-      "method": "hierarchical",
-      "hierarchy": { "n_clusters": [600, 200, 100], "n_levels": 3, "sample_sizes": [30, 15, 2] }
-    }
-  }
-}
-```
-
-- `embedding.extractor`: `"ssrae"` (default) | `"vctex"` | `"resnet_imagenet"`.
-- `embedding.q`: the extractor's hyperparameter: `13` for SSRAE, `[5, 17]` for VCTex,
-  `null` for `resnet_imagenet` (fixed 2048-d penultimate layer). Defaulted per extractor
-  if omitted; never falls back to SSRAE's `13` for VCTex. TexHAL's canonical config is `17`
-  (ADR 0011).
-- `embedding.variant`: `"full"` (default) | `"spatial"` | `"spectral"`; SSRAE only, slices
-  the cached full embedding and never recomputes it.
-- `selection.method`: `"flat_closest"` (flat k-means, closest sample per cluster) |
-  `"flat_proportional"` (random picks per cluster, proportional to cluster size,
-  cluster count independent of the query budget) | `"hierarchical"` (requires
-  `selection.hierarchy`).
-- A dataset entry with a legacy `"config_kmh"` and no `"selection"` key is read as
-  `selection = {"method": "hierarchical", "hierarchy": config_kmh}`.
-
-Embeddings are cached in `results/cache/embeddings/` under a key built from
-`(dataset, extractor, Q, variant, split, pool_hash)`, so a cache is never reused across a
-different configuration. The exact `embedding`/`selection` values of each ablation run are in
-[`.specs/experiments/ablation-study.md`](.specs/experiments/ablation-study.md) and
-`files_config/ablations/README.md`.
-
-## Results directory convention
-
-`trainer.py` writes to:
+Each run writes one leaf directory:
 
 ```
 {dir_results}/{dataset_folder}/SEED_{seed}/NQ_{n_query}_NIL_{n_init_labeled}_NR_{n_round}_NE_{n_epoch}/{strategy_name}/
 ```
 
-containing `results.json` (per-round metrics, written last so its presence marks a
-complete run; weighted and macro precision/recall/F1), `predictions.csv`,
-`confusion_matrix.pdf`, `accuracy.pdf`/`precision.pdf`/`recall.pdf`/`f1_score.pdf`,
-`log-dalmax.log`, `saved_model.pth` (the `dalmax-checkpoint`, see
-[Inference tools](#inference-tools)) and `run_metadata.json` (full config snapshot, git
-commit, library versions, recorded environment and determinism settings). `results/` is
-append-only. See [`.specs/experiments/experimental-protocol.md`](.specs/experiments/experimental-protocol.md).
+| File | Content |
+|---|---|
+| `results.json` | per-round metrics (accuracy, weighted and macro precision/recall/F1); written last, so its presence marks a finished run |
+| `run_metadata.json` | resolved config, git commit, versions, environment, determinism settings, data-order hashes |
+| `round_predictions.json` | test predictions of every round, with the test images' paths and true labels |
+| `round_queries.json` | pool indices labeled in every round (round 0 = initial set), with labels and image paths |
+| `predictions.csv` | last-round test predictions |
+| `confusion_matrix.pdf`, `accuracy.pdf`, `precision.pdf`, `recall.pdf`, `f1_score.pdf` | plots |
+| `log-dalmax.log` | run log |
+| `saved_model.pth` | trained model in the `dalmax-checkpoint` format (`dalmax/models/checkpoint.py`) |
 
-## Execution environments
+`results/` is append-only. Checkpoints written before 2026-08-23 hold no weights and cannot be loaded (KI-22).
 
-DalMax is developed and run across three environments, hardware-agnostic: the GPU
-actually used is recorded at runtime in each run's `run_metadata.json`
-(`environment.gpus`), never named in code or docs.
-
-1. **Local dev notebook**: no GPU. Coding, CPU smoke tests on tiny subsets, reports.
-2. **Lab machine**: one or more GPUs; pull the repo, run the campaign
-   (`make campaign-run`), bring results back via git or copy.
-3. **Google Colab Pro** (single GPU, session-limited): a hybrid layout (repo, `.venv` and
-   dataset on the runtime's local disk, `results/` symlinked to Drive so artifacts survive a
-   disconnect) via `make colab-setup` / `make campaign-run`.
-
-Details and decision matrix:
-[`.specs/infrastructure/execution-environments.md`](.specs/infrastructure/execution-environments.md);
-operator guides: [`LAB_RUNBOOK.md`](LAB_RUNBOOK.md), [`COLAB_RUNBOOK.md`](COLAB_RUNBOOK.md)
-and the runnable notebook
-[`notebooks/colab_runbook.ipynb`](notebooks/colab_runbook.ipynb)
-(badge at the top). Training targets CUDA 12.4 with `torch==2.5.0`/`torchvision==0.20.0`.
-
-## Development
-
-The project uses a Claude Code multi-agent setup for coding sessions: see
-[`CLAUDE.md`](CLAUDE.md) (operational guide), [`.claude/`](.claude/) (agents, commands, rules,
-skills) and [`.specs/`](.specs/) (source-of-truth specifications). Code, spec and ADR updates
-go together (`.claude/rules/spec-sync.md`).
+Inference tools ([ADR 0006](.specs/adr/0006-checkpoint-format-and-inference-tools.md),
+[`tools/README.md`](tools/README.md)) use the same preprocessing as training:
 
 ```bash
-make setup            # poetry install
-make lint             # ruff check
-make format           # ruff format
-make test             # pytest, fast tests only
-make smoke            # end-to-end micro-dataset run (tools/trainer.py, CPU) + fast tests
-make campaign-smoke   # micro campaign on CPU (skips the two adversarial baselines)
+poetry run python tools/loader.py  --model <leaf>/saved_model.pth                     # inspect a checkpoint
+poetry run python tools/predict.py --model <leaf>/saved_model.pth --image path/to/image.jpg
+poetry run python tools/predict.py --model <leaf>/saved_model.pth \
+    --dir DATA/daninhas_full_fixed/test/DATASET_GRAMINEA --out results/predictions/   # folder, recursive
+poetry run python tools/gui.py                                                       # tkinter mini-app
 ```
 
-CI (`.github/workflows/ci.yml`) runs the fast checks. `tests/test_hardware_agnostic.py`
-fails if a GPU model name appears in a tracked file.
+`predict.py` writes `predictions.csv` (one probability column per class) and a `<stem>.pred.json` per image
+into `--out` (default: next to the input); `--device {auto,cpu,cuda}` as in `trainer.py`.
 
-## Repository layout
+## Repository map
 
-```
-dalmax-framework-deep-active-learning-python/
-├── tools/                     # CLI entry points: trainer.py, predict.py, loader.py, gui.py (+ README)
-├── dalmax/                    # the one package; all Python source lives here
-│   ├── cli.py                 # argparse -> ExperimentConfig -> ExperimentRunner.run()
-│   ├── campaign.py            # campaign engine: list / run / verify
-│   ├── config/                # schema.py (typed dataclasses), loader.py (params JSON -> config)
-│   ├── seeding.py             # seeding and determinism settings
-│   ├── logging_utils.py       # module-level singleton logger
-│   ├── data/                  # datasets.py, handlers.py, loaders.py, registry.py
-│   ├── models/                # base.py, daninhas_resnet50.py, cifar10_cnn.py, checkpoint.py, registry.py
-│   ├── inference/             # predictor.py, export.py (CSV writer), gui.py (tkinter)
-│   ├── query_strategies/      # base.py (Strategy), the 12 classical strategies, full_supervised.py,
-│   │                          #   representation.py, registry.py (STRATEGY_REGISTRY)
-│   ├── embeddings/            # EmbeddingProvider: ssrae, vctex, resnet_imagenet + keyed cache
-│   ├── selection/             # SelectionStrategy: flat_closest, flat_proportional, hierarchical
-│   ├── experiment/            # runner.py (round loop), reporter.py, run_metadata.py, environment.py
-│   ├── reporting/             # campaign_report.py, leaf_check.py and cross-run aggregation scripts
-│   └── tools/                 # vendored code: SSRAE/, VCTex/, SSL/ (hierarchical k-means, Meta-licensed)
-├── files_config/
-│   ├── params_micro.json      # CPU smoke-test params (make smoke)
-│   ├── campaign/              # manifest.json (+ micro, KI-43 control), params_paper1/params_kmh (+ micro)
-│   ├── ablations/             # per-method ablation params (rnhal/, texhal/, texhal_q17/, micro/)
-│   └── benchmark/             # legacy reference params (CIFAR-10 block used by tests)
-├── scripts/                   # make_micro_dataset.py, campaign/build_manifest.py, colab/setup_colab.sh
-├── notebooks/                 # colab_runbook.ipynb (runnable Colab guide), colab_local_test.ipynb
-├── assets/                    # README figure (TikZ source + PNG), qualification PDF
-├── tests/                     # pytest suite (imports, registries, selection, seeding, campaign, golden runs)
-├── DATA/                      # datasets (gitignored, immutable)
-├── results/                   # experiment outputs (gitignored, append-only)
-├── .specs/                    # specifications, experiment protocols, ADRs
-├── .claude/                   # multi-agent config: agents, commands, rules, skills
-├── LAB_RUNBOOK.md  COLAB_RUNBOOK.md  CLAUDE.md  AGENTS.md  Makefile
-```
+| Path | Content |
+|---|---|
+| `tools/` | CLI entry points: `trainer.py`, `predict.py`, `loader.py`, `gui.py` |
+| `dalmax/` | the package: `cli.py`, `campaign.py`, `seeding.py`, `data_order.py`, `config/`, `data/`, `models/`, `query_strategies/`, `embeddings/`, `selection/`, `experiment/`, `reporting/`, `inference/`, `tools/` (vendored SSRAE, VCTex and hierarchical k-means code) |
+| `files_config/` | params files and manifests: `campaign/`, `ablations/`, `datasets/`, `benchmark/` (legacy, used by tests), `params_micro.json` |
+| `scripts/` | dataset builder, micro dataset, manifest builders, Colab setup |
+| `notebooks/` | `colab_runbook.ipynb` (runnable Colab guide) |
+| `tests/` | pytest suite (registries, seeding, cache, campaign, golden runs, hardware-agnostic check) |
+| `assets/` | README figure (TikZ source and PNG) and the qualification document |
+| `.specs/` | specifications (source of truth), experiment protocols, known issues, ADRs in [`.specs/adr/`](.specs/adr/README.md) |
+| `.claude/`, `CLAUDE.md`, `AGENTS.md` | agent configuration and operational guide for coding sessions |
+| `DATA/`, `results/`, `docs/` | datasets, run outputs and generated reports (not tracked, except committed ablation tables under `docs/results/`) |
 
-The pre-Phase-4 `core/`/`utils/` split no longer exists; the per-module map is in
-[`.specs/architecture/current-state.md`](.specs/architecture/current-state.md).
-
-## Roadmap
-
-The codebase was refactored in phases so that the ablation studies (representation,
-hierarchy, stage contribution) are a matter of configuration, not new code:
-
-**Phase 1 (safety net) done, Phase 2 (core refactor) done, Phase 3 (ablations) executed
-2026-08-26, Phase 4 (polish, single `dalmax/` package) done**, followed by the CLI/`tools/`
-cleanup and the checkpoint/inference tools. The one-shot campaign (222 runs for the three
-papers: 210 executed 2026-09-30 to 2026-11-01 and verified, plus the 12-run `hier_transfer`
-part, ADR 0013, executed 2026-11-11 and verified, 222/222) and the 165-run KMH configuration
-study (ADR 0012, executed and verified 2026-11-10). Next: writing the thesis from the
-campaign results and advisor review of the ablation section.
-
-Plan and acceptance criteria: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refactor-plan.md);
-papers: [`.specs/experiments/papers-roadmap.md`](.specs/experiments/papers-roadmap.md).
+Module-level detail: [`.specs/architecture/current-state.md`](.specs/architecture/current-state.md).
+CI (`.github/workflows/ci.yml`) runs the fast checks.
 
 ## License
 
-DalMax is released under the MIT License. See [LICENSE](LICENSE).
+DalMax is released under the MIT License. See [LICENSE](LICENSE). The vendored hierarchical k-means code in
+`dalmax/tools/SSL/` carries its own Meta Platforms copyright header.
 
-## Citing
+## How to cite
 
-If you use this code in your research or applications, please consider citing the
-repository:
+If you use this code, please cite the repository:
 
 ```bibtex
 @misc{Carvalho2024dalmax,
@@ -533,14 +363,12 @@ repository:
   howpublished = {\url{https://github.com/MarioCarvalhoBr/dalmax-framework-deep-active-learning-python}},
   month        = {dec},
   year         = {2024},
-  note         = {Available on GitHub},
-  annote       = {A Python framework for implementing and comparing deep active learning methods.}
+  note         = {Available on GitHub}
 }
 ```
 
-This repository also contains the PhD qualification document presenting the
-theoretical foundation and methodology behind DalMax/RNHAL:
-[`assets/phd_files/qualificacao-doutorado-mario-carvalho.pdf`](assets/phd_files/qualificacao-doutorado-mario-carvalho.pdf).
+The PhD qualification document with the theoretical foundation of DalMax/RNHAL is in
+[`assets/phd_files/qualificacao-doutorado-mario-carvalho.pdf`](assets/phd_files/qualificacao-doutorado-mario-carvalho.pdf):
 
 ```bibtex
 @phdthesis{Carvalho2025qualificacao,
@@ -551,35 +379,50 @@ theoretical foundation and methodology behind DalMax/RNHAL:
   month      = {mar},
   type       = {Qualificação de Doutorado},
   address    = {Campo Grande, MS, Brazil},
-  note       = {PhD Qualification Examination},
-  supervisor = {Wesley Nunes Gonçalves}
+  note       = {PhD Qualification Examination}
 }
 ```
 
 ## Contact
 
-- Author: Mário de Araújo Carvalho
-- Email: mariodearaujocarvalho@gmail.com
+- Author: Mário de Araújo Carvalho (mariodearaujocarvalho@gmail.com)
 - Advisor: Wesley Nunes Gonçalves (UFMS)
-- Project: [https://github.com/MarioCarvalhoBr/dalmax-framework-deep-active-learning-python](https://github.com/MarioCarvalhoBr/dalmax-framework-deep-active-learning-python)
+- Project: <https://github.com/MarioCarvalhoBr/dalmax-framework-deep-active-learning-python>
 
 ## Acknowledgements
 
-This project is based on code from
-[DeepAL: Deep Active Learning in Python](https://github.com/ej0cl6/deep-active-learning).
-Please consider citing the corresponding publication, available
-[here](https://arxiv.org/abs/2111.15258).
+- The twelve classical strategies and the original loop are based on
+  [DeepAL: Deep Active Learning in Python](https://github.com/ej0cl6/deep-active-learning) [[26]](#ref-26).
+- The eight strategies marked (+) are ports of [DeepAL+](https://github.com/SineZHAN/deepALplus) (MIT licence)
+  [[16]](#ref-16), with the deviations listed above.
+- The hierarchical k-means and hierarchical sampling code is vendored from
+  [facebookresearch/ssl-data-curation](https://github.com/facebookresearch/ssl-data-curation) [[21]](#ref-21).
 
-### References
+## References
 
-[1] A Sequential Algorithm for Training Text Classifiers, SIGIR, 1994
-
-[2] Active Hidden Markov Models for Information Extraction, IDA, 2001
-
-[3] Active learning literature survey. University of Wisconsin-Madison Department of Computer Sciences, 2009
-
-[4] Deep Bayesian Active Learning with Image Data, ICML, 2017
-
-[5] Active Learning for Convolutional Neural Networks: A Core-Set Approach, ICLR, 2018
-
-[6] Adversarial Active Learning for Deep Networks: a Margin Based Approach, arXiv, 2018
+1. <a id="ref-1"></a>David D. Lewis, William A. Gale. A Sequential Algorithm for Training Text Classifiers. *SIGIR '94: Proceedings of the 17th Annual International ACM SIGIR Conference on Research and Development in Information Retrieval*, 1994. <https://doi.org/10.1007/978-1-4471-2099-5_1>
+2. <a id="ref-2"></a>Tobias Scheffer, Christian Decomain, Stefan Wrobel. Active Hidden Markov Models for Information Extraction. *Advances in Intelligent Data Analysis (IDA 2001)*, LNCS 2189, 2001. <https://doi.org/10.1007/3-540-44816-0_31>
+3. <a id="ref-3"></a>Burr Settles. Active Learning Literature Survey. Computer Sciences Technical Report 1648, University of Wisconsin–Madison, 2009. <https://burrsettles.com/pub/settles.activelearning.pdf>
+4. <a id="ref-4"></a>Yarin Gal, Zoubin Ghahramani. Dropout as a Bayesian Approximation: Representing Model Uncertainty in Deep Learning. *Proceedings of the 33rd International Conference on Machine Learning (ICML)*, PMLR 48, 2016. <https://proceedings.mlr.press/v48/gal16.html>
+5. <a id="ref-5"></a>Yarin Gal, Riashat Islam, Zoubin Ghahramani. Deep Bayesian Active Learning with Image Data. *Proceedings of the 34th International Conference on Machine Learning (ICML)*, PMLR 70, 2017. <https://proceedings.mlr.press/v70/gal17a.html>
+6. <a id="ref-6"></a>Neil Houlsby, Ferenc Huszár, Zoubin Ghahramani, Máté Lengyel. Bayesian Active Learning for Classification and Preference Learning. arXiv:1112.5745, 2011. <https://doi.org/10.48550/arXiv.1112.5745>
+7. <a id="ref-7"></a>Linton C. Freeman. *Elementary Applied Statistics: For Students in Behavioral Science*. Wiley, New York, 1965. <https://openlibrary.org/works/OL5743680W>
+8. <a id="ref-8"></a>Michael Kampffmeyer, Arnt-Borre Salberg, Robert Jenssen. Semantic Segmentation of Small Objects and Modeling of Uncertainty in Urban Remote Sensing Images Using Deep Convolutional Neural Networks. *2016 IEEE Conference on Computer Vision and Pattern Recognition Workshops (CVPRW)*, 2016. <https://doi.org/10.1109/cvprw.2016.90>
+9. <a id="ref-9"></a>Melanie Ducoffe, Frederic Precioso. Adversarial Active Learning for Deep Networks: a Margin Based Approach. arXiv:1802.09841, 2018. <https://doi.org/10.48550/arXiv.1802.09841>
+10. <a id="ref-10"></a>Alexey Kurakin, Ian Goodfellow, Samy Bengio. Adversarial examples in the physical world. arXiv:1607.02533, 2016. <https://doi.org/10.48550/arXiv.1607.02533>
+11. <a id="ref-11"></a>Seyed-Mohsen Moosavi-Dezfooli, Alhussein Fawzi, Pascal Frossard. DeepFool: A Simple and Accurate Method to Fool Deep Neural Networks. *2016 IEEE Conference on Computer Vision and Pattern Recognition (CVPR)*, 2016. <https://doi.org/10.1109/CVPR.2016.282>
+12. <a id="ref-12"></a>Donggeun Yoo, In So Kweon. Learning Loss for Active Learning. *2019 IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)*, 2019. <https://doi.org/10.1109/cvpr.2019.00018>
+13. <a id="ref-13"></a>Keze Wang, Dongyu Zhang, Ya Li, Ruimao Zhang, Liang Lin. Cost-Effective Active Learning for Deep Image Classification. *IEEE Transactions on Circuits and Systems for Video Technology* 27(12), 2017. <https://doi.org/10.1109/tcsvt.2016.2589879>
+14. <a id="ref-14"></a>Fedor Zhdanov. Diverse mini-batch Active Learning. arXiv:1901.05954, 2019. <https://doi.org/10.48550/arXiv.1901.05954>
+15. <a id="ref-15"></a>Ozan Sener, Silvio Savarese. Active Learning for Convolutional Neural Networks: A Core-Set Approach. *International Conference on Learning Representations (ICLR)*, 2018. <https://openreview.net/forum?id=H1aIuk-RW>
+16. <a id="ref-16"></a>Xueying Zhan, Qingzhong Wang, Kuan-hao Huang, Haoyi Xiong, Dejing Dou, Antoni B. Chan. A Comparative Survey of Deep Active Learning. arXiv:2203.13450, 2022. <https://doi.org/10.48550/arXiv.2203.13450> (code: <https://github.com/SineZHAN/deepALplus>)
+17. <a id="ref-17"></a>Samrath Sinha, Sayna Ebrahimi, Trevor Darrell. Variational Adversarial Active Learning. *2019 IEEE/CVF International Conference on Computer Vision (ICCV)*, 2019. <https://doi.org/10.1109/iccv.2019.00607>
+18. <a id="ref-18"></a>Jordan T. Ash, Chicheng Zhang, Akshay Krishnamurthy, John Langford, Alekh Agarwal. Deep Batch Active Learning by Diverse, Uncertain Gradient Lower Bounds. *International Conference on Learning Representations (ICLR)*, 2020. <https://openreview.net/forum?id=ryghZJBKPS>
+19. <a id="ref-19"></a>David Arthur, Sergei Vassilvitskii. k-means++: The Advantages of Careful Seeding. *Proceedings of the Eighteenth Annual ACM-SIAM Symposium on Discrete Algorithms (SODA)*, 2007. <https://theory.stanford.edu/~sergei/papers/kMeansPP-soda.pdf>
+20. <a id="ref-20"></a>Changjian Shui, Fan Zhou, Christian Gagné, Boyu Wang. Deep Active Learning: Unified and Principled Method for Query and Training. *Proceedings of the 23rd International Conference on Artificial Intelligence and Statistics (AISTATS)*, PMLR 108, 2020. <https://proceedings.mlr.press/v108/shui20a.html>
+21. <a id="ref-21"></a>Huy V. Vo, Vasil Khalidov, Timothée Darcet, Théo Moutakanni, Nikita Smetanin, Marc Szafraniec, Hugo Touvron, Camille Couprie, Maxime Oquab, Armand Joulin, Hervé Jégou, Patrick Labatut, Piotr Bojanowski. Automatic Data Curation for Self-Supervised Learning: A Clustering-Based Approach. arXiv:2405.15613, 2024. <https://doi.org/10.48550/arXiv.2405.15613>
+22. <a id="ref-22"></a>Kaiming He, Xiangyu Zhang, Shaoqing Ren, Jian Sun. Deep Residual Learning for Image Recognition. *2016 IEEE Conference on Computer Vision and Pattern Recognition (CVPR)*, 2016. <https://doi.org/10.1109/CVPR.2016.90>
+23. <a id="ref-23"></a>Jia Deng, Wei Dong, Richard Socher, Li-Jia Li, Kai Li, Li Fei-Fei. ImageNet: A large-scale hierarchical image database. *2009 IEEE Conference on Computer Vision and Pattern Recognition (CVPR)*, 2009. <https://doi.org/10.1109/CVPR.2009.5206848>
+24. <a id="ref-24"></a>Ricardo T. Fares, Lucas C. Ribas. Volumetric Color-Texture Representation for Colorectal Polyp Classification in Histopathology Images. *Proceedings of the 20th International Joint Conference on Computer Vision, Imaging and Computer Graphics Theory and Applications (VISAPP)*, 2025. <https://doi.org/10.5220/0013315800003912>
+25. <a id="ref-25"></a>Ricardo T. Fares, Lucas C. Ribas. A New Approach to Learn Spatio-Spectral Texture Representation with Randomized Networks: Application to Brazilian Plant Species Identification. *Engineering Applications of Neural Networks (EANN 2024)*, CCIS, 2024. <https://doi.org/10.1007/978-3-031-62495-7_33>
+26. <a id="ref-26"></a>Kuan-Hao Huang. DeepAL: Deep Active Learning in Python. arXiv:2111.15258, 2021. <https://arxiv.org/abs/2111.15258> (code: <https://github.com/ej0cl6/deep-active-learning>)

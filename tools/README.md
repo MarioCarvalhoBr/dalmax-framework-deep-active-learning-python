@@ -13,8 +13,8 @@ from the repo root; each one puts the repo root on `sys.path` itself
 
 ```bash
 poetry run python tools/trainer.py --help
-poetry run python tools/loader.py --model results/campaign/.../saved_model.pth
-poetry run python tools/predict.py --model results/campaign/.../saved_model.pth --dir DATA/daninhas_full/test/DATASET_GRAMINEA --out results/predictions/
+poetry run python tools/loader.py --model results/campaign_fixed/.../saved_model.pth
+poetry run python tools/predict.py --model results/campaign_fixed/.../saved_model.pth --dir DATA/daninhas_full_fixed/test/DATASET_GRAMINEA --out results/predictions/
 poetry run python tools/gui.py
 ```
 
