@@ -105,6 +105,24 @@ Unchanged in spirit since Phase 2, with paths updated for the Phase 4 package mo
    If it needs MC-dropout predictions (`predict_prob_dropout*`), the model must carry a dropout layer: set
    `"model_args": {"dropout_p": ...}` in the params JSON (the DANINHAS ResNet-50 has none by default and
    `predict_prob_dropout*` raise `MCDropoutError` without one, KI-41, ADR 0014).
+   **Pattern of the DeepAL+ ports (ADR 0015), preferred for new strategies with their own
+   hyperparameters or generators:** register the class in
+   `DEEPALPLUS_STRATEGY_REGISTRY` and a factory `name -> callable(config, dataset, net, logger) -> kwargs`
+   in `DEEPALPLUS_STRATEGY_KWARGS` (it may also build a sub-strategy through the registry, as
+   `CEALSampling` does). Hyperparameters go in a typed, validated dataclass under
+   `dalmax/config/schema.py::StrategyArgs` (params JSON `"strategy_args": {"<StrategyName>": {...}}`,
+   every key optional, unknown keys rejected, added to `STRATEGY_ARGS_KEYS`). Generators come from
+   `derive_seed(config.seed, "<tag>")`; scores with few distinct values are ranked with
+   `dalmax/query_strategies/ranking.py::rank_descending`/`rank_ascending` (seeded tie-break).
+   Auxiliary networks (a loss module, a VAE, a critic) are built inside
+   `dalmax.seeding.isolated_torch_seed(seed)` so the run's global torch stream is not consumed, and
+   any extra DataLoader gets an explicit `generator=`.
+   **If the strategy changes how the task model is trained**, do not touch `DeepLearning.train`: override
+   `Strategy.train()` and delegate to an injected trainer object that builds the model with
+   `DeepLearning.build_model()` and sets `net.clf` (`dalmax/models/loss_prediction.py::LossPredictionTrainer`,
+   `dalmax/models/waal.py::WAALTrainer`; `CEALSampling.train` passes a different dataset to `net.train`).
+   Per-round, reporting-only values go through `Strategy.diagnostics()` into `results.json`'s
+   `strategy_diagnostics` key.
 6. Add a test asserting `dalmax.query_strategies.registry.build_strategy("<NewStrategyClass>", ...)`
    resolves without error — see `tests/test_strategy_registry.py` for the pattern (stub
    dataset/net, no real training). `tests/test_registry.py`/`tests/test_strategy_registry.py` parse
@@ -130,3 +148,9 @@ reachable only through some other path; it must be reachable through `dalmax.cli
 `KMeansSampling`, `KCenterGreedy`, `BALDDropout`, `AdversarialBIM`,
 `AdversarialDeepFool`, `SSRAEKmeansSampling`, `VCTexKmeansSampling`,
 `SSRAEKmeansHCSampling`, `VCTexKmeansHCSampling`, `RepresentationStrategy`, `FullSupervised` (2026-09-29: the paper-1 upper bound, *not* active learning — registered in `NON_ACTIVE_STRATEGY_REGISTRY`, forces `n_init_labeled` = pool size, requires `--n_round 0`, `query()` raises).
+
+DeepAL+ ports (2026-11-11, ADR 0015; `DEEPALPLUS_STRATEGY_REGISTRY`): `VarRatio` (MC-dropout variation
+ratio, needs `model_args.dropout_p`), `MeanSTD` (MC-dropout mean per-class std, needs `model_args.dropout_p`),
+`KCenterGreedyPCA`, `BadgeSampling`, `CEALSampling`, `LossPredictionLoss` (own trainer), `VAAL` (VAE +
+discriminator trained per query), `WAAL` (own min-max trainer). Not ported: DeepAL+'s `KMeansSamplingGPU`
+(same method as `KMeansSampling` with faiss GPU k-means; a GPU-only dependency and no new method).

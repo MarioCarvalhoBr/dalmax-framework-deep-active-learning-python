@@ -131,7 +131,8 @@ to historical GPU runs at the same seed (CPU runs are unaffected).
 
 ## Query strategies exercised
 
-Full `--strategy_name` choice list (from `demo.py` (historical) → `dalmax/cli.py`, unchanged plus one addition):
+Full `--strategy_name` choice list (from `demo.py` (historical) → `dalmax/cli.py`, unchanged plus one addition;
+plus the eight DeepAL+ ports of 2026-11-11 listed after the caveats below):
 `RandomSampling`, `LeastConfidence`, `MarginSampling`, `EntropySampling`,
 `LeastConfidenceDropout`, `MarginSamplingDropout`, `EntropySamplingDropout`,
 `KMeansSampling`, `KCenterGreedy`, `BALDDropout`, `AdversarialBIM`,
@@ -159,6 +160,43 @@ noise (`quality/known-issues.md` KI-41); they now need `"model_args": {"dropout_
 features. `AdversarialBIM` broke distance ties in pool order (KI-45); ties are now broken at random with a
 generator derived from the seed (`derive_seed(seed, "adversarial_ties")`); `AdversarialDeepFool` keeps the pool-order
 tie-break of its executed runs (its only exact ties are byte-identical duplicate images).
+
+**DeepAL+ ports (2026-11-11, ADR 0015; implemented, not yet in any campaign manifest).** Eight further
+`--strategy_name` choices port every method of DeepAL+ (Zhan et al., 2022, arXiv 2203.13450) that DalMax lacked:
+`VarRatio`, `MeanSTD` (both MC dropout: run with `files_config/campaign/params_paper1_mc_dropout.json`,
+`dropout_p` 0.5, fail fast without it), `KCenterGreedyPCA`, `BadgeSampling`, `CEALSampling`, `LossPredictionLoss`,
+`VAAL` (`files_config/campaign/params_paper1_vaal.json` spells out its defaults; `params_paper1.json` is the same
+computation), `WAAL` (all others: `params_paper1.json`). Every protocol knob (seeds, `n_init_labeled`, `n_query`,
+`n_round`, `n_epoch`, optimizer) is shared with the other strategies. Three of them change the training of the task
+model: `LossPredictionLoss` trains a loss-prediction module jointly (same `n_epoch`, the module's gradient reaches the
+backbone during the first `floor(0.6 * n_epoch)` epochs), `WAAL` replaces the cross-entropy training by its min-max
+training on labeled + unlabeled data (every round, round 0 included, so its round-0 model differs from the others'),
+and `CEALSampling` adds pseudo-labelled samples to the next training only (round 0 is plain training). `VAAL` trains
+the task model normally and a VAE + discriminator at every query (images resized 128 -> 64 for the VAE). Deviations
+from DeepAL+ (including two upstream defects it fixes: VAAL's discriminator targets and VarRatio collapsing to
+LeastConfidence) are listed in ADR 0015. `KMeansSamplingGPU` is not ported (same method as `KMeansSampling`).
+
+**`strategy_args` params block (2026-11-11, ADR 0015).** Optional per-dataset block of per-strategy hyperparameters,
+keyed by strategy name; every key optional (defaults below = `dalmax/config/schema.py::StrategyArgs`), unknown
+strategy names or keys and wrongly typed values raise `ConfigError` (`"_comment"` keys allowed); the fully
+resolved block (all five sub-blocks, defaults included) appears in `run_metadata.json` under
+`config.dataset.strategy_args`:
+
+```json
+"strategy_args": {
+  "CEALSampling": {"base_strategy": "EntropySampling", "delta": 5e-5, "delta_decay": 3.3e-7},
+  "KCenterGreedyPCA": {"n_components": 50},
+  "LossPredictionLoss": {"margin": 1.0, "weight": 1.0, "detach_fraction": 0.6, "interm_dim": 128, "module_lr": 0.01},
+  "VAAL": {"epochs": 30, "latent_dim": 32, "beta": 1.0, "adversary_param": 1.0,
+           "num_vae_steps": 2, "num_adv_steps": 1, "lr": 0.0005, "image_size": 64},
+  "WAAL": {"alpha": 0.001, "gp_weight_task": 5.0, "gp_weight_critic": 2.0, "gamma_ratio": 1.0, "selection": 10.0}
+}
+```
+
+`CEALSampling.base_strategy` is one of `LeastConfidence`, `MarginSampling`, `EntropySampling`; its threshold at
+query round `t` is `delta - delta_decay * t`. `CEALSampling` also writes, per query round, `ceal_round`,
+`ceal_delta`, `ceal_n_pseudo_labels` and `ceal_pseudo_label_accuracy` (null when no sample was pseudo-labelled)
+under `results.json`'s `strategy_diagnostics` key (reporting only; every other strategy writes no such key).
 
 ## New CLI flags (Phase 2, additive — every other flag/default is unchanged)
 
