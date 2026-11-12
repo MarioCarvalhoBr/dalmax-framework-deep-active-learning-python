@@ -95,6 +95,12 @@ distinct from "hierarchical" and matters for the ablation in
   sweep 165 runs into `results/campaign_fixed/` and `results/campaign_kmh_fixed/`, split into two GPU parts for two
   Colab accounts (about 96 estimated GPU hours in total; `COLAB_RUNBOOK.md` section 6). Every number in the next bullet
   is history of the first campaign and is superseded for the papers by this re-run.
+- **Pre-flight fix KI-47 (2026-11-12, ADR 0016 amendment)**: the loaders listed each class folder in file-system order,
+  which differed between Colab sessions, so in the first campaign the same seed started from other images in each
+  later session and the cached embeddings served later sessions the features of other images (the KMH sweep,
+  `texhal_q17`, `hier_transfer`, paper-1 KMH nq50/nq10; very likely the cause of KI-43). Fixed before the clean
+  re-run: sorted file order, `data_order` hashes in `run_metadata.json`, an order-keyed and path-validated cache, the
+  seed audit by image paths plus a data-order audit; also a Drive quota gate and a VAAL/WAAL pilot.
 - **(History) Campaign executed (2026-09-30 to 2026-10-05, verified 2026-11-01; part `texhal_q17` executed 2026-11-01, verified 2026-11-02: 210/210)**: all runs of the three
   papers (one manifest, 3 seeds, Google Colab Pro) completed, 0 incomplete/missing, seed audit PASS;
   numbers in `.specs/experiments/campaign.md` (execution record), reports in `docs/results/campaign/`

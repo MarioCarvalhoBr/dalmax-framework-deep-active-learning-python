@@ -19,7 +19,7 @@
         "n_test": 209
     },
     "initial_labeled_idxs_sorted": [8, 47, 117, 148, 262, 309, 314, 385, 535, 802],
-    "round_1_query_idxs_sorted": [23, 280, 415, 500, 645],
+    "round_1_query_idxs_sorted": [58, 192, 428, 490, 711],
     "results_json": {
         "dataset_name": "DANINHAS",
         "strategy_name": "SSRAEKmeansSampling",
@@ -32,6 +32,19 @@
         "all_recall": [0.215311004784689, 0.215311004784689],
         "all_f1_score": [0.07629130090796066, 0.07629130090796066],
         "rounds": [0, 1]
+    },
+    "data_order": {
+        "note": "run_metadata.json data_order of this run since KI-47 (2026-11-12), as in tests/golden/random_sampling_micro_seed1.json; not asserted by the test.",
+        "contract": "sorted-names-v1",
+        "train_paths_hash": "0985fe1d1536",
+        "test_paths_hash": "3610a468cacc",
+        "n_train": 806,
+        "n_test": 209
+    },
+    "pre_ki47_unsorted_listing_values": {
+        "note": "Value of this fixture before 2026-11-12 (KI-47), kept for the record. The loaders used to list each class folder with an unsorted os.listdir; since KI-47 they sort the file names (the micro dataset itself was NOT regenerated). The round-1 query changed because the pool order, hence the SSRAE embedding at each index and the k-means assignment, changed; FlatKMeansClosest's seed derivation is unchanged. The results_json metrics are unchanged (the 1-epoch model predicts a single class at both rounds, on both orders). The cache file this run used to read/write, results/cache/embeddings/daninhas_micro__ssrae__Q13__full__train__pool9ab386175096.pkl, is never read again: the key now carries the order hash.",
+        "git_commit": "2b0a93a",
+        "round_1_query_idxs_sorted": [23, 280, 415, 500, 645]
     },
     "legacy_phase1_values": {
         "note": "Pre-Phase-2 values (tests/golden/ssrae_kmeans_micro_seed1.json as of git commit e60ae022f77aa981cdcc9cd3b5fa6d9057151060), kept for the historical record. Produced by the legacy core/query_strategies/ssrae_kmeans_sampling.py's KMeans(n_clusters=n, random_state=3, n_init=10) -- a hardcoded literal, independent of --seed. This is exactly the reproducibility hazard .claude/rules/reproducibility.md documents and Phase 2 fixes. Also predates the 2026-08-23 micro-dataset redefinition (see previous_micro_2class_values below), so its indices are not directly comparable to round_1_query_idxs_sorted above even setting the KMeans-seeding fix aside.",
@@ -59,10 +72,11 @@
         }
     },
     "notes": [
+        "2026-11-12 (KI-47): regenerated deliberately after the loaders switched to sorted file names (see pre_ki47_unsorted_listing_values). Captured on top of commit 2b0a93a plus the uncommitted KI-47 change set, in a scratch copy of the repository with its own copy of DATA/daninhas_micro/ (the real micro dataset was not touched or regenerated); bit-identical across 2 separate CPU processes, the first computing the SSRAE embeddings (cold cache: the pre-KI-47 file under the old name was present and ignored) and the second loading them from the new key results/cache/embeddings/daninhas_micro__ssrae__Q13__full__train__order0985fe1d1536__pool9ab386175096.pkl (warm cache).",
         "2026-08-23 micro-dataset redefinition (chore/micro-10pct): DATA/daninhas_micro/ was redefined from the old hand-picked 2-class/70-image subset to a 10%-stratified replica of DATA/daninhas_full/ (all 5 classes, both splits, 806 train + 209 test images total), per user request for a more realistic pre-lab/pre-Colab end-to-end check on the no-GPU notebook. round_1_query_idxs_sorted changed from [14, 24, 37, 45, 47] (previous_micro_2class_values) to [23, 280, 415, 500, 645] purely because the underlying pool of images (and therefore SSRAE embeddings and k-means cluster assignments) changed -- FlatKMeansClosest's seed derivation (dalmax.seeding.derive_seed(config.seed, \"selection\")) itself is unchanged. See previous_micro_2class_values and legacy_phase1_values above for the pre-redefinition/pre-Phase-2 records.",
         "Verified deterministic across 2 separate CPU processes on the local dev notebook (no GPU) on this commit: identical initial labeled idxs, query idxs, and results.json metrics.",
         "Initial labeled idxs are unchanged from the RandomSampling fixture (tests/golden/random_sampling_micro_seed1.json): dataset.initialize_labels's shuffle logic and dalmax.seeding.seed_everything's np.random.seed(seed) call are both independent of --strategy_name.",
-        "Uses dalmax.embeddings.EmbeddingCache (dalmax/embeddings/cache.py): this run reads/writes results/cache/embeddings/daninhas_micro__ssrae__Q13__full__train__pool9ab386175096.pkl. The pool_hash (9ab386175096) legitimately differs from the pre-redefinition fixture's pool_hash (a629ae2d049d), since the actual unlabeled pool array changed size/content (from 40 images across 2 classes to 796 images across 5 classes) even though pool_hash's own definition (dalmax.embeddings.cache.pool_hash) is unchanged.",
-        "results_json round-0 metrics are identical to the RandomSampling fixture (both strategies share the same initial_labeled_idxs_sorted, and round 0 is trained/evaluated before either strategy's query() ever runs). Round-1 metrics are close but not identical (accuracy ties at 0.215311004784689; precision/f1 differ in the 3rd decimal, e.g. SSRAEKmeansSampling's round-1 precision 0.046358828781392365 vs RandomSampling's 0.046581707765918294): with only 1 CPU epoch on this dataset, the two strategies' differently-queried 5 ids still land on nearly the same round-1 metrics at this scale, same qualitative pattern observed for the pre-redefinition 2-class fixture (where both strategies' round-1 metrics were exactly identical). results.json also carries all_precision_macro/all_recall_macro/all_f1_macro, which this test does not assert on."
+        "Uses dalmax.embeddings.EmbeddingCache (dalmax/embeddings/cache.py): until 2026-11-12 this run read/wrote results/cache/embeddings/daninhas_micro__ssrae__Q13__full__train__pool9ab386175096.pkl (since KI-47: ...__train__order0985fe1d1536__pool9ab386175096.pkl, see the first note). The pool_hash (9ab386175096) legitimately differs from the pre-redefinition fixture's pool_hash (a629ae2d049d), since the actual unlabeled pool array changed size/content (from 40 images across 2 classes to 796 images across 5 classes) even though pool_hash's own definition (dalmax.embeddings.cache.pool_hash) is unchanged.",
+        "Since KI-47 (2026-11-12) the round-0 AND round-1 metrics of this fixture equal the RandomSampling fixture's exactly (the 1-epoch model predicts a single class); the rest of this note describes the pre-KI-47 values. results_json round-0 metrics are identical to the RandomSampling fixture (both strategies share the same initial_labeled_idxs_sorted, and round 0 is trained/evaluated before either strategy's query() ever runs). Round-1 metrics are close but not identical (accuracy ties at 0.215311004784689; precision/f1 differ in the 3rd decimal, e.g. SSRAEKmeansSampling's round-1 precision 0.046358828781392365 vs RandomSampling's 0.046581707765918294): with only 1 CPU epoch on this dataset, the two strategies' differently-queried 5 ids still land on nearly the same round-1 metrics at this scale, same qualitative pattern observed for the pre-redefinition 2-class fixture (where both strategies' round-1 metrics were exactly identical). results.json also carries all_precision_macro/all_recall_macro/all_f1_macro, which this test does not assert on."
     ]
 }

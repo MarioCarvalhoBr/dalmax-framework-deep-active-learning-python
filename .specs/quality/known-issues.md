@@ -29,7 +29,7 @@ debt, works today but limits scalability), **Low** (cosmetic/mechanical).
 |---|---|---|---|---|---|
 | KI-1 | `demo.py` (historical) is a monolith mixing CLI, training loop, plotting, and persistence | **Resolved in `dalmax` (2026-08-23, Phase 2)** | `demo.py` is now a 12-line shim (`from dalmax.cli import main`). `dalmax/cli.py` does argparse only; `dalmax/experiment/runner.py::ExperimentRunner` is the round loop; `dalmax/experiment/reporter.py::write_report` is plotting/JSON/CSV persistence. Each is independently unit-testable (`tests/test_runner_n_round_zero.py`, `tests/test_registry.py`) | Medium → **Resolved** | Phase 2 (`experiment/runner.py` + `experiment/reporter.py` + thin `cli.py`) |
 | KI-2 | `pandas` imported in `demo.py`/`utils/report/` but was absent from the (since-retired) `requirements.txt` export | **Fully resolved** | `pyproject.toml` declares `pandas==2.2.3`; `dalmax/experiment/reporter.py` (the Phase 2 successor to `demo.py`'s persistence code) also imports `pandas` and installs correctly via `poetry install`. The `requirements.txt` export this row originally referred to was retired entirely (2026-08-23, ADR 0001 amendment) — Poetry is now the only install path, so there is nothing left to keep in sync | High → **Resolved** | Phase 1 (historical fix); requirements.txt export retired (2026-08-23) |
-| KI-3 | Pickle caches hardcoded in `utils/data.py` with no cache key for dataset/Q/pool/variant | **Fully resolved (2026-08-23, Phase 2 fix; Phase 4 deleted the superseded legacy path entirely)** | `dalmax/embeddings/cache.py::EmbeddingCache` keys every cache file on `(dataset, extractor, Q, variant, split, pool_hash)` — filename `{dataset}__{extractor}__Q{q}__{variant}__{split}__pool{pool_hash}.pkl` under `results/cache/embeddings/`. Only the `"full"` variant is ever cached; `spatial`/`spectral` are sliced from it on load (`dalmax/embeddings/variants.py`), never separately cached, so they cannot collide. `Q` is config-driven (`EmbeddingConfig.q`, defaulted per-extractor by `dalmax/config/loader.py`), never a hardcoded literal. The Phase 1 `utils/data.py::cache_file_path` path (keyed on dataset/Q/pool, no `embedding_variant`) was **deleted in Phase 4** along with the rest of `utils/data.py` (683 lines) — it had been dead code since Phase 2 (`current-state.md` §0 at the time), so nothing was lost by deleting it. The original unkeyed `results/features_dict_ssrae.pkl`/`results/features_dict_vctex.pkl` remain on disk as **lab-machine housekeeping, not code, debt** — orphaned, not read/written by anything in `dalmax/`, not deleted per `.claude/rules/data-safety.md` (never delete `results/` content automatically). Unit-tested in `tests/test_embedding_cache.py`; `tests/test_cache_paths.py` (which tested the now-deleted legacy path) was updated accordingly. | High → **Resolved** | Phase 1 (cache-path keying: dataset/Q/pool); Phase 2 (`EmbeddingProvider` + `EmbeddingCache`, ADR 0003, `embedding_variant` + config-driven `Q`); Phase 4 (legacy `utils/data.py` path deleted) |
+| KI-3 | Pickle caches hardcoded in `utils/data.py` with no cache key for dataset/Q/pool/variant | **Fully resolved (2026-08-23, Phase 2 fix; Phase 4 deleted the superseded legacy path entirely)** | `dalmax/embeddings/cache.py::EmbeddingCache` keys every cache file on `(dataset, extractor, Q, variant, split, pool_hash)` — filename `{dataset}__{extractor}__Q{q}__{variant}__{split}__pool{pool_hash}.pkl` under `results/cache/embeddings/` (since 2026-11-12, KI-47, also on the split's `order_hash`, filename `...__{split}__order{order_hash}__pool{pool_hash}.pkl`, with the image paths stored and validated on load: ids alone did not identify images). Only the `"full"` variant is ever cached; `spatial`/`spectral` are sliced from it on load (`dalmax/embeddings/variants.py`), never separately cached, so they cannot collide. `Q` is config-driven (`EmbeddingConfig.q`, defaulted per-extractor by `dalmax/config/loader.py`), never a hardcoded literal. The Phase 1 `utils/data.py::cache_file_path` path (keyed on dataset/Q/pool, no `embedding_variant`) was **deleted in Phase 4** along with the rest of `utils/data.py` (683 lines) — it had been dead code since Phase 2 (`current-state.md` §0 at the time), so nothing was lost by deleting it. The original unkeyed `results/features_dict_ssrae.pkl`/`results/features_dict_vctex.pkl` remain on disk as **lab-machine housekeeping, not code, debt** — orphaned, not read/written by anything in `dalmax/`, not deleted per `.claude/rules/data-safety.md` (never delete `results/` content automatically). Unit-tested in `tests/test_embedding_cache.py`; `tests/test_cache_paths.py` (which tested the now-deleted legacy path) was updated accordingly. | High → **Resolved** | Phase 1 (cache-path keying: dataset/Q/pool); Phase 2 (`EmbeddingProvider` + `EmbeddingCache`, ADR 0003, `embedding_variant` + config-driven `Q`); Phase 4 (legacy `utils/data.py` path deleted) |
 | KI-4 | `ssl_ssrae_sampling.py` hardcodes `self.params['DANINHAS']` | **Resolved (2026-08-23, Phase 2 fix; Phase 4 deleted the file that had the literal)** | The file that had the literal, `core/query_strategies/ssl_ssrae_sampling.py`, no longer exists — deleted in Phase 4 (it had been dead code/unreachable since Phase 2). Its replacement, `dalmax/selection/hierarchical_kmeans.py::HierarchicalKMeansSelection`, takes `hierarchy` via constructor injection, resolved by `dalmax/config/loader.py` per the actual `dataset_name` argument — no hardcoded key anywhere. Running `SSRAEKmeansHCSampling` against `CIFAR10` raises a clear `dalmax.config.schema.ConfigError` (naming the missing `hierarchy`/`config_kmh` key) instead of `KeyError: 'DANINHAS'`, if that dataset's params JSON entry has no hierarchy block — see KI-23 (still open: the params files themselves need a `CIFAR10.config_kmh`/`selection` block added before a real CIFAR10 hierarchical run, a content gap, not a code gap) | High → **Resolved** (code); KI-23 (params content) remains open | Phase 2 (config layer); Phase 4 (legacy file deleted) |
 | KI-5 | `SSRAEKmeansSampling` hardcodes `KMeans(random_state=3)` | **Resolved (2026-08-23, Phase 2 fix; Phase 4 deleted the files that had the literal)** | `core/query_strategies/ssrae_kmeans_sampling.py`/`vctex_kmeans_sampling.py` (the files with the literal) were deleted in Phase 4, having been dead code since Phase 2. Their replacement, `dalmax/selection/flat_kmeans_closest.py::FlatKMeansClosest`, derives `KMeans(random_state=...)` from `rng.integers(...)`, where `rng` is seeded via `dalmax.seeding.derive_seed(config.seed, "selection")` — verified empirically by regenerating `tests/golden/ssrae_kmeans_micro_seed1.json` (`round_1_query_idxs_sorted` changed from the old `[5,21,37,45,47]`, tied to the literal `3`, to `[14,24,37,45,47]` at `--seed 1`; the old value is preserved in the fixture's `legacy_phase1_values` block, not lost) and by `tests/test_selection_flat.py` | High → **Resolved** | Phase 2 (seed propagation audit); Phase 4 (legacy files deleted) |
 | KI-6 | Strategies mutate `dataset.features_dict` (deleting selected ids) as a side effect | **Resolved (2026-08-23, Phase 2 fix; Phase 4 deleted the files that had the mutation)** | The three `del features_dict[img_id]` call sites (in `ssrae_kmeans_sampling.py`, `vctex_kmeans_sampling.py`, `ssl_ssrae_sampling.py`) were deleted in Phase 4 along with those files, having been dead code since Phase 2. `dalmax/query_strategies/representation.py::RepresentationStrategy` never touches `dataset.features_dict` at all — it owns its own `{id: embedding}` map populated once from `EmbeddingCache` and re-derives the current unlabeled subset from `dataset.labeled_idxs` on every `query()` call, non-destructively (idempotent given the same labeled/unlabeled state) | Medium → **Resolved** | Phase 2 (`SelectionStrategy` returns ids; caller owns pool bookkeeping, not the strategy); Phase 4 (legacy files deleted) |
@@ -104,6 +104,7 @@ accepted as-is (author decision 2026-11-02)**, so they leave the open list (docu
 (Update 2026-11-11c: **KI-46** (byte-identical duplicate images in DANINHAS, including across train and test) added, OPEN, pending an author decision: 11 open, 46 tracked items.)
 (Update 2026-11-11b: author decision of the same day reverses the "accepted as-is" status of **KI-41, KI-42 and KI-45**: all three are **fixed in code (2026-11-11, ADR 0014)** and their 63 runs are prepared for re-execution as campaign parts `paper1_rerun_a` / `paper1_rerun_b` (not executed yet). They stay out of the open count: 10 open, 45 tracked items.)
 (Update 2026-11-11d: author decision on **KI-46**: everything is re-run on the new canonical dataset `DATA/daninhas_full_fixed` (ADR 0016), so KI-46 is **resolved for future runs**; the first campaign's results stay as history. The KI-41/KI-42/KI-45 re-run now happens inside that campaign (the parts `paper1_rerun_a/b` and the archive step of ADR 0014 were retired before execution). 10 open, 46 tracked items.)
+(Update 2026-11-12: **KI-47** (pool/test order followed the file system; the embedding cache served features of other images across sessions; the seed audit compared indices only) added and **fixed in code** before the clean campaign (ADR 0016 amendment); it affects the first campaign, which stays as history. KI-43 stays open until the clean campaign confirms that its cause 2 is KI-47. 10 open, 47 tracked items.)
 
 34 tracked items total (KI-34 added 2026-08-26, while reconciling the Phase 3 ablation execution
 batch; KI-33 added/resolved 2026-08-25). Of these, **27 are now fully resolved**: KI-1 through
@@ -353,7 +354,21 @@ History: accepted as-is by the author on 2026-11-02; option (b) below was chosen
 2048-d features for the embedding strategies, and re-run `KMeansSampling`/`KCenterGreedy` (with KI-41 (b):
 6 strategies x 3 budgets x 3 seeds = 54 runs as a new campaign part, old runs kept as history).
 
-### KI-43 — round-0 metrics differ across runs of the same seed and initial labeled set (OPEN, disclosure; found 2026-11-02)
+### KI-43 — round-0 metrics differ across runs of the same seed and initial labeled set (OPEN, disclosure; found 2026-11-02; cause 2 identified 2026-11-12 as KI-47, pending confirmation by the clean campaign)
+
+Update 2026-11-12 (KI-47): the "same initial labeled set" of this entry was the same set of INDICES only. The loaders
+listed each class folder in file-system order, which differs between Colab sessions, so the same indices named other
+images in every session after the first; and the representation strategies of later sessions selected on cached
+features of other images. That is very likely the true cause 2 below ("run environment drift between Colab
+sessions"): the round-0 value is a function of the session because the round-0 training images are, and the
+"perfect function of the Colab runtime image" is a function of the session's unzip order (three sessions on one image
+tag gave three test orders in the KMH sweep). It also explains the 2026-11-11 note at the end: the reference KMH
+configuration reproduced the campaign's query indices in 24/24 rounds because both executions read the same cached
+features with the same seed, and those indices named other images in the sweep's session, hence the 1.7-point gap.
+Cause 1 (RNG consumption of the ResNet-ImageNet provider) is unaffected. The loaders now sort the file names and the
+cache, the seed audit and a new data-order audit check image identity (KI-47); the clean campaign (ADR 0016) should
+show round-0 metrics that depend on the seed only (up to the documented best-effort GPU determinism), which would
+confirm the diagnosis. The control run below stays prepared, not executed.
 
 Note 2026-11-10: the `hier_transfer` part (ADR 0013) ran on a third runtime image (a different GPU model, see `run_metadata.json` `environment.gpus[0].name`); its 12 runs are compared only within the campaign's nq100 tables, as before.
 
@@ -563,3 +578,81 @@ unzipping). Everything is re-run on it into new roots (`results/campaign_fixed/`
 old result is reused, and every run now also saves the per-round test predictions and queries
 (`round_predictions.json`, `round_queries.json`) so a later finding of this kind can be re-scored without re-running.
 Remaining: the thesis must replace every number of the first campaign once the new one is executed.
+
+### KI-47 — pool and test order depended on the file system; the embedding cache served features of other images across sessions (FIXED IN CODE 2026-11-12, before the clean campaign; the first campaign is affected; found 2026-11-12)
+
+**Defect.** `dalmax/data/loaders.py` (`get_DANINHAS`, `get_CIFAR10`) sorted the class folder names but listed the files
+of each class folder with an unsorted `os.listdir`. Every pool index and test index is a position in the lists built
+from that listing, so what an index names followed the file system's listing order, which differs between machines
+and between Colab sessions (every session unzips the dataset again onto a fresh local disk). Three consequences:
+
+1. **Same seed, same indices, other images.** `Data.initialize_labels` shuffles indices with the seeded global RNG, so
+   a seed gives the same initial INDICES everywhere, but under another order they are other IMAGES: rows of one table
+   executed in different sessions started from different labelled sets.
+2. **Stale embedding cache.** `dalmax/embeddings/cache.py::EmbeddingCache` (on Drive, under the `results/` symlink)
+   was keyed on `(dataset, extractor, Q, variant, split, pool_hash)` with `pool_hash` = a hash of the unlabeled
+   INDICES, identical for a seed in every session. A later session therefore loaded the features computed by the
+   session that wrote the file: the feature at index `i` belonged to the image that had index `i` in THAT session's
+   order, silently.
+3. **Blind seed audit.** `dalmax.campaign.audit_seed_consistency` compared the logged initial indices only, so it
+   passed (it did, for every verify of the first campaign).
+
+**Evidence (read only, 2026-11-12).** The 222 leaves of `results/campaign/` hold the same set of 2,106 test paths in
+`predictions.csv` in 5 distinct orders, which coincide with the 5 Colab runtime image tags recorded in
+`run_metadata.json` (145 leaves on 20260921, the first session; 38 on 20260930; 9 on 20261001; the 18 `texhal_q17`
+leaves on 20261029; the 12 `hier_transfer` leaves on 20261109). The 165 leaves of `results/campaign_kmh/` hold 4
+distinct orders, three of them on the same image tag 20261106 (129 + 26 + 6 leaves) and one on 20261109 (4 leaves), so
+the order changes with the session (each session unzips the dataset again), not with the image. Cache hits in
+later sessions, from the run logs (time between the `Round 1` line and the first `Embedding matrix shape` line):
+`shared/kmh_nq100` computed the ResNet-ImageNet features in 8.4-8.6 s (session 1, 2026-09-30); paper-1 KMH loaded them
+in 3.9-5.7 s at nq50 (2026-10-02) and 3.1-3.8 s at nq10 (2026-10-05) and the KMH sweep in 0.25 s (2026-11-07);
+`texhal/6_1/rep_q17` computed VCTex Q=17 in 56-57 s (session 1), `texhal_q17` loaded it in 0.9-2.4 s (2026-11-01);
+`hier_transfer` loaded SSRAE/VCTex in 1.6-2.0 s (2026-11-11) against about 96 s to compute SSRAE. Decisive: the KI-43
+note of 2026-11-11 found the sweep's `hier_L3_ref` with exactly the campaign's query indices in 24/24 rounds of every
+budget although its session indexed the pool in another order: the same cached features and seed give the same
+indices, which named other images there. The brief that reported the defect also measured cache hits of 0.2 s against
+8.6 s of computation in leaves of later sessions.
+
+**Effect on the first campaign** (`results/campaign/`, `results/campaign_kmh/`, history, append-only):
+
+- **Misaligned features** (selection on the features of other images): every leaf of a representation-based strategy
+  executed in a session other than the one that wrote its embedding cache: the whole KMH sweep (165 leaves, ADR 0012),
+  `texhal_q17` (18, ADR 0011's 6.2/6.3 re-run), `hier_transfer` (12, ADR 0013) and paper-1 KMH at nq50 and nq10 (6):
+  201 leaves. The class folders were always sorted and every session holds the same files, so each class keeps its
+  block of indices and the misalignment permutes images only WITHIN a class: a selected batch kept the class
+  composition the cached features implied, but which images of a class were chosen was unrelated to their own
+  features (the same holds for the initial set of every later-session leaf). Open uncertainty: in
+  the first session the SSRAE seed-1 features were already cached before the first RNHAL run (0.19 s); most likely the
+  same session's `make colab-check` (SSRAE, seed 1) wrote them, but that check leaf was overwritten later, so it cannot
+  be confirmed; if they came from an earlier session, RNHAL's seed-1 rows are misaligned too.
+- **Different initial images**: every comparison between leaves of different sessions (the per-budget readings of
+  paper 1 across nq10/nq50/nq100, the KMH sweep against the campaign, `texhal_q17` and `hier_transfer` against the
+  rows of the first session) compares runs that started from different labelled images at the same seed.
+- **Decisions to re-read on the clean campaign**: ADR 0012 (the KMH sweep, its winners and paper 1's per-budget KMH
+  reference, pendencia P17) and ADR 0013 (hierarchy transfer, "the shape does not transfer") rest entirely on
+  misaligned leaves. ADR 0011's deciding comparison (the 6.1 rows Q=5/13/17/[5,17] and the paper-1 nq100 rows) was
+  measured inside the first session, on features computed there, but the `texhal_q17` 6.2/6.3 results that followed
+  from it are misaligned. None of the first campaign's numbers is used for the papers any more (ADR 0016), and these
+  choices must be re-read on the clean campaign.
+
+**Fix (2026-11-12, ADR 0016 amendment; before any run of the clean campaign).**
+
+- Loaders: `list_image_names` = plain lexicographic sort of the file names (`sorted()` on `str`, code-point order) in
+  every class folder of both splits, for both loaders (the order contract, `dalmax/data_order.py::ORDER_CONTRACT`).
+- Identity: `dalmax/data_order.py` (`relative_image_path` = `<class>/<file>`, `ordered_paths_hash`); every run records
+  `run_metadata.json` `data_order` = `{contract, train_paths_hash, test_paths_hash, n_train, n_test}`.
+- Cache: the key carries `order_hash` (the train split's ordered-paths hash), so the file name gains an
+  `__order<hash>` segment and no file written before the fix (including any `daninhas_full_fixed__*` cache) can be
+  hit; the payload (format version 2) stores the key, the ids and the relative paths of the cached images and is
+  validated on load (any mismatch or unreadable/truncated file: logged warning, recompute); writes are atomic
+  (temporary file + `os.replace`).
+- Audits: the seed audit compares the round-0 image paths of `round_queries.json` (indices from the log as fallback
+  for older leaves), so equal indices naming other images FAIL; the new data-order audit of `campaign verify` FAILs
+  when the leaves of one dataset disagree on the `data_order` hashes (WARN for leaves without the record).
+- Tests: `tests/test_data_order.py` (sorted, creation- and listing-order independent loaders), `tests/test_embedding_cache.py`
+  (foreign order refused, pre-fix name and payload ignored, truncated file recomputed, atomic write),
+  `tests/test_representation_strategy.py`, `tests/test_campaign.py` (audits). The two golden fixtures were regenerated
+  deliberately (`pre_ki47_unsorted_listing_values` keeps the old values; the micro dataset was not regenerated).
+
+**Status**: fixed in code; to be confirmed by the clean campaign (expect one `data_order` per dataset over all 459
+leaves and, per seed, identical round-0 images across both GPU parts).

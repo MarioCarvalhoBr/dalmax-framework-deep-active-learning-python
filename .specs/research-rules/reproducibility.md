@@ -92,8 +92,19 @@ amendment.
   tests); on GPU a non-empty `nondeterministic_op_warnings` list means some op had no deterministic
   kernel, and results may differ run to run and across GPU models/drivers. Papers must report the
   seed-averaged numbers, not claim bit-reproducibility on GPU. The campaign's `verify` runs the
-  seed-consistency audit (every run of a seed starts from the identical initial labeled set; missing or
-  unreadable log = WARN, mismatch = FAIL) -- see `.specs/experiments/campaign.md`.
+  seed-consistency audit (every run of a seed starts from the identical initial labeled IMAGES: round-0 paths of
+  `round_queries.json`, logged indices as the fallback for older leaves; nothing readable = WARN, mismatch = FAIL)
+  and the data-order audit below -- see `.specs/experiments/campaign.md`.
+
+- **Data order (2026-11-12, KI-47)**: a seed fixes pool INDICES; what an index names is fixed by the loader's
+  order, which is therefore part of what determines a run. The loaders list classes as sorted folder names and the
+  files of each class folder in plain lexicographic order of their names (`dalmax/data/loaders.py::list_image_names`,
+  contract `dalmax/data_order.py::ORDER_CONTRACT`), on every machine. Every run records `run_metadata.json`
+  `data_order` (`contract`, `train_paths_hash`, `test_paths_hash`, `n_train`, `n_test`: short SHA-256 of the
+  ordered `<class>/<file>` paths), and `campaign verify` FAILs when the leaves of one dataset disagree on them. Until
+  2026-11-12 the files came from an unsorted `os.listdir`, whose order differed between Colab sessions: in the first
+  campaign the same seed started from other images in every session after the first, and the representation
+  strategies of later sessions selected on cached features of other images (KI-47, the likely cause of KI-43).
 
 - **Hardware-agnostic (2026-09-29, ADR 0010)**: no GPU model name (nor a GPU-specific results directory
   or config name) may appear in code, configs, scripts, Makefile, tests, notebooks, runbooks,
@@ -118,6 +129,14 @@ literal, for any run through `dalmax.cli`. **Never reuse an embedding cache acro
 `(dataset, extractor, Q, pool, variant)` combination** — the keying above makes this impossible by
 construction (a different combination is a different filename), but always sanity-check the
 filename actually used before trusting an ablation's cached embeddings.
+
+**Image identity (2026-11-12, KI-47).** `pool_hash` hashes indices, which name images only under one data order, so
+the pre-fix key was hit by later Colab sessions with another order (features of other images, silently). The key now
+also carries the train split's `order_hash` (filename
+`{dataset}__{extractor}__Q{q}__{variant}__{split}__order{order_hash}__pool{pool_hash}.pkl`; no pre-fix file can be
+found), the payload (version 2) stores the key, the ids and the relative path of every cached image and is validated
+on load (mismatch or unreadable/truncated file: logged warning, recompute), and writes are atomic (temporary file +
+`os.replace`).
 
 The original (pre-Phase-2) description below is kept for historical context — it describes
 `utils/data.py`'s caches (that file was deleted in Phase 4, along with the

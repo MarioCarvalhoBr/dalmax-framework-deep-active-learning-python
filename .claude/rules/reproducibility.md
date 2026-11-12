@@ -48,9 +48,16 @@ locations.
   same pattern; a strategy that only ranks the task model's outputs needs none of this.
 - **Per-round history (2026-11-11, ADR 0016)**: every run also writes `round_predictions.json` (the test predictions of
   every round) and `round_queries.json` (the pool indices labeled in every round, with labels and image paths), so a
-  later finding about the test set or the pool can be re-scored from the saved runs instead of re-running them. The
-  pool order follows `os.listdir`, which is file-system dependent: identify images by path, not by pool index, when
-  comparing runs made on different machines.
+  later finding about the test set or the pool can be re-scored from the saved runs instead of re-running them.
+- **Data order is part of the run's identity (2026-11-12, KI-47)**: a pool or test index means "the image at that
+  position of the loader's list", so the order must never depend on the machine. Contract
+  (`dalmax/data_order.py::ORDER_CONTRACT`): classes = sorted folder names, files = plain lexicographic sort of the
+  names in each class folder (`dalmax/data/loaders.py::list_image_names`), for train and test. Any new loader that
+  lists a directory follows it. `run_metadata.json` records `data_order` (hashes of the ordered relative paths of
+  both splits); `campaign verify` FAILs when the leaves of one dataset disagree on them, and the seed audit compares
+  the round-0 image PATHS (`round_queries.json`), not only indices. Before KI-47 the files came from an unsorted
+  `os.listdir`, whose order differed between Colab sessions: equal indices named other images (first campaign).
+  Compare runs by `dalmax.data_order.relative_image_path` (`<class>/<file>`), never by index alone.
 - `torch.backends.cudnn.enabled = False` was used as a determinism
   shortcut in the historical `demo.py:59` (line no longer exists); it globally disabled cuDNN and cost performance on the
   the lab GPUs. **Now uses** `torch.backends.cudnn.deterministic = True` +
@@ -75,8 +82,9 @@ locations.
   tests); on GPU a non-empty `nondeterministic_op_warnings` list means some op had no deterministic
   kernel, and results may differ run to run and across GPU models/drivers. Papers must report the
   seed-averaged numbers, not claim bit-reproducibility on GPU. The campaign's `verify` runs the
-  seed-consistency audit (every run of a seed starts from the identical initial labeled set; missing or
-  unreadable log = WARN, mismatch = FAIL) -- see `.specs/experiments/campaign.md`.
+  seed-consistency audit (every run of a seed starts from the identical initial labeled IMAGES, compared by the
+  round-0 paths of `round_queries.json`, by the logged indices for older leaves; nothing readable = WARN,
+  mismatch = FAIL) and the data-order audit (KI-47) -- see `.specs/experiments/campaign.md`.
 
 - **Hardware-agnostic (2026-09-29, ADR 0010)**: no GPU model name (nor a GPU-specific results directory
   or config name) may appear in code, configs, scripts, Makefile, tests, notebooks, runbooks,
@@ -112,6 +120,17 @@ config-driven (`EmbeddingConfig.q`, defaulted per-extractor by `dalmax/config/lo
 embedding cache across a different `(dataset, extractor, Q, pool, variant)` combination** — the
 keying above makes this impossible by construction as long as the key components are computed
 correctly; still sanity-check the actual filename before trusting an ablation's cached embeddings.
+
+**Image identity (2026-11-12, KI-47).** `pool_hash` hashes pool INDICES, which name images only under one data
+order; the pre-fix key let later Colab sessions load features computed under another order (the first campaign's
+KMH sweep, `texhal_q17`, `hier_transfer`, paper-1 KMH nq50/nq10). The key now also carries `order_hash`
+(`dalmax.data_order.ordered_paths_hash` of the train split): filename
+`{dataset}__{extractor}__Q{q}__{variant}__{split}__order{order_hash}__pool{pool_hash}.pkl`, so no file written
+before the fix is ever found. The payload (format `dalmax-embedding-cache` version 2) stores the key, the ids and the
+`<class>/<file>` path of every cached image; `EmbeddingCache.load` refuses any mismatch (`EmbeddingCacheError`) and
+`compute_pool_embeddings` then logs a warning and recomputes, as it does for an unreadable/truncated file. Writes
+are atomic (temporary file in the same directory + `os.replace`). New caching code must store and check the identity
+of what it caches the same way, never rely on positional ids alone.
 
 The `utils/data.py::cache_file_path(name, dataset_folder, q=None, pool_hash=None)` helper described
 below (Phase 1 fix) was **deleted in Phase 4** along with the rest of `utils/data.py` — it had been

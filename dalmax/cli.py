@@ -23,6 +23,7 @@ from dataclasses import replace
 
 from dalmax.config.loader import load_experiment_config, to_dict
 from dalmax.config.schema import ExperimentConfig
+from dalmax.experiment.disk_space import NO_SPACE_EXIT_CODE, is_no_space_error
 from dalmax.experiment.reporter import write_report
 from dalmax.experiment.runner import ExperimentRunner
 from dalmax.logging_utils import get_logger, get_path_logger
@@ -138,8 +139,16 @@ def main(argv: list[str] | None = None) -> None:
     logger.warning("--------------------------------------------------------------------------")
 
     runner = ExperimentRunner(config, logger)
-    result = runner.run()
-    write_report(result, path_logger)
+    try:
+        result = runner.run()
+        write_report(result, path_logger)
+    except Exception as exc:
+        # A full disk / Drive quota gets its own exit code so `dalmax.campaign run` stops the
+        # batch instead of training the next runs for nothing (dalmax/experiment/disk_space.py).
+        if is_no_space_error(exc):
+            logger.error(f"No space left for the results of this run: {exc}")
+            raise SystemExit(NO_SPACE_EXIT_CODE) from exc
+        raise
 
 
 if __name__ == "__main__":

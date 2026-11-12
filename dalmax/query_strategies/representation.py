@@ -48,6 +48,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from dalmax.data_order import ordered_paths_hash
 from dalmax.embeddings.base import EmbeddingProvider
 from dalmax.embeddings.cache import EmbeddingCache, compute_pool_embeddings, pool_hash
 from dalmax.embeddings.variants import slice_embedding
@@ -149,6 +150,11 @@ class RepresentationStrategy(Strategy):
         self, initial_unlabeled_ids: np.ndarray
     ) -> dict[int, np.ndarray]:
         images = self.dataset.X_train[initial_unlabeled_ids]
+        # The images' identity (KI-47): pool ids are positions in the loader's list, so
+        # the cache key carries the hash of the ordered train paths and the cache stores
+        # and checks the path of every cached id (`dalmax/embeddings/cache.py`).
+        train_paths = self.dataset.Z_train_paths
+        pool_paths = [train_paths[int(i)] for i in initial_unlabeled_ids]
         # NOTE: not `getattr(self.dataset, "dataset_folder", self.config.dataset.name)` —
         # getattr's default argument is evaluated eagerly regardless of
         # whether the attribute is found, so that form would require every
@@ -165,9 +171,16 @@ class RepresentationStrategy(Strategy):
         key = self.embedding_provider.key(
             dataset=dataset_name,
             split="train",
+            order_hash=ordered_paths_hash(train_paths),
             pool_hash=pool_hash(initial_unlabeled_ids),
             variant="full",
         )
         return compute_pool_embeddings(
-            self.embedding_provider, images, initial_unlabeled_ids, self.cache, key
+            self.embedding_provider,
+            images,
+            initial_unlabeled_ids,
+            pool_paths,
+            self.cache,
+            key,
+            logger=self.logger,
         )

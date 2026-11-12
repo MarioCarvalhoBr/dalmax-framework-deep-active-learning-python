@@ -12,7 +12,9 @@ notebook differs from what this script emits. Run from the repo root:
 The notebook runs ONE GPU part of the clean campaign on `DATA/daninhas_full_fixed` per Colab account
 (`GPU_PART`, ADR 0016). Its gate cells raise (so "Run all" stops) on a wrong `GPU_PART`, an unfilled
 `DRIVE_ROOT`, a missing or wrong dataset, a dirty checkout, results of the other GPU part on this
-Drive, or a job count that differs from the manifests.
+Drive, a job count that differs from the manifests, too little free Drive space for the remaining
+runs (`make campaign-space-gpu-part`), or an unreviewed pilot (`PILOT_REVIEWED`, 2026-11-12: the pilot
+runs seed 1 of the part's VAAL/WAAL groups and one cheap strategy before the long runs).
 """
 
 from __future__ import annotations
@@ -27,7 +29,15 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-from dalmax.campaign import GPU_PARTS, load_manifest, parse_selection, plan_jobs  # noqa: E402
+from dalmax.campaign import (  # noqa: E402
+    GPU_PARTS,
+    load_estimates,
+    load_manifest,
+    parse_selection,
+    pilot_group_ids,
+    plan_jobs,
+    selected_groups,
+)
 
 OUT = "notebooks/colab_runbook.ipynb"
 MANIFESTS = ("files_config/campaign/manifest.json", "files_config/campaign/manifest_kmh_sweep.json")
@@ -51,6 +61,19 @@ def results_roots() -> list[str]:
     return [load_manifest(REPO_ROOT / path, validate=False).results_root for path in MANIFESTS]
 
 
+def pilot_hours() -> dict[str, float]:
+    """`{gpu part: estimated GPU hours of its pilot}` (seed 1 of `pilot_group_ids`)."""
+    manifests = [load_manifest(REPO_ROOT / path, validate=False) for path in MANIFESTS]
+    estimates: dict[str, float] = {}
+    for manifest in manifests:
+        estimates.update(load_estimates(manifest))
+    hours: dict[str, float] = {}
+    for gpu_part in GPU_PARTS:
+        ids = pilot_group_ids(selected_groups(manifests, parse_selection(gpu_part)))
+        hours[gpu_part] = sum(estimates[gid] for gid in ids) / 3600
+    return hours
+
+
 def md(text: str) -> dict[str, Any]:
     return {"cell_type": "markdown", "metadata": {}, "source": textwrap.dedent(text).strip("\n")}
 
@@ -63,6 +86,7 @@ def code(text: str) -> dict[str, Any]:
 def cells() -> list[dict[str, Any]]:
     expected = expected_counts()
     roots = results_roots()
+    pilot = pilot_hours()
     part1, part2 = GPU_PARTS
     expected_literal = "{" + ", ".join(f'"{p}": {expected[p]}' for p in GPU_PARTS) + "}"
     return [
@@ -91,6 +115,9 @@ def cells() -> list[dict[str, Any]]:
             REPO_DIR = "/content/dalmax"
             BRANCH = "main"  # must contain ADR 0016 (the clean campaign on {DATASET})
             GPU_PART = "{part1}"  # account A: "{part1}"; account B: "{part2}" (ADR 0016). Re-running resumes.
+            # Set to True only after reading the pilot report of section 6 (wall times vs estimates, no degeneracy
+            # flag); until then "Run all" stops right before the full run.
+            PILOT_REVIEWED = False
 
             # Expected size of each GPU part over BOTH manifests (computed from the manifests when the notebook
             # was generated); the gate cell before the run asserts it.
@@ -298,10 +325,12 @@ def cells() -> list[dict[str, Any]]:
 
             Inside a part the order is: cheap paper-1 groups, the ablations, the KMH sweep, then the long baselines
             (`AdversarialBIM`, `VAAL`/`WAAL`, `AdversarialDeepFool`) last. Re-running the run cell resumes (complete
-            leaves are skipped). Estimated hours per part: printed by the list cell. See `COLAB_RUNBOOK.md` section 6.
+            leaves are skipped). Estimated hours per part: printed by the list cell. Before the full run: the pre-run
+            gate (job count, no leaf of the other part, free Drive space for the remaining runs: about 96 MB per run
+            plus 20%), then the **pilot** (seed 1 of this part's `VAAL` and `WAAL` groups at its largest budget and one
+            cheap strategy) and its report. See `COLAB_RUNBOOK.md` section 6.
             """),
         code("!make campaign-list-gpu-part GPU_PART={GPU_PART} 2>&1 | tail -n 40"),
-        md("Run (skip-existing: **re-running this cell resumes after a disconnect** -- redo sections 0-5 first)."),
         code('''
             import re
             import subprocess
@@ -324,7 +353,36 @@ def cells() -> list[dict[str, Any]]:
             if int(found.group(1)) + int(found.group(2)):
                 raise RuntimeError(f"results of {OTHER_GPU_PART} are on this Drive ({found.group(0)}): wrong account or "
                                    "wrong GPU_PART? Stop and check before spending credits.")
-            print(total.group(0).strip(), f"-- gate OK for {GPU_PART}. The next cell launches the runs.")
+            # Drive quota: free space for every remaining run of the part (96 MB per run + 20%), else the batch would
+            # train for hours and fail at every save. `campaign run` repeats this check and stops on a full disk.
+            space = subprocess.run(["make", "campaign-space-gpu-part", f"GPU_PART={GPU_PART}"], cwd=REPO_DIR,
+                                   capture_output=True, text=True)
+            print(space.stdout.strip())
+            if space.returncode != 0:
+                raise RuntimeError("Not enough free Drive space for the remaining runs of this part (numbers above): free "
+                                   "space on this account's Drive first.\\n" + space.stderr[-1000:])
+            print(total.group(0).strip(), f"-- gate OK for {GPU_PART}. Next: the pilot.")
+            '''),
+        md(f"""
+            **Pilot** (seed 1 of this part's `VAAL` and `WAAL` groups at its largest budget, plus `RandomSampling` at
+            that budget; estimated {pilot[part1]:.1f} GPU h in `{part1}`, {pilot[part2]:.1f} GPU h in `{part2}`).
+            The VAAL/WAAL costs are FLOP estimates, so measure them before the long runs. The pilot leaves are normal
+            campaign leaves: the full run skips them. Then read the report: wall time against the estimate (and the
+            projected hours of each strategy over the part), the weighted F1 per round, and every
+            `strategy_diagnostics` series with degeneracy flags (`pool_order_fraction` near 1 = the KI-45 pool-order
+            signature; constant scores; zero spread). If the times or the diagnostics look wrong, stop and report
+            before spending the part's credits. Otherwise set `PILOT_REVIEWED = True` in the Parameters cell, re-run
+            it and continue from the gate cell below.
+            """),
+        code("!make campaign-pilot GPU_PART={GPU_PART}"),
+        code("!make campaign-pilot-report GPU_PART={GPU_PART}"),
+        md("Run (skip-existing: **re-running this cell resumes after a disconnect** -- redo sections 0-5 first)."),
+        code('''
+            # Gate: the full run starts only after the pilot report was read.
+            if not PILOT_REVIEWED:
+                raise RuntimeError("Read the pilot report above, then set PILOT_REVIEWED = True in the Parameters cell, "
+                                   "re-run that cell and continue from here.")
+            print(f"Pilot reviewed -- launching the full {GPU_PART} run (completed pilot leaves are skipped).")
             '''),
         code('''
             import time
@@ -338,7 +396,7 @@ def cells() -> list[dict[str, Any]]:
             '''),
         md("**Progress** (usable anytime, e.g. after a disconnect):"),
         code('''
-            !make campaign-verify-gpu-part GPU_PART={GPU_PART} 2>&1 | grep -E "^Totals|seed [0-9]"
+            !make campaign-verify-gpu-part GPU_PART={GPU_PART} 2>&1 | grep -E "^Totals|seed [0-9]|distinct order"
             for root in RESULTS_ROOTS:
                 log = f"{REPO_DIR}/{root}/campaign.log"
                 tail = open(log).read().splitlines()[-5:] if os.path.exists(log) else ["no campaign.log yet"]
@@ -350,8 +408,9 @@ def cells() -> list[dict[str, Any]]:
                 print(open(log).read() if os.path.exists(log) else f"{root}: no failures logged")
             '''),
         md("""
-            **Verify**: OK/INCOMPLETE/MISSING per job plus the seed-consistency audit (every run of a seed must start
-            from the identical initial labeled set). Exit code 0 = all OK, 1 = an incomplete/missing job or a FAIL
+            **Verify**: OK/INCOMPLETE/MISSING per job, the seed-consistency audit (every run of a seed must start
+            from the identical initial labeled IMAGES, compared by path) and the data-order audit (every leaf must
+            index the same ordered image lists, KI-47). Exit code 0 = all OK, 1 = an incomplete/missing job or a FAIL
             audit, 2 = only audit WARNs. Re-run the run cell to redo failed or missing jobs.
             """),
         code("!make campaign-verify-gpu-part GPU_PART={GPU_PART}"),
@@ -415,6 +474,8 @@ def cells() -> list[dict[str, Any]]:
 
             - Session dropped / limit reached -> new runtime, Parameters cell unchanged, sections 0-5, then the run
               cell again (complete leaves are skipped; at most the run in progress is lost).
+            - `STOP no space` in `campaign.log` / exit 4 -> the Drive is full: free space on this account's Drive, then
+              re-run the run cell (it resumes; the failed run is retried).
             - Drive FUSE `Transport endpoint is not connected` -> re-run the mount cell and `make colab-setup`.
             - `results/` symlink conflicts -> read `scripts/colab/setup_colab.sh`'s error message (it names the path).
             - Out of GPU memory -> stop and report it; never edit a committed params file to lower the batch size.

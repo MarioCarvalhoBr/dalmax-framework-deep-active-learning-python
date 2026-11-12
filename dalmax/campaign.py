@@ -8,7 +8,13 @@ ADR 0016); `manifest_kmh_sweep.json` is the paper-1 KMH sweep (ADR 0012). Each
 n_init_labeled + n_round) swept over the manifest's seeds; a table row of any
 paper that needs the same computation points to that one group (directly, or
 through an *alias* entry that documents why two differently-spelled configs are
-the same computation). Nothing runs twice.
+the same computation). Inside one manifest nothing runs twice
+(`validate_manifest`). Across the main manifest and the KMH sweep, three groups
+repeat the reference KMH configuration ON PURPOSE (`shared/kmh_nq100`,
+`p1/KMH/nq50`, `p1/KMH/nq10` vs the sweep's `kmh/nq{100,50,10}/hier_L3_ref`, so
+every sweep table is measured inside one session): `verify` over several
+manifests reports whether each such pair selected the same images
+(`cross_manifest_duplicates`, a free determinism check).
 
 Two orthogonal partitions select groups (`--part`):
 
@@ -29,15 +35,30 @@ plan: by GPU stage for a GPU part, manifest by manifest otherwise):
 - `run --part ... [--micro] [--dry-run] [--skip-existing|--no-skip-existing]
   [--device cuda]`: execute the jobs sequentially through `tools/trainer.py`
   (subprocess), logging to `<results_root>/campaign.log` and
-  `<results_root>/failures.log` of the job's manifest, continuing after a failure.
+  `<results_root>/failures.log` of the job's manifest, continuing after a failure
+  EXCEPT a lack of disk space: `run` refuses to start (exit 4) when the free space
+  of a results file system is below the remaining runs x `RUN_DISK_BYTES` x 1.2
+  (`dalmax/experiment/disk_space.py`), and stops the batch (exit 4) when a run
+  exits with `NO_SPACE_EXIT_CODE` or the free space drops below one run.
+- `space`: print that free-space check for the selection (exit 0 enough, 4 short).
 - `verify [--part ...] [--micro]`: per job OK / INCOMPLETE / MISSING, reusing
   `dalmax.reporting.leaf_check.check_leaf` (plus the manifest's
-  `required_leaf_files`), and the seed-consistency audit over every selected job.
+  `required_leaf_files`), the seed-consistency audit (round-0 image paths from
+  `round_queries.json`, pool indices from the log as fallback) and the data-order
+  audit (`run_metadata.json` `data_order` hashes, KI-47) over every selected job;
+  with several manifests also the duplicate-pair report (informational).
   Exit code: 0 all OK; 1 an incomplete/missing job or a FAIL audit; 2 only audit
-  WARNs (a run whose initial-labeled-set log line is missing/unreadable).
+  WARNs (a run whose initial set or data order cannot be read).
+- `pilot-report`: read-only summary of the pilot leaves (wall time vs estimate,
+  `strategy_diagnostics`, degeneracy flags; `dalmax/reporting/pilot_report.py`).
 - Every subcommand accepts `--exclude-strategy A,B` (e.g. the two adversarial
   baselines, far too slow for a CPU smoke run): jobs of those strategies are
   dropped from the list/run/verify/audit. The manifest still contains them.
+- Every subcommand accepts `--only-group ID[,ID]` (restrict to those groups) and
+  `--pilot` (= the pilot groups of the selection, `pilot_group_ids`, seed 1 unless
+  `--seeds` says otherwise): seed 1 of the VAAL and WAAL groups at the largest
+  budget of the selection plus RandomSampling at that budget. A later full run
+  skips the completed pilot leaves (skip-existing).
 
 Semantic execution order (fixed, independent of `--part`): paper 1 at
 n_query=100 first (the shared canonical runs -- KMH and RandomSampling, which
@@ -62,12 +83,23 @@ from typing import Any
 
 from dalmax.config.loader import load_experiment_config, to_dict
 from dalmax.config.schema import FULL_SUPERVISED_STRATEGY, STRATEGY_ARGS_KEYS
+from dalmax.data_order import relative_image_paths
+from dalmax.experiment.disk_space import (
+    DISK_MARGIN,
+    NO_SPACE_EXIT_CODE,
+    RUN_DISK_BYTES,
+    file_system_id,
+    format_gb,
+    free_bytes,
+    required_bytes,
+)
 from dalmax.query_strategies.registry import (
     GENERIC_REPRESENTATION_NAME,
     REPRESENTATION_PRESET_Q,
     REPRESENTATION_PRESETS,
 )
-from dalmax.reporting.leaf_check import ROUND_HISTORY_FILES, check_leaf
+from dalmax.reporting.leaf_check import ROUND_HISTORY_FILES, ROUND_QUERIES_FILE, check_leaf
+from dalmax.reporting.pilot_report import PilotRow, read_campaign_log_elapsed, render_pilot_report
 from dalmax.seeding import CUBLAS_WORKSPACE_CONFIG
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -602,6 +634,51 @@ def plan_jobs(
     return [Segment(manifests[mi], tuple(jobs)) for mi, jobs in segments]
 
 
+def selected_groups(
+    manifests: Sequence[Manifest], selection: Selection, exclude_strategies: Collection[str] = ()
+) -> list[RunGroup]:
+    """Every group of `manifests` the selection keeps (in manifest order)."""
+    return [g for m in manifests for g in m.groups
+            if selection.selects(g) and g.strategy_name not in exclude_strategies]
+
+
+def restrict_plan(plan: Sequence[Segment], group_ids: Collection[str], available: Collection[str]) -> list[Segment]:
+    """Keep only the jobs of `group_ids` (order preserved, empty segments dropped).
+
+    Fails fast on an id that is not among `available` (the groups of the selection),
+    e.g. a typo or a group of the other GPU part.
+    """
+    unknown = sorted(set(group_ids) - set(available))
+    if unknown:
+        raise CampaignError(f"--only-group: {unknown} not in the selected groups (check --part / --manifest)")
+    wanted = set(group_ids)
+    kept = [Segment(seg.manifest, tuple(j for j in seg.jobs if j.group.id in wanted)) for seg in plan]
+    return [seg for seg in kept if seg.jobs]
+
+
+# The pilot (2026-11-12): the two long DeepAL+ baselines whose costs are FLOP estimates (VAAL, WAAL) and one
+# cheap strategy, at the largest budget of the selection, seed 1 only, run before a GPU part's full plan.
+PILOT_STRATEGIES: tuple[str, ...] = ("VAAL", "WAAL")
+PILOT_CHEAP_STRATEGY = "RandomSampling"
+
+
+def pilot_group_ids(groups: Sequence[RunGroup]) -> tuple[str, ...]:
+    """The pilot of a selection: its VAAL and WAAL groups at the largest `n_query` they have in the
+    selection (nq100 in `part_1_gpu`, nq50 in `part_2_gpu`), plus `RandomSampling` at that budget."""
+    long = [g for g in groups if g.strategy_name in PILOT_STRATEGIES]
+    if not long:
+        raise CampaignError(f"--pilot: the selection has no {'/'.join(PILOT_STRATEGIES)} group")
+    budget = max(g.n_query for g in long)
+    picked = [g for g in long if g.n_query == budget]
+    missing = sorted(set(PILOT_STRATEGIES) - {g.strategy_name for g in picked})
+    if missing:
+        raise CampaignError(f"--pilot: no {missing} group at n_query={budget} in the selection")
+    cheap = [g for g in groups if g.strategy_name == PILOT_CHEAP_STRATEGY and g.n_query == budget]
+    if not cheap:
+        raise CampaignError(f"--pilot: no {PILOT_CHEAP_STRATEGY} group at n_query={budget} in the selection")
+    return tuple(g.id for g in (cheap[0], *picked))
+
+
 def count_by_part(jobs: Sequence[Job]) -> dict[str, int]:
     counts = dict.fromkeys(PARTS, 0)
     for job in jobs:
@@ -733,6 +810,11 @@ class RunSummary:
     skipped: int = 0
     failed: int = 0
     dry: int = 0
+    stopped_no_space: bool = False  # the batch was stopped for lack of disk space (exit 4)
+
+
+# `campaign run`/`space` exit code when the free space of a results file system is short.
+EXIT_NO_SPACE = 4
 
 
 def run_jobs(
@@ -744,14 +826,22 @@ def run_jobs(
     dry_run: bool = False,
     executor: Callable[[list[str], dict[str, str]], int] = _default_executor,
     echo: Callable[[str], None] = print,
+    free_space: Callable[[Path], int] | None = None,
+    run_bytes: int = RUN_DISK_BYTES,
 ) -> RunSummary:
-    """Execute jobs (all of `manifest`) sequentially; a failing job is logged and the batch continues."""
+    """Execute jobs (all of `manifest`) sequentially; a failing job is logged and the batch continues,
+    except for a lack of disk space: before each run the results file system must hold one more run
+    (`required_bytes(1)`), and a run that exits with `NO_SPACE_EXIT_CODE` stops the batch too
+    (`summary.stopped_no_space`), instead of training the next runs for nothing. `free_space`
+    defaults to `free_bytes` (injectable for tests)."""
+    free_space = free_space or free_bytes
     root = REPO_ROOT / manifest.results_root
     campaign_log = root / "campaign.log"
     failures_log = root / "failures.log"
     summary = RunSummary()
     env = build_env(device)
     total = len(jobs)
+    one_run = required_bytes(1, run_bytes=run_bytes)
 
     def log(msg: str) -> None:
         line = f"{_stamp()} {msg}"
@@ -771,6 +861,12 @@ def run_jobs(
             summary.dry += 1
             log(f"{head} DRY-RUN CUDA_VISIBLE_DEVICES={env.get('CUDA_VISIBLE_DEVICES', '-')} {' '.join(cmd)}")
             continue
+        free = free_space(root)
+        if free < one_run:
+            summary.stopped_no_space = True
+            log(f"{head} STOP no space: {format_gb(free)} free on the results file system, "
+                f"{format_gb(one_run)} needed for one run; free space, then re-run (resumes)")
+            break
         log(f"{head} START")
         t0 = time.time()
         code = executor(cmd, env)
@@ -779,14 +875,74 @@ def run_jobs(
             summary.failed += 1
             log(f"{head} FAILED exit={code} elapsed={elapsed:.0f}s")
             _append(failures_log, f"{_stamp()} FAILED {job.label()} exit={code}")
+            if code == NO_SPACE_EXIT_CODE:
+                summary.stopped_no_space = True
+                log(f"{head} STOP no space: the run failed for lack of disk space (exit {code}); "
+                    "free space, then re-run (resumes)")
+                break
         else:
             summary.executed += 1
             log(f"{head} DONE elapsed={elapsed:.0f}s")
     log(
         f"CAMPAIGN END executed={summary.executed} skipped={summary.skipped} "
         f"failed={summary.failed} dry_run={summary.dry}"
+        + (" STOPPED=no_space" if summary.stopped_no_space else "")
     )
     return summary
+
+
+@dataclass(frozen=True)
+class SpaceCheck:
+    """Free space of one file system against the runs still to execute into the results roots on it."""
+
+    roots: tuple[str, ...]
+    remaining_runs: int
+    needed: int
+    free: int
+
+    @property
+    def ok(self) -> bool:
+        return self.free >= self.needed
+
+
+def space_checks(
+    plan: Sequence[Segment],
+    *,
+    skip_existing: bool = True,
+    free_space: Callable[[Path], int] | None = None,
+    device_of: Callable[[Path], int] | None = None,
+    run_bytes: int = RUN_DISK_BYTES,
+) -> list[SpaceCheck]:
+    """One `SpaceCheck` per file system holding a results root of `plan`. Remaining runs = the
+    jobs without a complete leaf (all jobs with `skip_existing=False`); needed =
+    `required_bytes(remaining)` (runs x per-run size x 20% margin). `free_space` / `device_of`
+    default to `free_bytes` / `file_system_id` (injectable for tests)."""
+    free_space = free_space or free_bytes
+    device_of = device_of or file_system_id
+    remaining: dict[str, int] = {}
+    for seg in plan:
+        todo = sum(1 for j in seg.jobs if not (skip_existing and job_done(j, seg.manifest.required_leaf_files)))
+        remaining[seg.manifest.results_root] = remaining.get(seg.manifest.results_root, 0) + todo
+    by_device: dict[int, list[str]] = {}
+    for root in remaining:
+        by_device.setdefault(device_of(REPO_ROOT / root), []).append(root)
+    checks = []
+    for roots in by_device.values():
+        runs = sum(remaining[r] for r in roots)
+        checks.append(SpaceCheck(tuple(roots), runs, required_bytes(runs, run_bytes=run_bytes),
+                                 free_space(REPO_ROOT / roots[0])))
+    return checks
+
+
+def render_space_checks(checks: Sequence[SpaceCheck], run_bytes: int = RUN_DISK_BYTES) -> str:
+    lines = [f"Free-space check (results file systems; remaining runs x per-run size x {DISK_MARGIN}):"]
+    for c in checks:
+        verdict = "OK" if c.ok else "NOT ENOUGH"
+        lines.append(
+            f"  {verdict}: {', '.join(c.roots)}: {c.remaining_runs} remaining runs x {run_bytes / 1e6:.0f} MB x "
+            f"{DISK_MARGIN} = {format_gb(c.needed)} needed, {format_gb(c.free)} free"
+        )
+    return "\n".join(lines)
 
 
 # --- verify -------------------------------------------------------------------
@@ -828,6 +984,21 @@ class SeedAudit:
     reference: str | None = None
     offenders: tuple[str, ...] = ()
     unreadable: tuple[str, ...] = ()
+    basis: str = "pool indices"  # "image paths", "pool indices" or "image paths + pool indices"
+
+
+@dataclass(frozen=True)
+class InitialSet:
+    """The round-0 labeled set of one run: pool indices and, when the leaf has
+    `round_queries.json`, the sorted relative image paths (KI-47: indices alone
+    name images only under one data order)."""
+
+    idxs: list[int] | None
+    paths: list[str] | None = None
+
+    @property
+    def readable(self) -> bool:
+        return self.idxs is not None or self.paths is not None
 
 
 def read_initial_idxs(leaf: Path) -> list[int] | None:
@@ -839,34 +1010,71 @@ def read_initial_idxs(leaf: Path) -> list[int] | None:
     return json.loads(match.group(1)) if match else None
 
 
+def read_round_paths(leaf: Path) -> list[list[str]] | None:
+    """Per round, the sorted relative paths (`<class>/<file>`) labeled in it, from
+    `round_queries.json`; None when the file is absent or has no paths."""
+    path = leaf / ROUND_QUERIES_FILE
+    if not path.is_file():
+        return None
+    try:
+        rounds = sorted(json.loads(path.read_text())["rounds"], key=lambda r: int(r["round"]))
+        return [sorted(relative_image_paths(r["paths"])) for r in rounds]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def read_initial_set(leaf: Path) -> InitialSet:
+    """Round-0 set of a leaf: indices and image paths from `round_queries.json` when it
+    has them, else the indices of the log line (trees older than ADR 0016)."""
+    path = leaf / ROUND_QUERIES_FILE
+    if path.is_file():
+        try:
+            rounds = json.loads(path.read_text())["rounds"]
+            initial = next(r for r in rounds if int(r["round"]) == 0)
+            return InitialSet([int(i) for i in initial["pool_idxs"]], sorted(relative_image_paths(initial["paths"])))
+        except (OSError, ValueError, KeyError, TypeError, StopIteration):
+            pass  # malformed/older format: fall back to the log
+    return InitialSet(read_initial_idxs(leaf))
+
+
 def audit_seed_consistency(jobs: Sequence[Job], *, base: Path | None = None) -> list[SeedAudit]:
     """For each seed, every run (all strategies/configs, `FullSupervised`
     excluded) must have started from the IDENTICAL initial labeled set -- the
-    fair-comparison premise of the whole campaign."""
-    by_seed: dict[int, list[tuple[str, list[int] | None]]] = {}
+    fair-comparison premise of the whole campaign. Compared by image paths
+    (`round_queries.json`) wherever available, so two runs that start from the
+    same indices but different images FAIL (KI-47), and by pool indices
+    (log line) as the fallback for older leaves; any difference is a FAIL."""
+    by_seed: dict[int, list[tuple[str, InitialSet]]] = {}
     for job in jobs:
         if job.group.strategy_name in AUDIT_EXCLUDED_STRATEGIES:
             continue
         leaf = find_leaf(job.group, job.seed, base=base)
         if leaf is None:
             continue  # not run yet: `verify` reports it as MISSING
-        by_seed.setdefault(job.seed, []).append((job.group.id, read_initial_idxs(leaf)))
+        by_seed.setdefault(job.seed, []).append((job.group.id, read_initial_set(leaf)))
 
     seeds = sorted({j.seed for j in jobs if j.group.strategy_name not in AUDIT_EXCLUDED_STRATEGIES})
     audits: list[SeedAudit] = []
     for seed in seeds:
         runs = by_seed.get(seed, [])
-        readable = [(rid, idxs) for rid, idxs in runs if idxs is not None]
-        unreadable = tuple(rid for rid, idxs in runs if idxs is None)
+        readable = [(rid, s) for rid, s in runs if s.readable]
+        unreadable = tuple(rid for rid, s in runs if not s.readable)
         if not readable:
             # Runs exist but none can be compared (missing/unreadable log): WARN, not silence.
             status = "WARN" if unreadable else "NO_DATA"
             audits.append(SeedAudit(seed, status, len(runs), unreadable=unreadable))
             continue
-        reference_id, reference = readable[0]
-        offenders = tuple(rid for rid, idxs in readable if idxs != reference)
+        ref_idxs = next((s.idxs for _, s in readable if s.idxs is not None), None)
+        ref_paths = next((s.paths for _, s in readable if s.paths is not None), None)
+        offenders = tuple(
+            rid for rid, s in readable
+            if (s.idxs is not None and s.idxs != ref_idxs) or (s.paths is not None and s.paths != ref_paths)
+        )
+        with_paths = sum(s.paths is not None for _, s in readable)
+        basis = ("image paths" if with_paths == len(readable)
+                 else "pool indices" if with_paths == 0 else "image paths + pool indices")
         status = "FAIL" if offenders else ("WARN" if unreadable else "PASS")
-        audits.append(SeedAudit(seed, status, len(readable), reference_id, offenders, unreadable))
+        audits.append(SeedAudit(seed, status, len(readable), readable[0][0], offenders, unreadable, basis))
     return audits
 
 
@@ -874,12 +1082,138 @@ def render_seed_audit(audits: Sequence[SeedAudit]) -> str:
     lines = ["Seed-consistency audit (initial labeled set identical across all strategies/configs):"]
     for a in audits:
         line = f"  seed {a.seed}: {a.status} ({a.n_runs} runs compared"
-        line += f", reference {a.reference})" if a.reference else ")"
+        line += f" by {a.basis}, reference {a.reference})" if a.reference else ")"
         lines.append(line)
         for rid in a.offenders:
             lines.append(f"    OFFENDER (different initial set): {rid}")
         for rid in a.unreadable:
-            lines.append(f"    unreadable log-dalmax.log / no initial-idxs line: {rid}")
+            lines.append(f"    unreadable round_queries.json and log-dalmax.log / no initial-idxs line: {rid}")
+    return "\n".join(lines)
+
+
+# --- data-order audit (KI-47) -------------------------------------------------
+
+
+@dataclass(frozen=True)
+class DataOrderAudit:
+    """Do all leaves of one dataset folder index the same ordered train and test image lists?"""
+
+    dataset: str
+    status: str  # PASS | FAIL | WARN
+    n_runs: int
+    # (train hash, test hash) -> (number of leaves, first job label), one entry per distinct order
+    variants: tuple[tuple[str, str, int, str], ...] = ()
+    missing: tuple[str, ...] = ()  # job labels whose run_metadata.json has no `data_order`
+
+
+def read_data_order(leaf: Path) -> tuple[str, str] | None:
+    """`(train_paths_hash, test_paths_hash)` of `run_metadata.json`'s `data_order`, or None."""
+    try:
+        order = json.loads((leaf / "run_metadata.json").read_text())["data_order"]
+        return str(order["train_paths_hash"]), str(order["test_paths_hash"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+
+
+def audit_data_order(jobs: Sequence[Job], *, base: Path | None = None) -> list[DataOrderAudit]:
+    """Per dataset folder, every leaf (every strategy, the upper bound included) must
+    record the same `data_order` hashes: otherwise the same index named different
+    images in different runs (FAIL). Leaves without the record (written before
+    KI-47) give WARN."""
+    by_dataset: dict[str, list[tuple[str, tuple[str, str] | None]]] = {}
+    for job in jobs:
+        leaf = find_leaf(job.group, job.seed, base=base)
+        if leaf is None:
+            continue
+        dataset = leaf.parent.parent.parent.name  # <dir_results>/<dataset>/SEED_s/NQ_.../<strategy>
+        by_dataset.setdefault(dataset, []).append((job.label(), read_data_order(leaf)))
+    audits: list[DataOrderAudit] = []
+    for dataset, runs in sorted(by_dataset.items()):
+        counts: dict[tuple[str, str], list[str]] = {}
+        for label, order in runs:
+            if order is not None:
+                counts.setdefault(order, []).append(label)
+        variants = tuple((t, s, len(labels), labels[0]) for (t, s), labels in counts.items())
+        missing = tuple(label for label, order in runs if order is None)
+        status = "FAIL" if len(variants) > 1 else ("WARN" if missing else "PASS")
+        audits.append(DataOrderAudit(dataset, status, len(runs), variants, missing))
+    return audits
+
+
+def render_data_order_audit(audits: Sequence[DataOrderAudit], max_listed: int = 5) -> str:
+    lines = ["Data-order audit (every leaf of a dataset indexes the same ordered image lists, KI-47):"]
+    if not audits:
+        lines.append("  no leaves")
+    for a in audits:
+        lines.append(f"  {a.dataset}: {a.status} ({a.n_runs} runs, {len(a.variants)} distinct order(s))")
+        for train, test, count, example in a.variants:
+            lines.append(f"    train {train} / test {test}: {count} runs, e.g. {example}")
+        if a.missing:
+            shown = ", ".join(a.missing[:max_listed]) + (" ..." if len(a.missing) > max_listed else "")
+            lines.append(f"    no data_order in run_metadata.json ({len(a.missing)} runs): {shown}")
+    return "\n".join(lines)
+
+
+# --- intentional duplicate computations across manifests (informational) -------
+
+
+@dataclass(frozen=True)
+class DuplicatePairCheck:
+    """Did two groups with the same effective signature (in different manifests) select the same images?"""
+
+    first: str
+    second: str
+    seed: int
+    status: str  # SAME | DIFFERENT | N/A
+    detail: str = ""
+
+
+def cross_manifest_duplicates(manifests: Sequence[Manifest]) -> list[tuple[RunGroup, RunGroup]]:
+    """Pairs of groups of DIFFERENT manifests that are the same computation (`group_signature`).
+    Within a manifest `validate_manifest` already forbids any."""
+    seen: dict[str, tuple[int, RunGroup]] = {}
+    pairs: list[tuple[RunGroup, RunGroup]] = []
+    for mi, manifest in enumerate(manifests):
+        if manifest.dataset_name != manifests[0].dataset_name:
+            continue
+        for group in manifest.groups:
+            sig = group_signature(manifest, group)
+            other = seen.get(sig)
+            if other is None:
+                seen[sig] = (mi, group)
+            elif other[0] != mi:
+                pairs.append((other[1], group))
+    return pairs
+
+
+def check_duplicate_pairs(
+    pairs: Sequence[tuple[RunGroup, RunGroup]], seeds: Collection[int], *, base: Path | None = None
+) -> list[DuplicatePairCheck]:
+    """For each pair and seed: SAME if both leaves labeled the same images in every round
+    (`round_queries.json`), DIFFERENT (first differing round named), N/A if a side is missing."""
+    checks: list[DuplicatePairCheck] = []
+    for a, b in pairs:
+        for seed in sorted(set(a.seeds) & set(b.seeds) & set(seeds)):
+            leaves = [find_leaf(g, seed, base=base) for g in (a, b)]
+            rounds = [read_round_paths(leaf) if leaf is not None else None for leaf in leaves]
+            if rounds[0] is None or rounds[1] is None:
+                checks.append(DuplicatePairCheck(a.id, b.id, seed, "N/A", "a leaf or its round_queries.json is missing"))
+                continue
+            if rounds[0] == rounds[1]:
+                checks.append(DuplicatePairCheck(a.id, b.id, seed, "SAME", f"{len(rounds[0])} rounds"))
+                continue
+            first = next((r for r, (x, y) in enumerate(zip(*rounds, strict=False)) if x != y), min(map(len, rounds)))
+            checks.append(DuplicatePairCheck(a.id, b.id, seed, "DIFFERENT", f"first differing round {first}"))
+    return checks
+
+
+def render_duplicate_pairs(checks: Sequence[DuplicatePairCheck]) -> str:
+    lines = ["Intentional duplicate computations across manifests (informational; same seed + config "
+             "should select the same images):"]
+    if not checks:
+        lines.append("  no pair inside this selection")
+    for c in checks:
+        lines.append(f"  {c.status:<9} {c.first} == {c.second} seed={c.seed} ({c.detail})")
     return "\n".join(lines)
 
 
@@ -957,6 +1291,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "--exclude-strategy", default=None,
             help="comma-separated strategy names to drop (e.g. AdversarialBIM,AdversarialDeepFool for CPU smoke)",
         )
+        only = p.add_mutually_exclusive_group()
+        only.add_argument("--only-group", default=None,
+                          help="comma-separated group ids: restrict the selection to them (fail fast on unknown ids)")
+        only.add_argument("--pilot", action="store_true",
+                          help=f"only the pilot groups of the selection ({PILOT_CHEAP_STRATEGY} + "
+                               f"{'/'.join(PILOT_STRATEGIES)} at its largest budget), seed 1 unless --seeds is given")
 
     common(sub.add_parser("list", help="print the job table, counts and estimated GPU hours"))
     run_p = sub.add_parser("run", help="execute jobs sequentially via tools/trainer.py")
@@ -968,15 +1308,45 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     run_p.add_argument("--device", default=None, choices=["cuda", "cpu", "auto"],
                        help="default: cuda (cpu with --micro)")
-    common(sub.add_parser("verify", help="OK/INCOMPLETE/MISSING per job + seed-consistency audit"))
+    common(sub.add_parser("verify", help="OK/INCOMPLETE/MISSING per job + seed-consistency and data-order audits"))
+    common(sub.add_parser("space", help="free space of the results file systems vs the remaining runs (exit 4 short)"))
+    common(sub.add_parser("pilot-report", help="read-only: wall time vs estimate and strategy_diagnostics of the "
+                                               "pilot leaves (implies --pilot)"))
     return parser
 
 
-def verify_exit_code(statuses: Sequence[JobStatus], audits: Sequence[SeedAudit]) -> int:
+def verify_exit_code(
+    statuses: Sequence[JobStatus],
+    audits: Sequence[SeedAudit],
+    data_order_audits: Sequence[DataOrderAudit] = (),
+) -> int:
     """0: everything OK; 1: an incomplete/missing job or a FAILed audit; 2: only audit WARNs."""
     if any(s.status != "OK" for s in statuses) or any(a.status in ("FAIL", "NO_DATA") for a in audits):
         return 1
-    return 2 if any(a.status == "WARN" for a in audits) else 0
+    if any(a.status == "FAIL" for a in data_order_audits):
+        return 1
+    warn = any(a.status == "WARN" for a in audits) or any(a.status == "WARN" for a in data_order_audits)
+    return 2 if warn else 0
+
+
+def _pilot_rows(plan: Sequence[Segment], estimates: dict[int, dict[str, float]],
+                all_groups: Sequence[RunGroup]) -> list[PilotRow]:
+    """One `PilotRow` per pilot job (leaf, wall time from the manifest's campaign.log, estimate,
+    number of runs of the same strategy in the whole selection for the projection)."""
+    rows = []
+    for seg in plan:
+        log = REPO_ROOT / seg.manifest.results_root / "campaign.log"
+        for job in seg.jobs:
+            runs_in_selection = sum(len(g.seeds) for g in all_groups if g.strategy_name == job.group.strategy_name)
+            rows.append(PilotRow(
+                label=job.label(),
+                strategy=job.group.strategy_name,
+                leaf=find_leaf(job.group, job.seed),
+                campaign_log_seconds=read_campaign_log_elapsed(log, job.group.id, job.seed),
+                estimate_seconds=estimates[id(seg.manifest)].get(job.group.id),
+                runs_in_selection=runs_in_selection,
+            ))
+    return rows
 
 
 def _dispatch(args: argparse.Namespace) -> int:
@@ -988,12 +1358,27 @@ def _dispatch(args: argparse.Namespace) -> int:
         selection = parse_selection(args.part)
         excluded = parse_exclude_strategies(args.exclude_strategy, manifests)
         estimates = {id(m): load_estimates(m) for m in manifests}
+        groups = selected_groups(manifests, selection, excluded)
+        pilot = args.pilot or args.command == "pilot-report"
+        only = pilot_group_ids(groups) if pilot else (
+            [s.strip() for s in args.only_group.split(",") if s.strip()] if args.only_group else None)
+        seeds = [int(s) for s in args.seeds.split(",")] if args.seeds else None
+        if pilot and seeds is None:
+            seeds = [min(manifests[0].seeds)]
+        plan = plan_jobs(manifests, selection, seeds, excluded)
+        if only is not None:
+            plan = restrict_plan(plan, only, [g.id for g in groups])
     except CampaignError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
-    seeds = [int(s) for s in args.seeds.split(",")] if args.seeds else None
-    plan = plan_jobs(manifests, selection, seeds, excluded)
+    if args.command == "pilot-report":
+        print(render_pilot_report(_pilot_rows(plan, estimates, groups)))
+        return 0
+    if args.command == "space":
+        checks = space_checks(plan)
+        print(render_space_checks(checks))
+        return 0 if all(c.ok for c in checks) else EXIT_NO_SPACE
     if args.command == "list":
         if excluded:
             print(f"excluded strategies: {', '.join(sorted(excluded))}")
@@ -1013,21 +1398,41 @@ def _dispatch(args: argparse.Namespace) -> int:
             print(render_totals([j for seg in plan for j in seg.jobs], combined))
         return 0
     if args.command == "verify":
+        jobs = [j for seg in plan for j in seg.jobs]
         statuses = [verify_job(j, required_extra=seg.manifest.required_leaf_files)
                     for seg in plan for j in seg.jobs]
         print(render_verify(statuses))
-        audits = audit_seed_consistency([j for seg in plan for j in seg.jobs])
+        audits = audit_seed_consistency(jobs)
         print()
         print(render_seed_audit(audits))
-        return verify_exit_code(statuses, audits)
+        order_audits = audit_data_order(jobs)
+        print()
+        print(render_data_order_audit(order_audits))
+        if len(manifests) > 1:
+            in_plan = {j.group.id for j in jobs}
+            pairs = [(a, b) for a, b in cross_manifest_duplicates(manifests) if a.id in in_plan and b.id in in_plan]
+            print()
+            print(render_duplicate_pairs(check_duplicate_pairs(pairs, {j.seed for j in jobs})))
+        return verify_exit_code(statuses, audits, order_audits)
 
     device = args.device or ("cpu" if args.micro else "cuda")
+    if not args.dry_run:
+        checks = space_checks(plan, skip_existing=args.skip_existing)
+        if not all(c.ok for c in checks):
+            print(render_space_checks(checks), file=sys.stderr)
+            print("ERROR: not enough free space for the remaining runs; nothing was started. Free space on the "
+                  "results file system (the Drive on Colab) or run a smaller selection.", file=sys.stderr)
+            return EXIT_NO_SPACE
     failed = 0
     for seg in plan:
         summary = run_jobs(
             seg.jobs, seg.manifest, device=device, skip_existing=args.skip_existing, dry_run=args.dry_run
         )
         failed += summary.failed
+        if summary.stopped_no_space:
+            print("ERROR: the batch was stopped for lack of disk space (see campaign.log); free space and "
+                  "re-run the same command to resume.", file=sys.stderr)
+            return EXIT_NO_SPACE
     return 1 if failed else 0
 
 

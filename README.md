@@ -264,8 +264,10 @@ into `results/campaign_fixed/` and `results/campaign_kmh_fixed/`, split into two
 
 ```bash
 make campaign-list-gpu-part GPU_PART=part_1_gpu   # both manifests, plan order, estimated GPU hours
+make campaign-pilot GPU_PART=part_1_gpu           # seed 1 of the part's VAAL/WAAL (+ RandomSampling) first
+make campaign-pilot-report GPU_PART=part_1_gpu    # wall time vs estimate + strategy_diagnostics of the pilot
 make campaign-run-gpu-part GPU_PART=part_1_gpu    # sequential, skip-existing: re-run the same command to resume
-make campaign-verify-gpu-part GPU_PART=part_1_gpu # OK/INCOMPLETE/MISSING per job + seed audit
+make campaign-verify-gpu-part GPU_PART=part_1_gpu # OK/INCOMPLETE/MISSING per job + seed audit + data-order audit
 make campaign-verify-all                          # both manifests after merging the two parts (expect OK=459)
 make campaign-report-all                          # tables + mean confusion matrices -> docs/results/campaign_fixed/ (+ _kmh_fixed/)
 make campaign-smoke                               # CPU micro campaign (skips the two adversarial baselines)

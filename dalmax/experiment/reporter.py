@@ -17,8 +17,10 @@ was found, only the last round's `predictions.csv` existed):
 - `round_predictions.json`: the predicted class index of every test image at every
   round, with the test images' paths and true class indices (test-set order).
 - `round_queries.json`: per round, the pool indices labeled in that round (round 0 =
-  the initial labeled set), sorted, with their true class indices and image paths
-  (the pool order follows `os.listdir`, so the paths are the stable identifier).
+  the initial labeled set), sorted, with their true class indices and image paths.
+  Pool indices follow the loaders' sorted order (KI-47; `run_metadata.json`'s
+  `data_order` hashes it); the paths stay the identifier to compare runs by
+  (`dalmax.data_order.relative_image_path`), and the campaign's seed audit does.
 """
 
 from __future__ import annotations

@@ -41,9 +41,12 @@ paper-1 micro files for smoke speed):
   (paper 1), which are also papers 2/3's "w/o representation module" row.
 
 GPU parts (ADR 0016): `part_1_gpu` (account A: paper 1 at nq100, the upper bound, every ablation part, KMH sweep nq100
-and nq50; 282 runs, about 47.5 estimated GPU h) and `part_2_gpu` (account B: paper 1 at nq50 and nq10, KMH sweep nq10;
-177 runs, about 48.6 h). `make campaign-run-gpu-part GPU_PART=...` runs both manifests for one part in stage order
-(cheap groups, ablations, KMH sweep, then `AdversarialBIM`, `VAAL`/`WAAL`, `AdversarialDeepFool`).
+and nq50; 282 runs, about 47.6 estimated GPU h) and `part_2_gpu` (account B: paper 1 at nq50 and nq10, KMH sweep nq10;
+177 runs, about 48.8 h). `make campaign-run-gpu-part GPU_PART=...` runs both manifests for one part in stage order
+(cheap groups, ablations, KMH sweep, then `AdversarialBIM`, `VAAL`/`WAAL`, `AdversarialDeepFool`); run
+`make campaign-pilot GPU_PART=...` first (seed 1 of the part's VAAL/WAAL groups + RandomSampling) and read
+`make campaign-pilot-report GPU_PART=...`. The three groups `shared/kmh_nq100`, `p1/KMH/nq50`, `p1/KMH/nq10` of the
+main manifest repeat the sweep's `kmh/nq{100,50,10}/hier_L3_ref` on purpose (ADR 0016 amendment).
 
 Run `python -m dalmax.campaign list` for the job table (add `--exclude-strategy A,B` to drop strategies from
 `list`/`run`/`verify`; `--manifest A,B` merges several manifests into one plan). `make campaign-smoke` passes

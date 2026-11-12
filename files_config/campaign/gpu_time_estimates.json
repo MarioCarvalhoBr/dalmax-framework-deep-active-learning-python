@@ -96,9 +96,9 @@
    "rule": "about a plain uncertainty strategy at the same budget"
   },
   "p1/CEALSampling/nq100": {
-   "seconds_per_run": 115,
+   "seconds_per_run": 275,
    "basis": "estimate",
-   "rule": "1.25 x a plain uncertainty strategy at the same budget"
+   "rule": "3 x a plain uncertainty strategy at the same budget (trains on labeled + pseudo-labelled samples, up to about a quarter of the pool)"
   },
   "p1/LossPredictionLoss/nq100": {
    "seconds_per_run": 92,
@@ -214,9 +214,9 @@
    "rule": "about a plain uncertainty strategy at the same budget"
   },
   "p1/CEALSampling/nq50": {
-   "seconds_per_run": 104,
+   "seconds_per_run": 250,
    "basis": "estimate",
-   "rule": "1.25 x a plain uncertainty strategy at the same budget"
+   "rule": "3 x a plain uncertainty strategy at the same budget (trains on labeled + pseudo-labelled samples, up to about a quarter of the pool)"
   },
   "p1/LossPredictionLoss/nq50": {
    "seconds_per_run": 83,
@@ -332,9 +332,9 @@
    "rule": "about a plain uncertainty strategy at the same budget"
   },
   "p1/CEALSampling/nq10": {
-   "seconds_per_run": 90,
+   "seconds_per_run": 217,
    "basis": "estimate",
-   "rule": "1.25 x a plain uncertainty strategy at the same budget"
+   "rule": "3 x a plain uncertainty strategy at the same budget (trains on labeled + pseudo-labelled samples, up to about a quarter of the pool)"
   },
   "p1/LossPredictionLoss/nq10": {
    "seconds_per_run": 72,

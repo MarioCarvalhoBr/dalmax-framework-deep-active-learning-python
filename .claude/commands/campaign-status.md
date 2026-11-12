@@ -15,8 +15,9 @@ Steps:
    `texhal` 30, `texhal_q17` 18, `hier_transfer` 12; KMH sweep 165 / 55; GPU parts `part_1_gpu` 282 runs,
    `part_2_gpu` 177 runs).
 2. `poetry run python -m dalmax.campaign verify --manifest $M --part <part>` -- per job OK / INCOMPLETE / MISSING
-   (`dalmax/reporting/leaf_check.py` artifact check) plus the seed-consistency audit. Exit code:
-   0 all OK, 1 an incomplete/missing job or a FAIL audit, 2 only audit WARNs.
+   (`dalmax/reporting/leaf_check.py` artifact check) plus the seed-consistency audit (round-0 image paths)
+   and the data-order audit (KI-47); with several manifests also the intentional duplicate-pair report.
+   Exit code: 0 all OK, 1 an incomplete/missing job or a FAIL audit, 2 only audit WARNs.
 3. Summarize per part: `<ok>/<expected>` runs, list every INCOMPLETE/MISSING job label, any audit
    FAIL/WARN offender, and the last lines of `results/campaign_fixed/failures.log` and
    `results/campaign_kmh_fixed/failures.log` if they exist.

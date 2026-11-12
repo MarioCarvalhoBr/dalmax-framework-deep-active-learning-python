@@ -277,7 +277,9 @@ and the key carries one extra component, `pool_hash` (a 12-hex-char sha256 diges
 unlabeled-pool ids), because the pool actually embedded depends on `--seed`/`--n_init_labeled`, not
 only on `(dataset, extractor, Q, variant, split)` — two runs with the same first five components but
 a different seed would otherwise silently share a cache file for a *different* pool. Filename
-actually written: `{dataset}__{extractor}__Q{q}__{variant}__{split}__pool{pool_hash}.pkl`. The rest
+actually written: `{dataset}__{extractor}__Q{q}__{variant}__{split}__pool{pool_hash}.pkl` (since 2026-11-12, KI-47:
+`...__{split}__order{order_hash}__pool{pool_hash}.pkl`, because ids name images only under one data order; the
+payload also stores and validates the cached images' paths). The rest
 of this section's contract (key components below, "full" always cached, variants sliced not
 recomputed) is otherwise accurate as implemented (`dalmax/embeddings/cache.py`,
 `dalmax/embeddings/base.py::EmbeddingKey`).

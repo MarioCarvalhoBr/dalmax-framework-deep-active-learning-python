@@ -2,6 +2,7 @@
 	lab-setup lab-check colab-setup colab-check \
 	campaign-list campaign-run campaign-verify campaign-report campaign-report-all campaign-smoke campaign-smoke-kmh \
 	campaign-list-gpu-part campaign-run-gpu-part campaign-verify-gpu-part campaign-verify-all campaign-smoke-gpu-part \
+	campaign-space campaign-space-gpu-part campaign-pilot campaign-pilot-report \
 	campaign-manifest kmh-sweep-configs gpu-time-estimates dataset-check
 
 # GPU index used by `lab-check` (sets CUDA_VISIBLE_DEVICES).
@@ -110,10 +111,13 @@ colab-check:
 
 # --- The campaign (ADR 0008/0009/0016) ----------------------------------------
 # One manifest (files_config/campaign/manifest.json) drives the clean execution of
-# everything papers 1-3 need on DATA/daninhas_full_fixed/ -- no redundant runs --
-# into results/campaign_fixed/; the KMH sweep (manifest_kmh_sweep.json) goes to
-# results/campaign_kmh_fixed/. See .specs/experiments/campaign.md, COLAB_RUNBOOK.md
-# and LAB_RUNBOOK.md.
+# everything papers 1-3 need on DATA/daninhas_full_fixed/ -- no redundant run inside
+# it -- into results/campaign_fixed/; the KMH sweep (manifest_kmh_sweep.json) goes to
+# results/campaign_kmh_fixed/ and repeats the reference KMH configuration of the main
+# manifest on purpose (3 groups, a determinism check reported by campaign-verify-all).
+# See .specs/experiments/campaign.md, COLAB_RUNBOOK.md and LAB_RUNBOOK.md.
+# `campaign-run*` refuse to start (exit 4) without free space for the remaining runs
+# (96 MB per run + 20%) and stop the batch (exit 4) on a no-space failure.
 # Variables (all optional):
 #   PART=all|paper1|upper_bound|rnhal|texhal|texhal_q17|hier_transfer|control|kmh_nq10|kmh_nq50|kmh_nq100
 #               (comma-separated allowed; default all), or a GPU part: part_1_gpu|part_2_gpu (ADR 0016).
@@ -144,10 +148,14 @@ campaign-list:
 campaign-run:
 	poetry run python -m dalmax.campaign run $(CAMPAIGN_FLAGS) $(if $(DEVICE),--device $(DEVICE)) $(RUN_ARGS)
 
-# Per-job OK/INCOMPLETE/MISSING + the seed-consistency audit.
+# Per-job OK/INCOMPLETE/MISSING + the seed-consistency audit (round-0 image paths) + the data-order audit.
 # Exit 0 all OK, 1 incomplete/missing job or FAIL audit, 2 only audit WARNs.
 campaign-verify:
 	poetry run python -m dalmax.campaign verify $(CAMPAIGN_FLAGS)
+
+# Free space of the results file system(s) vs the remaining runs (exit 4 when short). Read only.
+campaign-space:
+	poetry run python -m dalmax.campaign space $(CAMPAIGN_FLAGS)
 
 # --- One GPU part across BOTH manifests (ADR 0016: one Colab account per GPU part) ---
 #   GPU_PART=part_1_gpu|part_2_gpu (required). The main manifest and the KMH sweep are merged into one
@@ -173,7 +181,24 @@ campaign-verify-gpu-part:
 	$(require_gpu_part)
 	poetry run python -m dalmax.campaign verify $(GPU_PART_FLAGS)
 
-# Both manifests, every group (after merging the two GPU parts locally): expect OK=459 and the seed audit PASS.
+campaign-space-gpu-part:
+	$(require_gpu_part)
+	poetry run python -m dalmax.campaign space $(GPU_PART_FLAGS)
+
+# The pilot of a GPU part (run it before campaign-run-gpu-part): seed 1 of the part's VAAL and WAAL groups at its
+# largest budget (nq100 in part_1_gpu, nq50 in part_2_gpu) and RandomSampling at that budget. Its leaves are the
+# normal ones, so the full run skips them. Then read `make campaign-pilot-report GPU_PART=...` (wall time vs
+# estimate, strategy_diagnostics, degeneracy flags; read only).
+campaign-pilot:
+	$(require_gpu_part)
+	poetry run python -m dalmax.campaign run $(GPU_PART_FLAGS) --pilot $(if $(DEVICE),--device $(DEVICE),$(if $(MICRO),--device cpu)) $(RUN_ARGS)
+
+campaign-pilot-report:
+	$(require_gpu_part)
+	poetry run python -m dalmax.campaign pilot-report $(GPU_PART_FLAGS)
+
+# Both manifests, every group (after merging the two GPU parts locally): expect OK=459, the seed audit PASS for
+# seeds 1-3 (compared by round-0 image paths), the data-order audit PASS, and the duplicate-pair report.
 campaign-verify-all:
 	poetry run python -m dalmax.campaign verify --part all --manifest $(GPU_MANIFESTS) $(if $(SEEDS),--seeds $(SEEDS)) $(if $(EXCLUDE),--exclude-strategy $(EXCLUDE))
 

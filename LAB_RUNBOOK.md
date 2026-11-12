@@ -48,8 +48,11 @@ overlap between the two commands.
   ops that had no deterministic kernel are listed in `nondeterministic_op_warnings`).
 - **Resume**: `campaign-run` skips a job only when its leaf holds the full artifact set
   (`results.json` is written last), so relaunching after a crash or reboot resumes cleanly.
-- **`campaign-verify` exit code**: 0 all OK, 1 incomplete/missing job or FAIL seed audit, 2 only
-  audit WARNs (log without the initial-labeled-set line).
+- **`campaign-verify` exit code**: 0 all OK, 1 incomplete/missing job or FAIL seed audit (round-0 image
+  paths) or FAIL data-order audit (KI-47), 2 only audit WARNs (no readable initial set, or a leaf without
+  `run_metadata.json` `data_order`).
+- **Disk space**: `campaign-run` refuses to start (exit 4) unless the results disk holds the remaining
+  runs x 96 MB x 1.2, and stops the batch (exit 4) when it fills up; `make campaign-space` prints the check.
 - **Out of GPU memory**: the same batch size (256) is used for every run, including the
   `FullSupervised` upper bound (all 7,230 pool images of `daninhas_full_fixed`). A job that runs out of memory is logged to
   `failures.log` and the batch continues -- do not lower the batch size silently (it would change

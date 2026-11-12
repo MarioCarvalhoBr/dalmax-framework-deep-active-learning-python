@@ -1,7 +1,9 @@
 # The campaign (2026-09-29; clean re-run on `daninhas_full_fixed` prepared 2026-11-11, ADR 0016)
 
 One clean execution of **everything the three papers need**, same seeds `{1,2,3}`, same protocol, **no redundant
-run**: every distinct configuration runs exactly once and every table of every paper points to that single run.
+run inside a manifest**: every distinct configuration of a manifest runs exactly once and every table points to that
+single run. Across the main manifest and the KMH sweep, three groups repeat the reference KMH configuration on
+purpose (section "Intentional duplicate computations" below).
 Decision records: ADR 0008 (manifest + dedup), ADR 0009 (shared "w/o representation" run), ADR 0016 (clean re-run on
 the duplicate-free dataset, two GPU parts). Single source of truth: `files_config/campaign/manifest.json` (generated
 by `scripts/campaign/build_manifest.py`; micro mirror `manifest_micro.json`) plus the KMH sweep
@@ -34,18 +36,18 @@ bound's `n_init_labeled` is 7,230.
 
 | Manifest | Part | Groups x seeds | Runs | Content | Est. GPU h |
 |---|---|---|---|---|---|
-| main | `paper1` | 63 x 3 | 189 | the 20 strategies (12 classical + `VarRatio`, `MeanSTD`, `KCenterGreedyPCA`, `BadgeSampling`, `CEALSampling`, `LossPredictionLoss`, `VAAL`, `WAAL`) + KMH, x nq {10,50,100} | 67.8 |
+| main | `paper1` | 63 x 3 | 189 | the 20 strategies (12 classical + `VarRatio`, `MeanSTD`, `KCenterGreedyPCA`, `BadgeSampling`, `CEALSampling`, `LossPredictionLoss`, `VAAL`, `WAAL`) + KMH, x nq {10,50,100} | 68.1 |
 | main | `upper_bound` | 1 x 3 | 3 | `FullSupervised` on the whole pool (7,230) | 0.04 |
 | main | `rnhal` | 14 x 3 | 42 | paper 3 ablations at nq100 (unchanged content) | 4.4 |
 | main | `texhal` | 10 x 3 | 30 | paper 2 ablations at nq100, incl. `shared/texhal_full` | 3.3 |
 | main | `texhal_q17` | 6 x 3 | 18 | paper 2, TexHAL Q=17 6.2/6.3 (ADR 0011) | 1.2 |
 | main | `hier_transfer` | 4 x 3 | 12 | ADR 0013 rows of tables 6.2 of papers 2/3 | 0.6 |
-| main | **total** | **98 x 3** | **294** | | **77.2** |
+| main | **total** | **98 x 3** | **294** | | **77.6** |
 | sweep | `kmh_nq100` | 21 x 3 | 63 | KMH sweep stages 1 + 2 (ADR 0012) | 9.9 |
 | sweep | `kmh_nq50` | 17 x 3 | 51 | | 4.9 |
 | sweep | `kmh_nq10` | 17 x 3 | 51 | | 4.0 |
 | sweep | **total** | **55 x 3** | **165** | | **18.9** |
-| both | **total** | **153 x 3** | **459** | | **96.1** |
+| both | **total** | **153 x 3** | **459** | | **96.4** |
 
 Params per paper-1 strategy: the dropout family (`LeastConfidenceDropout`, `MarginSamplingDropout`,
 `EntropySamplingDropout`, `BALDDropout`, `VarRatio`, `MeanSTD`) `params_paper1_mc_dropout.json` (`model_args.dropout_p`
@@ -56,9 +58,10 @@ bound `params_paper1.json`. Group ids, aliases, table rows and the dedup table a
 candidates are the 20 strategies + KMH. The KMH sweep keeps its 165 runs / 55 groups and its tables.
 
 **Unchanged rules.** Protocol (`n_init_labeled` 100, `n_round` 8, `n_epoch` 10, batch 256, lr 0.05, momentum 0.3,
-reference hierarchy `[600,200,100]`/`[30,15,2]`, SSRAE `q=13`, VCTex as in ADR 0011), seeds and determinism, the
-dedup/alias rules and the seed-consistency audit are those of the sections "Protocol", "Dedup table" and "Seeds and
-determinism" in the history part below; only the pool (7,230) and the test set (1,008) differ. The KI-43 control
+reference hierarchy `[600,200,100]`/`[30,15,2]`, SSRAE `q=13`, VCTex as in ADR 0011), seeds and determinism and the
+dedup/alias rules are those of the sections "Protocol", "Dedup table" and "Seeds and determinism" in the history part
+below; only the pool (7,230) and the test set (1,008) differ. The seed-consistency audit changed with KI-47 (section
+"Data order, cache identity and audits" below). The KI-43 control
 manifest (`manifest_control_ki43.json`, prepared, not run) now targets `results/campaign_control_fixed/` and compares
 against `results/campaign_fixed/shared/random_nq100/`.
 
@@ -67,8 +70,8 @@ manifests carries `gpu_part` and `gpu_stage`. A group never splits (its three se
 
 | GPU part | Account | Content | Runs / groups | Est. GPU h |
 |---|---|---|---|---|
-| `part_1_gpu` | A | paper 1 at nq100 (incl. `shared/random_nq100`, `shared/kmh_nq100`), the upper bound, `rnhal`, `texhal`, `texhal_q17`, `hier_transfer`, KMH sweep at nq100 and nq50 | 282 / 94 | 47.5 |
-| `part_2_gpu` | B | paper 1 at nq50 and nq10, KMH sweep at nq10 | 177 / 59 | 48.6 |
+| `part_1_gpu` | A | paper 1 at nq100 (incl. `shared/random_nq100`, `shared/kmh_nq100`), the upper bound, `rnhal`, `texhal`, `texhal_q17`, `hier_transfer`, KMH sweep at nq100 and nq50 | 282 / 94 | 47.6 |
+| `part_2_gpu` | B | paper 1 at nq50 and nq10, KMH sweep at nq10 | 177 / 59 | 48.8 |
 
 Execution order inside a part (`gpu_stage`; the main manifest and the sweep are merged into one plan): 1 paper-1
 strategies other than the long ones, KMH and the upper bound; 2 the ablations; 3 the KMH sweep; 4 `AdversarialBIM`;
@@ -97,7 +100,9 @@ asserts this.
 median subprocess overhead of 11 s); `basis: "estimate"` (with a `rule`) = the eight DeepAL+ strategies, never run on
 a GPU: `LossPredictionLoss`, `BadgeSampling`, `KCenterGreedyPCA` about a plain uncertainty strategy (mean of
 LeastConfidence/MarginSampling/EntropySampling at the same budget), `VarRatio`/`MeanSTD` about an MC-dropout one, CEAL
-1.25 x plain, `WAAL` about 45 min and `VAAL` (32 px) about 50 min per run (FLOP estimates). Caveats: measured on the
+3 x plain (revised 2026-11-12 from 1.25 x: CEAL trains on the labeled plus pseudo-labelled samples, up to about a
+quarter of the pool; the GPU-part rule is fixed per budget, so no group moved), `WAAL` about 45 min and `VAAL` (32 px)
+about 50 min per run (FLOP estimates; the pilot below measures them first). Caveats: measured on the
 dataset with duplicates (pool 8,086 / test 2,106, so the new runs should be somewhat shorter) and, for the ADR 0014
 strategies, with the pre-fix code; no GPU model is recorded. Main contributors: `AdversarialDeepFool` 3 groups =
 40.9 h, `VAAL` 7.5 h, `WAAL` 6.75 h, `AdversarialBIM` 5.7 h, KMH sweep 18.9 h. `campaign list` prints estimated hours
@@ -121,23 +126,68 @@ Every leaf holds the artifact set of `dalmax/reporting/leaf_check.py::REQUIRED_F
 of this campaign (`required_leaf_files`), `round_predictions.json` and `round_queries.json` (per-round test predictions
 and queried pool indices; format in `experimental-protocol.md`). A leaf without them is incomplete and is re-run.
 
+**Data order, cache identity and audits (KI-47, ADR 0016 amendment of 2026-11-12).** The first campaign's loaders
+listed each class folder in file-system order, which differed between Colab sessions: the same seed selected the same
+pool indices but other images in each session, and the Drive-resident embedding cache, keyed on indices, served
+later sessions the features of other images (`.specs/quality/known-issues.md` KI-47). For this campaign: the loaders
+sort the file names (`dalmax/data/loaders.py::list_image_names`, contract `dalmax/data_order.py::ORDER_CONTRACT`);
+every leaf's `run_metadata.json` records `data_order` (`train_paths_hash`, `test_paths_hash` of the ordered
+`<class>/<file>` lists, `n_train`, `n_test`); the embedding cache key carries the train split's `order_hash`
+(`...__{split}__order{order_hash}__pool{pool_hash}.pkl`) and the payload stores and checks the cached images' paths
+(refused or unreadable: warning + recompute; atomic writes). `campaign verify` runs (1) the seed-consistency audit
+by **image paths** (round 0 of `round_queries.json`; logged indices only for leaves without it), so equal indices
+naming other images FAIL, and (2) the **data-order audit**: per dataset folder, every leaf must record the same
+`data_order` hashes (FAIL otherwise, WARN for a leaf without the record). Exit codes as before: 0 / 1 (a job not OK or
+a FAIL) / 2 (only WARNs). After merging both parts expect one order for `daninhas_full_fixed` over all 459 leaves.
+
+**Intentional duplicate computations.** Three groups of the main manifest have the effective signature of a KMH-sweep
+group: `shared/kmh_nq100` = `kmh/nq100/hier_L3_ref`, `p1/KMH/nq50` = `kmh/nq50/hier_L3_ref`, `p1/KMH/nq10` =
+`kmh/nq10/hier_L3_ref` (ImageNet ResNet-50 features + the reference hierarchy). They are kept: each manifest is
+deduplicated internally (`validate_manifest`), the sweep's reference rows are measured with the sweep, and after the
+KI-47 fix each pair is a free determinism check (same seed and config should select the same images).
+`campaign verify` over several manifests (`make campaign-verify-all`) prints them (`cross_manifest_duplicates`,
+`tests/test_campaign.py` pins exactly these three) with `SAME` / `DIFFERENT` (first differing round) / `N/A` per seed,
+comparing the per-round image paths of `round_queries.json`; informational, no effect on the exit code. The nq50 pair
+crosses the GPU parts (`p1/KMH/nq50` in `part_2_gpu`, the sweep's nq50 in `part_1_gpu`), so a `DIFFERENT` there may
+also reflect best-effort GPU determinism across two runtimes.
+
+**Drive quota gate.** About 95 MB per run (measured 95.1 MB per leaf in the first campaign, mostly the checkpoint):
+`campaign run` refuses to start (exit 4, numbers printed, nothing started) unless the free space of each results file
+system covers the remaining runs x 96 MB x 1.2 (`dalmax/experiment/disk_space.py`; a fresh part needs 32.5 GB for
+`part_1_gpu`, 20.4 GB for `part_2_gpu`), and stops the batch (exit 4, `STOP no space` in `campaign.log`) before a run
+when less than one run's worth is free or after a run that failed with the trainer's no-space exit code 28. `campaign
+space` / `make campaign-space[-gpu-part]` print the check (read only); the notebook's pre-run gate runs it.
+
+**Pilot.** Before the long runs of a GPU part: `make campaign-pilot GPU_PART=...` = `campaign run --pilot`, seed 1 of
+the part's `VAAL` and `WAAL` groups at its largest budget (`part_1_gpu`: nq100; `part_2_gpu`: nq50) plus
+`RandomSampling` at that budget (`shared/random_nq100` or `p1/RandomSampling/nq50`), about 1.6 estimated GPU hours;
+then `make campaign-pilot-report GPU_PART=...` (read only, `dalmax/reporting/pilot_report.py`): per pilot leaf the
+wall time (`campaign.log` `DONE elapsed`) against the estimate and the projected hours of that strategy over the
+part, the weighted F1 per round, every `strategy_diagnostics` series and degeneracy flags (`pool_order_fraction` >=
+0.5, a `*_n_unique` of 1, a `*_std` of 0). The pilot leaves are ordinary leaves, so the full run skips them. The
+notebook stops before the full run until `PILOT_REVIEWED = True`.
+
 **Commands** (operator guide: `COLAB_RUNBOOK.md` section 6):
 
 ```bash
 make campaign-list-gpu-part   GPU_PART=part_1_gpu   # both manifests, plan order, est. hours (account B: part_2_gpu)
+make campaign-space-gpu-part  GPU_PART=part_1_gpu   # free space vs remaining runs (exit 4 when short; read only)
+make campaign-pilot           GPU_PART=part_1_gpu   # seed 1 of VAAL/WAAL (+ RandomSampling) before the long runs
+make campaign-pilot-report    GPU_PART=part_1_gpu   # wall time vs estimate, strategy_diagnostics, flags (read only)
 make campaign-run-gpu-part    GPU_PART=part_1_gpu   # resumable: re-run the same command
-make campaign-verify-gpu-part GPU_PART=part_1_gpu   # OK/INCOMPLETE/MISSING + seed audit over the part
-make campaign-verify-all                            # after merging both parts locally: expect OK=459, audit PASS
+make campaign-verify-gpu-part GPU_PART=part_1_gpu   # OK/INCOMPLETE/MISSING + seed audit + data-order audit
+make campaign-verify-all                            # after merging both parts: OK=459, audits PASS, duplicate pairs
 make campaign-report-all                            # docs/results/campaign_fixed/ + docs/results/campaign_kmh_fixed/
 make campaign-list                                  # main manifest alone (PART=paper1|... or part_1_gpu|part_2_gpu)
 make campaign-smoke-gpu-part GPU_PART=part_2_gpu    # CPU micro plan of one GPU part, seed 1
 make dataset-check                                  # builder --check on DATA/daninhas_full_fixed (read only)
 ```
 
-`python -m dalmax.campaign {list,run,verify} --manifest A[,B] --part <parts|gpu part> [--micro] [--seeds 1]
-[--exclude-strategy A,B] [--dry-run] [--no-skip-existing] [--device cuda]`: `--manifest` takes a comma-separated list
-whose jobs are merged into one plan (by `gpu_stage` for a GPU part, manifest by manifest otherwise); semantic parts and
-GPU parts cannot be mixed in one `--part`.
+`python -m dalmax.campaign {list,run,verify,space,pilot-report} --manifest A[,B] --part <parts|gpu part> [--micro]
+[--seeds 1] [--exclude-strategy A,B] [--only-group ID[,ID] | --pilot] [--dry-run] [--no-skip-existing]
+[--device cuda]`: `--manifest` takes a comma-separated list whose jobs are merged into one plan (by `gpu_stage` for a
+GPU part, manifest by manifest otherwise); semantic parts and GPU parts cannot be mixed in one `--part`;
+`--only-group` fails fast on an id outside the selection.
 
 **Retired with ADR 0016**: the ADR 0014 parts `paper1_rerun_a`/`paper1_rerun_b` (their 21 groups are back in `paper1`),
 `dalmax/superseded.py`, `scripts/campaign/archive_superseded_runs.py`, `make campaign-archive-superseded`, the run
@@ -158,6 +208,13 @@ below.
 Everything below describes the first campaign as executed (and the ADR 0014 re-run as prepared, never executed): its
 counts (222 runs / 74 groups), paths (`results/campaign/`, `results/campaign_kmh/`), commands and results were valid
 for the manifests of commit d668673 and earlier. Kept as the historical record; do not use its numbers for the papers.
+
+> **KI-47 (found 2026-11-12) affects everything below.** The pool and test order followed each Colab session's file
+> listing, so runs of one seed in different sessions started from different images, and the KMH sweep (all 165 runs),
+> `texhal_q17`, `hier_transfer` and paper-1 KMH at nq50/nq10 selected on cached features of other images. Every
+> "seed audit PASS" recorded below compared pool indices only and does not show that runs started from the same
+> images. The outcomes of ADR 0012 and ADR 0013 (and the `texhal_q17` results that followed ADR 0011) must be re-read
+> on the clean campaign; see `.specs/quality/known-issues.md` KI-47 and the KI-43 update.
 
 ## Protocol (unchanged from the thesis paper-1 chapter)
 

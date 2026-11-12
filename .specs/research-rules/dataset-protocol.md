@@ -32,7 +32,11 @@ DATA/daninhas_full/
 Loaded by `dalmax.data.loaders.get_DANINHAS` (was `utils.data.get_DANINHAS`, moved in Phase 4): classes are discovered as
 `sorted(os.listdir(train_dir))` (i.e. the 5 `DATASET_*` folder names, sorted
 alphabetically — this sort order fixes the integer class index mapping used
-everywhere downstream, e.g. in confusion matrices). Images are opened,
+everywhere downstream, e.g. in confusion matrices). Inside each class folder the files are taken in plain
+lexicographic order of their names (`dalmax.data.loaders.list_image_names`, since 2026-11-12; before that an unsorted
+`os.listdir`, whose order differed between machines and Colab sessions, KI-47), so the pool and test lists, and what
+every pool/test index names, are the same everywhere (`dalmax/data_order.py`; `run_metadata.json` `data_order`
+records their hashes). Images are opened,
 converted to RGB, and resized to 128×128 (`img_size=128` default parameter).
 
 ## Per-class counts (measured directly, `find ... | wc -l`, confirms `arquivos.txt`)

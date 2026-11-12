@@ -65,7 +65,8 @@ We will:
      `shared/kmh_nq100`), the upper bound, all of `rnhal`, `texhal`, `texhal_q17`, `hier_transfer`, and the KMH sweep at
      nq100 and nq50; `part_2_gpu` = paper 1 at nq50 and nq10 and the KMH sweep at nq10. A group never splits.
    - Balance: estimated 47.5 GPU h (`part_1_gpu`, 282 runs / 94 groups) vs 48.6 h (`part_2_gpu`, 177 runs / 59
-     groups), from `files_config/campaign/gpu_time_estimates.json` (see below).
+     groups), from `files_config/campaign/gpu_time_estimates.json` (see below; 47.6 vs 48.8 h since the 2026-11-12
+     amendment's CEAL estimate, no group moved).
    - Stages: 1 paper-1 strategies other than the long ones, KMH and the upper bound; 2 the ablations; 3 the KMH sweep;
      4 `AdversarialBIM`; 5 `VAAL`, `WAAL`; 6 `AdversarialDeepFool`. An exhausted credit budget therefore leaves complete
      tables except the long baselines' rows.
@@ -78,7 +79,8 @@ We will:
    trainer-subprocess wall time per run (`campaign.log` `DONE elapsed`, or `Total time` + the median 11 s overhead for
    runs merged from other sessions); for the eight new strategies, rules from the author's brief, marked `estimate`
    (`LossPredictionLoss`, `BadgeSampling`, `KCenterGreedyPCA` about a plain uncertainty strategy, `VarRatio`/`MeanSTD`
-   about an MC-dropout one, `CEALSampling` 1.25 times plain, `WAAL` about 45 min, `VAAL` at 32 px about 50 min per run).
+   about an MC-dropout one, `CEALSampling` 1.25 times plain (3 times since the 2026-11-12 amendment), `WAAL` about
+   45 min, `VAAL` at 32 px about 50 min per run).
    The manifests reference it (`gpu_time_estimates`) and `campaign list` prints estimated hours per part, per GPU part
    and in total. No GPU model is named.
 7. **Signature**: `dalmax.campaign.effective_signature` reduces `strategy_args` to the block the strategy reads
@@ -87,8 +89,9 @@ We will:
    an executed group changes: none of their params had a `strategy_args` block.
 8. **Per-round history**: every run additionally writes `round_predictions.json` (the predicted class of every test
    image at every round, with test paths and true classes) and `round_queries.json` (per round the sorted pool
-   indices labeled in it, round 0 = the initial set, with true classes and image paths; the pool order follows
-   `os.listdir`, so the paths are the stable key). `results.json`, `predictions.csv` and the log lines are unchanged.
+   indices labeled in it, round 0 = the initial set, with true classes and image paths; the paths are the key to
+   compare runs by, and since the 2026-11-12 amendment the pool order itself is fixed, see below). `results.json`,
+   `predictions.csv` and the log lines are unchanged.
    `dalmax/reporting/leaf_check.py::check_leaf(leaf, extra_required)` checks them when a manifest lists them in
    `required_leaf_files` (all manifests of this campaign do); leaves of the old trees still verify without them.
 9. **Colab hand-off**: `scripts/colab/setup_colab.sh` uses `daninhas_full_fixed` (zip `daninhas_full_fixed.zip`,
@@ -115,3 +118,54 @@ We will:
   duplicates and is superseded for the papers by this campaign.
 - Follow-up: execute (`COLAB_RUNBOOK.md` section 6), merge, `make campaign-verify-all` (expect `OK=459`, seed audit PASS),
   `make campaign-report-all`; then re-derive every thesis number from the new reports.
+
+## Amendment (2026-11-12): data order, cache identity, audits, Drive quota gate, pilot (pre-flight audit, before execution)
+
+A pre-flight audit of the prepared campaign returned NO-GO for one blocking defect, **KI-47**
+(`.specs/quality/known-issues.md`): the loaders listed the files of each class folder with an unsorted `os.listdir`,
+whose order differs between Colab sessions, so the same seed selected the same pool indices but other images in each
+session; the embedding cache (on Drive, keyed on pool indices) served later sessions the features of other images;
+and the seed audit compared indices only. In the first campaign this misaligned at least the whole KMH sweep,
+`texhal_q17`, `hier_transfer` and paper-1 KMH at nq50/nq10 (201 leaves), so the evidence behind ADR 0012 and ADR 0013
+(and the `texhal_q17` results that followed ADR 0011) must be re-read on this campaign; it is very likely the true
+cause of KI-43. Decisions, all implemented before any run of this campaign:
+
+1. **Deterministic order.** `dalmax/data/loaders.py::list_image_names` sorts the file names (plain lexicographic
+   order) in every class folder of both splits, for both loaders. Contract and identity helpers:
+   `dalmax/data_order.py` (`ORDER_CONTRACT`, `relative_image_path` = `<class>/<file>`, `ordered_paths_hash`,
+   `data_order_record`). Every run records `run_metadata.json` `data_order`.
+2. **Cache identity.** `EmbeddingKey.order_hash` (the train split's ordered-paths hash) joins the key and the file
+   name (`...__{split}__order{order_hash}__pool{pool_hash}.pkl`), so no pre-fix file (including any
+   `daninhas_full_fixed__*` cache written before this amendment) can be hit; the payload (version 2) stores the key,
+   ids and relative paths and is validated on load; a refused, unreadable or truncated file is recomputed with a
+   logged warning; writes are atomic. Chosen over "validate only" because a different order then never even opens
+   the old file, and over "key only" because the stored paths also catch a renamed or hand-copied file.
+3. **Audits.** The seed audit compares the round-0 image paths of `round_queries.json` (indices from the log for
+   older leaves). `campaign verify` adds a data-order audit (FAIL when the leaves of one dataset disagree on the
+   `data_order` hashes, WARN when a leaf has none) and, over several manifests, an informational duplicate-pair report.
+4. **Intentional duplicates.** `shared/kmh_nq100`, `p1/KMH/nq50` and `p1/KMH/nq10` have the effective signature of the
+   sweep's `kmh/nq{100,50,10}/hier_L3_ref`. They stay (each sweep table is measured inside one session and the main
+   tables likewise); after the KI-47 fix they are a free determinism check, reported by `campaign verify` over both
+   manifests (`cross_manifest_duplicates`, SAME/DIFFERENT per seed). The nq50 pair crosses the GPU parts (sweep nq50 in
+   `part_1_gpu`), so only `make campaign-verify-all` sees both sides; a DIFFERENT there can also come from best-effort GPU
+   determinism across two runtimes. "No redundant run" holds inside each manifest only.
+5. **Drive quota gate.** `dalmax/experiment/disk_space.py`: `campaign run` refuses to start (exit 4) unless the free
+   space of each results file system covers the remaining runs x 96 MB x 1.2 (measured 95.1 MB per leaf in the first
+   campaign); before every run it needs one more run's worth and stops the batch (exit 4) when it is short or when a
+   run exits with `NO_SPACE_EXIT_CODE` (28, set by `dalmax.cli.main` on a no-space error) instead of continuing.
+   `campaign space` / `make campaign-space[-gpu-part]` print the check; the notebook's pre-run gate runs it.
+6. **Pilot.** `campaign {list,run,verify,space} --only-group ID[,ID]` and `--pilot` (seed 1 of the VAAL and WAAL groups
+   at the largest budget of the selection, nq100 in `part_1_gpu` and nq50 in `part_2_gpu`, plus `RandomSampling` at
+   that budget; about 1.6 estimated GPU h per part); `make campaign-pilot GPU_PART=...`, then the read-only
+   `make campaign-pilot-report GPU_PART=...` (`dalmax/reporting/pilot_report.py`: wall time vs estimate, projected
+   hours, weighted F1 per round, `strategy_diagnostics`, degeneracy flags). The notebook runs the pilot after the
+   pre-run gate and stops before the full run until `PILOT_REVIEWED = True`; the full run skips the pilot leaves.
+7. **CEAL estimate.** `CEALSampling` trains on the labeled plus pseudo-labelled samples (up to about a quarter of the
+   pool) since the ADR 0015 follow-up, so its rule is 3 x a plain uncertainty strategy (was 1.25 x; an estimate).
+   The GPU-part assignment is fixed per budget, so no group moved: 47.6 h (`part_1_gpu`) vs 48.8 h (`part_2_gpu`),
+   96.4 h in total.
+
+Consequences: the two golden fixtures were regenerated deliberately (round-1 query of `SSRAEKmeansSampling`, round-1
+weighted precision/F1 of `RandomSampling`; old values kept in `pre_ki47_unsorted_listing_values`; the micro dataset
+was not regenerated). `make campaign-verify-all` now expects `OK=459`, the seed audit PASS for seeds 1-3 by image
+paths, the data-order audit PASS with one order per dataset, and reports the three duplicate pairs.

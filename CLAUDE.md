@@ -70,9 +70,14 @@ make lab-check GPU=0                  # one short real-data GPU run (n_round=1) 
 # main manifest 294 runs / 98 groups -> results/campaign_fixed/, KMH sweep 165 / 55 -> results/campaign_kmh_fixed/;
 # two GPU parts, one per Colab account (see .specs/experiments/campaign.md and COLAB_RUNBOOK.md section 6):
 make campaign-list-gpu-part GPU_PART=part_1_gpu     # both manifests in plan order + est. GPU hours (account B: part_2_gpu)
+make campaign-space-gpu-part GPU_PART=part_1_gpu    # free space vs remaining runs x 96 MB x 1.2 (exit 4 when short; read only)
+make campaign-pilot GPU_PART=part_1_gpu             # first: seed 1 of the part's VAAL/WAAL (+ RandomSampling) at its largest budget
+make campaign-pilot-report GPU_PART=part_1_gpu      # read only: wall time vs estimate, strategy_diagnostics, degeneracy flags
 make campaign-run-gpu-part GPU_PART=part_1_gpu      # cheap groups, ablations, KMH sweep, then BIM/VAAL/WAAL/DeepFool; resume = re-run
-make campaign-verify-gpu-part GPU_PART=part_1_gpu   # OK/INCOMPLETE/MISSING + seed audit (exit 0 ok / 1 fail / 2 warn)
-make campaign-verify-all                            # after merging both parts locally: expect OK=459, seed audit PASS
+                                                    #   (refuses to start / stops with exit 4 when the Drive is short of space)
+make campaign-verify-gpu-part GPU_PART=part_1_gpu   # OK/INCOMPLETE/MISSING + seed audit (image paths) + data-order audit (0/1/2)
+make campaign-verify-all                            # after merging both parts locally: expect OK=459, both audits PASS, + the
+                                                    #   3 intentional KMH duplicate pairs (SAME/DIFFERENT, informational)
 make campaign-report-all                            # docs/results/campaign_fixed/ + docs/results/campaign_kmh_fixed/
 make campaign-list                                  # main manifest alone; PART=paper1|upper_bound|rnhal|texhal|texhal_q17|hier_transfer
                                                     #   (comma-separated ok) or PART=part_1_gpu|part_2_gpu
@@ -194,8 +199,17 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   into new roots (`results/campaign_fixed/`, `results/campaign_kmh_fixed/`), paper 1 now has 20 strategies + KMH, the
   ADR 0014 re-run parts / archive script / superseded-leaf guard were retired unexecuted, every run also saves
   `round_predictions.json` / `round_queries.json`, and the work is split into two GPU parts for two Colab accounts
-  (`part_1_gpu` 282 runs, about 47.5 estimated GPU h; `part_2_gpu` 177 runs, about 48.6 h). Every executed number above
+  (`part_1_gpu` 282 runs, about 47.6 estimated GPU h; `part_2_gpu` 177 runs, about 48.8 h). Every executed number above
   (first campaign, KMH sweep, hier_transfer) was obtained on the dataset with duplicates and is superseded for the papers.
+- **Pre-flight fix KI-47** (2026-11-12, ADR 0016 amendment, before any run of the clean campaign): the loaders listed
+  each class folder with an unsorted `os.listdir`, whose order differed between Colab sessions, so in the first
+  campaign the same seed started from other images in every later session, and the Drive-resident embedding cache
+  (keyed on pool indices) served the KMH sweep, `texhal_q17`, `hier_transfer` and paper-1 KMH nq50/nq10 the features
+  of other images (the evidence behind ADR 0012/0013, and the `texhal_q17` results after ADR 0011, must be re-read on
+  the clean campaign; very likely the true cause of KI-43). Fixed: sorted file names (`list_image_names`,
+  `dalmax/data_order.py`), `run_metadata.json` `data_order` hashes, an order-keyed and path-validated cache with
+  atomic writes, the seed audit by round-0 image paths plus a data-order audit in `campaign verify`; also a Drive
+  quota gate (`campaign run` exit 4), a pilot (`make campaign-pilot`) and CEAL estimated at 3x a plain run.
 
 Next milestone: execute the clean re-run (`COLAB_RUNBOOK.md` section 6), then rewrite the thesis numbers from its reports; advisor review of the ablation section
 (`paper_drafts/ablation_section.tex`, weighted-primary/macro-secondary framing still pending
@@ -233,8 +247,10 @@ outstanding.
   `--device cuda` explicitly on the lab machine, don't rely on `auto` — see
   `.specs/infrastructure/execution-environments.md`), `--embedding_variant
   {full,spatial,spectral}` (SSRAE only, overrides the params JSON's `embedding.variant`).
-- **Embedding cache path (Phase 2)**: `results/cache/embeddings/{dataset}__{extractor}__Q{q}__{variant}__{split}__pool{hash}.pkl`
-  (`dalmax/embeddings/cache.py`) — the Phase 1 `results/cache/{name}_{dataset_folder}...`
+- **Embedding cache path (Phase 2; `order` segment since 2026-11-12, KI-47)**:
+  `results/cache/embeddings/{dataset}__{extractor}__Q{q}__{variant}__{split}__order{order_hash}__pool{hash}.pkl`
+  (`dalmax/embeddings/cache.py`; the payload also stores and checks the cached images' paths, so a cache of another
+  image order is never used) — the Phase 1 `results/cache/{name}_{dataset_folder}...`
   path was deleted along with `utils/data.py` in Phase 4;
   `results/features_dict_*.pkl` (original, orphaned) files may still be on disk
   but are read by nothing.

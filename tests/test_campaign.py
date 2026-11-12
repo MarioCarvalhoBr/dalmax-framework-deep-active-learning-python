@@ -414,19 +414,33 @@ def _tiny_manifest(tmp_path: Path) -> C.Manifest:
 
 
 def _write_leaf(leaf: Path, *, omit: tuple[str, ...] = (), initial: str | None = None, n_round: int = 1,
-                round_files: bool = False) -> None:
+                round_files: bool = False, order: tuple[str, str] | None = ("train0", "test0"),
+                initial_paths: list[str] | None = None, query_paths: list[list[str]] | None = None) -> None:
+    """A fake leaf. `order` = the `data_order` hashes of run_metadata.json (None: a pre-KI-47 leaf);
+    `initial_paths` (with `round_files`) = the round-0 image paths of round_queries.json."""
     leaf.mkdir(parents=True, exist_ok=True)
     payload = {"all_acc": [0.5, 0.6], "all_f1_score": [0.5, 0.6], "all_f1_macro": [0.4, 0.5],
                "rounds": list(range(n_round + 1))}
+    meta: dict = {"config": {}, "git_commit": "abc"}
+    if order is not None:
+        meta["data_order"] = {"contract": "sorted-names-v1", "train_paths_hash": order[0], "test_paths_hash": order[1]}
     files = {
         "results.json": json.dumps(payload),
         "predictions.csv": "Image Index,Real Class,Predicted Class,Correct,Path\n0,a,a,True,x\n",
-        "run_metadata.json": json.dumps({"config": {}, "git_commit": "abc"}),
+        "run_metadata.json": json.dumps(meta),
         "log-dalmax.log": f"Initial labeled idxs (sorted): {initial or '[1, 2, 3]'}\n",
     }
     if round_files:
         files["round_predictions.json"] = json.dumps({"predictions": [[0]] * (n_round + 1)})
-        files["round_queries.json"] = json.dumps({"rounds": [{"round": r} for r in range(n_round + 1)]})
+        if initial_paths is None:
+            rounds = [{"round": r} for r in range(n_round + 1)]
+        else:
+            queries = query_paths or [[] for _ in range(n_round)]
+            rounds = [{"round": 0, "kind": "initial", "pool_idxs": json.loads(initial or "[1, 2, 3]"),
+                       "paths": initial_paths}]
+            rounds += [{"round": r, "kind": "query", "pool_idxs": list(range(len(queries[r - 1]))),
+                        "paths": queries[r - 1]} for r in range(1, n_round + 1)]
+        files["round_queries.json"] = json.dumps({"rounds": rounds})
     for name in (*REQUIRED_FILES, *(ROUND_HISTORY_FILES if round_files else ())):
         if name in omit:
             continue
@@ -721,3 +735,221 @@ def test_signature_ignores_other_strategies_args_blocks() -> None:
     sig = json.loads(C.effective_signature(vaal, *args, "VAAL", 100, 100, 8))
     assert list(sig["dataset"]["strategy_args"]) == ["vaal"] and sig["dataset"]["strategy_args"]["vaal"]["image_size"] == 32
     assert "strategy_args" not in json.loads(C.effective_signature(vaal, *args, "RandomSampling", 100, 100, 8))["dataset"]
+
+
+# --- KI-47: seed audit by image paths, data-order audit -------------------------------------
+
+
+IMAGES = ["DATA/d/train/c0/a.png", "DATA/d/train/c0/b.png", "DATA/d/train/c1/c.png"]
+
+
+def test_seed_audit_fails_on_different_images_under_equal_indices(tmp_path: Path) -> None:
+    """The KI-47 failure mode: the same seed selects the same pool INDICES, which name other images
+    under another data order. Indices alone pass; the round-0 paths of round_queries.json fail."""
+    manifest = _tiny_manifest(tmp_path)
+    g_random, g_margin = manifest.groups
+    _write_leaf(_leaf_of(g_random, 1), round_files=True, initial="[1, 2, 3]", initial_paths=IMAGES)
+    other_images = ["DATA/d/train/c0/x.png", "DATA/d/train/c0/b.png", "DATA/d/train/c1/c.png"]
+    _write_leaf(_leaf_of(g_margin, 1), round_files=True, initial="[1, 2, 3]", initial_paths=other_images)
+    jobs = C.expand_jobs(manifest, seeds=[1])
+
+    audit = C.audit_seed_consistency(jobs)[0]
+    assert audit.status == "FAIL" and audit.offenders == ("p1/MarginSampling/nq5",)
+    assert audit.basis == "image paths"
+    assert "compared by image paths" in C.render_seed_audit([audit])
+
+    # Same images under another dataset location (absolute path, other machine): PASS.
+    moved = ["/content/dalmax/" + p for p in reversed(IMAGES)]
+    _write_leaf(_leaf_of(g_margin, 1), round_files=True, initial="[1, 2, 3]", initial_paths=moved)
+    assert C.audit_seed_consistency(jobs)[0].status == "PASS"
+
+
+def test_seed_audit_falls_back_to_log_indices_for_older_leaves(tmp_path: Path) -> None:
+    manifest = _tiny_manifest(tmp_path)
+    g_random, g_margin = manifest.groups
+    _write_leaf(_leaf_of(g_random, 1), round_files=True, initial="[1, 2, 3]", initial_paths=IMAGES)
+    _write_leaf(_leaf_of(g_margin, 1), initial="[1, 2, 3]")  # no round_queries.json: log indices only
+    audit = C.audit_seed_consistency(C.expand_jobs(manifest, seeds=[1]))[0]
+    assert audit.status == "PASS" and audit.basis == "image paths + pool indices"
+    _write_leaf(_leaf_of(g_margin, 1), initial="[1, 2, 4]")
+    assert C.audit_seed_consistency(C.expand_jobs(manifest, seeds=[1]))[0].status == "FAIL"
+
+
+def test_read_initial_set_and_round_paths(tmp_path: Path) -> None:
+    _write_leaf(tmp_path, round_files=True, initial="[4, 8]", initial_paths=["x/train/c/b.png", "x/train/c/a.png"],
+                query_paths=[["x/train/c/z.png"]])
+    assert C.read_initial_set(tmp_path) == C.InitialSet([4, 8], ["c/a.png", "c/b.png"])
+    assert C.read_round_paths(tmp_path) == [["c/a.png", "c/b.png"], ["c/z.png"]]
+    (tmp_path / "round_queries.json").write_text("{not json")
+    assert C.read_initial_set(tmp_path) == C.InitialSet([4, 8], None)  # falls back to the log line
+    assert C.read_round_paths(tmp_path) is None
+
+
+def test_data_order_audit_pass_fail_warn_and_exit_codes(tmp_path: Path) -> None:
+    manifest = _tiny_manifest(tmp_path)
+    g_random, g_margin = manifest.groups
+    for seed in (1, 2):
+        _write_leaf(_leaf_of(g_random, seed))
+        _write_leaf(_leaf_of(g_margin, seed))
+    jobs = C.expand_jobs(manifest)
+    statuses = [C.verify_job(j) for j in jobs]
+    seed_audits = C.audit_seed_consistency(jobs)
+    audit = C.audit_data_order(jobs)
+    assert [(a.dataset, a.status, a.n_runs) for a in audit] == [("daninhas_micro", "PASS", 4)]
+    assert C.verify_exit_code(statuses, seed_audits, audit) == 0
+
+    _write_leaf(_leaf_of(g_margin, 2), order=("train1", "test0"))  # one leaf indexed another train order
+    audit = C.audit_data_order(jobs)
+    assert audit[0].status == "FAIL" and len(audit[0].variants) == 2
+    text = C.render_data_order_audit(audit)
+    assert "daninhas_micro: FAIL" in text and "train train1 / test test0: 1 runs" in text
+    assert C.verify_exit_code(statuses, seed_audits, audit) == 1
+
+    _write_leaf(_leaf_of(g_margin, 2), order=None)  # a leaf written before KI-47: WARN
+    audit = C.audit_data_order(jobs)
+    assert audit[0].status == "WARN" and audit[0].missing == ("p1/MarginSampling/nq5 seed=2",)
+    assert C.verify_exit_code(statuses, seed_audits, audit) == 2
+
+
+# --- N5: intentional duplicates across the two manifests ------------------------------------
+
+
+def test_the_only_duplicates_across_manifests_are_the_three_reference_kmh_pairs(both_full) -> None:
+    pairs = {(a.id, b.id) for a, b in C.cross_manifest_duplicates(both_full)}
+    assert pairs == {
+        ("shared/kmh_nq100", "kmh/nq100/hier_L3_ref"),
+        ("p1/KMH/nq50", "kmh/nq50/hier_L3_ref"),
+        ("p1/KMH/nq10", "kmh/nq10/hier_L3_ref"),
+    }
+
+
+def test_duplicate_pair_check_same_different_and_missing(tmp_path: Path) -> None:
+    manifest = _tiny_manifest(tmp_path)
+    a, b = manifest.groups
+    _write_leaf(_leaf_of(a, 1), round_files=True, initial_paths=IMAGES, query_paths=[["DATA/d/train/c1/q.png"]])
+    _write_leaf(_leaf_of(b, 1), round_files=True, initial_paths=IMAGES, query_paths=[["/abs/train/c1/q.png"]])
+    _write_leaf(_leaf_of(a, 2), round_files=True, initial_paths=IMAGES, query_paths=[["DATA/d/train/c1/q.png"]])
+    _write_leaf(_leaf_of(b, 2), round_files=True, initial_paths=IMAGES, query_paths=[["DATA/d/train/c1/r.png"]])
+    checks = {c.seed: c for c in C.check_duplicate_pairs([(a, b)], {1, 2})}
+    assert checks[1].status == "SAME" and checks[2].status == "DIFFERENT"
+    assert "first differing round 1" in checks[2].detail
+    (_leaf_of(b, 2) / "round_queries.json").unlink()
+    assert C.check_duplicate_pairs([(a, b)], {2})[0].status == "N/A"
+    assert "SAME" in C.render_duplicate_pairs(list(checks.values()))
+
+
+# --- N1: free-space gate --------------------------------------------------------------------
+
+
+def test_space_checks_group_roots_by_file_system(tmp_path: Path) -> None:
+    manifest = _tiny_manifest(tmp_path)
+    plan = C.plan_jobs([manifest], C.Selection())
+    checks = C.space_checks(plan, free_space=lambda p: 10**9, device_of=lambda p: 7, run_bytes=100)
+    assert len(checks) == 1 and checks[0].remaining_runs == 4 and checks[0].needed == 480 and checks[0].ok
+    _write_leaf(_leaf_of(manifest.groups[0], 1))  # a complete leaf is not "remaining"
+    assert C.space_checks(plan, free_space=lambda p: 10**9, device_of=lambda p: 7)[0].remaining_runs == 3
+    short = C.space_checks(plan, free_space=lambda p: 0, device_of=lambda p: 7)
+    assert not short[0].ok
+    assert "NOT ENOUGH" in C.render_space_checks(short) and "3 remaining runs" in C.render_space_checks(short)
+
+
+def test_run_refuses_to_start_without_space(monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    def forbidden(*args, **kwargs):
+        raise AssertionError("no job may start when the free space is short")
+
+    monkeypatch.setattr(C, "free_bytes", lambda path: 0)
+    monkeypatch.setattr(C, "run_jobs", forbidden)
+    monkeypatch.setattr(C, "job_done", lambda job, required_extra=(): False)  # independent of local smoke trees
+    code = C.main(["run", "--micro", "--part", "rnhal", "--seeds", "1", "--device", "cpu", "--no-skip-existing"])
+    assert code == C.EXIT_NO_SPACE == 4
+    err = capsys.readouterr().err
+    assert "NOT ENOUGH" in err and "nothing was started" in err
+    assert C.main(["space", "--micro", "--part", "rnhal", "--seeds", "1"]) == 4
+
+
+def test_run_jobs_stops_on_low_space_and_on_a_no_space_exit(tmp_path: Path) -> None:
+    manifest = _tiny_manifest(tmp_path)
+    jobs = C.expand_jobs(manifest)
+    calls: list[list[str]] = []
+
+    def executor(cmd: list[str], env: dict[str, str]) -> int:
+        calls.append(cmd)
+        return C.NO_SPACE_EXIT_CODE
+
+    summary = C.run_jobs(jobs, manifest, device="cpu", executor=executor, echo=lambda _: None,
+                         free_space=lambda p: 10**12)
+    assert summary.stopped_no_space and summary.failed == 1 and len(calls) == 1  # stopped, not continued
+    assert "STOP no space" in (tmp_path / "campaign.log").read_text()
+
+    calls.clear()
+    free = iter([10**12, 10])  # enough for the first run, then the disk is full
+
+    def ok_executor(cmd: list[str], env: dict[str, str]) -> int:
+        calls.append(cmd)
+        return 0
+
+    summary = C.run_jobs(jobs, manifest, device="cpu", executor=ok_executor, echo=lambda _: None,
+                         free_space=lambda p: next(free), skip_existing=False)
+    assert summary.stopped_no_space and summary.executed == 1 and len(calls) == 1
+
+
+# --- N4: pilot --------------------------------------------------------------------------------
+
+
+def test_pilot_groups_per_gpu_part(both_full) -> None:
+    part1 = C.pilot_group_ids(C.selected_groups(both_full, C.parse_selection("part_1_gpu")))
+    part2 = C.pilot_group_ids(C.selected_groups(both_full, C.parse_selection("part_2_gpu")))
+    assert part1 == ("shared/random_nq100", "p1/VAAL/nq100", "p1/WAAL/nq100")
+    assert part2 == ("p1/RandomSampling/nq50", "p1/VAAL/nq50", "p1/WAAL/nq50")  # no nq100 in part 2
+    with pytest.raises(C.CampaignError, match="no VAAL/WAAL group"):
+        C.pilot_group_ids(C.selected_groups(both_full, C.parse_selection("rnhal")))
+
+
+def test_only_group_restricts_and_fails_fast(both_full, capsys) -> None:
+    plan = C.plan_jobs(both_full, C.parse_selection("part_1_gpu"), seeds=[1])
+    groups = C.selected_groups(both_full, C.parse_selection("part_1_gpu"))
+    kept = C.restrict_plan(plan, ["p1/VAAL/nq100"], [g.id for g in groups])
+    assert [(j.group.id, j.seed) for seg in kept for j in seg.jobs] == [("p1/VAAL/nq100", 1)]
+    with pytest.raises(C.CampaignError, match="not in the selected groups"):
+        C.restrict_plan(plan, ["p1/VAAL/nq50"], [g.id for g in groups])  # a group of the other GPU part
+    manifests = f"{FULL},{SWEEP}"
+    assert C.main(["list", "--manifest", manifests, "--part", "part_1_gpu", "--only-group", "nope"]) == 2
+    assert C.main(["list", "--manifest", manifests, "--part", "part_2_gpu", "--pilot"]) == 0
+    out = capsys.readouterr().out
+    assert "p1/VAAL/nq50" in out and "TOTAL            3 runs (3 run groups)" in out.split("Combined:")[1]
+    with pytest.raises(SystemExit):
+        C.main(["list", "--pilot", "--only-group", "x"])  # mutually exclusive
+
+
+def test_full_run_after_the_pilot_skips_the_completed_pilot_leaves(tmp_path: Path) -> None:
+    def group(gid: str, strategy: str) -> C.RunGroup:
+        return C.RunGroup(id=gid, part="paper1", params_json="files_config/campaign/params_paper1_micro.json",
+                          strategy_name=strategy, n_query=5, n_init_labeled=10, n_round=1, seeds=(1, 2),
+                          dir_results=str(tmp_path / gid) + "/", used_by=())
+
+    groups = tuple(group(f"p1/{s}/nq5", s) for s in ("RandomSampling", "VAAL", "WAAL", "MarginSampling"))
+    manifest = C.Manifest(name="tiny", dataset_name="DANINHAS", results_root=str(tmp_path), seeds=(1, 2),
+                          primary_nq=5, groups=groups, aliases=(), tables={})
+    by_strategy = {g.strategy_name: g for g in groups}
+    executed: list[tuple[str, int]] = []
+
+    def executor(cmd: list[str], env: dict[str, str]) -> int:
+        g = by_strategy[cmd[cmd.index("--strategy_name") + 1]]
+        seed = int(cmd[cmd.index("--seed") + 1])
+        executed.append((g.id, seed))
+        _write_leaf(_leaf_of(g, seed))
+        return 0
+
+    pilot_ids = C.pilot_group_ids(groups)
+    assert pilot_ids == ("p1/RandomSampling/nq5", "p1/VAAL/nq5", "p1/WAAL/nq5")
+    pilot_plan = C.restrict_plan(C.plan_jobs([manifest], C.Selection(), seeds=[1]), pilot_ids, pilot_ids)
+    for seg in pilot_plan:
+        C.run_jobs(seg.jobs, manifest, device="cpu", executor=executor, echo=lambda _: None,
+                   free_space=lambda p: 10**12)
+    assert sorted(executed) == sorted((gid, 1) for gid in pilot_ids)
+
+    executed.clear()
+    summary = C.run_jobs(C.expand_jobs(manifest), manifest, device="cpu", executor=executor, echo=lambda _: None,
+                         free_space=lambda p: 10**12)
+    assert summary.skipped == 3 and summary.executed == 5
+    assert not set(executed) & {(gid, 1) for gid in pilot_ids}

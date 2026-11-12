@@ -26,6 +26,7 @@ import numpy as np
 
 from dalmax.config.schema import FULL_SUPERVISED_STRATEGY, ExperimentConfig
 from dalmax.data.registry import get_dataset
+from dalmax.data_order import data_order_record
 from dalmax.experiment.environment import summarize_environment
 from dalmax.experiment.run_metadata import (
     record_nondeterministic_ops_in_metadata,
@@ -138,8 +139,12 @@ class ExperimentRunner:
         logger.warning(f"Results directory: {dir_results}")
 
         metadata = snapshot(config)
+        # Which images the pool/test indices of this run name (KI-47): compared across
+        # the leaves of a campaign by `dalmax.campaign.audit_data_order`.
+        metadata["data_order"] = data_order_record(dataset.Z_train_paths, dataset.Z_test_paths)
         write_run_metadata(dir_results, metadata)
         logger.warning(summarize_environment(metadata["environment"]))
+        logger.warning(f"Data order: {metadata['data_order']}")
 
         logger.warning(f"device: {config.device}")
 

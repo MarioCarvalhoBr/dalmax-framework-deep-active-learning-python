@@ -171,7 +171,7 @@ features. `AdversarialBIM` broke distance ties in pool order (KI-45); ties are n
 generator derived from the seed (`derive_seed(seed, "adversarial_ties")`); `AdversarialDeepFool` keeps the pool-order
 tie-break of its executed runs (its only exact ties are byte-identical duplicate images).
 
-**DeepAL+ ports (2026-11-11, ADR 0015; implemented, not yet in any campaign manifest).** Eight further
+**DeepAL+ ports (2026-11-11, ADR 0015; in paper 1 of the campaign since ADR 0016).** Eight further
 `--strategy_name` choices port every method of DeepAL+ (Zhan et al., 2022, arXiv 2203.13450) that DalMax lacked:
 `VarRatio`, `MeanSTD` (both MC dropout: run with `files_config/campaign/params_paper1_mc_dropout.json`,
 `dropout_p` 0.5, fail fast without it), `KCenterGreedyPCA`, `BadgeSampling`, `CEALSampling`, `LossPredictionLoss`,
@@ -196,7 +196,7 @@ resolved block (all five sub-blocks, defaults included) appears in `run_metadata
 
 ```json
 "strategy_args": {
-  "CEALSampling": {"base_strategy": "EntropySampling", "delta": 5e-5, "delta_decay": 3.3e-7},
+  "CEALSampling": {"base_strategy": "EntropySampling", "delta": 0.05, "delta_decay": 0.0033, "delta_schedule": "linear"},
   "KCenterGreedyPCA": {"n_components": 50},
   "LossPredictionLoss": {"margin": 1.0, "weight": 1.0, "detach_fraction": 0.6, "interm_dim": 128, "module_lr": 0.01},
   "VAAL": {"epochs": 30, "latent_dim": 32, "beta": 1.0, "adversary_param": 1.0,
@@ -205,10 +205,25 @@ resolved block (all five sub-blocks, defaults included) appears in `run_metadata
 }
 ```
 
-`CEALSampling.base_strategy` is one of `LeastConfidence`, `MarginSampling`, `EntropySampling`; its threshold at
-query round `t` is `delta - delta_decay * t`. `CEALSampling` also writes, per query round, `ceal_round`,
-`ceal_delta`, `ceal_n_pseudo_labels` and `ceal_pseudo_label_accuracy` (null when no sample was pseudo-labelled)
-under `results.json`'s `strategy_diagnostics` key (reporting only; every other strategy writes no such key).
+`CEALSampling.base_strategy` is one of `LeastConfidence`, `MarginSampling`, `EntropySampling`; its entropy threshold at
+query round `t` (1-based, clamped at 0) is `delta - delta_decay * t` with `delta_schedule: "linear"` (the default) or
+`delta - delta_decay * t (t + 1) / 2` with `"cumulative"` (DeepAL+'s literal reading). The defaults `delta` 0.05 and
+`delta_decay` 0.0033 are the CEAL paper's CACD setting (DeepAL+'s 5e-5 / 3.3e-7 pseudo-labels nothing on DANINHAS,
+ADR 0015).
+
+**`strategy_diagnostics`** (reporting only, never fed back into selection or training): all eight DeepAL+ ports write
+per-round series under this optional `results.json` key (every other strategy writes no such key, so their schema is
+unchanged). Every port records `pool_order_fraction` per query (the KI-45 signature: fraction of the batch among the
+first `2n` unlabeled pool positions; about `2n/|U|` for an informative strategy, 1.0 for a collapse to pool order),
+and six of them add their own series:
+`VarRatio` `var_ratio_n_nonzero`; `MeanSTD` `mean_std_score_mean`, `mean_std_score_std`; `CEALSampling` `ceal_round`,
+`ceal_delta`, `ceal_n_pseudo_labels`, `ceal_pseudo_label_accuracy` (null when nothing was pseudo-labelled) and, per
+training, `ceal_train_size`; `LossPredictionLoss` `lpl_labeled_spearman`, `lpl_n_labeled`, `lpl_pool_score_std`,
+`lpl_pool_score_n_unique`; `VAAL` `vaal_discriminator_auc`, `vaal_score_std`, `vaal_score_n_unique`, `vaal_mean_kl`,
+`vaal_mu_dim_std`; `WAAL` (per training) `waal_n_steps`, `waal_wasserstein_last_epoch` and (per query)
+`waal_critic_labeled_mean/std`, `waal_critic_unlabeled_mean/std`, `waal_critic_init_corr`, `waal_uncertainty_std`,
+`waal_critic_term_std`. `KCenterGreedyPCA` and `BadgeSampling` record `pool_order_fraction` only. The campaign's
+pilot report prints them (`.specs/experiments/campaign.md`, "Pilot").
 
 For deduplication (`dalmax.campaign.effective_signature`, ADR 0016) only the block of the strategy being run counts:
 two params files that differ only in another strategy's `strategy_args` block are the same computation for every
@@ -291,8 +306,9 @@ keys above), `predictions.csv` (per-test-image prediction record),
 - `round_queries.json` (compact JSON): `{"format": "dalmax-round-queries", "version": 1, "class_names": [...],
   "n_pool": N, "rounds": [{"round": 0, "kind": "initial", "pool_idxs": [...], "labels": [...], "paths": [...]},
   {"round": 1, "kind": "query", ...}, ...]}`: the sorted pool indices labeled in each round (round 0 = the initial
-  labeled set), their true classes and image paths. Pool indices follow the loader's `os.listdir` order, which is
-  file-system dependent; the paths are the stable key.
+  labeled set), their true classes and image paths. Pool indices follow the loaders' sorted order (classes = sorted
+  folder names, files = sorted names in each class folder; KI-47, `run_metadata.json` `data_order`); compare runs by
+  the paths (`<class>/<file>`), as the campaign's seed audit does.
 
 Both are additive (`results.json`, `predictions.csv` and the log lines are unchanged) and written before
 `results.json`. `dalmax/reporting/leaf_check.py` requires them only for manifests that list them in
@@ -319,8 +335,11 @@ Every leaf results directory now also contains `run_metadata.json`
 with: the fully-resolved config as loaded (including the new `embedding`/
 `selection`/`device` fields, and `params_json_path`), `git_commit`
 (best-effort `git rev-parse HEAD`, `None` if unavailable), `python_version`,
-`torch_version`, `cuda_available`, `started_at` (UTC ISO-8601), and (2026-09-29) `determinism` (`seed`,
-`deterministic_algorithms`, `cudnn_deterministic`, `cudnn_benchmark`, `cublas_workspace_config`). This is
+`torch_version`, `cuda_available`, `started_at` (UTC ISO-8601), (2026-09-29) `determinism` (`seed`,
+`deterministic_algorithms`, `cudnn_deterministic`, `cudnn_benchmark`, `cublas_workspace_config`), and (2026-11-12,
+KI-47) `data_order` (`contract` = `"sorted-names-v1"`, `train_paths_hash` and `test_paths_hash` = the first 12 hex
+digits of the SHA-256 of the ordered `<class>/<file>` paths of each split, `n_train`, `n_test`; what the run's pool
+and test indices name, compared across leaves by `campaign verify`). This is
 what makes `.claude/rules/reproducibility.md`'s "(params JSON + CLI args +
 seed + git commit) fully determine a run" verifiable after the fact — see
 `research-rules/reproducibility.md`.

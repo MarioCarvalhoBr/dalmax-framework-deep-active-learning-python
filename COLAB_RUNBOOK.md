@@ -263,12 +263,13 @@ The work is split into two GPU parts of about equal estimated GPU time, one per 
 
 | Account | `GPU_PART` | Content | Runs / groups | Est. GPU h | Checkpoints |
 |---|---|---|---|---|---|
-| A | `part_1_gpu` | paper 1 at nq100 (with the shared runs), the upper bound, all papers 2/3 ablations, KMH sweep nq100 + nq50 | 282 / 94 | 47.5 | about 27 GB |
-| B | `part_2_gpu` | paper 1 at nq50 and nq10, KMH sweep nq10 | 177 / 59 | 48.6 | about 17 GB |
+| A | `part_1_gpu` | paper 1 at nq100 (with the shared runs), the upper bound, all papers 2/3 ablations, KMH sweep nq100 + nq50 | 282 / 94 | 47.6 | about 27 GB (gate: 32.5 GB free) |
+| B | `part_2_gpu` | paper 1 at nq50 and nq10, KMH sweep nq10 | 177 / 59 | 48.8 | about 17 GB (gate: 20.4 GB free) |
 
 Estimates: `files_config/campaign/gpu_time_estimates.json` (measured on the first campaign, on its GPU class and its
 larger dataset; the eight new strategies are rule-based estimates, `VAAL`/`WAAL` from FLOP counts), so expect the real
-hours to differ, possibly on the low side for the measured groups. Each run writes a ~95 MB checkpoint. Inside a part
+hours to differ, possibly on the low side for the measured groups (`CEALSampling` is estimated at 3x a plain run: it
+trains on the labeled plus pseudo-labelled samples). Each run writes a ~95 MB checkpoint. Inside a part
 the order is: cheap paper-1 groups, ablations, the KMH sweep, then `AdversarialBIM`, `VAAL`/`WAAL` and
 `AdversarialDeepFool` (about 14 h per DeepFool group) last, so an exhausted credit budget leaves complete tables
 except the long baselines' rows. Add about 15 minutes per session for sections 0-5.
@@ -286,7 +287,10 @@ except the long baselines' rows. Add about 15 minutes per session for sections 0
    (`cd DATA && zip -qr daninhas_full_fixed.zip daninhas_full_fixed`) and upload the zip to
    `<DRIVE_ROOT>/DATA/daninhas_full_fixed.zip`; `make colab-setup` then never reads the folder through Drive (the
    folder is optional when the zip is present). Free Drive space: the results of the part (about 27 GB / 17 GB) plus,
-   if you use the zip cell of step 9, the same again.
+   if you use the zip cell of step 9, the same again. The run refuses to start (exit 4, numbers printed) unless the
+   free space covers the remaining runs x 96 MB x 1.2 (a fresh part: 32.5 GB for A, 20.4 GB for B), and stops the
+   batch instead of continuing when the Drive fills up mid-part (`STOP no space` in `campaign.log`; free space and
+   re-run the run cell, it resumes).
 2. **Parameters cell** of `notebooks/colab_runbook.ipynb`: `DRIVE_ROOT = "<DRIVE_ROOT>"` (the folder that holds
    `DATA/`; the placeholder fails fast), `GPU_PART = "part_1_gpu"` (A) or `"part_2_gpu"` (B), `BRANCH` = a branch that
    contains ADR 0016 (`main` once merged).
@@ -296,17 +300,28 @@ except the long baselines' rows. Add about 15 minutes per session for sections 0
    that is not Python 3.12 or sees no GPU.
 4. **List**: `!make campaign-list-gpu-part GPU_PART=part_1_gpu` (B: `part_2_gpu`). Both manifests are merged into one
    plan of three segments (main manifest, KMH sweep, main manifest's long baselines); the `Combined:` block ends with
-   `TOTAL 282 runs (94 run groups)  est 47.5 GPU h` (B: `177 runs (59 run groups)  est 48.6 GPU h`).
-5. **Pre-run gate** (the notebook cell right before the run): re-runs the list and asserts that count, and asserts that
-   this Drive holds no leaf of the other GPU part (a wrong account or a wrong `GPU_PART`).
+   `TOTAL 282 runs (94 run groups)  est 47.6 GPU h` (B: `177 runs (59 run groups)  est 48.8 GPU h`).
+5. **Pre-run gate** (the notebook cell after the list): re-runs the list and asserts that count, asserts that this
+   Drive holds no leaf of the other GPU part (a wrong account or a wrong `GPU_PART`), and runs
+   `make campaign-space-gpu-part GPU_PART=...` (free Drive space for the remaining runs, see step 1).
+
+   **Then the pilot** (before the long runs): `!make campaign-pilot GPU_PART=part_1_gpu` runs seed 1 of the part's `VAAL` and
+   `WAAL` groups at its largest budget (A: nq100; B: nq50, the part has no nq100) plus `RandomSampling` at that budget,
+   about 1.6 estimated GPU hours. Then `!make campaign-pilot-report GPU_PART=part_1_gpu` (read only) prints per pilot
+   run the wall time against the estimate and the projected hours of that strategy over the part, the weighted F1 per
+   round, every `strategy_diagnostics` series and degeneracy flags (`pool_order_fraction` close to 1 = the KI-45
+   pool-order signature; constant scores; zero spread). If the times are far off or a flag fires, stop and report
+   before spending the part's credits. Otherwise set `PILOT_REVIEWED = True` in the Parameters cell (the notebook
+   stops before the full run until then). The pilot leaves are normal leaves: the full run skips them.
 6. **Run**: `!make campaign-run-gpu-part GPU_PART=part_1_gpu`. Logs: `results/campaign_fixed/campaign.log` and
    `results/campaign_kmh_fixed/campaign.log` (failures in `failures.log` next to them; the batch continues after a
-   failure).
+   failure, except a lack of space: then it stops with exit 4 and `STOP no space` in `campaign.log`).
 7. **Resume after a session drop or limit**: open a new runtime, keep the Parameters cell as it is, redo sections 0-5
    and run the same run cell: complete leaves (full artifact set, including `round_predictions.json` and
    `round_queries.json`) are skipped, so at most the run in progress is lost. A failed job is retried by re-running.
 8. **Verify**: `!make campaign-verify-gpu-part GPU_PART=part_1_gpu`: expect `Totals: OK=282 INCOMPLETE=0 MISSING=0`
-   (B: `OK=177`) and the seed audit PASS for seeds 1-3. The Progress cell shows the totals and the tail of both logs
+   (B: `OK=177`), the seed audit PASS for seeds 1-3 (`compared by image paths`) and the data-order audit PASS
+   (`daninhas_full_fixed: PASS`, one distinct order). The Progress cell shows the totals and the tail of both logs
    at any time.
 9. **Zip and download.** The notebook's zip cell refuses (raises) unless verify reports every run of the part `OK`
    (`ZIP_PARTIAL = True` ships an incomplete part on purpose), checks the free space, zips both results roots without
@@ -320,14 +335,24 @@ except the long baselines' rows. Add about 15 minutes per session for sections 0
     ```bash
     cd <repo root>
     unzip -n part_1_gpu.zip        # -n: never overwrite; the two parts write disjoint leaves
-    unzip -n part_2_gpu.zip
+    unzip -n part_2_gpu.zip        # one zip at a time, after the first one has finished extracting
     ls results/campaign_fixed/campaign_part_*_gpu.log results/campaign_kmh_fixed/campaign_part_*_gpu.log
-    make campaign-verify-all       # both manifests: expect OK=459 INCOMPLETE=0 MISSING=0, seed audit PASS
+    make campaign-verify-all       # both manifests: expect OK=459 INCOMPLETE=0 MISSING=0, both audits PASS
     make campaign-report-all       # docs/results/campaign_fixed/ and docs/results/campaign_kmh_fixed/
     ```
 
-    The seed audit of `campaign-verify-all` compares the initial labeled set of every run of a seed across BOTH
-    accounts and both manifests: a FAIL there means the two runtimes did not reproduce the same initial set.
+    Extract the zips **one at a time** (never two `unzip` processes into the same tree at once, and if Drive split a
+    download into several zips, extract those one after the other too): each archive is about the size of its part's
+    results (27 GB / 17 GB, checkpoints do not compress), so also check the local free space before each one.
+
+    The seed audit of `campaign-verify-all` compares the round-0 labeled IMAGES (paths in `round_queries.json`) of
+    every run of a seed across BOTH accounts and both manifests, and the data-order audit compares the `data_order`
+    hashes of `run_metadata.json` (the ordered train and test image lists) of all 459 leaves: a FAIL in either means
+    two runs did not start from the same images or did not index the same ordered lists. (Before KI-47 the audit
+    compared pool indices only, which the first campaign passed although its sessions indexed the images in different
+    orders.) The last block lists the three intentional duplicate computations (paper-1 KMH vs the sweep's
+    `hier_L3_ref` at nq100/50/10, ADR 0016 amendment): `SAME` = both selected the same images in every round; a
+    `DIFFERENT` is not a failure (the nq50 pair ran on the two accounts) but is worth reporting.
 
 **Optional per-account report**: `!make campaign-report-all` on one account renders the tables of its part only (rows of
 the other part read `TBD`).
@@ -603,6 +628,12 @@ disk and must be downloaded before the runtime ends).
 
 ## 7. Troubleshooting
 
+- **`STOP no space` in `campaign.log`, or `campaign run` exits 4** (2026-11-12): the results file system (the Drive,
+  through the `results/` symlink) is short of space. Before the first run the command prints the check
+  (remaining runs x 96 MB x 1.2 against the free space) and starts nothing; mid-part it stops after the run that
+  failed for lack of space (trainer exit 28) or before a run when less than one run's worth is free. Free space on
+  this account's Drive (`make campaign-space-gpu-part GPU_PART=...` shows the numbers), then re-run the same run cell:
+  it resumes and retries the failed run.
 - **`ValueError: Key backend: 'module://matplotlib_inline.backend_inline' is not a valid value`**
   (seen on Colab, 2026-08-25, on every `trainer.py` launch). The notebook
   front-end exports `MPLBACKEND=module://matplotlib_inline.backend_inline` to

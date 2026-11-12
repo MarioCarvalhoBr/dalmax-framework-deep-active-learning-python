@@ -36,7 +36,9 @@ class EmbeddingKey:
 
     `q` is already formatted (see `format_q`) so the key is directly usable
     to build a cache filename without callers needing to know each
-    provider's `q` type.
+    provider's `q` type. `order_hash` (KI-47) is
+    `dalmax.data_order.ordered_paths_hash` of the split's ordered image list:
+    `pool_hash` hashes pool ids, which only name images under one order.
     """
 
     dataset: str
@@ -44,6 +46,7 @@ class EmbeddingKey:
     q: str
     variant: str
     split: str
+    order_hash: str
     pool_hash: str
 
 
@@ -86,15 +89,19 @@ class EmbeddingProvider(ABC):
         """
         raise NotImplementedError
 
-    def key(self, dataset: str, split: str, pool_hash: str, variant: str = "full") -> EmbeddingKey:
+    def key(
+        self, dataset: str, split: str, order_hash: str, pool_hash: str, variant: str = "full"
+    ) -> EmbeddingKey:
         """Build the `EmbeddingKey` this provider's output should be cached
-        under, for the given `dataset`/`split`/unlabeled-pool identity
-        (`pool_hash`, see `dalmax/embeddings/cache.py::pool_hash`)."""
+        under, for the given `dataset`/`split`, the split's image order
+        (`order_hash`, see `dalmax/data_order.py::ordered_paths_hash`) and
+        unlabeled-pool identity (`pool_hash`, see `dalmax/embeddings/cache.py::pool_hash`)."""
         return EmbeddingKey(
             dataset=dataset,
             extractor=self.name,
             q=format_q(self.q),
             variant=variant,
             split=split,
+            order_hash=order_hash,
             pool_hash=pool_hash,
         )

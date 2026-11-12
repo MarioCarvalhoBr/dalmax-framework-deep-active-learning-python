@@ -29,6 +29,10 @@ EXPECTED_COMMAND_ORDER = [
     '"dataset-check"',
     '"colab-check"',
     "make campaign-list-gpu-part",
+    '"campaign-space-gpu-part"',
+    "!make campaign-pilot GPU_PART",
+    "!make campaign-pilot-report GPU_PART",
+    "if not PILOT_REVIEWED",
     "make campaign-run-gpu-part",
     "make campaign-verify-gpu-part",
     "zip -qr",
@@ -106,13 +110,21 @@ def test_checkout_gate_refuses_modified_tracked_files() -> None:
     assert '"status", "--porcelain", "--untracked-files=no"' in clone and "raise RuntimeError" in clone
 
 
-def test_cell_right_before_the_run_asserts_the_count_and_the_other_part_is_absent() -> None:
+def test_pre_run_gate_then_pilot_then_review_gate_right_before_the_run() -> None:
     sources = _code_sources()
     run_idx = next(i for i, s in enumerate(sources) if "make campaign-run-gpu-part" in s)
-    gate = sources[run_idx - 1]
+    gate_idx = next(i for i, s in enumerate(sources) if "(EXPECTED_RUNS, EXPECTED_GROUPS)" in s)
+    gate = sources[gate_idx]
     assert '"campaign-list-gpu-part", f"GPU_PART={GPU_PART}"' in gate and "check=True" in gate
-    assert "(EXPECTED_RUNS, EXPECTED_GROUPS)" in gate
     assert '"campaign-verify-gpu-part", f"GPU_PART={OTHER_GPU_PART}"' in gate and "raise RuntimeError" in gate
+    # Drive quota (2026-11-12): the gate refuses when the free space is short for the remaining runs.
+    assert '"campaign-space-gpu-part", f"GPU_PART={GPU_PART}"' in gate and "space.returncode != 0" in gate
+    pilot_idx = sources.index("!make campaign-pilot GPU_PART={GPU_PART}")
+    report_idx = sources.index("!make campaign-pilot-report GPU_PART={GPU_PART}")
+    assert gate_idx < pilot_idx < report_idx < run_idx
+    review = sources[run_idx - 1]  # the cell right before the run: the pilot must have been reviewed
+    assert "if not PILOT_REVIEWED:" in review and "raise RuntimeError" in review
+    assert "PILOT_REVIEWED = False" in sources[0]  # default: "Run all" stops before the full run
 
 
 def test_zip_cell_refuses_unless_verify_ok_and_ships_part_specific_logs() -> None:

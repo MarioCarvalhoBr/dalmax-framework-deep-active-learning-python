@@ -15,8 +15,10 @@ the trees of the first execution (read only, never written):
   (author's brief of 2026-11-11, not measurements): `LossPredictionLoss`, `BadgeSampling` and
   `KCenterGreedyPCA` cost about a plain uncertainty strategy (the mean of `LeastConfidence`,
   `MarginSampling` and `EntropySampling` at the same budget); `VarRatio` and `MeanSTD` about an
-  MC-dropout strategy (mean of the four at the same budget); `CEALSampling` 1.25 times a plain one;
-  `WAAL` about 45 minutes and `VAAL` (VAE images 32 x 32) about 50 minutes per run (FLOP estimates).
+  MC-dropout strategy (mean of the four at the same budget); `CEALSampling` 3 times a plain one
+  (revised 2026-11-12 from 1.25: since the ADR 0015 follow-up CEAL trains on the labeled set plus the
+  pseudo-labelled samples, up to about a quarter of the pool, at every round); `WAAL` about 45 minutes and
+  `VAAL` (VAE images 32 x 32) about 50 minutes per run (FLOP estimates).
 
 Caveats: the first execution ran on the dataset with duplicates (8,086 pool / 2,106 test images; the
 new one has 7,230 / 1,008), on the GPU class of that execution, and `KMeansSampling` /
@@ -62,7 +64,8 @@ ESTIMATE_RULES: dict[str, tuple[tuple[str, ...], float, float | None, str]] = {
     "LossPredictionLoss": (PLAIN, 1.0, None, "about a plain uncertainty strategy at the same budget"),
     "BadgeSampling": (PLAIN, 1.0, None, "about a plain uncertainty strategy at the same budget"),
     "KCenterGreedyPCA": (PLAIN, 1.0, None, "about a plain uncertainty strategy at the same budget"),
-    "CEALSampling": (PLAIN, 1.25, None, "1.25 x a plain uncertainty strategy at the same budget"),
+    "CEALSampling": (PLAIN, 3.0, None, "3 x a plain uncertainty strategy at the same budget (trains on labeled + "
+                                      "pseudo-labelled samples, up to about a quarter of the pool)"),
     "VarRatio": (MC_DROPOUT, 1.0, None, "about an MC-dropout strategy at the same budget"),
     "MeanSTD": (MC_DROPOUT, 1.0, None, "about an MC-dropout strategy at the same budget"),
     "WAAL": ((), 1.0, 45 * 60.0, "about 45 minutes per run (FLOP estimate)"),

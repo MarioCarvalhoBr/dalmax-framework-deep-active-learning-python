@@ -64,3 +64,13 @@ def test_python_version_probe_checks_venv_not_kernel() -> None:
     assert not any("py_ok" in s for s in sources)
     src = next(s for s in sources if 'record("python_version"' in s)
     assert "venv_py" in src and "kernel_py" in src
+
+
+def test_no_personal_drive_path_and_the_fixed_dataset() -> None:
+    """2026-11-12: neutral DRIVE_ROOT placeholder (no personal folder) and the canonical dataset of ADR 0016."""
+    text = NOTEBOOK_PATH.read_text(encoding="utf-8")
+    assert "UFMS" not in text and "Pós-graduação" not in text and "/home/" not in text
+    assert 'DRIVE_ROOT = \\"/content/drive/MyDrive/<FOLDER_THAT_HOLDS_DATA>\\"' in text
+    assert "daninhas_full_fixed" in text
+    assert "daninhas_full\\\"" not in text and "daninhas_full.zip" not in text and "daninhas_full`" not in text
+    assert "EXPECTED_FILES = 8240" in text

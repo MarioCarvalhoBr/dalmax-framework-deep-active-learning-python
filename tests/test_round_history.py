@@ -185,3 +185,20 @@ def test_leaf_check_accepts_the_files_and_results_json_is_unchanged(leaf) -> Non
     payload = json.loads((path / "results.json").read_text())
     assert "round_predictions" not in payload and "round_queries" not in payload
     assert payload["rounds"] == [0, 1, 2]
+
+
+def test_run_metadata_records_the_data_order_and_the_audit_reads_it(leaf) -> None:
+    """KI-47: every run records which images its pool/test indices name; the campaign's
+    seed audit reads the round-0 image paths back from round_queries.json."""
+    from dalmax import campaign
+    from dalmax.data_order import ordered_paths_hash
+
+    path, result, logger = leaf
+    order = json.loads((path / "run_metadata.json").read_text())["data_order"]
+    assert order["train_paths_hash"] == ordered_paths_hash(result.dataset.Z_train_paths)
+    assert order["test_paths_hash"] == ordered_paths_hash(result.dataset.Z_test_paths)
+    assert (order["n_train"], order["n_test"]) == (N_POOL, len(Y_TEST))
+    assert campaign.read_data_order(path) == (order["train_paths_hash"], order["test_paths_hash"])
+    initial = campaign.read_initial_set(path)
+    assert initial.idxs == [0, 9] and initial.paths == sorted(["c0/img0.png", "c0/img9.png"])
+    assert any(line.startswith("Data order: ") for line in logger.lines)
