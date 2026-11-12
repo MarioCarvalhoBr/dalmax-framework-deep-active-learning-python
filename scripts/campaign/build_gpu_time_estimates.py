@@ -11,14 +11,16 @@ the trees of the first execution (read only, never written):
   hold (merged from another session), the run's own `Total time: <s> seconds` line of
   `log-dalmax.log` plus the median subprocess overhead measured on the runs that have both. The
   group's value is the mean over its seeds, rounded to whole seconds.
-- **estimate** groups: the eight DeepAL+ strategies of ADR 0015, never executed on the GPU. Rules
+- **estimate** groups: the eight DeepAL+ strategies of ADR 0015 and the WAAL control, never executed on
+  the GPU. Rules
   (author's brief of 2026-11-11, not measurements): `LossPredictionLoss`, `BadgeSampling` and
   `KCenterGreedyPCA` cost about a plain uncertainty strategy (the mean of `LeastConfidence`,
   `MarginSampling` and `EntropySampling` at the same budget); `VarRatio` and `MeanSTD` about an
   MC-dropout strategy (mean of the four at the same budget); `CEALSampling` 3 times a plain one
   (revised 2026-11-12 from 1.25: since the ADR 0015 follow-up CEAL trains on the labeled set plus the
   pseudo-labelled samples, up to about a quarter of the pool, at every round); `WAAL` about 45 minutes and
-  `VAAL` (VAE images 32 x 32) about 50 minutes per run (FLOP estimates).
+  `VAAL` (VAE images 32 x 32) about 50 minutes per run (FLOP estimates); the WAAL control
+  `WAALRandomQuery` (2026-11-12) equal to `WAAL`.
 
 Caveats: the first execution ran on the dataset with duplicates (8,086 pool / 2,106 test images; the
 new one has 7,230 / 1,008), on the GPU class of that execution, and `KMeansSampling` /
@@ -59,6 +61,7 @@ TOTAL_TIME_RE = re.compile(r"Total time: ([0-9.]+) seconds")
 
 PLAIN = ("LeastConfidence", "MarginSampling", "EntropySampling")
 MC_DROPOUT = ("LeastConfidenceDropout", "MarginSamplingDropout", "EntropySamplingDropout", "BALDDropout")
+WAAL_SECONDS = 45 * 60.0
 # strategy -> (reference family, multiplier, fixed seconds or None, rule text)
 ESTIMATE_RULES: dict[str, tuple[tuple[str, ...], float, float | None, str]] = {
     "LossPredictionLoss": (PLAIN, 1.0, None, "about a plain uncertainty strategy at the same budget"),
@@ -68,7 +71,10 @@ ESTIMATE_RULES: dict[str, tuple[tuple[str, ...], float, float | None, str]] = {
                                       "pseudo-labelled samples, up to about a quarter of the pool)"),
     "VarRatio": (MC_DROPOUT, 1.0, None, "about an MC-dropout strategy at the same budget"),
     "MeanSTD": (MC_DROPOUT, 1.0, None, "about an MC-dropout strategy at the same budget"),
-    "WAAL": ((), 1.0, 45 * 60.0, "about 45 minutes per run (FLOP estimate)"),
+    "WAAL": ((), 1.0, WAAL_SECONDS, "about 45 minutes per run (FLOP estimate)"),
+    # The WAAL control (ADR 0015 amendment of 2026-11-12): WAAL's training, a random query; the query is a
+    # negligible part of a WAAL run, so the same estimate.
+    "WAALRandomQuery": ((), 1.0, WAAL_SECONDS, "equal to WAAL (same training; the random query is negligible)"),
     "VAAL": ((), 1.0, 50 * 60.0, "about 50 minutes per run at VAE image size 32 (FLOP estimate)"),
 }
 

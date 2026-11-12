@@ -2,7 +2,8 @@
 `AdversarialDeepFool`, moved here unchanged in refactor Phase 4 from
 `core/query_strategies/`), the 8 DeepAL+ ports of ADR 0015 (`VarRatio`, `MeanSTD`,
 `KCenterGreedyPCA`, `BadgeSampling`, `CEALSampling`, `LossPredictionLoss`, `VAAL`,
-`WAAL`), the shared `Strategy` base class, and the generic
+`WAAL`), the WAAL training-budget control `WAALRandomQuery` (WAAL's training with a
+uniform random query), the shared `Strategy` base class, and the generic
 `RepresentationStrategy` (the single class backing all four legacy
 `*Kmeans*Sampling` CLI names plus the new generic `RepresentationStrategy`
 choice).
@@ -35,6 +36,7 @@ from dalmax.query_strategies.margin_sampling_dropout import MarginSamplingDropou
 from dalmax.query_strategies.mean_std import MeanSTD
 from dalmax.query_strategies.random_sampling import RandomSampling
 from dalmax.query_strategies.registry import (
+    CONTROL_STRATEGY_REGISTRY,
     DEEPALPLUS_STRATEGY_REGISTRY,
     GENERIC_REPRESENTATION_NAME,
     LEGACY_STRATEGY_REGISTRY,
@@ -45,9 +47,10 @@ from dalmax.query_strategies.registry import (
 from dalmax.query_strategies.representation import RepresentationStrategy
 from dalmax.query_strategies.vaal import VAAL
 from dalmax.query_strategies.var_ratio import VarRatio
-from dalmax.query_strategies.waal import WAAL
+from dalmax.query_strategies.waal import WAAL, WAALRandomQuery
 
 __all__ = [
+    "CONTROL_STRATEGY_REGISTRY",
     "DEEPALPLUS_STRATEGY_REGISTRY",
     "GENERIC_REPRESENTATION_NAME",
     "LEGACY_STRATEGY_REGISTRY",
@@ -75,5 +78,6 @@ __all__ = [
     "VAAL",
     "VarRatio",
     "WAAL",
+    "WAALRandomQuery",
     "build_strategy",
 ]

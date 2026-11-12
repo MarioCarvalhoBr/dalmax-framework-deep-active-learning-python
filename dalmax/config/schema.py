@@ -396,6 +396,16 @@ STRATEGY_ARGS_KEYS: dict[str, str] = {
     "WAAL": "waal",
 }
 
+# Strategy name -> the `StrategyArgs` field the strategy READS. Equal to
+# `STRATEGY_ARGS_KEYS` plus the strategies without a block of their own that read
+# another strategy's block: the WAAL control `WAALRandomQuery` reads the `WAAL` block
+# (one block for both, so the control's training cannot drift from WAAL's; ADR 0015
+# amendment of 2026-11-12). A params JSON has no `"WAALRandomQuery"` key.
+STRATEGY_ARGS_READ_BY: dict[str, str] = {
+    **STRATEGY_ARGS_KEYS,
+    "WAALRandomQuery": STRATEGY_ARGS_KEYS["WAAL"],
+}
+
 
 @dataclass(frozen=True)
 class DatasetConfig:

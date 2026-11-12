@@ -31,7 +31,8 @@ MC_DROPOUT = ("LeastConfidenceDropout", "MarginSamplingDropout", "EntropySamplin
 DROPOUT_FAMILY = (*MC_DROPOUT, "VarRatio", "MeanSTD")
 DEEPALPLUS = ("VarRatio", "MeanSTD", "KCenterGreedyPCA", "BadgeSampling", "CEALSampling", "LossPredictionLoss",
               "VAAL", "WAAL")
-LONG = ("AdversarialBIM", "VAAL", "WAAL", "AdversarialDeepFool")
+LONG = ("AdversarialBIM", "VAAL", "WAAL", "WAALRandomQuery", "AdversarialDeepFool")
+WAAL_CONTROL_ID = "p1_control/WAALRandomQuery/nq100"
 
 
 def _builder():
@@ -110,9 +111,49 @@ def test_kmh_sweep_parts_filter_and_order() -> None:
 def test_run_counts_per_part(which: str, request: pytest.FixtureRequest) -> None:
     manifest: C.Manifest = request.getfixturevalue(which)
     counts = C.count_by_part(C.expand_jobs(manifest))
-    assert counts == {"paper1": 189, "upper_bound": 3, "rnhal": 42, "texhal": 30, "texhal_q17": 18,
-                      "hier_transfer": 12, "control": 0, "kmh_nq10": 0, "kmh_nq50": 0, "kmh_nq100": 0}
-    assert sum(counts.values()) == 294 and len(manifest.groups) == 98
+    assert counts == {"paper1": 189, "paper1_control": 3, "upper_bound": 3, "rnhal": 42, "texhal": 30,
+                      "texhal_q17": 18, "hier_transfer": 12, "control": 0, "kmh_nq10": 0, "kmh_nq50": 0,
+                      "kmh_nq100": 0}
+    assert sum(counts.values()) == 297 and len(manifest.groups) == 99
+
+
+@pytest.mark.parametrize("which", ["full_manifest", "micro_manifest"])
+def test_waal_control_is_a_separate_control_not_a_benchmark_strategy(
+    which: str, request: pytest.FixtureRequest
+) -> None:
+    """ADR 0015 amendment (2026-11-12): `WAALRandomQuery` at the primary budget only, part
+    `paper1_control`, its own table, never a benchmark row or a `best_of` candidate."""
+    manifest: C.Manifest = request.getfixturevalue(which)
+    groups = manifest.group_by_id()
+    control = groups[WAAL_CONTROL_ID]
+    waal = groups["p1/WAAL/nq100"]
+    assert [g.id for g in manifest.groups if g.strategy_name == "WAALRandomQuery"] == [WAAL_CONTROL_ID]
+    assert control.part == "paper1_control" and control.n_query == waal.n_query == manifest.primary_nq
+    assert (control.params_json, control.n_init_labeled, control.n_round, control.seeds) == (
+        waal.params_json, waal.n_init_labeled, waal.n_round, waal.seeds)
+    assert (control.gpu_part, control.gpu_stage) == (waal.gpu_part, waal.gpu_stage) == ("part_1_gpu", 5)
+    assert control.dir_results != waal.dir_results
+    tables = {t["id"]: t for t in manifest.tables["paper1"]["tables"]}
+    for budget in (10, 50, 100):
+        rows = tables[f"paper1_nq{budget}"]["rows"]
+        assert len(rows) == 22  # 20 strategies + KMH + the upper bound: the control is no row here
+        assert all(r.get("run") != WAAL_CONTROL_ID for r in rows)
+    control_table = tables["paper1_waal_control_nq100"]
+    assert [r["run"] for r in control_table["rows"]] == [
+        "p1/WAAL/nq100", WAAL_CONTROL_ID, "p1/RandomSampling/nq100"]
+    for paper in manifest.tables.values():
+        for table in paper["tables"]:
+            for row in table["rows"]:
+                if "best_of" in row:
+                    assert WAAL_CONTROL_ID not in {c["run"] for c in row["best_of"]["candidates"]}
+    assert [(u["paper"], u["table"]) for u in control.used_by] == [("paper1", "paper1_waal_control_nq100")]
+
+
+def test_waal_control_is_estimated_like_waal_and_not_in_the_pilot(both_full) -> None:
+    estimates = _estimates(both_full)
+    assert estimates[WAAL_CONTROL_ID] == estimates["p1/WAAL/nq100"]
+    groups = C.selected_groups(both_full, C.parse_selection("part_1_gpu"))
+    assert WAAL_CONTROL_ID not in C.pilot_group_ids(groups)
 
 
 def test_paper1_is_20_strategies_plus_kmh_and_no_rnhal_texhal_presets(full_manifest: C.Manifest) -> None:
@@ -228,10 +269,12 @@ def test_execution_order_paper1_nq100_first_upper_bound_last(full_manifest: C.Ma
     phases = [C.phase_index(j.group, full_manifest.primary_nq) for j in jobs]
     assert phases == sorted(phases)
     assert jobs[0].group.id == "shared/random_nq100"
-    assert all(j.group.n_query == 100 for j in jobs[:63]) and jobs[63].group.part == "rnhal"
+    assert all(j.group.n_query == 100 for j in jobs[:66]) and jobs[66].group.part == "rnhal"
+    assert [j.group.part for j in jobs[63:66]] == ["paper1_control"] * 3
     assert jobs[-1].group.part == "upper_bound"
     assert [C.PHASE_LABELS[p] for p in dict.fromkeys(phases)] == [
-        "paper1_nq100", "rnhal", "texhal", "texhal_q17", "hier_transfer", "paper1_other_nq", "upper_bound"]
+        "paper1_nq100", "paper1_control", "rnhal", "texhal", "texhal_q17", "hier_transfer", "paper1_other_nq",
+        "upper_bound"]
 
 
 @pytest.mark.parametrize("which", ["full_manifest", "micro_manifest"])
@@ -368,8 +411,8 @@ def test_cli_list_gpu_part_prints_estimates(capsys: pytest.CaptureFixture[str]) 
     out = capsys.readouterr().out
     assert "Execution plan (3 segments)" in out and "GPU parts (ADR 0016):" in out
     combined = out.split("Combined:")[1]
-    assert "part_2_gpu     177 runs (59 run groups)  est" in combined
-    assert "part_1_gpu       0 runs" in combined
+    assert "part_2_gpu      177 runs (59 run groups)  est" in combined
+    assert "part_1_gpu        0 runs" in combined
 
 
 def test_cli_run_gpu_part_dry_run_logs_nothing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -636,7 +679,7 @@ def test_exclude_strategy_filter_drops_only_those_groups(full_manifest: C.Manife
     dropped = [j for j in jobs if j not in kept]
     assert dropped and {j.group.strategy_name for j in dropped} == set(ADVERSARIAL)
     assert len(dropped) == 2 * 3 * 3  # 2 strategies x 3 n_query x 3 seeds
-    assert len(kept) == len(jobs) - len(dropped) == 294 - 18
+    assert len(kept) == len(jobs) - len(dropped) == 297 - 18
     assert all(j.group.strategy_name not in ADVERSARIAL for j in kept)
     assert [j for j in jobs if j in kept] == kept  # order preserved
 
@@ -653,7 +696,7 @@ def test_cli_exclude_strategy_applies_to_list(capsys: pytest.CaptureFixture[str]
     out = capsys.readouterr().out
     assert "excluded strategies: AdversarialBIM, AdversarialDeepFool" in out
     assert "Adversarial" not in out.split("excluded strategies:")[1].split("\n", 1)[1]
-    assert "TOTAL" in out and "92 runs" in out  # 98 micro seed-1 jobs - 2 strategies x 3 n_query
+    assert "TOTAL" in out and "93 runs" in out  # 99 micro seed-1 jobs - 2 strategies x 3 n_query
     assert C.main(["list", "--micro", "--exclude-strategy", "Nope"]) == 2
 
 
@@ -1073,7 +1116,7 @@ def test_only_group_restricts_and_fails_fast(both_full, capsys) -> None:
     assert C.main(["list", "--manifest", manifests, "--part", "part_1_gpu", "--only-group", "nope"]) == 2
     assert C.main(["list", "--manifest", manifests, "--part", "part_2_gpu", "--pilot"]) == 0
     out = capsys.readouterr().out
-    assert "p1/VAAL/nq50" in out and "TOTAL            3 runs (3 run groups)" in out.split("Combined:")[1]
+    assert "p1/VAAL/nq50" in out and "TOTAL             3 runs (3 run groups)" in out.split("Combined:")[1]
     with pytest.raises(SystemExit):
         C.main(["list", "--pilot", "--only-group", "x"])  # mutually exclusive
 

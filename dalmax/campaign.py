@@ -18,8 +18,8 @@ manifests reports whether each such pair selected the same images
 
 Two orthogonal partitions select groups (`--part`):
 
-- the *semantic parts* `PARTS` (`paper1`, `upper_bound`, `rnhal`, `texhal`,
-  `texhal_q17`, `hier_transfer`, `control`, `kmh_nq100`, `kmh_nq50`, `kmh_nq10`;
+- the *semantic parts* `PARTS` (`paper1`, `paper1_control`, `upper_bound`, `rnhal`,
+  `texhal`, `texhal_q17`, `hier_transfer`, `control`, `kmh_nq100`, `kmh_nq50`, `kmh_nq10`;
   comma-separated, or `all`), executed in the fixed `PHASE_LABELS` order;
 - the *GPU parts* `GPU_PARTS` (`part_1_gpu`, `part_2_gpu`, ADR 0016): every group of
   the two full-scale manifests carries a `gpu_part` and a `gpu_stage`; selecting a
@@ -68,7 +68,8 @@ plan: by GPU stage for a GPU part, manifest by manifest otherwise):
 
 Semantic execution order (fixed, independent of `--part`): paper 1 at
 n_query=100 first (the shared canonical runs -- KMH and RandomSampling, which
-papers 2/3 reuse -- land early), then rnhal, texhal, texhal_q17, hier_transfer,
+papers 2/3 reuse -- land early), then the paper-1 controls (`paper1_control`),
+then rnhal, texhal, texhal_q17, hier_transfer,
 then paper 1 at n_query=50 and 10, then the upper bound.
 """
 
@@ -88,7 +89,7 @@ from pathlib import Path
 from typing import Any
 
 from dalmax.config.loader import load_experiment_config, to_dict
-from dalmax.config.schema import FULL_SUPERVISED_STRATEGY, STRATEGY_ARGS_KEYS
+from dalmax.config.schema import FULL_SUPERVISED_STRATEGY, STRATEGY_ARGS_READ_BY
 from dalmax.data_order import relative_image_paths
 from dalmax.experiment.disk_space import (
     DISK_MARGIN,
@@ -116,8 +117,11 @@ TRAINER_SCRIPT = "tools/trainer.py"
 # Layout/ownership rule: a run group lives under the FIRST paper that consumes
 # it (paper 1 < 2 < 3) and its `used_by` lists every consumer; e.g. paper 1's
 # `KMH@100` is also the "w/o representation module" row of papers 2 and 3.
-PARTS: tuple[str, ...] = ("paper1", "upper_bound", "rnhal", "texhal", "texhal_q17", "hier_transfer",
-                          "control", "kmh_nq100", "kmh_nq50", "kmh_nq10")
+# `paper1_control` (ADR 0015 amendment of 2026-11-12): paper-1 CONTROLS, not benchmark strategies (today
+# `WAALRandomQuery` at nq100: WAAL's training with a random query); a table of their own, never a benchmark row.
+# `control` is the separate KI-43 control manifest.
+PARTS: tuple[str, ...] = ("paper1", "paper1_control", "upper_bound", "rnhal", "texhal", "texhal_q17",
+                          "hier_transfer", "control", "kmh_nq100", "kmh_nq50", "kmh_nq10")
 
 # The two GPU parts (ADR 0016): one per Colab account, balanced by estimated GPU time.
 GPU_PARTS: tuple[str, ...] = ("part_1_gpu", "part_2_gpu")
@@ -125,6 +129,7 @@ GPU_PARTS: tuple[str, ...] = ("part_1_gpu", "part_2_gpu")
 # Execution phases (see module docstring). Index = order of execution.
 PHASE_LABELS: tuple[str, ...] = (
     "paper1_nq100",
+    "paper1_control",
     "rnhal",
     "texhal",
     "texhal_q17",
@@ -331,7 +336,8 @@ def effective_signature(
       build the same provider + selection.
 
     Per-strategy hyperparameters (`strategy_args`, ADR 0015) are reduced to
-    the one block the strategy reads (`STRATEGY_ARGS_KEYS`; none for every
+    the one block the strategy reads (`STRATEGY_ARGS_READ_BY`: its own block,
+    or for the WAAL control `WAALRandomQuery` the `WAAL` block; none for every
     other strategy), so two params files that differ only in another
     strategy's block are the same computation. For the groups executed
     before ADR 0015 this changes no dedup decision: their params have no
@@ -353,7 +359,7 @@ def effective_signature(
     embedding = dataset.pop("embedding")
     selection = dataset.pop("selection")
     strategy_args = dataset.pop("strategy_args")
-    own_args_key = STRATEGY_ARGS_KEYS.get(strategy_name)
+    own_args_key = STRATEGY_ARGS_READ_BY.get(strategy_name)
     if own_args_key is not None:
         dataset["strategy_args"] = {own_args_key: strategy_args[own_args_key]}
 

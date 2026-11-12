@@ -22,6 +22,8 @@ import pytest
 from dalmax.config.loader import load_experiment_config
 from dalmax.config.schema import ConfigError
 from dalmax.query_strategies.registry import (
+    CONTROL_STRATEGY_KWARGS,
+    CONTROL_STRATEGY_REGISTRY,
     DEEPALPLUS_STRATEGY_KWARGS,
     DEEPALPLUS_STRATEGY_REGISTRY,
     GENERIC_REPRESENTATION_NAME,
@@ -84,6 +86,22 @@ def test_build_strategy_deepalplus_names_construct_their_class(name):
     dataset, net = _dataset_and_net()
     strategy = build_strategy(name, dataset, net, _config(name), logger=None, rng=np.random.default_rng(0))
     assert type(strategy) is DEEPALPLUS_STRATEGY_REGISTRY[name]
+    assert strategy.dataset is dataset and strategy.net is net
+
+
+def test_strategy_registry_covers_the_controls():
+    # ADR 0015 amendment (2026-11-12): controls are their own family, never a DeepAL+ port.
+    assert set(CONTROL_STRATEGY_REGISTRY) == {"WAALRandomQuery"}
+    assert set(CONTROL_STRATEGY_KWARGS) == set(CONTROL_STRATEGY_REGISTRY)
+    assert set(CONTROL_STRATEGY_REGISTRY) <= set(STRATEGY_REGISTRY)
+    assert not set(CONTROL_STRATEGY_REGISTRY) & (set(DEEPALPLUS_STRATEGY_REGISTRY) | set(LEGACY_STRATEGY_REGISTRY))
+
+
+@pytest.mark.parametrize("name", sorted(CONTROL_STRATEGY_REGISTRY))
+def test_build_strategy_control_names_construct_their_class(name):
+    dataset, net = _dataset_and_net()
+    strategy = build_strategy(name, dataset, net, _config(name), logger=None, rng=np.random.default_rng(0))
+    assert type(strategy) is CONTROL_STRATEGY_REGISTRY[name]
     assert strategy.dataset is dataset and strategy.net is net
 
 

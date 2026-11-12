@@ -30,9 +30,15 @@ every existing params JSON keep working unchanged. See
 
 - **`daninhas_full_fixed`** (primary since 2026-11-11, ADR 0016): `DATA/daninhas_full_fixed/{train,test}/DATASET_<CLASS>/`,
   the duplicate-free version of `daninhas_full` (KI-46): 7,230 train / 1,008 test images, no MD5 repeated inside or
-  across the splits, plus `MANIFEST.csv` (one row per kept image with its dropped source copies) and `README.txt`
-  (8,240 files). Built once by `scripts/datasets/build_daninhas_full_fixed.py` (refuses an existing destination;
-  `--check` / `make dataset-check` verifies it); immutable afterwards. Every full-scale params JSON of the campaign,
+  across the splits, plus the metadata of the layout of 2026-11-12: `README.txt` (the dataset as it is: identity
+  rule, counts per split and class, how to verify), `MANIFEST.csv` (`split,class,file,md5`, one row per image) and
+  `logs/` (`build_history.txt`: builder, exclusion list, source file count and what was removed and why;
+  `source_manifest.csv`: the manifest with the dropped source copies and aliases) = 8,242 files (8,240 before the
+  layout). Built once by `scripts/datasets/build_daninhas_full_fixed.py` (refuses an existing destination;
+  `--check` / `make dataset-check` verifies the layout, the files on disk against `MANIFEST.csv` by name and MD5, and
+  no repeated MD5); the existing folder is converted once by `--migrate-metadata` (metadata only, images untouched,
+  `.claude/rules/data-safety.md`); immutable afterwards. No loader, order hash or cache key reads the metadata files:
+  the data order depends only on the paths under `train/` and `test/`. Every full-scale params JSON of the campaign,
   the KMH sweep, the ablations and the lab/Colab checks points to it (`"data_dir": "DATA/daninhas_full_fixed/"`), so
   the results leaf folder and the embedding cache key read `daninhas_full_fixed`. Same 5 classes and loader as below.
 - **`daninhas_full`** (primary until 2026-11-11; the dataset of the first campaign, kept immutable as history):
@@ -172,7 +178,13 @@ generator derived from the seed (`derive_seed(seed, "adversarial_ties")`); `Adve
 tie-break of its executed runs (its only exact ties are byte-identical duplicate images).
 
 **DeepAL+ ports (2026-11-11, ADR 0015; in paper 1 of the campaign since ADR 0016).** Eight further
-`--strategy_name` choices port every method of DeepAL+ (Zhan et al., 2022, arXiv 2203.13450) that DalMax lacked:
+`--strategy_name` choices port every method of DeepAL+ (Zhan et al., 2022, arXiv 2203.13450) that DalMax lacked.
+A ninth new choice, `WAALRandomQuery` (2026-11-12, ADR 0015 amendment), is a CONTROL, not a benchmark strategy:
+WAAL's training procedure unchanged (it reads the `"WAAL"` block below; there is no `"WAALRandomQuery"` block, a
+params JSON that sets one is rejected) with a uniform random query from the unlabeled pool
+(`derive_seed(seed, "waal_random_query")`); for a seed it trains WAAL's round-0 model exactly. It measures how much of
+a WAAL gain over `RandomSampling` comes from WAAL's training (about 280 SGD steps per round against 10 to 40) rather
+than from its selection. Hyperparameter blocks:
 `VarRatio`, `MeanSTD` (both MC dropout: run with `files_config/campaign/params_paper1_mc_dropout.json`,
 `dropout_p` 0.5, fail fast without it), `KCenterGreedyPCA`, `BadgeSampling`, `CEALSampling`, `LossPredictionLoss`,
 `VAAL` (`files_config/campaign/params_paper1_vaal.json`: its defaults except `image_size: 32`, the author's cost
@@ -222,7 +234,9 @@ training, `ceal_train_size`; `LossPredictionLoss` `lpl_labeled_spearman`, `lpl_n
 `lpl_pool_score_n_unique`; `VAAL` `vaal_discriminator_auc`, `vaal_score_std`, `vaal_score_n_unique`, `vaal_mean_kl`,
 `vaal_mu_dim_std`; `WAAL` (per training) `waal_n_steps`, `waal_wasserstein_last_epoch` and (per query)
 `waal_critic_labeled_mean/std`, `waal_critic_unlabeled_mean/std`, `waal_critic_init_corr`, `waal_uncertainty_std`,
-`waal_critic_term_std`. `KCenterGreedyPCA` and `BadgeSampling` record `pool_order_fraction` only. The campaign's
+`waal_critic_term_std`; the WAAL control `WAALRandomQuery` the same training series and critic statistics
+(`waal_critic_*`), no `waal_uncertainty_std`/`waal_critic_term_std` (its query does not use those terms), and
+`query_rule` = `"uniform_random"` per query. `KCenterGreedyPCA` and `BadgeSampling` record `pool_order_fraction` only. The campaign's
 pilot report prints them (`.specs/experiments/campaign.md`, "Pilot").
 
 For deduplication (`dalmax.campaign.effective_signature`, ADR 0016) only the block of the strategy being run counts:

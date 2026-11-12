@@ -59,7 +59,7 @@ rounding/an off-by-one, not investigated further.)
 
 `daninhas_full` holds byte-identical copies inside and across the splits (`.specs/quality/known-issues.md` KI-46).
 The duplicate-free `DATA/daninhas_full_fixed/` (built by `scripts/datasets/build_daninhas_full_fixed.py`, same layout
-and class folders, plus `MANIFEST.csv` and `README.txt`) is the dataset of every run from 2026-11-11 on. Counts
+and class folders, plus metadata files) is the dataset of every run from 2026-11-11 on. Counts
 (measured with `find ... -type f | wc -l` on the built folder, 2026-11-11):
 
 | Class | train | test |
@@ -71,8 +71,25 @@ and class folders, plus `MANIFEST.csv` and `README.txt`) is the dataset of every
 | `DATASET_OUTRAS_FOLHAS_LARGAS` | 1,671 | 78 |
 | **Total** | **7,230** | **1,008** |
 
-Total files 8,240 (8,238 images + `MANIFEST.csv` + `README.txt`; the Colab setup checks this count and runs the
-builder's `--check`). The tables above and below describe the original `daninhas_full`, kept as the dataset of the
+Metadata layout (author instruction 2026-11-12; the top-level files describe the dataset as it is, the provenance
+lives under `logs/`):
+
+```
+daninhas_full_fixed/
+  train/<class>/...         7,230 images
+  test/<class>/...          1,008 images
+  README.txt                identity rule, counts per split and class, how to verify (no source counts)
+  MANIFEST.csv              split,class,file,md5 (the current files only)
+  logs/build_history.txt    builder, exclusion list, source file count, what was removed and why (the build report)
+  logs/source_manifest.csv  MANIFEST.csv plus source_train_copies, source_test_copies, source_aliases_dropped
+```
+
+Total files 8,242 (8,238 images + 4 metadata files; 8,240 in the previous layout, `MANIFEST.csv` with the source
+columns + `README.txt` with the source counts, converted once by the builder's `--migrate-metadata`, images
+untouched). The Colab setup checks the images per split (7,230 / 1,008) and runs the builder's `--check`: the files on
+disk equal the rows of `MANIFEST.csv` (name and MD5), the metadata layout, no repeated MD5. The metadata never
+affects a run: the loaders, the `data_order` hashes (train `805314e2dae2`, test `17ac35b4b1b3`) and the cache keys
+read only the paths under `train/` and `test/`. The tables above and below describe the original `daninhas_full`, kept as the dataset of the
 first campaign.
 
 ## Class imbalance notes

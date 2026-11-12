@@ -7,9 +7,9 @@ if/elif chains") for the `dalmax`-routed CLI (`dalmax.cli`) — that module was
 removed as dead code in refactor Phase 4
 (`.specs/architecture/refactor-plan.md`).
 
-Four kinds of names are registered (the third, `FullSupervised`, is the
+Five kinds of names are registered (the third, `FullSupervised`, is the
 paper-1 upper bound -- not active learning, see `full_supervised.py`; the fourth,
-the DeepAL+ ports of ADR 0015, is listed at the end):
+the DeepAL+ ports of ADR 0015, and the fifth, the controls, are listed at the end):
 
 - The 12 legacy strategies (`RandomSampling` ... `AdversarialDeepFool`) are
   constructed as the historical `demo.py` always has,
@@ -45,6 +45,10 @@ the DeepAL+ ports of ADR 0015, is listed at the end):
   resolved through `LEGACY_STRATEGY_REGISTRY` (restricted to
   `dalmax.config.schema.CEAL_BASE_STRATEGIES`). None of them advances the run's
   main generator or the global torch stream at construction.
+- The controls (`CONTROL_STRATEGY_REGISTRY`, today only `WAALRandomQuery`, the
+  training-budget control of `WAAL`: WAAL's training with a uniform random query;
+  ADR 0015 amendment of 2026-11-12) are built the same way, through
+  `CONTROL_STRATEGY_KWARGS`. They are not benchmark strategies.
 
 `SelectionStrategy` construction always derives its RNG seed from
 `config.seed` via `dalmax.seeding.derive_seed(config.seed, "selection")` —
@@ -96,7 +100,12 @@ from dalmax.query_strategies.random_sampling import RandomSampling
 from dalmax.query_strategies.representation import RepresentationStrategy
 from dalmax.query_strategies.vaal import VAAL, VAAL_TIES_SEED_TAG
 from dalmax.query_strategies.var_ratio import VAR_RATIO_SEED_TAG, VarRatio
-from dalmax.query_strategies.waal import WAAL, WAAL_TIES_SEED_TAG
+from dalmax.query_strategies.waal import (
+    WAAL,
+    WAAL_RANDOM_QUERY_SEED_TAG,
+    WAAL_TIES_SEED_TAG,
+    WAALRandomQuery,
+)
 from dalmax.seeding import derive_seed
 from dalmax.selection.registry import get_selection_strategy
 
@@ -187,12 +196,25 @@ def _vaal_kwargs(config: ExperimentConfig, dataset, net, logger) -> dict[str, An
     return {"sampler": sampler, "rng": _seeded_rng(config, VAAL_TIES_SEED_TAG)}
 
 
+def _waal_trainer(config: ExperimentConfig) -> WAALTrainer:
+    """The WAAL trainer of a run, shared by `WAAL` and its control `WAALRandomQuery`:
+    the `strategy_args.WAAL` block and the `WAAL_SEED_TAG` generator, so both strategies
+    train identically for the same seed."""
+    return WAALTrainer(config.dataset.strategy_args.waal, _seeded_rng(config, WAAL_SEED_TAG))
+
+
 def _waal_kwargs(config: ExperimentConfig, dataset, net, logger) -> dict[str, Any]:
-    args = config.dataset.strategy_args.waal
     return {
-        "trainer": WAALTrainer(args, _seeded_rng(config, WAAL_SEED_TAG)),
-        "selection": args.selection,
+        "trainer": _waal_trainer(config),
+        "selection": config.dataset.strategy_args.waal.selection,
         "rng": _seeded_rng(config, WAAL_TIES_SEED_TAG),
+    }
+
+
+def _waal_random_query_kwargs(config: ExperimentConfig, dataset, net, logger) -> dict[str, Any]:
+    return {
+        "trainer": _waal_trainer(config),
+        "rng": _seeded_rng(config, WAAL_RANDOM_QUERY_SEED_TAG),
     }
 
 
@@ -220,6 +242,27 @@ DEEPALPLUS_STRATEGY_KWARGS: dict[str, StrategyKwargsFactory] = {
     "LossPredictionLoss": _loss_prediction_kwargs,
     "VAAL": _vaal_kwargs,
     "WAAL": _waal_kwargs,
+}
+
+# Controls (not benchmark strategies): a method's training with another query, to
+# separate the effect of the training from the effect of the selection. Built like
+# the DeepAL+ ports (`Class(dataset, net, logger, **kwargs)`).
+CONTROL_STRATEGY_REGISTRY: dict[str, type[Strategy]] = {
+    "WAALRandomQuery": WAALRandomQuery,
+}
+
+CONTROL_STRATEGY_KWARGS: dict[str, StrategyKwargsFactory] = {
+    "WAALRandomQuery": _waal_random_query_kwargs,
+}
+
+# Every name built as `Class(dataset, net, logger, **factory(config, dataset, net, logger))`.
+KWARGS_STRATEGY_REGISTRY: dict[str, type[Strategy]] = {
+    **DEEPALPLUS_STRATEGY_REGISTRY,
+    **CONTROL_STRATEGY_REGISTRY,
+}
+KWARGS_STRATEGY_FACTORIES: dict[str, StrategyKwargsFactory] = {
+    **DEEPALPLUS_STRATEGY_KWARGS,
+    **CONTROL_STRATEGY_KWARGS,
 }
 
 # Not active learning: the paper-1 upper bound (train once on the whole pool).
@@ -256,6 +299,7 @@ REPRESENTATION_PRESET_Q: dict[str, Any] = {"ssrae": 13, "vctex": (5, 17)}
 STRATEGY_REGISTRY: dict[str, Any] = {
     **LEGACY_STRATEGY_REGISTRY,
     **DEEPALPLUS_STRATEGY_REGISTRY,
+    **CONTROL_STRATEGY_REGISTRY,
     **NON_ACTIVE_STRATEGY_REGISTRY,
     **dict.fromkeys(REPRESENTATION_PRESETS, RepresentationStrategy),
     GENERIC_REPRESENTATION_NAME: RepresentationStrategy,
@@ -326,9 +370,9 @@ def build_strategy(
     registry) but never consumed: representation strategies derive their own
     generator from `dalmax.seeding.derive_seed(config.seed, "selection")` and
     `AdversarialBIM` from `derive_seed(config.seed, "adversarial_ties")`
-    (`LEGACY_STRATEGY_KWARGS`) and the DeepAL+ ports from their own tags
-    (`DEEPALPLUS_STRATEGY_KWARGS`), so building a strategy never advances the
-    run's main generator.
+    (`LEGACY_STRATEGY_KWARGS`) and the DeepAL+ ports and the controls from
+    their own tags (`DEEPALPLUS_STRATEGY_KWARGS`, `CONTROL_STRATEGY_KWARGS`), so
+    building a strategy never advances the run's main generator.
 
     Raises
     ------
@@ -343,9 +387,9 @@ def build_strategy(
         extra_kwargs = LEGACY_STRATEGY_KWARGS[name](config) if name in LEGACY_STRATEGY_KWARGS else {}
         return LEGACY_STRATEGY_REGISTRY[name](dataset, net, logger, **extra_kwargs)
 
-    if name in DEEPALPLUS_STRATEGY_REGISTRY:
-        kwargs = DEEPALPLUS_STRATEGY_KWARGS[name](config, dataset, net, logger)
-        return DEEPALPLUS_STRATEGY_REGISTRY[name](dataset, net, logger, **kwargs)
+    if name in KWARGS_STRATEGY_REGISTRY:
+        kwargs = KWARGS_STRATEGY_FACTORIES[name](config, dataset, net, logger)
+        return KWARGS_STRATEGY_REGISTRY[name](dataset, net, logger, **kwargs)
 
     if name in NON_ACTIVE_STRATEGY_REGISTRY:
         return NON_ACTIVE_STRATEGY_REGISTRY[name](dataset, net, logger)

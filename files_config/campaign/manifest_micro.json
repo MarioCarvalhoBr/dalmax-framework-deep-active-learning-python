@@ -37,6 +37,11 @@
           "row": "RandomSampling"
         },
         {
+          "paper": "paper1",
+          "table": "paper1_waal_control_nq100",
+          "row": "RandomSampling"
+        },
+        {
           "paper": "paper2",
           "table": "comparison",
           "row": "RandomSampling @ n_query=100"
@@ -519,6 +524,11 @@
         {
           "paper": "paper1",
           "table": "paper1_nq100",
+          "row": "WAAL"
+        },
+        {
+          "paper": "paper1",
+          "table": "paper1_waal_control_nq100",
           "row": "WAAL"
         }
       ],
@@ -1613,6 +1623,31 @@
         }
       ],
       "note": "KMH: hierarchical k-means selection on ImageNet ResNet-50 features (reference hierarchy [600,200,100]), no SSRAE/VCTex."
+    },
+    {
+      "id": "p1_control/WAALRandomQuery/nq100",
+      "part": "paper1_control",
+      "gpu_part": "part_1_gpu",
+      "gpu_stage": 5,
+      "params_json": "files_config/campaign/params_paper1_micro.json",
+      "strategy_name": "WAALRandomQuery",
+      "n_query": 5,
+      "n_init_labeled": 10,
+      "n_round": 1,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/smoke_campaign_fixed/paper1/control_nq100/",
+      "used_by": [
+        {
+          "paper": "paper1",
+          "table": "paper1_waal_control_nq100",
+          "row": "WAAL training + random query (control)"
+        }
+      ],
+      "note": "Control of WAAL (not a benchmark strategy): WAAL's training procedure unchanged (same strategy_args.WAAL block, trainer generator and round-0 model for a seed), query = uniform random draw from the unlabeled pool. Separates WAAL's training budget from its selection."
     },
     {
       "id": "p1/upper_bound",
@@ -2916,6 +2951,25 @@
             {
               "label": "Upper bound (full pool)",
               "run": "p1/upper_bound"
+            }
+          ]
+        },
+        {
+          "id": "paper1_waal_control_nq100",
+          "kind": "benchmark",
+          "title": "Paper 1 -- WAAL training-budget control (not a benchmark strategy), n_query=100",
+          "rows": [
+            {
+              "label": "WAAL",
+              "run": "p1/WAAL/nq100"
+            },
+            {
+              "label": "WAAL training + random query (control)",
+              "run": "p1_control/WAALRandomQuery/nq100"
+            },
+            {
+              "label": "RandomSampling",
+              "run": "p1/RandomSampling/nq100"
             }
           ]
         }

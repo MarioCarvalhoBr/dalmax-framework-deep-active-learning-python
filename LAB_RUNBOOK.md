@@ -24,9 +24,10 @@ explicitly says "local notebook" (`.claude/rules/data-safety.md`,
 The campaign (`files_config/campaign/manifest.json`, ADR 0008/0009,
 [`.specs/experiments/campaign.md`](.specs/experiments/campaign.md)) is the single way to
 execute everything the three papers need; since 2026-11-11 (ADR 0016) it is the clean re-run on
-`DATA/daninhas_full_fixed` (main manifest 294 runs / 98 groups into `results/campaign_fixed/`, KMH sweep 165 / 55 into
-`results/campaign_kmh_fixed/`). The dataset must be at `DATA/daninhas_full_fixed/` (`make dataset-check` must print
-`OK: no repeated md5 inside or across splits`). See `COLAB_RUNBOOK.md` section 6 for the step list. The two GPU parts
+`DATA/daninhas_full_fixed` (main manifest 297 runs / 99 groups into `results/campaign_fixed/`, of which 3 are the WAAL
+control `WAALRandomQuery`; KMH sweep 165 / 55 into `results/campaign_kmh_fixed/`). The dataset must be at
+`DATA/daninhas_full_fixed/` (`make dataset-check` must print
+`OK: files on disk match MANIFEST.csv, no repeated md5 inside or across splits`). See `COLAB_RUNBOOK.md` section 6 for the step list. The two GPU parts
 are disjoint, so with two GPUs they can run concurrently, one process per GPU (the runner reads
 `CUDA_VISIBLE_DEVICES`, default 0); with one GPU run them one after the other:
 
@@ -127,8 +128,9 @@ overlap between the two commands.
 - [ ] **Confirm the dataset is present** (`DATA/` is gitignored — it is never
   pulled by `git pull`, and must be copied onto the lab machine independently):
   ```bash
-  find DATA/daninhas_full_fixed -type f | wc -l   # expect 8240 (7,230 train + 1,008 test + MANIFEST.csv + README.txt)
-  make dataset-check                              # OK: no repeated md5 inside or across splits
+  find DATA/daninhas_full_fixed/train -type f | wc -l   # expect 7230
+  find DATA/daninhas_full_fixed/test -type f | wc -l    # expect 1008
+  make dataset-check   # OK: files on disk match MANIFEST.csv, no repeated md5 inside or across splits
   ```
   Since 2026-11-11 (ADR 0016) the campaign runs on the duplicate-free `DATA/daninhas_full_fixed/` (KI-46);
   `DATA/daninhas_full/` is only needed to rebuild it or the micro dataset. If `DATA/daninhas_full_fixed/` is
@@ -142,8 +144,10 @@ overlap between the two commands.
   (cd DATA && unzip -q daninhas_full_fixed.zip)
   ```
   (or `rsync -avz DATA/daninhas_full_fixed/ <lab-user>@<lab-host>:.../DATA/daninhas_full_fixed/`
-  as an alternative to zip+scp). After copying, `make dataset-check` must pass and the file count must match
-  (`MANIFEST.csv` lists every kept image). **Never write into `DATA/daninhas_full_fixed/`** once it's in place
+  as an alternative to zip+scp). After copying, `make dataset-check` must pass: it compares every file on disk
+  with `MANIFEST.csv` (name and MD5) and checks the metadata layout (`README.txt`, `MANIFEST.csv`, `logs/`). A copy
+  of the previous layout (no `logs/`) fails it: copy the migrated folder instead (the one-off
+  `--migrate-metadata` of 2026-11-12, `.claude/rules/data-safety.md`). **Never write into `DATA/daninhas_full_fixed/`** once it's in place
   (`.claude/rules/data-safety.md`) — it is read-only input for every run below.
 
 - [ ] **Optional cleanup: orphaned pre-refactor cache files.** If any of these

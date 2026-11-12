@@ -101,7 +101,8 @@ def test_dataset_gates_raise() -> None:
     drive_gate = next(s for s in sources if "zip_path = f\"{DRIVE_ROOT}/DATA/{DATASET}.zip\"" in s)
     assert "raise FileNotFoundError" in drive_gate
     local_gate = next(s for s in sources if '"dataset-check"' in s)
-    assert "n_files != DATASET_FILES" in local_gate and "check=True" in local_gate
+    assert "n_images != expected_images" in local_gate and "check=True" in local_gate
+    assert "DATASET_SPLIT_IMAGES = {'train': 7230, 'test': 1008}" in _code_sources()[0]
     assert any('["make", "colab-setup"]' in s and "check=True" in s for s in sources)
 
 
@@ -183,7 +184,7 @@ def test_every_session_checks_out_the_pinned_git_ref_detached() -> None:
     """2026-11-12: one code version for the whole campaign; a push during it must not reach a session."""
     sources = _code_sources()
     params = sources[0]
-    assert 'GIT_REF = "campaign-fixed-v1"' in params and "BRANCH" not in params
+    assert 'GIT_REF = "campaign-fixed-v2"' in params and "BRANCH" not in params
     clone = next(s for s in sources if "git" in s and "clone" in s)
     assert '"clone", REPO_URL, REPO_DIR' in clone and "--branch" not in clone
     assert '"fetch", "--tags", "origin"' in clone and '"checkout", "--detach", GIT_REF' in clone

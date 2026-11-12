@@ -140,8 +140,9 @@ fixed in code since 2026-11-11 (ADR 0014; optional params block `"model_args": {
 MC-dropout strategies). The first campaign also ran on a dataset with byte-identical duplicates inside and across
 train and test (KI-46); since 2026-11-11 (ADR 0016) everything is prepared for a clean re-run on the duplicate-free
 `DATA/daninhas_full_fixed`, with the eight DeepAL+ strategies (`VarRatio`, `MeanSTD`, `KCenterGreedyPCA`,
-`BadgeSampling`, `CEALSampling`, `LossPredictionLoss`, `VAAL`, `WAAL`, ADR 0015) added to paper 1
-(`COLAB_RUNBOOK.md` section 6), not executed yet.
+`BadgeSampling`, `CEALSampling`, `LossPredictionLoss`, `VAAL`, `WAAL`, ADR 0015) added to paper 1 and a control
+of WAAL's training budget (`WAALRandomQuery`: WAAL's training with a uniform random query, a separate control row,
+2026-11-12) (`COLAB_RUNBOOK.md` section 6), not executed yet.
 
 ## Installation
 
@@ -181,17 +182,19 @@ CPU-only strategies.
 ### daninhas_full_fixed (primary since 2026-11-11) and daninhas_full
 
 UAV weed image patches, five classes, `train/`/`test/` split. The canonical dataset is
-`daninhas_full_fixed` (8,238 images: 7,230 in the pool, 1,008 in the fixed test set, plus `MANIFEST.csv` and
-`README.txt`), the duplicate-free version of the original `daninhas_full` (10,192 images: 8,086 / 2,106, with
+`daninhas_full_fixed` (8,238 images: 7,230 in the pool, 1,008 in the fixed test set, plus `README.txt`,
+`MANIFEST.csv` and `logs/` with the build's provenance), the duplicate-free version of the original `daninhas_full` (10,192 images: 8,086 / 2,106, with
 byte-identical copies inside and across the splits, KI-46), built by
 `scripts/datasets/build_daninhas_full_fixed.py` and checked by `make dataset-check`. Layout (both):
 
 ```
 DATA/
-    daninhas_full_fixed/        (daninhas_full/: same layout)
+    daninhas_full_fixed/        (daninhas_full/: same train/ and test/ layout, no metadata files)
         train/  test/
             DATASET_BRACHIARIA/  DATASET_COLONIAO/  DATASET_GRAMINEA/
             DATASET_MAMONA/      DATASET_OUTRAS_FOLHAS_LARGAS/
+        README.txt  MANIFEST.csv              (the dataset as it is: counts, split,class,file,md5)
+        logs/build_history.txt  logs/source_manifest.csv   (provenance of the build)
 ```
 
 (`train/` and `test/` each hold the five class folders.) `DATA/` is immutable,
@@ -257,9 +260,9 @@ deterministic kernel), so report seed-averaged numbers.
 Everything the three papers need runs from ONE manifest,
 `files_config/campaign/manifest.json`, plus the paper-1 KMH sweep `manifest_kmh_sweep.json` (configurations shared by
 several papers run once and are aliased), driven by the engine `dalmax/campaign.py`. Since 2026-11-11 (ADR 0016) they
-describe the clean re-run on `DATA/daninhas_full_fixed` (294 + 165 = 459 runs, seeds 1 to 3, prepared, not executed)
+describe the clean re-run on `DATA/daninhas_full_fixed` (297 + 165 = 462 runs, seeds 1 to 3, prepared, not executed)
 into `results/campaign_fixed/` and `results/campaign_kmh_fixed/`, split into two GPU parts (`part_1_gpu`,
-`part_2_gpu`) of about 48 estimated GPU hours each, one per Colab account. See
+`part_2_gpu`) of about 49 estimated GPU hours each, one per Colab account. See
 [`.specs/experiments/campaign.md`](.specs/experiments/campaign.md) and ADR 0008/0009/0010/0016.
 
 ```bash
@@ -268,12 +271,12 @@ make campaign-pilot GPU_PART=part_1_gpu           # seed 1 of the part's VAAL/WA
 make campaign-pilot-report GPU_PART=part_1_gpu    # wall time vs estimate + strategy_diagnostics of the pilot
 make campaign-run-gpu-part GPU_PART=part_1_gpu    # sequential, skip-existing: re-run the same command to resume
 make campaign-verify-gpu-part GPU_PART=part_1_gpu # OK/INCOMPLETE/MISSING per job + seed audit + data-order audit
-make campaign-verify-all                          # both manifests after merging the two parts (expect OK=459)
+make campaign-verify-all                          # both manifests after merging the two parts (expect OK=462)
 make campaign-report-all                          # tables + mean confusion matrices -> docs/results/campaign_fixed/ (+ _kmh_fixed/)
 make campaign-smoke                               # CPU micro campaign (skips the two adversarial baselines)
 ```
 
-Variables: `PART=all|paper1|upper_bound|rnhal|texhal|texhal_q17|hier_transfer` (comma-separated
+Variables: `PART=all|paper1|paper1_control|upper_bound|rnhal|texhal|texhal_q17|hier_transfer` (comma-separated
 allowed) or `PART=part_1_gpu|part_2_gpu`, `MICRO=1` (micro manifest on CPU, results in `results/smoke_campaign_fixed/`),
 `MANIFEST=path` (any other manifest, overrides `MICRO`; e.g. the KI-43 control:
 `make campaign-run MANIFEST=files_config/campaign/manifest_control_ki43.json PART=control`),

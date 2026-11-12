@@ -73,4 +73,4 @@ def test_no_personal_drive_path_and_the_fixed_dataset() -> None:
     assert 'DRIVE_ROOT = \\"/content/drive/MyDrive/<FOLDER_THAT_HOLDS_DATA>\\"' in text
     assert "daninhas_full_fixed" in text
     assert "daninhas_full\\\"" not in text and "daninhas_full.zip" not in text and "daninhas_full`" not in text
-    assert "EXPECTED_FILES = 8240" in text
+    assert "EXPECTED_FILES = 8242" in text

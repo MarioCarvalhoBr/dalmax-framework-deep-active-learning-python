@@ -574,8 +574,9 @@ by `scripts/datasets/build_daninhas_full_fixed.py` (commit c7d2e9a; the source f
 per distinct MD5 of the source test split (1,008); train = one file per distinct MD5 of the source train split minus
 every image also in test and minus four near-duplicates of test images listed in
 `files_config/datasets/daninhas_full_fixed_near_duplicate_leaks.csv` (7,230); plus `MANIFEST.csv` and `README.txt`
-(8,240 files). `--check` verifies that no MD5 repeats inside or across the splits (the Colab setup runs it after
-unzipping). Everything is re-run on it into new roots (`results/campaign_fixed/`, `results/campaign_kmh_fixed/`), no
+(8,240 files; since the metadata layout of 2026-11-12, KI-49, `README.txt`, `MANIFEST.csv` and `logs/` with two files,
+8,242). `--check` verifies that no MD5 repeats inside or across the splits (the Colab setup runs it after
+unzipping), and since KI-49 also the files on disk against `MANIFEST.csv`. Everything is re-run on it into new roots (`results/campaign_fixed/`, `results/campaign_kmh_fixed/`), no
 old result is reused, and every run now also saves the per-round test predictions and queries
 (`round_predictions.json`, `round_queries.json`) so a later finding of this kind can be re-scored without re-running.
 Remaining: the thesis must replace every number of the first campaign once the new one is executed.
@@ -655,7 +656,7 @@ indices, which named other images there. The brief that reported the defect also
   `tests/test_representation_strategy.py`, `tests/test_campaign.py` (audits). The two golden fixtures were regenerated
   deliberately (`pre_ki47_unsorted_listing_values` keeps the old values; the micro dataset was not regenerated).
 
-**Status**: fixed in code; to be confirmed by the clean campaign (expect one `data_order` per dataset over all 459
+**Status**: fixed in code; to be confirmed by the clean campaign (expect one `data_order` per dataset over all 462
 leaves and, per seed, identical round-0 images across both GPU parts).
 
 ### KI-48 — campaign completeness and code-version gaps: corrupt leaves counted as complete, foreign dataset folder picked, mixed commits invisible, notebook pulled a branch (FIXED 2026-11-12, before the clean campaign; found 2026-11-12)
@@ -673,9 +674,32 @@ the leaf incomplete (re-run into the same leaf; `INCOMPLETE ... (integrity: ...)
 soft warning; round files checked only when required); leaves are looked up under `basename(data_dir)` of the group's
 params only (`RunGroup.dataset_folder`) and a plan leaf under another dataset folder FAILs the data-order audit;
 `verify` and `pilot-report` print the distinct `git_commit` values of the OK leaves (WARN, exit code unchanged, on more
-than one or a missing value); the notebook checks out `GIT_REF` (tag `campaign-fixed-v1`) detached on every session,
+than one or a missing value); the notebook checks out `GIT_REF` (tag `campaign-fixed-v1`, `campaign-fixed-v2` since
+2026-11-12) detached on every session,
 prints the commit, and its run cell prints a non-zero exit, re-runs the space check and points to both logs. The
 first campaign's 222 + 165 leaves were re-checked read-only with the new rule: all still complete. Tests:
 `tests/test_campaign.py` (corruptions parametrized, commit audit, foreign folder), `tests/test_colab_notebook.py`.
 
 **Status**: fixed.
+
+### KI-49 — the dataset check did not compare the files with `MANIFEST.csv`; top-level metadata described the old dataset (FIXED 2026-11-12, before the clean campaign; found 2026-11-12)
+
+Found by the pre-flight audit and the author's review of `DATA/daninhas_full_fixed/`. (1) `build_daninhas_full_fixed.py
+--check` (also `make dataset-check` and the Colab setup after unzipping) verified only that no MD5 repeats; the setup
+counted 8,240 files. A copy with a corrupted image (other bytes, same name) or with one image replaced by a stray file
+passed both checks, so a damaged upload to a Drive would have gone unnoticed. (2) The top-level `README.txt` and
+`MANIFEST.csv` described the build from the old dataset (`source files: 10192`, removal counts, the columns
+`source_train_copies`, `source_test_copies`, `source_aliases_dropped`) instead of the dataset itself.
+
+**Fix** (ADR 0016 amendment of 2026-11-12, `.claude/rules/data-safety.md`): a new metadata layout (`README.txt` = what
+the dataset is; `MANIFEST.csv` = `split,class,file,md5`; `logs/build_history.txt` = the provenance, including the old
+README text word for word; `logs/source_manifest.csv` = the old manifest byte for byte); `--check` now also requires the
+layout and the files on disk to equal the rows of `MANIFEST.csv` by name and MD5 (missing, extra and changed files are
+listed); the Colab setup checks the images per split (7,230 / 1,008), refuses a Drive zip without `logs/`, then runs
+`--check`. The existing folder is converted once by the author with `--migrate-metadata` (verifies disk == old manifest
+first and writes nothing otherwise; never touches an image; refuses a second run; `--dry-run` precondition held on the
+real folder on 2026-11-12: 8,238 files == the 8,238 rows). Tests: `tests/test_build_daninhas_full_fixed.py` (a fresh
+build and a migrated old-layout build are byte-identical in all four metadata files; damaged copies abort the migration
+without writing and fail `--check`). The data order and cache keys are unaffected (they read only `train/` and `test/`).
+
+**Status**: fixed in code; the migration of the real folder is the author's step before the campaign.

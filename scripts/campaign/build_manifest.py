@@ -56,6 +56,14 @@ KMH_LABEL = "KMH (hierarchical k-means, ImageNet ResNet-50 features)"
 # Paper-1 methods eligible for "best paper-1 method @ nq=100": the 20 strategies + KMH.
 PAPER1_METHODS = [*PAPER1_STRATEGIES, KMH]
 PAPER1_BUDGETS = (10, 50, 100)
+# Paper-1 CONTROLS (not benchmark strategies, ADR 0015 amendment of 2026-11-12): part `paper1_control`, a
+# table of their own next to the method they control, never a row or `best_of` candidate of the benchmark
+# tables (which stay "20 strategies + KMH"). WAALRandomQuery = WAAL's training (about 280 SGD steps per
+# round against 10 to 40 for the others) with a uniform random query, so a gain of WAAL over RandomSampling
+# can be split into training and selection. Same params file as WAAL (it reads WAAL's strategy_args block).
+PAPER1_CONTROL_PART = "paper1_control"
+WAAL_CONTROL = "WAALRandomQuery"
+WAAL_CONTROL_BUDGETS = (100,)
 # The dropout family trains with a dropout layer before the classifier (KI-41, ADR 0014):
 # the four MC-dropout strategies and the two DeepAL+ ones that sample it (VarRatio, MeanSTD).
 DROPOUT_STRATEGIES = [
@@ -81,7 +89,9 @@ UPPER_BOUND_GPU_PART = PART_1_GPU
 STAGE_PAPER1 = 1  # paper-1 strategies other than the long ones, KMH, the upper bound
 STAGE_ABLATIONS = 2  # rnhal, texhal, texhal_q17, hier_transfer
 STAGE_KMH_SWEEP = 3  # the KMH sweep manifest
-LONG_STRATEGY_STAGE: dict[str, int] = {"AdversarialBIM": 4, "VAAL": 5, "WAAL": 5, "AdversarialDeepFool": 6}
+LONG_STRATEGY_STAGE: dict[str, int] = {
+    "AdversarialBIM": 4, "VAAL": 5, "WAAL": 5, WAAL_CONTROL: 5, "AdversarialDeepFool": 6,
+}
 GPU_TIME_ESTIMATES = "files_config/campaign/gpu_time_estimates.json"
 
 
@@ -227,6 +237,15 @@ def build(scale: Scale) -> dict[str, Any]:
                       scale.n_init, scale.n_round, f"{root}/paper1/nq{paper_nq}/",
                       "KMH: hierarchical k-means selection on ImageNet ResNet-50 features (reference "
                       "hierarchy [600,200,100]), no SSRAE/VCTex.", **at_nq)
+    # --- paper-1 controls (own part and table; not benchmark rows) -------------
+    for paper_nq in WAAL_CONTROL_BUDGETS:
+        add_group(f"p1_control/{WAAL_CONTROL}/nq{paper_nq}", PAPER1_CONTROL_PART, paper1_params(scale, "WAAL"),
+                  WAAL_CONTROL, scale.nq_by_paper_nq[paper_nq], scale.n_init, scale.n_round,
+                  f"{root}/paper1/control_nq{paper_nq}/",
+                  "Control of WAAL (not a benchmark strategy): WAAL's training procedure unchanged (same "
+                  "strategy_args.WAAL block, trainer generator and round-0 model for a seed), query = uniform "
+                  "random draw from the unlabeled pool. Separates WAAL's training budget from its selection.",
+                  gpu_part=PAPER1_GPU_PART[paper_nq], stage=STAGE_PAPER1)
     add_group("p1/upper_bound", "upper_bound", scale.paper1_params, "FullSupervised", primary,
               scale.upper_bound_n_init, 0, f"{root}/paper1/upper_bound/",
               "Upper bound (not active learning): train once on the ENTIRE pool "
@@ -314,6 +333,17 @@ def build(scale: Scale) -> dict[str, Any]:
         paper1_tables.append({
             "id": f"paper1_nq{paper_nq}", "kind": "benchmark",
             "title": f"Paper 1 -- DAL benchmark, n_query={paper_nq}", "rows": rows,
+        })
+
+    for paper_nq in WAAL_CONTROL_BUDGETS:
+        paper1_tables.append({
+            "id": f"paper1_waal_control_nq{paper_nq}", "kind": "benchmark",
+            "title": f"Paper 1 -- WAAL training-budget control (not a benchmark strategy), n_query={paper_nq}",
+            "rows": [
+                row("WAAL", f"p1/WAAL/nq{paper_nq}"),
+                row("WAAL training + random query (control)", f"p1_control/{WAAL_CONTROL}/nq{paper_nq}"),
+                row("RandomSampling", f"p1/RandomSampling/nq{paper_nq}"),
+            ],
         })
 
     hier_labels = dict(HIER_COMMON + HIER_NEW_RNHAL) | HIER_TRANSFER_LABELS

@@ -68,6 +68,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "LossPredictionLoss",
             "VAAL",
             "WAAL",
+            "WAALRandomQuery",
             "SSRAEKmeansSampling",
             "VCTexKmeansSampling",
             "SSRAEKmeansHCSampling",

@@ -67,26 +67,27 @@ make lab-check GPU=0                  # one short real-data GPU run (n_round=1) 
 
 # The campaign -- the ONLY path for the final execution of all three papers. Since 2026-11-11 (ADR 0016) the
 # manifests describe the CLEAN RE-RUN of everything on DATA/daninhas_full_fixed (KI-46), prepared, not executed:
-# main manifest 294 runs / 98 groups -> results/campaign_fixed/, KMH sweep 165 / 55 -> results/campaign_kmh_fixed/;
+# main manifest 297 runs / 99 groups (incl. the 3-run WAAL control) -> results/campaign_fixed/, KMH sweep 165 / 55
+# -> results/campaign_kmh_fixed/;
 # two GPU parts, one per Colab account (see .specs/experiments/campaign.md and COLAB_RUNBOOK.md section 6):
 make campaign-list-gpu-part GPU_PART=part_1_gpu     # both manifests in plan order + est. GPU hours (account B: part_2_gpu)
 make campaign-space-gpu-part GPU_PART=part_1_gpu    # free space vs remaining runs x 96 MB x 1.2 (exit 4 when short; read only)
 make campaign-pilot GPU_PART=part_1_gpu             # first: seed 1 of the part's VAAL/WAAL (+ RandomSampling) at its largest budget
 make campaign-pilot-report GPU_PART=part_1_gpu      # read only: wall time vs estimate, strategy_diagnostics, degeneracy flags
-make campaign-run-gpu-part GPU_PART=part_1_gpu      # cheap groups, ablations, KMH sweep, then BIM/VAAL/WAAL/DeepFool; resume = re-run
+make campaign-run-gpu-part GPU_PART=part_1_gpu      # cheap groups, ablations, KMH sweep, then BIM/VAAL/WAAL(+control)/DeepFool; resume = re-run
                                                     #   (refuses to start / stops with exit 4 when the Drive is short of space)
 make campaign-verify-gpu-part GPU_PART=part_1_gpu   # OK/INCOMPLETE/MISSING (integrity problems = INCOMPLETE) + git_commit audit
                                                     #   (WARN only) + seed audit (image paths) + data-order audit (0/1/2)
-make campaign-verify-all                            # after merging both parts locally: expect OK=459, one commit, both audits PASS, + the
+make campaign-verify-all                            # after merging both parts locally: expect OK=462, one commit, both audits PASS, + the
                                                     #   3 intentional KMH duplicate pairs (SAME/DIFFERENT, informational)
 make campaign-report-all                            # docs/results/campaign_fixed/ + docs/results/campaign_kmh_fixed/
-make campaign-list                                  # main manifest alone; PART=paper1|upper_bound|rnhal|texhal|texhal_q17|hier_transfer
+make campaign-list                                  # main manifest alone; PART=paper1|paper1_control|upper_bound|rnhal|texhal|texhal_q17|hier_transfer
                                                     #   (comma-separated ok) or PART=part_1_gpu|part_2_gpu
 make campaign-list MANIFEST=files_config/campaign/manifest_kmh_sweep.json     # the KMH sweep alone (ADR 0012)
 make campaign-list MANIFEST=files_config/campaign/manifest_control_ki43.json  # KI-43 control (prepared, not run)
 make campaign-smoke-gpu-part GPU_PART=part_2_gpu    # micro plan of one GPU part on CPU (seed 1), skips AdversarialBIM/DeepFool
 make campaign-smoke / campaign-smoke-kmh            # micro main manifest / micro KMH sweep on CPU (seed 1)
-make dataset-check                                  # scripts/datasets/build_daninhas_full_fixed.py --check (no repeated MD5)
+make dataset-check                                  # build_daninhas_full_fixed.py --check (files == MANIFEST.csv, layout, no repeated MD5)
 make gpu-time-estimates                             # rebuild files_config/campaign/gpu_time_estimates.json from the first campaign's trees
 
 # Colab targets (see COLAB_RUNBOOK.md for the full notebook-cell guide):
@@ -200,7 +201,7 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   into new roots (`results/campaign_fixed/`, `results/campaign_kmh_fixed/`), paper 1 now has 20 strategies + KMH, the
   ADR 0014 re-run parts / archive script / superseded-leaf guard were retired unexecuted, every run also saves
   `round_predictions.json` / `round_queries.json`, and the work is split into two GPU parts for two Colab accounts
-  (`part_1_gpu` 282 runs, about 47.6 estimated GPU h; `part_2_gpu` 177 runs, about 48.8 h). Every executed number above
+  (`part_1_gpu` 285 runs, about 49.9 estimated GPU h since the WAAL control; `part_2_gpu` 177 runs, about 48.8 h). Every executed number above
   (first campaign, KMH sweep, hier_transfer) was obtained on the dataset with duplicates and is superseded for the papers.
 - **Pre-flight fix KI-47** (2026-11-12, ADR 0016 amendment, before any run of the clean campaign): the loaders listed
   each class folder with an unsorted `os.listdir`, whose order differed between Colab sessions, so in the first
@@ -215,7 +216,17 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   round count or an empty checkpoint is INCOMPLETE (re-run on resume); leaves are looked up only under the dataset
   folder of the group's params (a plan leaf under another folder FAILs the data-order audit); `verify`/`pilot-report`
   print the distinct `git_commit` values (WARN on more than one); the notebook checks out `GIT_REF` (tag
-  `campaign-fixed-v1`) detached on every session instead of pulling `main`, and surfaces a non-zero run exit.
+  `campaign-fixed-v2` since 2026-11-12; v1 predates the two items below) detached on every session instead of pulling
+  `main`, and surfaces a non-zero run exit.
+- **WAAL control + dataset metadata layout** (2026-11-12, branch `feat/waal-control-dataset-layout`, ADR 0015 and ADR
+  0016 amendments, before any run): `WAALRandomQuery` = WAAL's training unchanged (same `strategy_args.WAAL` block,
+  trainer generator and round-0 model for a seed) with a uniform random query (`derive_seed(seed,
+  "waal_random_query")`), so a WAAL gain over `RandomSampling` can be split into training (about 280 SGD steps per
+  round against 10 to 40) and selection; part `paper1_control` at nq100 (3 runs, `part_1_gpu`, stage 5), its own table
+  `paper1_waal_control_nq100`, never a benchmark row (paper 1 stays 20 strategies + KMH). `DATA/daninhas_full_fixed`
+  gets `logs/build_history.txt` + `logs/source_manifest.csv` (provenance), a top-level `README.txt`/`MANIFEST.csv`
+  describing the dataset as it is (`split,class,file,md5`), 8,242 files; `--check` now also compares the files on disk
+  with `MANIFEST.csv`; the one-off `--migrate-metadata` converts the existing folder (images untouched).
 
 Next milestone: execute the clean re-run (`COLAB_RUNBOOK.md` section 6), then rewrite the thesis numbers from its reports; advisor review of the ablation section
 (`paper_drafts/ablation_section.tex`, weighted-primary/macro-secondary framing still pending
@@ -245,9 +256,11 @@ outstanding.
   `all_precision_macro`/`all_recall_macro`/`all_f1_macro`, and since ADR 0016 every run also writes
   `round_predictions.json` (test predictions of every round) and `round_queries.json` (pool indices labeled per round,
   with labels and paths); `dataset_folder` is `daninhas_full_fixed` for the clean campaign.
-- **Dataset (ADR 0016)**: canonical `DATA/daninhas_full_fixed/` (7,230 train / 1,008 test + `MANIFEST.csv` + `README.txt`
-  = 8,240 files, no repeated MD5; built by `scripts/datasets/build_daninhas_full_fixed.py`, the only sanctioned way a
-  dataset directory is created, `.claude/rules/data-safety.md`). `DATA/daninhas_full/` (with duplicates, KI-46) stays
+- **Dataset (ADR 0016)**: canonical `DATA/daninhas_full_fixed/` (7,230 train / 1,008 test images + `README.txt` +
+  `MANIFEST.csv` (`split,class,file,md5`) + `logs/build_history.txt` + `logs/source_manifest.csv` = 8,242 files since
+  the metadata layout of 2026-11-12, no repeated MD5; built by `scripts/datasets/build_daninhas_full_fixed.py`, the only
+  sanctioned way a dataset directory is created, `.claude/rules/data-safety.md`; its `--migrate-metadata` is the one-off,
+  images-untouched conversion of the existing folder authorised on 2026-11-12). `DATA/daninhas_full/` (with duplicates, KI-46) stays
   untouched as the source and as the dataset of the first campaign; micro configs keep `DATA/daninhas_micro/`.
 - **New CLI flags (Phase 2)**: `--device {auto,cuda,cpu}` (default `auto`; pass
   `--device cuda` explicitly on the lab machine, don't rely on `auto` — see
@@ -268,7 +281,9 @@ outstanding.
   `SSRAEKmeansSampling`, `VCTexKmeansSampling`, `SSRAEKmeansHCSampling`,
   `VCTexKmeansHCSampling`, **`VarRatio`**, **`MeanSTD`**, **`KCenterGreedyPCA`**, **`BadgeSampling`**,
   **`CEALSampling`**, **`LossPredictionLoss`**, **`VAAL`**, **`WAAL`** (2026-11-11, ADR 0015: the DeepAL+ ports, in paper 1
-  since ADR 0016; hyperparameters in the optional `strategy_args` params block), **`FullSupervised`** (2026-09-29 — paper-1 upper bound, *not* active
+  since ADR 0016; hyperparameters in the optional `strategy_args` params block), **`WAALRandomQuery`** (2026-11-12, ADR 0015
+  amendment: the WAAL training-budget control, WAAL's training + a uniform random query, reads the `WAAL` block; a
+  control, not a benchmark strategy), **`FullSupervised`** (2026-09-29 — paper-1 upper bound, *not* active
   learning: whole pool labeled, requires `--n_round 0`, `query()` raises),
   **`RepresentationStrategy`** (NEW — generic, driven
   by the params JSON's `"embedding"`/`"selection"` blocks; see
@@ -301,12 +316,12 @@ outstanding.
   `dalmax/reporting/campaign_report.py`. `seed_everything` now also sets `CUBLAS_WORKSPACE_CONFIG` and
   `torch.use_deterministic_algorithms(True, warn_only=True)`; `run_metadata.json` has a `determinism` block.
   (Counts and paths in this bullet are the FIRST campaign, on the dataset with duplicates; see the next bullet.)
-- **Clean re-run manifests (ADR 0016, prepared 2026-11-11, not executed)**: the committed `manifest.json` now has 294
-  runs / 98 groups (paper1 189 = 20 strategies + KMH x nq {10,50,100}; upper_bound 3 with `n_init_labeled` 7,230;
-  rnhal 42, texhal 30, texhal_q17 18, hier_transfer 12) under `results/campaign_fixed/`, and `manifest_kmh_sweep.json`
+- **Clean re-run manifests (ADR 0016, prepared 2026-11-11, not executed)**: the committed `manifest.json` now has 297
+  runs / 99 groups (paper1 189 = 20 strategies + KMH x nq {10,50,100}; paper1_control 3 = `WAALRandomQuery` nq100,
+  2026-11-12; upper_bound 3 with `n_init_labeled` 7,230; rnhal 42, texhal 30, texhal_q17 18, hier_transfer 12) under `results/campaign_fixed/`, and `manifest_kmh_sweep.json`
   165 / 55 under `results/campaign_kmh_fixed/`. Every group of both carries `gpu_part` (`part_1_gpu` = paper 1 nq100,
   upper bound, all ablations, sweep nq100+nq50; `part_2_gpu` = paper 1 nq50+nq10, sweep nq10) and `gpu_stage`
-  (1 cheap paper-1, 2 ablations, 3 KMH sweep, 4 BIM, 5 VAAL/WAAL, 6 DeepFool); `--part part_N_gpu` selects by it,
+  (1 cheap paper-1, 2 ablations, 3 KMH sweep, 4 BIM, 5 VAAL/WAAL/WAAL control, 6 DeepFool); `--part part_N_gpu` selects by it,
   `--manifest A,B` merges manifests into one plan. Params: dropout family (4 MC-dropout + `VarRatio`, `MeanSTD`)
   `params_paper1_mc_dropout.json`, `VAAL` `params_paper1_vaal.json` (`image_size` 32), others `params_paper1.json`.
   Estimates: `files_config/campaign/gpu_time_estimates.json` (`campaign list` prints hours). Manifests list

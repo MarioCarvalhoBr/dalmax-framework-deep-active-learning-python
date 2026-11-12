@@ -202,3 +202,47 @@ does): the VAE normalizes the labeled and the unlabeled batch separately during 
 original do, so the discriminator is trained on per-batch-normalized latents. `vaal_discriminator_auc` will show
 whether this matters on DANINHAS; if it stays near or below 0.5, scoring in train mode is the first thing to try.
 
+
+## Amendment (2026-11-12): the WAAL training-budget control `WAALRandomQuery` (author decision, before any run)
+
+Finding (b) of the first amendment is a confound: WAAL takes about 280 SGD steps per round (the joint loader iterates
+over the pool) against 10 to 40 for every other strategy, round 0 included, so a gain of WAAL over `RandomSampling`
+could come from the training and not from which images WAAL queries. Decision: add a control that keeps WAAL's training
+and replaces only the query by a uniform random draw from the unlabeled pool.
+
+1. **Code** (`dalmax/query_strategies/waal.py`). A shared, unregistered base `WAALTrainedStrategy(Strategy)` holds
+   everything that is not the query rule: `train()` (the injected `WAALTrainer.fit`), the reporting-only critic
+   evaluation at query time (`_score_pool`: `score_components` on the pool, then `_record_critic`: on the labeled set)
+   and `diagnostics()`. `WAAL(WAALTrainedStrategy)` keeps its query (`uncertainty - selection * critic`, lowest first,
+   `waal_ties` tie-break) and its diagnostics, unchanged (same keys, values and order). `WAALRandomQuery
+   (WAALTrainedStrategy)` draws `rng.choice(unlabeled_idxs, n, replace=False)`; its scores never reach the pick.
+2. **What is shared, precisely**: the trainer (built by the same `registry._waal_trainer`: `strategy_args.WAAL` block,
+   generator `derive_seed(seed, "waal")`), hence the task-model construction from the run's torch stream
+   (`DeepLearning.build_model`), the critic built inside `isolated_torch_seed`, the joint loader order, the
+   gradient-penalty draws and the optimizers; the hyperparameters (the control reads the `WAAL` block:
+   `dalmax/config/schema.py::STRATEGY_ARGS_READ_BY["WAALRandomQuery"] = "waal"`; there is no `"WAALRandomQuery"` key in
+   `STRATEGY_ARGS_KEYS`, a params JSON that sets one is rejected, so the two cannot drift); the critic evaluation of
+   every query, which also draws one loader seed per call from the trainer generator, so the generator state handed to
+   the next training is identical; the params file (`params_paper1.json`). **Not shared**: the query rule, its
+   generator (`derive_seed(seed, "waal_random_query")`, created once per run by
+   `registry._waal_random_query_kwargs`, advancing across rounds) and the query diagnostics. Consequence: for the same
+   seed the round-0 model, round-0 metrics and round-0 diagnostics are identical (tested:
+   `tests/test_waal_random_query.py` on a tiny model, `tests/test_deepalplus_e2e.py::test_waal_control_reproduces_waal_round0`
+   through `tools/trainer.py` on the micro dataset); later rounds differ only through the labeled set.
+3. **Registry**: a new family `CONTROL_STRATEGY_REGISTRY` / `CONTROL_STRATEGY_KWARGS` (controls are not benchmark
+   strategies, so `DEEPALPLUS_STRATEGY_REGISTRY` keeps exactly the eight ports); `build_strategy` dispatches both
+   families through `KWARGS_STRATEGY_REGISTRY` / `KWARGS_STRATEGY_FACTORIES` (no new branch); `dalmax/cli.py` choice
+   `WAALRandomQuery`. The campaign signature reads `STRATEGY_ARGS_READ_BY`, so the control's signature depends on the
+   WAAL block only (and differs from WAAL's by the strategy name).
+4. **Diagnostics** (`strategy_diagnostics`): per training `waal_n_steps`, `waal_wasserstein_last_epoch` (as WAAL); per
+   query `waal_critic_labeled_mean/std`, `waal_critic_unlabeled_mean/std`, `waal_critic_init_corr`,
+   `pool_order_fraction` and `query_rule = "uniform_random"`; not `waal_uncertainty_std` / `waal_critic_term_std`
+   (terms of a score the control does not use).
+5. **Campaign** (ADR 0016 amendment of the same day): group `p1_control/WAALRandomQuery/nq100`, part `paper1_control`,
+   its own table, nq100 only. Reading: WAAL vs control isolates the selection at equal training; control vs
+   `RandomSampling` isolates the training at equal (random) selection.
+
+Rejected: a flag on WAAL (`strategy_args.WAAL.random_query`): it would make the control a WAAL configuration that the
+benchmark rows and the signature would have to special-case, and a WAAL block with the flag set could leak into the
+benchmark by a params mistake; a copy of WAAL's class (duplicated training code that could drift); giving the control
+its own `strategy_args` block (two blocks to keep equal by hand).

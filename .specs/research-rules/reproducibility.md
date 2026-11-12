@@ -48,7 +48,9 @@ amendment.
   auxiliary DataLoaders' order are drawn), and the query tie-breaks `"mean_std_ties"`, `"loss_prediction_ties"`,
   `"vaal_ties"`, `"waal_ties"` (ADR 0015 amendment: every port ranks with `ranking.rank_ascending`/
   `rank_descending`, so collapsed scores never fall back to pool order, the KI-45 failure; a stable argsort is not
-  acceptable for a new strategy's final ranking). **Convention established here**: an auxiliary network (one that only
+  acceptable for a new strategy's final ranking), and `"waal_random_query"` (2026-11-12: the uniform random query of
+  the WAAL control `WAALRandomQuery`, `registry.py::CONTROL_STRATEGY_KWARGS`; its trainer uses WAAL's own `"waal"`
+  tag, so for a seed the control and WAAL train the identical round-0 model). **Convention established here**: an auxiliary network (one that only
   some strategies build) is constructed inside `dalmax.seeding.isolated_torch_seed(seed)` (forks and restores the
   CPU torch generator) and moved to the device afterwards; any DataLoader it adds gets an explicit
   `generator=` (a DataLoader without one draws its worker base seed from the global torch stream even when it does

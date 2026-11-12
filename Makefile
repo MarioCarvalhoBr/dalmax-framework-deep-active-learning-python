@@ -95,7 +95,8 @@ lab-check:
 colab-setup:
 	bash scripts/colab/setup_colab.sh
 
-# Verify the canonical dataset (KI-46, ADR 0016): no repeated MD5 inside or across
+# Verify the canonical dataset (KI-46, ADR 0016): files on disk == MANIFEST.csv (name and MD5), the
+# metadata layout (README.txt, MANIFEST.csv, logs/), no repeated MD5 inside or across
 # DATA/daninhas_full_fixed/{train,test}. Read-only.
 dataset-check:
 	poetry run python scripts/datasets/build_daninhas_full_fixed.py --check
@@ -119,7 +120,7 @@ colab-check:
 # `campaign-run*` refuse to start (exit 4) without free space for the remaining runs
 # (96 MB per run + 20%) and stop the batch (exit 4) on a no-space failure.
 # Variables (all optional):
-#   PART=all|paper1|upper_bound|rnhal|texhal|texhal_q17|hier_transfer|control|kmh_nq10|kmh_nq50|kmh_nq100
+#   PART=all|paper1|paper1_control|upper_bound|rnhal|texhal|texhal_q17|hier_transfer|control|kmh_nq10|kmh_nq50|kmh_nq100
 #               (comma-separated allowed; default all), or a GPU part: part_1_gpu|part_2_gpu (ADR 0016).
 #   MICRO=1     -> files_config/campaign/manifest_micro.json (CPU smoke, results/smoke_campaign_fixed/)
 #   MANIFEST=path -> any other manifest (overrides MICRO), e.g. the KMH sweep or the KI-43 control:
@@ -160,7 +161,8 @@ campaign-space:
 # --- One GPU part across BOTH manifests (ADR 0016: one Colab account per GPU part) ---
 #   GPU_PART=part_1_gpu|part_2_gpu (required). The main manifest and the KMH sweep are merged into one
 #   plan ordered by execution stage: cheap table-critical groups, ablations, the KMH sweep, then the long
-#   baselines (AdversarialBIM, VAAL/WAAL, AdversarialDeepFool) last. Resume = re-run the same command.
+#   baselines (AdversarialBIM, VAAL/WAAL and the WAAL control WAALRandomQuery, AdversarialDeepFool) last.
+#   Resume = re-run the same command.
 #   MICRO=1 -> the two micro manifests (CPU smoke). SEEDS / EXCLUDE / DEVICE / RUN_ARGS as above.
 GPU_MANIFESTS = $(if $(MICRO),files_config/campaign/manifest_micro.json$(,)files_config/campaign/manifest_kmh_sweep_micro.json,files_config/campaign/manifest.json$(,)files_config/campaign/manifest_kmh_sweep.json)
 , := ,
@@ -197,7 +199,7 @@ campaign-pilot-report:
 	$(require_gpu_part)
 	poetry run python -m dalmax.campaign pilot-report $(GPU_PART_FLAGS)
 
-# Both manifests, every group (after merging the two GPU parts locally): expect OK=459, the seed audit PASS for
+# Both manifests, every group (after merging the two GPU parts locally): expect OK=462, the seed audit PASS for
 # seeds 1-3 (compared by round-0 image paths), the data-order audit PASS, and the duplicate-pair report.
 campaign-verify-all:
 	poetry run python -m dalmax.campaign verify --part all --manifest $(GPU_MANIFESTS) $(if $(SEEDS),--seeds $(SEEDS)) $(if $(EXCLUDE),--exclude-strategy $(EXCLUDE))

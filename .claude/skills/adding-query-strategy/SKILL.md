@@ -72,6 +72,16 @@ JSON `"embedding"`/`"selection"` block already reaches any combination (see
    `self.params['DANINHAS']['config_kmh']` anti-pattern, KI-4, that Phase 2 fixed) and never a
    post-construction `setattr` (KI-7, also fixed — strategies get everything through the
    constructor now, via `build_strategy`).
+   Own hyperparameters/generators: follow the DeepAL+ pattern instead (`DEEPALPLUS_STRATEGY_REGISTRY` +
+   `DEEPALPLUS_STRATEGY_KWARGS`, a `StrategyArgs` block, `derive_seed(config.seed, "<tag>")`;
+   `.specs/use-cases/add-new-strategy.md` Path B step 5).
+   **A control of an existing method** (e.g. `WAALRandomQuery`, WAAL's training + a random query, 2026-11-12):
+   register it in `CONTROL_STRATEGY_REGISTRY` + `CONTROL_STRATEGY_KWARGS`; share the method's code through a base
+   class (`waal.py::WAALTrainedStrategy`), its trainer tag and its `strategy_args` block (via
+   `dalmax/config/schema.py::STRATEGY_ARGS_READ_BY`); give the new query its own seed tag; keep the shared code's
+   generator consumption identical; document in the docstring what is and is not shared; test that one seed gives
+   the method's round-0 model; in a manifest give it its own part and table (`paper1_control`), never a benchmark
+   row or `best_of` candidate, plus a GPU-time estimate rule.
 6. Test: `dalmax/query_strategies/registry.py::build_strategy("YourStrategyName", ...)` resolves
    without raising — see `tests/test_strategy_registry.py` (stub dataset/net, no real training).
 7. Update `.specs/use-cases/add-new-strategy.md`'s strategy list and
