@@ -91,7 +91,10 @@ def test_expected_counts_match_the_manifests() -> None:
 
 def test_no_personal_path_and_no_old_dataset() -> None:
     text = NOTEBOOK_PATH.read_text(encoding="utf-8")
-    assert "UFMS" not in text and "Pós-graduação" not in text and "/home/" not in text
+    assert "/home/" not in text
+    # Author instruction 2026-11-12: the Parameters cell assigns DRIVE_ROOT twice, the placeholder (example) and then
+    # the Drive folder both accounts use; that folder appears nowhere else in the notebook.
+    assert text.count("MyDrive/UFMS/") == 1
     assert "daninhas_full/" not in text and "daninhas_full\"" not in text
     assert "campaign-archive-superseded" not in text and "paper1_rerun" not in text
 

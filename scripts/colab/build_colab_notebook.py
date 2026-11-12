@@ -51,6 +51,9 @@ REPO_URL = "https://github.com/MarioCarvalhoBr/dalmax-framework-deep-active-lear
 DEFAULT_GIT_REF = "campaign-fixed-v2"
 RUN_EXIT_FILE = "/content/campaign_run_exit_code"  # local runtime disk, not the repo or Drive
 DRIVE_ROOT_PLACEHOLDER = "/content/drive/MyDrive/<FOLDER_THAT_HOLDS_DATA>"
+# The author's Drive folder, the same on both accounts (author instruction 2026-11-12): the second assignment in
+# the Parameters cell overrides the placeholder above it, which stays as the example for other users.
+DRIVE_ROOT_DEFAULT = "/content/drive/MyDrive/UFMS/Pós-graduação/Doutorado/FINAL/PROJETO/DALMAX"
 DATASET = "daninhas_full_fixed"
 # Images per split of daninhas_full_fixed (scripts/colab/setup_colab.sh checks the same counts); the folder also
 # holds README.txt, MANIFEST.csv and logs/ (2 files), which `make dataset-check` verifies against the images.
@@ -131,6 +134,7 @@ def cells() -> list[dict[str, Any]]:
 
             # Parameters -- the ONLY cell in this notebook you edit.
             DRIVE_ROOT = "{DRIVE_ROOT_PLACEHOLDER}"  # REQUIRED, per account: the Drive folder holding DATA/{DATASET}/
+            DRIVE_ROOT = "{DRIVE_ROOT_DEFAULT}"  # the value in use; the line above is the example
             REPO_URL = "{REPO_URL}"
             REPO_DIR = "/content/dalmax"
             # The code version of the WHOLE campaign: a tag (or a commit SHA), checked out detached on every session
