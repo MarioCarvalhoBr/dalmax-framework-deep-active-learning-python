@@ -85,15 +85,18 @@ from dalmax.query_strategies.kcenter_greedy_pca import KCENTER_PCA_SEED_TAG, KCe
 from dalmax.query_strategies.kmeans_sampling import KMeansSampling
 from dalmax.query_strategies.least_confidence import LeastConfidence
 from dalmax.query_strategies.least_confidence_dropout import LeastConfidenceDropout
-from dalmax.query_strategies.loss_prediction import LossPredictionLoss
+from dalmax.query_strategies.loss_prediction import (
+    LOSS_PREDICTION_TIES_SEED_TAG,
+    LossPredictionLoss,
+)
 from dalmax.query_strategies.margin_sampling import MarginSampling
 from dalmax.query_strategies.margin_sampling_dropout import MarginSamplingDropout
-from dalmax.query_strategies.mean_std import MeanSTD
+from dalmax.query_strategies.mean_std import MEAN_STD_SEED_TAG, MeanSTD
 from dalmax.query_strategies.random_sampling import RandomSampling
 from dalmax.query_strategies.representation import RepresentationStrategy
-from dalmax.query_strategies.vaal import VAAL
+from dalmax.query_strategies.vaal import VAAL, VAAL_TIES_SEED_TAG
 from dalmax.query_strategies.var_ratio import VAR_RATIO_SEED_TAG, VarRatio
-from dalmax.query_strategies.waal import WAAL
+from dalmax.query_strategies.waal import WAAL, WAAL_TIES_SEED_TAG
 from dalmax.seeding import derive_seed
 from dalmax.selection.registry import get_selection_strategy
 
@@ -138,8 +141,8 @@ def _var_ratio_kwargs(config: ExperimentConfig, dataset, net, logger) -> dict[st
     return {"rng": _seeded_rng(config, VAR_RATIO_SEED_TAG)}
 
 
-def _no_kwargs(config: ExperimentConfig, dataset, net, logger) -> dict[str, Any]:
-    return {}
+def _mean_std_kwargs(config: ExperimentConfig, dataset, net, logger) -> dict[str, Any]:
+    return {"rng": _seeded_rng(config, MEAN_STD_SEED_TAG)}
 
 
 def _kcenter_pca_kwargs(config: ExperimentConfig, dataset, net, logger) -> dict[str, Any]:
@@ -157,12 +160,20 @@ def _ceal_kwargs(config: ExperimentConfig, dataset, net, logger) -> dict[str, An
     # `CEALArgs` restricts `base_strategy` to `CEAL_BASE_STRATEGIES` (plain uncertainty).
     args = config.dataset.strategy_args.ceal
     base = LEGACY_STRATEGY_REGISTRY[args.base_strategy](dataset, net, logger)
-    return {"base_strategy": base, "delta": args.delta, "delta_decay": args.delta_decay}
+    return {
+        "base_strategy": base,
+        "delta": args.delta,
+        "delta_decay": args.delta_decay,
+        "delta_schedule": args.delta_schedule,
+    }
 
 
 def _loss_prediction_kwargs(config: ExperimentConfig, dataset, net, logger) -> dict[str, Any]:
     args = config.dataset.strategy_args.loss_prediction
-    return {"trainer": LossPredictionTrainer(args, _seeded_rng(config, LOSS_PREDICTION_SEED_TAG))}
+    return {
+        "trainer": LossPredictionTrainer(args, _seeded_rng(config, LOSS_PREDICTION_SEED_TAG)),
+        "rng": _seeded_rng(config, LOSS_PREDICTION_TIES_SEED_TAG),
+    }
 
 
 def _vaal_kwargs(config: ExperimentConfig, dataset, net, logger) -> dict[str, Any]:
@@ -173,7 +184,7 @@ def _vaal_kwargs(config: ExperimentConfig, dataset, net, logger) -> dict[str, An
         train_args=_loader_args(config.dataset.train_args),
         test_args=_loader_args(config.dataset.test_args),
     )
-    return {"sampler": sampler}
+    return {"sampler": sampler, "rng": _seeded_rng(config, VAAL_TIES_SEED_TAG)}
 
 
 def _waal_kwargs(config: ExperimentConfig, dataset, net, logger) -> dict[str, Any]:
@@ -181,6 +192,7 @@ def _waal_kwargs(config: ExperimentConfig, dataset, net, logger) -> dict[str, An
     return {
         "trainer": WAALTrainer(args, _seeded_rng(config, WAAL_SEED_TAG)),
         "selection": args.selection,
+        "rng": _seeded_rng(config, WAAL_TIES_SEED_TAG),
     }
 
 
@@ -201,7 +213,7 @@ StrategyKwargsFactory = Callable[[ExperimentConfig, Any, Any, Any], dict[str, An
 
 DEEPALPLUS_STRATEGY_KWARGS: dict[str, StrategyKwargsFactory] = {
     "VarRatio": _var_ratio_kwargs,
-    "MeanSTD": _no_kwargs,
+    "MeanSTD": _mean_std_kwargs,
     "KCenterGreedyPCA": _kcenter_pca_kwargs,
     "BadgeSampling": _badge_kwargs,
     "CEALSampling": _ceal_kwargs,

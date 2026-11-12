@@ -55,7 +55,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from dalmax.config.schema import LossPredictionArgs
-from dalmax.seeding import isolated_torch_seed
+from dalmax.seeding import isolated_torch_seed, torch_generator
 
 # `dalmax.seeding.derive_seed` tag of the per-run module-initialisation generator.
 LOSS_PREDICTION_SEED_TAG = "loss_prediction"
@@ -107,10 +107,12 @@ class LossPredictionTrainer:
         self.args = args
         self.rng = rng
 
+    def _next_seed(self) -> int:
+        return int(self.rng.integers(0, 2**32 - 1))
+
     def build_module(self, stage_channels: Sequence[int], device: torch.device) -> LossNet:
         """A fresh `LossNet`, initialised from the next seed of the per-run generator."""
-        seed = int(self.rng.integers(0, 2**32 - 1))
-        with isolated_torch_seed(seed):
+        with isolated_torch_seed(self._next_seed()):
             module = LossNet(stage_channels, self.args.interm_dim)
         return module.to(device)
 
@@ -160,16 +162,33 @@ class LossPredictionTrainer:
             print(f" - Epoch {epoch}/{n_epoch} Loss: {np.mean(losses):.4f}")
         return module
 
-    @staticmethod
-    def predict_losses(net, module: LossNet, data) -> torch.Tensor:
-        """Predicted loss of every sample of `data` (eval mode, CPU tensor)."""
+    def predict_losses(
+        self, net, module: LossNet, data, *, with_true_loss: bool = False
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
+        """Predicted loss of every sample of `data` (eval mode, CPU tensor).
+
+        With `with_true_loss`, also the true per-sample cross-entropy (uses the labels of
+        `data`: only for the labeled set, as a reporting-only diagnostic). The loader gets
+        an explicit generator (an unshuffled DataLoader otherwise draws its worker base
+        seed from the global torch stream).
+        """
         clf = net.clf
         clf.eval()
         module.eval()
         scores = torch.zeros(len(data))
-        loader = DataLoader(data, shuffle=False, **net.params["test_args"])
+        true_loss = torch.zeros(len(data))
+        loader = DataLoader(
+            data,
+            shuffle=False,
+            generator=torch_generator(self._next_seed()),
+            **net.params["test_args"],
+        )
         with torch.no_grad():
-            for x, _y, idxs in loader:
-                _logits, _features, stages = clf.forward_with_stages(x.to(net.device))
+            for x, y, idxs in loader:
+                logits, _features, stages = clf.forward_with_stages(x.to(net.device))
                 scores[idxs] = module(stages).cpu()
-        return scores
+                if with_true_loss:
+                    true_loss[idxs] = F.cross_entropy(
+                        logits, torch.as_tensor(y).to(net.device), reduction="none"
+                    ).cpu()
+        return (scores, true_loss) if with_true_loss else scores

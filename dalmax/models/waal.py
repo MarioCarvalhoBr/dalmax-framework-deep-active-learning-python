@@ -38,6 +38,13 @@ Deviations from DeepAL+, deliberate:
   `log(softmax)` in float32: equal wherever the latter is finite, but a saturated
   softmax no longer gives `-inf` (an infinite score, ties at `inf`).
 
+Observability (ADR 0015, reporting only): `fit` returns a `WAALFitResult` with the
+number of optimizer steps, the mean Wasserstein estimate over the last epoch and a
+frozen copy of the critic at initialisation; `score_components` returns, per pool
+sample, the uncertainty term, the trained critic's score and the initial critic's
+score, from which the strategy reports critic statistics, the correlation of the
+query-time critic with its initialisation, and the spread of both score terms.
+
 Kept as in DeepAL+ and the original WAAL code, and flagged in ADR 0015: the critic
 step subtracts the gradient penalty (`- alpha * gp * 2`), i.e. the critic is pushed
 to *increase* it, the opposite sign of WGAN-GP; and DeepAL+ fixes `gamma_ratio = 1`
@@ -45,6 +52,9 @@ where the original uses `|L| / |U|`.
 """
 
 from __future__ import annotations
+
+import copy
+from dataclasses import dataclass
 
 import numpy as np
 import torch
@@ -128,6 +138,16 @@ def waal_scores(log_probs: torch.Tensor, critic_scores: torch.Tensor, selection:
     return 0.5 * l2_upper + 0.5 * l1_upper - selection * critic_scores
 
 
+@dataclass
+class WAALFitResult:
+    """What `WAALTrainer.fit` hands to the strategy: the trained critic plus diagnostics."""
+
+    critic: Critic
+    critic_init: Critic
+    n_steps: int
+    wasserstein_last_epoch: float
+
+
 def _set_requires_grad(module: nn.Module, flag: bool) -> None:
     for param in module.parameters():
         param.requires_grad = flag
@@ -143,8 +163,8 @@ class WAALTrainer:
     def _next_seed(self) -> int:
         return int(self.rng.integers(0, _MAX_SEED))
 
-    def fit(self, net, labeled, unlabeled) -> Critic:
-        """Train `net.clf` (rebuilt) and a new critic; return the critic."""
+    def fit(self, net, labeled, unlabeled) -> WAALFitResult:
+        """Train `net.clf` (rebuilt) and a new critic; return it with diagnostics."""
         params = net.params
         device = net.device
         args = self.args
@@ -152,6 +172,8 @@ class WAALTrainer:
         with isolated_torch_seed(self._next_seed()):
             critic = Critic(clf.get_embedding_dim())
         critic = critic.to(device)
+        critic_init = copy.deepcopy(critic).eval()
+        _set_requires_grad(critic_init, False)
         net.clf = clf
         gp_generator = torch_generator(self._next_seed())
         loader = joint_loader(
@@ -161,10 +183,13 @@ class WAALTrainer:
         opt_critic = optim.SGD(critic.parameters(), **params["optimizer_args"])
 
         n_epoch = params["n_epoch"]
+        n_steps = 0
+        wasserstein_epoch: list[float] = []
         for epoch in tqdm(range(1, n_epoch + 1), ncols=100):
             clf.train()
             critic.train()
             pred_losses: list[float] = []
+            wasserstein_epoch = []
             for _index, label_x, label_y, unlabel_x, _ in loader:
                 label_x, label_y = label_x.to(device), label_y.to(device)
                 unlabel_x = unlabel_x.to(device)
@@ -198,25 +223,44 @@ class WAALTrainer:
                 opt_critic.zero_grad()
                 critic_loss.backward()
                 opt_critic.step()
+                n_steps += 1
+                wasserstein_epoch.append(wasserstein.item())
             print(f" - Epoch {epoch}/{n_epoch} task CE: {np.mean(pred_losses):.4f}")
         _set_requires_grad(clf, True)
         _set_requires_grad(critic, True)
-        return critic
+        return WAALFitResult(
+            critic=critic,
+            critic_init=critic_init,
+            n_steps=n_steps,
+            wasserstein_last_epoch=float(np.mean(wasserstein_epoch)) if wasserstein_epoch else float("nan"),
+        )
 
-    @staticmethod
-    def score_pool(net, critic: Critic, data, selection: float) -> torch.Tensor:
-        """`waal_scores` of every sample of `data` (eval mode; log-probabilities from
-        `log_softmax` of the logits)."""
+    def score_components(
+        self, net, fit: WAALFitResult, data
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Per sample of `data` (eval mode, float64): the uncertainty term
+        `0.5 ||log p||_2 + 0.5 ||log p||_1` (`log_softmax` of the logits), the trained
+        critic's score and the initial critic's score. The query score is
+        `uncertainty - selection * critic` (`waal_scores`)."""
         clf = net.clf
         clf.eval()
-        critic.eval()
-        scores = torch.zeros(len(data), dtype=torch.float64)
-        loader: DataLoader = DataLoader(data, shuffle=False, **net.params["test_args"])
+        fit.critic.eval()
+        uncertainty = torch.zeros(len(data), dtype=torch.float64)
+        critic_scores = torch.zeros(len(data), dtype=torch.float64)
+        init_scores = torch.zeros(len(data), dtype=torch.float64)
+        loader = DataLoader(
+            data,
+            shuffle=False,
+            generator=torch_generator(self._next_seed()),
+            **net.params["test_args"],
+        )
         with torch.no_grad():
             for x, _y, idxs in loader:
                 logits, z = clf(x.to(net.device))
                 log_probs = F.log_softmax(logits.to(torch.float64), dim=1)
-                critic_scores = critic(z).to(torch.float64)
-                scores[idxs] = waal_scores(log_probs, critic_scores, selection).cpu()
-        return scores
+                zeros = torch.zeros(len(idxs), dtype=torch.float64, device=log_probs.device)
+                uncertainty[idxs] = waal_scores(log_probs, zeros, 0.0).cpu()
+                critic_scores[idxs] = fit.critic(z).to(torch.float64).cpu()
+                init_scores[idxs] = fit.critic_init(z).to(torch.float64).cpu()
+        return uncertainty, critic_scores, init_scores
 

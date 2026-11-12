@@ -250,11 +250,17 @@ class VAALSampler:
             )
         return vae, discriminator
 
-    def score(self, vae: VAE, discriminator: Critic, data: Dataset) -> torch.Tensor:
-        """Discriminator output on the VAE mean of every sample of `data` (eval mode)."""
+    def encode_and_score(
+        self, vae: VAE, discriminator: Critic, data: Dataset
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Discriminator output on the VAE mean, and the mean and log-variance, of every
+        sample of `data` (eval mode, CPU tensors)."""
         vae.eval()
         discriminator.eval()
+        latent = self.args.latent_dim
         scores = torch.zeros(len(data))
+        mus = torch.zeros(len(data), latent)
+        logvars = torch.zeros(len(data), latent)
         # An explicit generator: even an unshuffled DataLoader draws its worker base
         # seed from the global torch stream otherwise.
         loader = DataLoader(
@@ -262,6 +268,17 @@ class VAALSampler:
         )
         with torch.no_grad():
             for x, _y, idxs in loader:
-                mu, _ = vae.encode(resize_for_vae(x.to(self.device), self.args.image_size))
+                mu, logvar = vae.encode(resize_for_vae(x.to(self.device), self.args.image_size))
                 scores[idxs] = discriminator(mu).cpu()
-        return scores
+                mus[idxs] = mu.cpu()
+                logvars[idxs] = logvar.cpu()
+        return scores, mus, logvars
+
+    def score(self, vae: VAE, discriminator: Critic, data: Dataset) -> torch.Tensor:
+        """Discriminator output on the VAE mean of every sample of `data` (eval mode)."""
+        return self.encode_and_score(vae, discriminator, data)[0]
+
+
+def kl_per_sample(mu: torch.Tensor, logvar: torch.Tensor) -> torch.Tensor:
+    """`KL(N(mu, exp(logvar)) || N(0, I))` per row (nats)."""
+    return -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp(), dim=1)

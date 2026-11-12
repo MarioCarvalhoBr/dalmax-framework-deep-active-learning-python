@@ -10,7 +10,8 @@ Each run must finish, write three rounds of metrics, record the resolved
 `strategy_args` in `run_metadata.json`, query disjoint unlabeled ids, and leave a
 `saved_model.pth` that the inference `Predictor` loads and that reproduces the run's
 own `predictions.csv` (WAAL and LossPredictionLoss train with their own trainers but
-save the ordinary task model). CEAL must report its pseudo-labels per round.
+save the ordinary task model). Every port reports `strategy_diagnostics`, and no query
+may be the pool-order head (the KI-45 failure). CEAL must report its pseudo-labels.
 """
 
 from __future__ import annotations
@@ -42,6 +43,7 @@ PARAMS_BY_STRATEGY = {
 }
 
 N_INIT, N_QUERY, N_ROUND, SEED = 10, 5, 2, 1
+N_POOL_UPPER = 100_000  # any bound above the pool size: only the first 2n unlabeled ids matter
 INITIAL_RE = re.compile(r"Initial labeled idxs \(sorted\): (\[[^\]]*\])")
 QUERY_RE = re.compile(r"Round (\d+) query_idxs \(sorted\): (\[[^\]]*\])")
 
@@ -96,11 +98,19 @@ def test_micro_run_end_to_end(strategy_name: str, tmp_path: Path) -> None:
     )
     results = json.loads((leaf / "results.json").read_text())
     assert results["rounds"] == [0, 1, 2] and len(results["all_f1_macro"]) == 3
+    diag = results["strategy_diagnostics"]
     if strategy_name == "CEALSampling":
-        diag = results["strategy_diagnostics"]
         assert diag["ceal_round"] == [1, 2] and len(diag["ceal_n_pseudo_labels"]) == 2
-    else:
-        assert "strategy_diagnostics" not in results
+    # Not pool order (the KI-45 signature): the query is not drawn from the first 2n
+    # unlabeled positions (~10 of ~800 here), checked both from the reported diagnostic
+    # and from the logged query ids.
+    assert len(diag["pool_order_fraction"]) == N_ROUND
+    assert all(fraction < 0.8 for fraction in diag["pool_order_fraction"]), diag
+    labeled = set(initial)
+    for rd in (1, 2):
+        unlabeled = [i for i in range(N_POOL_UPPER) if i not in labeled][: 2 * N_QUERY]
+        assert not set(queries[rd]) <= set(unlabeled), (rd, queries[rd])
+        labeled |= set(queries[rd])
 
     metadata = json.loads((leaf / "run_metadata.json").read_text())
     assert "strategy_args" in metadata["config"]["dataset"]

@@ -31,10 +31,13 @@ Deviations from DeepAL+, deliberate (the method is unchanged):
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import torch
 
 from .base import Strategy
+from .diagnostics import RoundDiagnostics, pool_order_fraction
 
 # `dalmax.seeding.derive_seed` tag of the k-means++ generator.
 BADGE_SEED_TAG = "badge"
@@ -96,10 +99,16 @@ class BadgeSampling(Strategy):
     def __init__(self, dataset, net, logger, *, rng: np.random.Generator) -> None:
         super().__init__(dataset, net, logger)
         self.rng = rng
+        self._diag = RoundDiagnostics()
+
+    def diagnostics(self) -> dict[str, list[Any]]:
+        return self._diag.as_dict()
 
     def query(self, n: int) -> np.ndarray:
         unlabeled_idxs, unlabeled_data = self.dataset.get_unlabeled_data()
         logits, features = self.net.predict_logits_and_embeddings(unlabeled_data)
         residuals = _residuals(torch.softmax(logits.to(torch.float64), dim=1))
         chosen = kmeans_plus_plus(residuals.numpy(), features.numpy(), n, self.rng)
-        return unlabeled_idxs[chosen]
+        picked = unlabeled_idxs[chosen]
+        self._diag.add(pool_order_fraction=pool_order_fraction(picked, unlabeled_idxs, n))
+        return picked

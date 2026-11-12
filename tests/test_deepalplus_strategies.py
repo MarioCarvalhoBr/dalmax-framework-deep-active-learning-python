@@ -47,13 +47,20 @@ from dalmax.models.vaal import (
     discriminator_targets,
     resize_for_vae,
 )
-from dalmax.models.waal import WAALTrainer, gradient_penalty, waal_scores
+from dalmax.models.waal import (
+    Critic,
+    WAALFitResult,
+    WAALTrainer,
+    gradient_penalty,
+    waal_scores,
+)
 from dalmax.query_strategies.badge_sampling import (
     BadgeSampling,
     gradient_embeddings,
     kmeans_plus_plus,
 )
 from dalmax.query_strategies.ceal import CEALSampling, ceal_threshold, predictive_entropy
+from dalmax.query_strategies.diagnostics import RoundDiagnostics, binary_auc, pool_order_fraction
 from dalmax.query_strategies.entropy_sampling import EntropySampling
 from dalmax.query_strategies.kcenter_greedy import KCenterGreedy, k_center_greedy
 from dalmax.query_strategies.kcenter_greedy_pca import KCenterGreedyPCA, reduce_embeddings
@@ -68,7 +75,7 @@ from dalmax.query_strategies.registry import (
 from dalmax.query_strategies.vaal import VAAL
 from dalmax.query_strategies.var_ratio import VarRatio, variation_ratios
 from dalmax.query_strategies.waal import WAAL
-from dalmax.seeding import derive_seed
+from dalmax.seeding import derive_seed, isolated_torch_seed
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PARAMS_MICRO = REPO_ROOT / "files_config/params_micro.json"
@@ -264,7 +271,7 @@ def test_var_ratio_and_mean_std_fail_fast_without_dropout() -> None:
     with pytest.raises(MCDropoutError):
         VarRatio(dataset, net, LOGGER, rng=np.random.default_rng(0)).query(2)
     with pytest.raises(MCDropoutError):
-        MeanSTD(dataset, net, LOGGER).query(2)
+        MeanSTD(dataset, net, LOGGER, rng=np.random.default_rng(0)).query(2)
 
 
 def test_var_ratio_and_mean_std_run_with_dropout() -> None:
@@ -274,7 +281,7 @@ def test_var_ratio_and_mean_std_run_with_dropout() -> None:
     net.train(data)
     dataset = _PoolDataset(len(data), xs=data.xs.numpy(), ys=data.Y.numpy())
     assert len(VarRatio(dataset, net, LOGGER, rng=np.random.default_rng(0)).query(3)) == 3
-    assert len(MeanSTD(dataset, net, LOGGER).query(3)) == 3
+    assert len(MeanSTD(dataset, net, LOGGER, rng=np.random.default_rng(0)).query(3)) == 3
 
 
 # --- MeanSTD ------------------------------------------------------------------------
@@ -291,7 +298,7 @@ def test_mean_std_scores_hand_computed_population_std() -> None:
     torch.testing.assert_close(
         mean_std_scores(probs), torch.tensor([0.0, 0.2, 0.1], dtype=torch.float64)
     )
-    strategy = MeanSTD(_PoolDataset(3), _SplitProbsNet(probs), LOGGER)
+    strategy = MeanSTD(_PoolDataset(3), _SplitProbsNet(probs), LOGGER, rng=np.random.default_rng(0))
     assert strategy.query(3).tolist() == [1, 2, 0]
 
 
@@ -477,6 +484,10 @@ class _RecordingNet:
         assert len(idxs) == len(data)
         return self.probs_by_id[idxs].clone()
 
+    def predict_logits_and_embeddings(self, data) -> tuple[torch.Tensor, torch.Tensor]:
+        # log p as logits: softmax(log p) = p (CEAL's own n_classes-sized pass).
+        return self.predict_prob(data).log(), torch.zeros(len(data), 1)
+
     def train(self, data) -> None:
         self.trained_on.append((data.xs.numpy().copy(), data.Y.numpy().copy()))
 
@@ -619,13 +630,15 @@ def test_loss_prediction_strategy_queries_highest_predicted_loss() -> None:
     data = _tiny_data()
     dataset = _PoolDataset(len(data), n_labeled=3, xs=data.xs.numpy(), ys=data.Y.numpy())
     trainer = LossPredictionTrainer(LossPredictionArgs(), np.random.default_rng(0))
-    strategy = LossPredictionLoss(dataset, net, LOGGER, trainer=trainer)
+    strategy = LossPredictionLoss(
+        dataset, net, LOGGER, trainer=trainer, rng=np.random.default_rng(0)
+    )
     with pytest.raises(RuntimeError, match="before train"):
         strategy.query(2)
     strategy.module = module
     _, unlabeled = dataset.get_unlabeled_data()
     scores = trainer.predict_losses(net, module, unlabeled).numpy()
-    expected = (np.argsort(-scores, kind="stable")[:4] + 3).tolist()
+    expected = (np.argsort(-scores, kind="stable")[:4] + 3).tolist()  # no ties here
     assert strategy.query(4).tolist() == expected
 
 
@@ -669,19 +682,22 @@ def test_gradient_penalty_of_a_linear_critic() -> None:
     assert gp.item() == pytest.approx((5.0 - 1.0) ** 2)
 
 
-def _fit_waal(seed: int = 0) -> tuple[DeepLearning, nn.Module]:
+def _fit_waal(seed: int = 0) -> tuple[DeepLearning, WAALFitResult]:
     torch.manual_seed(seed)
     net = _tiny_net()
     trainer = WAALTrainer(WAALArgs(), np.random.default_rng(seed))
-    critic = trainer.fit(net, _tiny_data(5, seed=1), _tiny_data(9, seed=2))
-    return net, critic
+    fit = trainer.fit(net, _tiny_data(5, seed=1), _tiny_data(9, seed=2))
+    return net, fit
 
 
 def test_waal_training_is_deterministic_and_keeps_the_task_model_interface() -> None:
-    net_a, critic_a = _fit_waal()
-    net_b, critic_b = _fit_waal()
+    net_a, fit_a = _fit_waal()
+    net_b, fit_b = _fit_waal()
     _assert_same_state(_state(net_a.clf), _state(net_b.clf))
-    _assert_same_state(_state(critic_a), _state(critic_b))
+    _assert_same_state(_state(fit_a.critic), _state(fit_b.critic))
+    # 9 unlabeled / batch 5 = 2 joint batches per epoch, 2 epochs.
+    assert fit_a.n_steps == 4 and math.isfinite(fit_a.wasserstein_last_epoch)
+    assert not torch.equal(fit_a.critic.net[0].weight, fit_a.critic_init.net[0].weight)
     assert all(p.requires_grad for p in net_a.clf.parameters())
     # The evaluated model is the plain task model: ordinary prediction works.
     preds = net_a.predict(_tiny_data(4, seed=3))
@@ -707,17 +723,30 @@ def test_waal_task_model_starts_from_the_same_weights_as_plain_training() -> Non
 
 
 def test_waal_strategy_queries_lowest_score() -> None:
-    net, critic = _fit_waal()
+    net, fit = _fit_waal()
     data = _tiny_data(10, seed=4)
     dataset = _PoolDataset(10, n_labeled=2, xs=data.xs.numpy(), ys=data.Y.numpy())
     trainer = WAALTrainer(WAALArgs(), np.random.default_rng(0))
-    strategy = WAAL(dataset, net, LOGGER, trainer=trainer, selection=10.0)
+    strategy = WAAL(
+        dataset, net, LOGGER, trainer=trainer, selection=10.0, rng=np.random.default_rng(0)
+    )
     with pytest.raises(RuntimeError, match="before train"):
         strategy.query(2)
-    strategy.critic = critic
+    strategy.fit_result = fit
     _, unlabeled = dataset.get_unlabeled_data()
-    scores = trainer.score_pool(net, critic, unlabeled, 10.0).numpy()
+    uncertainty, critic, _ = trainer.score_components(net, fit, unlabeled)
+    scores = (uncertainty - 10.0 * critic).numpy()
     assert strategy.query(3).tolist() == (np.argsort(scores, kind="stable")[:3] + 2).tolist()
+    diag = strategy.diagnostics()
+    for key in (
+        "waal_critic_labeled_mean",
+        "waal_critic_unlabeled_std",
+        "waal_critic_init_corr",
+        "waal_uncertainty_std",
+        "waal_critic_term_std",
+        "pool_order_fraction",
+    ):
+        assert len(diag[key]) == 1, key
 
 
 def test_joint_dataset_cycles_the_shorter_set() -> None:
@@ -797,14 +826,22 @@ class _FixedScoreSampler:
     def fit(self, labeled, unlabeled):
         return None, None
 
+    def encode_and_score(self, vae, discriminator, data):
+        return self.scores.clone(), torch.zeros(len(data), 2), torch.zeros(len(data), 2)
+
     def score(self, vae, discriminator, data) -> torch.Tensor:
-        return self.scores.clone()
+        return torch.full((len(data),), 0.7)  # the labeled set
 
 
 def test_vaal_queries_the_lowest_discriminator_scores() -> None:
     dataset = _PoolDataset(6, n_labeled=2)
     sampler = _FixedScoreSampler(torch.tensor([0.9, 0.1, 0.5, 0.05]))
-    assert VAAL(dataset, None, LOGGER, sampler=sampler).query(2).tolist() == [5, 3]
+    strategy = VAAL(dataset, None, LOGGER, sampler=sampler, rng=np.random.default_rng(0))
+    assert strategy.query(2).tolist() == [5, 3]
+    diag = strategy.diagnostics()
+    # Labeled 0.7 vs pool scores: above 0.1, 0.5, 0.05, below 0.9 -> AUC 3/4.
+    assert diag["vaal_discriminator_auc"] == [0.75]
+    assert diag["vaal_score_n_unique"] == [4] and diag["vaal_mean_kl"] == [0.0]
 
 
 # --- config: the `strategy_args` block ----------------------------------------------
@@ -839,8 +876,9 @@ def test_strategy_args_absent_means_defaults() -> None:
     assert resolved["vaal"]["epochs"] == 30 and resolved["waal"]["alpha"] == 1e-3
     assert resolved["ceal"] == {
         "base_strategy": "EntropySampling",
-        "delta": 5e-5,
-        "delta_decay": 0.033e-5,
+        "delta": 0.05,
+        "delta_decay": 0.0033,
+        "delta_schedule": "linear",
     }
     assert resolved["loss_prediction"]["detach_fraction"] == 0.6
     assert resolved["kcenter_greedy_pca"]["n_components"] == 50
@@ -933,7 +971,7 @@ def test_build_strategy_derives_each_generator_from_the_seed() -> None:
     assert build("KCenterGreedyPCA").n_components == 50
     ceal = build("CEALSampling")
     assert type(ceal.base_strategy) is EntropySampling
-    assert (ceal.delta, ceal.delta_decay) == (5e-5, 0.033e-5)
+    assert (ceal.delta, ceal.delta_decay, ceal.delta_schedule) == (0.05, 0.0033, "linear")
     assert build("WAAL").selection == 10.0
     assert build("VAAL").sampler.args == VAALArgs()
 
@@ -957,5 +995,189 @@ def test_vaal_params_files_differ_from_paper1_only_by_the_vaal_block(
     strategy_args = block.pop("strategy_args")
     assert block == base["DANINHAS"] and list(strategy_args) == ["VAAL"]
     config = _load(campaign / vaal_file)
-    assert config.dataset.strategy_args.vaal == VAALArgs(epochs=epochs)
+    # image_size 32: the author's cost decision for the campaign on daninhas_full_fixed (ADR 0016).
+    assert config.dataset.strategy_args.vaal == VAALArgs(epochs=epochs, image_size=32)
     assert config.dataset.strategy_args.waal == WAALArgs()
+
+
+# --- review follow-up (ADR 0015): schedules, diagnostics, tie-breaks, learnability ----
+
+
+@pytest.mark.parametrize(
+    "schedule,round_idx,expected",
+    [
+        ("linear", 1, 0.05 - 0.0033),
+        ("linear", 8, 0.05 - 8 * 0.0033),
+        ("cumulative", 3, 0.05 - 6 * 0.0033),
+        ("cumulative", 6, 0.0),  # 0.05 - 21 * 0.0033 < 0, clamped
+        ("linear", 100, 0.0),
+    ],
+)
+def test_ceal_threshold_schedules_and_clamp(schedule: str, round_idx: int, expected: float) -> None:
+    assert ceal_threshold(0.05, 0.0033, round_idx, schedule) == pytest.approx(expected)
+
+
+def test_ceal_defaults_pseudo_label_a_confident_model_without_labeling_anything() -> None:
+    # Toy pool: 3 labeled, 7 unlabeled; a confident model (entropy ~0.01-0.03 nats on
+    # ids 3-6, i.e. below the paper's delta_0 = 0.05 but far above DeepAL+'s 5e-5).
+    xs = np.arange(10, dtype=np.float32)[:, None]
+    ys = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2, 0])
+    dataset = _PoolDataset(10, n_labeled=3, xs=xs, ys=ys)
+    confident = [[0.998, 0.001, 0.001], [0.002, 0.996, 0.002], [0.001, 0.001, 0.998]]
+    probs = np.array(
+        [[1 / 3] * 3] * 3 + confident + [[0.997, 0.0015, 0.0015]] + [[0.4, 0.3, 0.3]] * 3
+    )
+    net = _RecordingNet(probs, dataset)
+    args = CEALArgs()
+    strategy = CEALSampling(
+        dataset,
+        net,
+        LOGGER,
+        base_strategy=EntropySampling(dataset, net, LOGGER),
+        delta=args.delta,
+        delta_decay=args.delta_decay,
+        delta_schedule=args.delta_schedule,
+    )
+    assert predictive_entropy(torch.as_tensor(probs[3:7])).max() < args.delta - args.delta_decay
+    labeled_before = dataset.labeled_idxs.copy()
+    q = strategy.query(3)
+    assert sorted(q.tolist()) == [7, 8, 9]
+    assert np.array_equal(dataset.labeled_idxs, labeled_before)  # nothing leaked into labels
+    strategy.update(q)
+    strategy.train()
+    x, y = net.trained_on[-1]
+    assert sorted(x.ravel().tolist()) == list(range(10))
+    assert dataset.labeled_idxs.sum() == 6  # 3 initial + 3 queried; pseudo-labels are not labels
+    diag = strategy.diagnostics()
+    assert diag["ceal_n_pseudo_labels"] == [4] and diag["ceal_pseudo_label_accuracy"] == [1.0]
+    assert diag["ceal_train_size"] == [10]
+
+
+def test_pool_order_fraction_and_auc_helpers() -> None:
+    unlabeled = np.array([5, 6, 7, 8, 9, 10, 11])
+    assert pool_order_fraction(np.array([5, 6]), unlabeled, 2) == 1.0
+    assert pool_order_fraction(np.array([5, 11]), unlabeled, 2) == 0.5
+    assert binary_auc(np.array([0.9, 0.8]), np.array([0.1, 0.2])) == 1.0
+    assert binary_auc(np.array([0.5]), np.array([0.5])) == 0.5
+    diag = RoundDiagnostics()
+    diag.add(a=float("nan"), b=np.int64(3))
+    assert diag.as_dict() == {"a": [None], "b": [3]}
+
+
+class _ConstantLossTrainer:
+    def predict_losses(self, net, module, data) -> torch.Tensor:
+        return torch.ones(len(data))
+
+
+class _ConstantWAALTrainer:
+    def score_components(self, net, fit, data):
+        ones = torch.ones(len(data), dtype=torch.float64)
+        return ones, ones * 0.5, ones * 0.5
+
+
+def _constant_score_strategy(name: str, dataset: _PoolDataset, seed: int):
+    rng = np.random.default_rng(seed)
+    if name == "MeanSTD":
+        probs = torch.full((3, 40, 3), 1 / 3)  # identical passes: every score is 0
+        return MeanSTD(dataset, _SplitProbsNet(probs), LOGGER, rng=rng)
+    if name == "VarRatio":
+        probs = _onehot_passes([[0] * 40] * 3, 3)  # unanimous passes: every score is 0
+        return VarRatio(dataset, _SplitProbsNet(probs), LOGGER, rng=rng)
+    if name == "LossPredictionLoss":
+        strategy = LossPredictionLoss(dataset, None, LOGGER, trainer=_ConstantLossTrainer(), rng=rng)
+        strategy.module = object()
+        return strategy
+    if name == "VAAL":
+        return VAAL(dataset, None, LOGGER, sampler=_FixedScoreSampler(torch.full((40,), 0.5)), rng=rng)
+    strategy = WAAL(dataset, None, LOGGER, trainer=_ConstantWAALTrainer(), selection=10.0, rng=rng)
+    strategy.fit_result = object()
+    return strategy
+
+
+@pytest.mark.parametrize("name", ["MeanSTD", "VarRatio", "LossPredictionLoss", "VAAL", "WAAL"])
+def test_constant_scores_use_the_seeded_tie_break_not_pool_order(name: str) -> None:
+    queries = []
+    for seed in range(5):
+        dataset = _PoolDataset(45, n_labeled=5)
+        queries.append(_constant_score_strategy(name, dataset, seed).query(4).tolist())
+    first_2n = set(range(5, 13))
+    assert all(not set(q) <= first_2n for q in queries)  # never the pool-order head
+    assert len({tuple(q) for q in queries}) > 1  # the seed matters
+    again = _constant_score_strategy(name, _PoolDataset(45, n_labeled=5), 0).query(4).tolist()
+    assert again == queries[0]  # and is reproducible
+
+
+def _separable_images(n: int, sign: float, seed: int, size: int = 32) -> _ImageData:
+    g = torch.Generator().manual_seed(seed)
+    xs = sign + 0.3 * torch.randn(n, 3, size, size, generator=g)
+    return _ImageData(xs, torch.arange(n) % 3)
+
+
+def test_vaal_discriminator_learns_a_separable_labeled_unlabeled_split() -> None:
+    # Learnable setting: fixed, separable latent codes (no adversarial VAE moving them).
+    # The real discriminator, loss and optimizer must rate labeled above unlabeled.
+    # (End to end on a tiny toy the adversarial VAE drives the AUC to ~0 within a few
+    # epochs: that is the game, and why `vaal_discriminator_auc` is reported per round.)
+    g = torch.Generator().manual_seed(0)
+    mu_l = torch.randn(64, 8, generator=g) + 1.0
+    mu_u = torch.randn(64, 8, generator=g) - 1.0
+    with isolated_torch_seed(0):
+        dis = Critic(8)
+    opt = torch.optim.Adam(dis.parameters(), lr=VAALArgs().lr)
+    for _ in range(200):
+        loss = discriminator_loss(dis(mu_l), dis(mu_u))
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+    with torch.no_grad():
+        auc = binary_auc(dis(mu_l).numpy(), dis(mu_u).numpy())
+    assert auc > 0.9, auc
+
+
+class _FixedFeatureNet(nn.Module):
+    """Parameter-free features (per-channel image mean) + linear classifier: the WAAL
+    task step cannot move the features, so only the critic learns the split."""
+
+    def __init__(self, n_classes: int, dropout_p: float = 0.0) -> None:
+        super().__init__()
+        self.classifier = nn.Linear(3, n_classes)
+
+    def forward(self, x: torch.Tensor):
+        features = x.mean(dim=(2, 3))
+        return self.classifier(features), features
+
+    def get_embedding_dim(self) -> int:
+        return 3
+
+
+def _fit_separable_waal(model_cls, alpha: float) -> float:
+    torch.manual_seed(0)
+    net = DeepLearning(model_cls, dict(_TEST_PARAMS, n_epoch=15), torch.device("cpu"), {})
+    trainer = WAALTrainer(WAALArgs(alpha=alpha), np.random.default_rng(0))
+    labeled, unlabeled = _separable_images(15, 1.0, 0, size=8), _separable_images(15, -1.0, 1, size=8)
+    fit = trainer.fit(net, labeled, unlabeled)
+    _, critic_l, _ = trainer.score_components(net, fit, labeled)
+    _, critic_u, _ = trainer.score_components(net, fit, unlabeled)
+    return binary_auc(critic_u.numpy(), critic_l.numpy())
+
+
+def test_waal_critic_learns_a_separable_labeled_unlabeled_split() -> None:
+    # Learnable setting: alpha 1 (DeepAL+'s 1e-3 scales the critic's gradient down 1000x)
+    # and features the task step cannot move; the critic must rate unlabeled above labeled.
+    assert _fit_separable_waal(_FixedFeatureNet, alpha=1.0) > 0.9
+
+
+def test_loss_prediction_train_reports_spearman_on_the_labeled_set() -> None:
+    torch.manual_seed(0)
+    net = _tiny_net()
+    data = _tiny_data()
+    dataset = _PoolDataset(len(data), n_labeled=8, xs=data.xs.numpy(), ys=data.Y.numpy())
+    trainer = LossPredictionTrainer(LossPredictionArgs(), np.random.default_rng(0))
+    strategy = LossPredictionLoss(dataset, net, LOGGER, trainer=trainer, rng=np.random.default_rng(0))
+    strategy.train()
+    strategy.query(2)
+    diag = strategy.diagnostics()
+    assert diag["lpl_n_labeled"] == [8] and len(diag["lpl_labeled_spearman"]) == 1
+    rho = diag["lpl_labeled_spearman"][0]
+    assert rho is None or -1.0 <= rho <= 1.0
+    assert diag["lpl_pool_score_n_unique"][0] >= 1 and len(diag["pool_order_fraction"]) == 1

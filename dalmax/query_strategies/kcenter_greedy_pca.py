@@ -20,10 +20,13 @@ Deviations from DeepAL+, deliberate:
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 from sklearn.decomposition import PCA
 
 from .base import Strategy
+from .diagnostics import RoundDiagnostics, pool_order_fraction
 from .kcenter_greedy import k_center_greedy
 
 # `dalmax.seeding.derive_seed` tag of the PCA random state.
@@ -48,9 +51,16 @@ class KCenterGreedyPCA(Strategy):
         super().__init__(dataset, net, logger)
         self.n_components = n_components
         self.random_state = random_state
+        self._diag = RoundDiagnostics()
 
     def query(self, n: int) -> np.ndarray:
         labeled_idxs, train_data = self.dataset.get_train_data()
         embeddings = self.get_embeddings(train_data).numpy()
         reduced = reduce_embeddings(embeddings, self.n_components, self.random_state)
-        return k_center_greedy(reduced, labeled_idxs, n)
+        picked = k_center_greedy(reduced, labeled_idxs, n)
+        unlabeled_idxs = np.flatnonzero(~labeled_idxs)
+        self._diag.add(pool_order_fraction=pool_order_fraction(picked, unlabeled_idxs, n))
+        return picked
+
+    def diagnostics(self) -> dict[str, list[Any]]:
+        return self._diag.as_dict()

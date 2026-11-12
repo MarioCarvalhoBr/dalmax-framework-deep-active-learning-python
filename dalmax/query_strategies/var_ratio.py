@@ -21,10 +21,13 @@ round), via `dalmax.query_strategies.ranking.rank_descending`.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import torch
 
 from .base import Strategy
+from .diagnostics import RoundDiagnostics, pool_order_fraction
 from .ranking import rank_descending
 
 # `dalmax.seeding.derive_seed` tag of the tie-break generator.
@@ -50,9 +53,19 @@ class VarRatio(Strategy):
         super().__init__(dataset, net, logger)
         self.n_drop: int = net.params["n_drop"]
         self.rng = rng
+        self._diag = RoundDiagnostics()
 
     def query(self, n: int) -> np.ndarray:
         unlabeled_idxs, unlabeled_data = self.dataset.get_unlabeled_data()
         probs = self.predict_prob_dropout_split(unlabeled_data, n_drop=self.n_drop)
         scores = variation_ratios(probs).numpy()
-        return unlabeled_idxs[rank_descending(scores, self.rng)[:n]]
+        picked = unlabeled_idxs[rank_descending(scores, self.rng)[:n]]
+        # Reporting only: with few non-zero scores the query is mostly a random tie-break.
+        self._diag.add(
+            var_ratio_n_nonzero=int((scores > 0).sum()),
+            pool_order_fraction=pool_order_fraction(picked, unlabeled_idxs, n),
+        )
+        return picked
+
+    def diagnostics(self) -> dict[str, list[Any]]:
+        return self._diag.as_dict()

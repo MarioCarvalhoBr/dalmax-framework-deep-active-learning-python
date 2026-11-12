@@ -231,28 +231,41 @@ def _check_non_negative(owner: str, **values: float) -> None:
             raise ConfigError(f"{owner}.{name} must be >= 0, got {value!r}")
 
 
+CEAL_DELTA_SCHEDULES = ("linear", "cumulative")
+
+
 @dataclass(frozen=True)
 class CEALArgs:
-    """``CEALSampling`` (Wang et al., 2017; DeepAL+ defaults).
+    """``CEALSampling`` (Wang et al., IEEE TCSVT 2017, arXiv 1701.03551).
 
     - ``base_strategy``: strategy that picks the queried samples, one of
       ``CEAL_BASE_STRATEGIES``.
     - ``delta``: initial entropy threshold ``delta_0`` (nats) below which an
-      unlabeled sample is pseudo-labelled for the next training.
-    - ``delta_decay``: ``dr``; the threshold of query round ``t`` (1-based) is
-      ``delta_0 - dr * t`` (linear, as in the original paper; see ADR 0015 for
-      DeepAL+'s cumulative variant).
+      unlabeled sample is pseudo-labelled for the next training. Default 0.05 and
+      ``delta_decay`` 0.0033: the paper's CACD setting (its Caltech-256 setting is
+      0.005 / 0.00033; DeepAL+ uses 5e-5 / 0.033e-5, which pseudo-labels nothing on
+      DANINHAS, ADR 0015).
+    - ``delta_schedule``: threshold of query round ``t`` (1-based), clamped at 0:
+      ``"linear"`` = ``delta_0 - dr * t``; ``"cumulative"`` = ``delta_0 - dr * t (t + 1) / 2``
+      (the literal recursive reading of the paper's Eq. 9, ``delta = delta - dr * t``,
+      and DeepAL+'s code).
     """
 
     base_strategy: str = "EntropySampling"
-    delta: float = 5e-5
-    delta_decay: float = 0.033e-5
+    delta: float = 0.05
+    delta_decay: float = 0.0033
+    delta_schedule: str = "linear"
 
     def __post_init__(self) -> None:
         if self.base_strategy not in CEAL_BASE_STRATEGIES:
             raise ConfigError(
                 f"CEALArgs.base_strategy must be one of {list(CEAL_BASE_STRATEGIES)}, "
                 f"got {self.base_strategy!r}"
+            )
+        if self.delta_schedule not in CEAL_DELTA_SCHEDULES:
+            raise ConfigError(
+                f"CEALArgs.delta_schedule must be one of {list(CEAL_DELTA_SCHEDULES)}, "
+                f"got {self.delta_schedule!r}"
             )
         _check_positive("CEALArgs", delta=self.delta)
         _check_non_negative("CEALArgs", delta_decay=self.delta_decay)

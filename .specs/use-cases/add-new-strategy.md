@@ -122,7 +122,10 @@ Unchanged in spirit since Phase 2, with paths updated for the Phase 4 package mo
    `DeepLearning.build_model()` and sets `net.clf` (`dalmax/models/loss_prediction.py::LossPredictionTrainer`,
    `dalmax/models/waal.py::WAALTrainer`; `CEALSampling.train` passes a different dataset to `net.train`).
    Per-round, reporting-only values go through `Strategy.diagnostics()` into `results.json`'s
-   `strategy_diagnostics` key.
+   `strategy_diagnostics` key (`dalmax/query_strategies/diagnostics.py::RoundDiagnostics`); include at least
+   `pool_order_fraction` (the KI-45 pool-order signature) and a statistic that would expose your score collapsing
+   (score std / number of distinct scores, a discriminator AUC, a correlation with the target). Rank the final scores
+   with `ranking.rank_descending`/`rank_ascending` and a seeded generator, never a plain stable argsort.
 6. Add a test asserting `dalmax.query_strategies.registry.build_strategy("<NewStrategyClass>", ...)`
    resolves without error — see `tests/test_strategy_registry.py` for the pattern (stub
    dataset/net, no real training). `tests/test_registry.py`/`tests/test_strategy_registry.py` parse
