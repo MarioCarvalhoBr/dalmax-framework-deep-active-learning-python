@@ -67,5 +67,5 @@ def test_campaign_has_no_hardware_specific_names() -> None:
     from dalmax import campaign as C
 
     manifest = C.load_manifest(REPO_ROOT / C.DEFAULT_MANIFEST)
-    assert manifest.results_root == "results/campaign"
-    assert manifest.name == "campaign"
+    assert manifest.results_root == "results/campaign_fixed"
+    assert manifest.name == "campaign_fixed"

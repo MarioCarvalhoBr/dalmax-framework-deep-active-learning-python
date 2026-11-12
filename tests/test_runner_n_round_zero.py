@@ -109,6 +109,9 @@ class _FakeDataset:
 
     def __init__(self) -> None:
         self.labeled_idxs = np.zeros(20, dtype=bool)
+        self.n_pool = 20
+        self.Y_train = np.array([i % 2 for i in range(20)])
+        self.Z_train_paths = [f"t{i}.png" for i in range(20)]
         self.Y_test = torch.tensor([0, 1, 0, 1, 0])
         self.Z_test_paths = [f"p{i}.png" for i in range(5)]
 

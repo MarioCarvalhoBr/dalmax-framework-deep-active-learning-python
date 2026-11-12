@@ -29,6 +29,14 @@ REQUIRED_FILES: tuple[str, ...] = (
     "saved_model.pth",
 )
 
+# Per-round history files (ADR 0016), written by every run since 2026-11-11. They are
+# not in REQUIRED_FILES so that leaves of the earlier trees still verify; a manifest
+# that requires them lists them in its `required_leaf_files` (the campaign on
+# daninhas_full_fixed does), and `check_leaf(..., extra_required=...)` checks them.
+ROUND_PREDICTIONS_FILE = "round_predictions.json"
+ROUND_QUERIES_FILE = "round_queries.json"
+ROUND_HISTORY_FILES: tuple[str, ...] = (ROUND_PREDICTIONS_FILE, ROUND_QUERIES_FILE)
+
 # A saved_model.pth below this size is almost certainly the pre-KI-22-fix
 # class-pickle (~900 bytes), not a real dalmax-checkpoint with weights -- see
 # .specs/quality/known-issues.md KI-22 and ADR 0006.
@@ -41,16 +49,36 @@ def _parse_n_round(nq_dirname: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
-def check_leaf(leaf: Path) -> tuple[list[str], list[str]]:
-    """Check one leaf directory against `REQUIRED_FILES`.
+def _check_round_history(fpath: Path, n_round: int | None) -> list[str]:
+    """Warnings for a present-but-suspicious `round_predictions.json` / `round_queries.json`."""
+    try:
+        payload = json.loads(fpath.read_text())
+    except (OSError, json.JSONDecodeError):
+        return [f"{fpath.name}: failed to parse"]
+    key = "predictions" if fpath.name == ROUND_PREDICTIONS_FILE else "rounds"
+    rounds = payload.get(key) if isinstance(payload, dict) else None
+    if not isinstance(rounds, list):
+        return [f"{fpath.name}: missing key {key!r}"]
+    if n_round is not None and len(rounds) != n_round + 1:
+        return [f"{fpath.name}: {len(rounds)} rounds != n_round+1={n_round + 1}"]
+    return []
+
+
+def check_leaf(leaf: Path, extra_required: tuple[str, ...] = ()) -> tuple[list[str], list[str]]:
+    """Check one leaf directory against `REQUIRED_FILES` plus `extra_required`.
 
     Returns `(missing_files, warnings)`. `missing_files` is empty iff every
     required artifact is present; `warnings` flags a present-but-suspicious
     artifact (e.g. an unparsable `results.json`, an inconsistent round count,
     or a too-small `saved_model.pth`) without counting it as missing.
+    `extra_required` names further mandatory files, e.g. `ROUND_HISTORY_FILES`
+    for the leaves of a manifest that lists them in `required_leaf_files`.
     """
     missing: list[str] = []
     warnings: list[str] = []
+    unknown = sorted(set(extra_required) - set(ROUND_HISTORY_FILES))
+    if unknown:
+        raise ValueError(f"check_leaf: unknown extra required file(s) {unknown}; known: {ROUND_HISTORY_FILES}")
 
     for fname in REQUIRED_FILES:
         fpath = leaf / fname
@@ -91,5 +119,12 @@ def check_leaf(leaf: Path) -> tuple[list[str], list[str]]:
                     f"saved_model.pth: {size} bytes < 10 MB "
                     "(likely a pre-fix class-pickle, see KI-22/ADR 0006)"
                 )
+
+    for fname in extra_required:
+        fpath = leaf / fname
+        if not fpath.is_file():
+            missing.append(fname)
+        else:
+            warnings.extend(_check_round_history(fpath, _parse_n_round(leaf.parent.name)))
 
     return missing, warnings

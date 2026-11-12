@@ -1,62 +1,73 @@
 #!/bin/bash
 # Idempotent Colab-session setup: verifies Drive is mounted, builds/reuses a
-# single dataset zip on Drive and unzips it onto the local runtime disk, and
-# wires results/ to a Google Drive symlink.
+# single dataset zip on Drive and unzips it onto the local runtime disk, checks
+# the local copy (file count + no repeated MD5), and wires results/ to a Google
+# Drive symlink.
 #
 # Implements the hybrid layout decision documented in COLAB_RUNBOOK.md's
-# introduction: the repo, its .venv, and DATA/daninhas_full all live on the
+# introduction: the repo, its .venv, and DATA/daninhas_full_fixed all live on the
 # Colab runtime's local disk (/content) for fast reads and a normal `poetry
 # install`, while results/ is a symlink to Drive so every artifact
 # (results.json, saved_model.pth checkpoints, run_metadata.json,
-# log-dalmax.log, results/cache/embeddings/ SSRAE cache) persists across a
+# log-dalmax.log, results/cache/embeddings/ caches) persists across a
 # session disconnect -- Colab Pro gives no guaranteed background execution,
 # so a dropped session must not lose finished work. Rejected alternative:
 # putting the repo/.venv inside Drive itself (FUSE latency on every import,
 # and a ~2.5 GB `poetry install` into Drive is impractically slow).
 #
-# Dataset transfer strategy: the first session to run this script builds
-# DATA/daninhas_full.zip from the Drive folder and stores the zip back on
-# Drive (${DRIVE_ROOT}/DATA/daninhas_full.zip); every later session just
-# copies that one ~47 MB zip to /content and unzips it locally in seconds,
-# instead of copying 10,193 small files through Drive's FUSE mount one at a
-# time (the well-known slow path -- see COLAB_RUNBOOK.md's troubleshooting
-# section and .specs/infrastructure/execution-environments.md's Colab
-# checklist).
+# Dataset (ADR 0016): the canonical, duplicate-free DATA/daninhas_full_fixed
+# (KI-46; 7,230 train + 1,008 test images + MANIFEST.csv + README.txt = 8,240
+# files). The first session to run this script builds
+# ${DRIVE_ROOT}/DATA/daninhas_full_fixed.zip from the Drive folder and stores the
+# zip back on Drive; every later session just copies that one zip to /content
+# and unzips it locally in seconds, instead of reading thousands of small files
+# through Drive's FUSE mount (the well-known slow path -- see COLAB_RUNBOOK.md's
+# troubleshooting section). After unzipping, the local copy must have exactly
+# the expected file count AND pass `scripts/datasets/build_daninhas_full_fixed.py
+# --check` (no repeated MD5 inside or across the splits, standard library only).
 #
-# Usage: bash scripts/colab/setup_colab.sh   (no arguments; run from the repo
-# root, e.g. after `%cd /content/dalmax` in the notebook).
+# Usage: DRIVE_ROOT=/content/drive/MyDrive/<folder holding DATA/> bash scripts/colab/setup_colab.sh
+# (run from the repo root, e.g. after `%cd /content/dalmax` in the notebook,
+# which exports DRIVE_ROOT from its Parameters cell).
 #
 # Idempotent: safe to re-run after a disconnect/reconnect --
 #   - reuses the Drive-side zip if it already exists (does not rebuild it);
-#   - skips the local unzip if DATA/daninhas_full already has the expected
+#   - skips the local unzip if DATA/daninhas_full_fixed already has the expected
 #     file count;
 #   - leaves an already-correct results/ symlink alone;
 #   - refuses (rather than silently clobbering) if a real, non-empty
 #     results/ directory already exists locally -- see .claude/rules/
 #     data-safety.md ("results/ is append-only").
 #
-# Env overrides:
-#   DRIVE_ROOT - root of this project's Google Drive folder. Default matches
-#                the path this PhD project actually uses (see
-#                COLAB_RUNBOOK.md's "User facts" / cell 1).
+# Env:
+#   DRIVE_ROOT - REQUIRED: the Google Drive folder that holds DATA/ (and gets
+#                results/) on THIS account; no default (it differs per account).
 
 set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-DRIVE_ROOT="${DRIVE_ROOT:-/content/drive/MyDrive/UFMS/Pós-graduação/Doutorado/FINAL/PROJETO/DALMAX}"
-DRIVE_DATA_DIR="${DRIVE_ROOT}/DATA"
-DRIVE_ZIP="${DRIVE_DATA_DIR}/daninhas_full.zip"
-DRIVE_RESULTS="${DRIVE_ROOT}/results"
+if [ -z "${DRIVE_ROOT:-}" ]; then
+    echo "ERROR: DRIVE_ROOT is not set. Set it to the Drive folder that holds DATA/ on this account, e.g."
+    echo "  DRIVE_ROOT=/content/drive/MyDrive/<your folder> make colab-setup"
+    echo "(the notebook's Parameters cell exports it)."
+    exit 1
+fi
 
-EXPECTED_FILE_COUNT=10193
+DATASET="daninhas_full_fixed"
+EXPECTED_FILE_COUNT=8240   # 7,230 train + 1,008 test images + MANIFEST.csv + README.txt
+DRIVE_DATA_DIR="${DRIVE_ROOT}/DATA"
+DRIVE_ZIP="${DRIVE_DATA_DIR}/${DATASET}.zip"
+DRIVE_RESULTS="${DRIVE_ROOT}/results"
+LOCAL_DATASET="DATA/${DATASET}"
 
 echo "============================================================"
 echo "DalMax Colab setup"
 echo "============================================================"
 echo "Repo root:   $REPO_ROOT"
 echo "Drive root:  $DRIVE_ROOT"
+echo "Dataset:     $DATASET (expected $EXPECTED_FILE_COUNT files)"
 echo "============================================================"
 
 # --- 1. Assert Drive is mounted and the dataset folder exists there --------
@@ -68,7 +79,7 @@ fi
 
 if [ ! -d "$DRIVE_DATA_DIR" ]; then
     echo "ERROR: $DRIVE_DATA_DIR not found on Drive."
-    echo "Check DRIVE_ROOT and that daninhas_full was uploaded to Drive at that path."
+    echo "Check DRIVE_ROOT and that ${DATASET} was uploaded to Drive under it (DATA/${DATASET}/)."
     exit 1
 fi
 
@@ -79,42 +90,48 @@ mkdir -p "$DRIVE_RESULTS"
 # --- 3. Build (first session) or reuse (later sessions) the dataset zip on
 #        Drive, then copy the single zip to /content and unzip it locally. --
 if [ ! -f "$DRIVE_ZIP" ]; then
-    if [ ! -d "${DRIVE_DATA_DIR}/daninhas_full" ]; then
-        echo "ERROR: neither $DRIVE_ZIP nor ${DRIVE_DATA_DIR}/daninhas_full exist on Drive."
+    if [ ! -d "${DRIVE_DATA_DIR}/${DATASET}" ]; then
+        echo "ERROR: neither $DRIVE_ZIP nor ${DRIVE_DATA_DIR}/${DATASET} exist on Drive."
         exit 1
     fi
-    echo "First session: building ${DRIVE_ZIP} from ${DRIVE_DATA_DIR}/daninhas_full"
+    echo "First session: building ${DRIVE_ZIP} from ${DRIVE_DATA_DIR}/${DATASET}"
     echo "(one-time, slower over Drive's FUSE mount -- later sessions reuse this zip)..."
-    ( cd "$DRIVE_DATA_DIR" && zip -qr daninhas_full.zip daninhas_full )
+    ( cd "$DRIVE_DATA_DIR" && zip -qr "${DATASET}.zip" "${DATASET}" ) || { echo "ERROR: zip failed"; exit 1; }
     echo "Zip built and stored back on Drive for future sessions."
 else
     echo "Reusing existing zip: $DRIVE_ZIP"
 fi
 
-LOCAL_ZIP="/content/daninhas_full.zip"
+LOCAL_ZIP="/content/${DATASET}.zip"
 echo "Copying zip to local runtime disk ($LOCAL_ZIP)..."
-cp "$DRIVE_ZIP" "$LOCAL_ZIP"
+cp "$DRIVE_ZIP" "$LOCAL_ZIP" || { echo "ERROR: copying the zip from Drive failed"; exit 1; }
 
 mkdir -p DATA
 CURRENT_COUNT=0
-if [ -d "DATA/daninhas_full" ]; then
-    CURRENT_COUNT=$(find DATA/daninhas_full -type f | wc -l)
+if [ -d "$LOCAL_DATASET" ]; then
+    CURRENT_COUNT=$(find "$LOCAL_DATASET" -type f | wc -l)
 fi
 
 if [ "$CURRENT_COUNT" -eq "$EXPECTED_FILE_COUNT" ]; then
-    echo "DATA/daninhas_full already has $EXPECTED_FILE_COUNT files locally -- skipping unzip."
+    echo "$LOCAL_DATASET already has $EXPECTED_FILE_COUNT files locally -- skipping unzip."
 else
     echo "Unzipping into DATA/ ..."
-    unzip -q -o "$LOCAL_ZIP" -d DATA/
+    unzip -q -o "$LOCAL_ZIP" -d DATA/ || { echo "ERROR: unzip failed"; exit 1; }
 fi
 
-ACTUAL_COUNT=$(find DATA/daninhas_full -type f | wc -l)
-echo "DATA/daninhas_full file count: $ACTUAL_COUNT (expected $EXPECTED_FILE_COUNT)"
+ACTUAL_COUNT=$(find "$LOCAL_DATASET" -type f 2>/dev/null | wc -l)
+echo "$LOCAL_DATASET file count: $ACTUAL_COUNT (expected $EXPECTED_FILE_COUNT)"
 if [ "$ACTUAL_COUNT" -ne "$EXPECTED_FILE_COUNT" ]; then
     echo "ERROR: file count mismatch -- the local copy is incomplete or the zip is stale."
-    echo "If DATA/daninhas_full/arquivos.txt exists, diff it against a known-good copy"
-    echo "(e.g. the lab machine's) to find the missing/extra files, per LAB_RUNBOOK.md's"
-    echo "dataset-transfer verification step."
+    echo "Compare against DATA/${DATASET}/MANIFEST.csv of a known-good copy (one row per image)."
+    echo "If the Drive zip is stale, delete $DRIVE_ZIP so the next run rebuilds it from the folder."
+    exit 1
+fi
+
+# The dataset contract (no repeated MD5 inside or across the splits; KI-46).
+echo "Checking $LOCAL_DATASET for repeated MD5 (scripts/datasets/build_daninhas_full_fixed.py --check)..."
+if ! python3 scripts/datasets/build_daninhas_full_fixed.py --check --dst "$LOCAL_DATASET"; then
+    echo "ERROR: $LOCAL_DATASET fails the duplicate check -- this is not the canonical dataset."
     exit 1
 fi
 
@@ -147,6 +164,6 @@ fi
 
 echo "============================================================"
 echo "Setup complete."
-echo "  DATA/daninhas_full: $ACTUAL_COUNT files (local disk, fast reads)"
+echo "  $LOCAL_DATASET: $ACTUAL_COUNT files, duplicate check OK (local disk, fast reads)"
 echo "  results/ -> $DRIVE_RESULTS (Drive, persists across disconnects)"
 echo "============================================================"

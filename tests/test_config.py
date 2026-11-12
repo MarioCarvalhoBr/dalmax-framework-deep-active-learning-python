@@ -59,7 +59,7 @@ def test_loads_daninhas_from_params_paper1_without_modifying_the_file():
 
     assert PARAMS_PAPER1.read_text() == original_text
     assert config.dataset.name == "DANINHAS"
-    assert config.dataset.data_dir == "DATA/daninhas_full/"
+    assert config.dataset.data_dir == "DATA/daninhas_full_fixed/"  # ADR 0016: the duplicate-free dataset
     assert config.dataset.n_classes == 5
     assert config.dataset.n_epoch == 10
     assert config.dataset.n_drop == 10

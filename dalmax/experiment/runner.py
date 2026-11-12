@@ -57,6 +57,12 @@ class RunResult:
     all_precision_macro: list[float] = field(default_factory=list)
     all_recall_macro: list[float] = field(default_factory=list)
     all_f1_macro: list[float] = field(default_factory=list)
+    # Per-round history for later re-scoring (ADR 0016): the test-set predictions of
+    # every round (class indices, test-set order) and the pool indices labeled in each
+    # round (round 0 = the initial labeled set). Written by the reporter to
+    # `round_predictions.json` / `round_queries.json`.
+    round_predictions: list[list[int]] = field(default_factory=list)
+    round_queries: list[list[int]] = field(default_factory=list)
     elapsed_seconds: float = 0.0
 
 
@@ -158,10 +164,9 @@ class ExperimentRunner:
         # feature-map extraction this used to also trigger was dead code,
         # removed in refactor Phase 4).
         dataset.initialize_labels(config.n_init_labeled, config.strategy_name)
-        logger.warning(
-            "Initial labeled idxs (sorted): "
-            f"{sorted(int(i) for i in np.where(dataset.labeled_idxs)[0])}"
-        )
+        initial_idxs = sorted(int(i) for i in np.where(dataset.labeled_idxs)[0])
+        logger.warning(f"Initial labeled idxs (sorted): {initial_idxs}")
+        result.round_queries.append(initial_idxs)
 
         logger.warning("Round 0")
         strategy.info()
@@ -182,7 +187,9 @@ class ExperimentRunner:
             logger.warning(f"Round {rd}")
 
             query_idxs = strategy.query(config.n_query)
-            logger.warning(f"Round {rd} query_idxs (sorted): {sorted(int(i) for i in query_idxs)}")
+            sorted_query = sorted(int(i) for i in query_idxs)
+            logger.warning(f"Round {rd} query_idxs (sorted): {sorted_query}")
+            result.round_queries.append(sorted_query)
 
             strategy.update(query_idxs)
             strategy.info()
@@ -220,3 +227,4 @@ class ExperimentRunner:
         result.all_recall_macro.append(float(metrics["recall_macro"]))
         result.all_f1_macro.append(float(metrics["f1_macro"]))
         result.all_rounds.append(round_idx)
+        result.round_predictions.append([int(p) for p in preds])

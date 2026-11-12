@@ -1,44 +1,48 @@
-"""Single-campaign manifest: load, validate, expand to jobs, run, verify.
+"""Campaign manifests: load, validate, expand to jobs, run, verify.
 
 `files_config/campaign/manifest.json` is the single source of truth for the
-one-shot single-environment re-execution of everything the three papers need (see
-`.specs/experiments/campaign.md` and ADR 0008). Each *run group* is one
-distinct computation (params JSON + strategy + n_query + n_init_labeled +
-n_round) swept over the manifest's seeds; a table row of any paper that needs
-the same computation points to that one group (directly, or through an
-*alias* entry that documents why two differently-spelled configs are the same
-computation). Nothing runs twice.
+clean re-execution of everything the three papers need on
+`DATA/daninhas_full_fixed` (see `.specs/experiments/campaign.md`, ADR 0008 and
+ADR 0016); `manifest_kmh_sweep.json` is the paper-1 KMH sweep (ADR 0012). Each
+*run group* is one distinct computation (params JSON + strategy + n_query +
+n_init_labeled + n_round) swept over the manifest's seeds; a table row of any
+paper that needs the same computation points to that one group (directly, or
+through an *alias* entry that documents why two differently-spelled configs are
+the same computation). Nothing runs twice.
 
-CLI (`python -m dalmax.campaign <cmd>`):
+Two orthogonal partitions select groups (`--part`):
 
-- `list`: print the job table (counts per part and in total).
-- `run --part {paper1,paper1_rerun_a,paper1_rerun_b,upper_bound,rnhal,texhal,texhal_q17,hier_transfer,control,kmh_nq100,kmh_nq50,kmh_nq10,all}[,...] [--micro] [--dry-run]
-  [--skip-existing|--no-skip-existing] [--device cuda]`: execute the jobs
-  sequentially through `tools/trainer.py` (subprocess), logging to
-  `<results_root>/campaign.log` and `<results_root>/failures.log`, continuing
-  after a failure.
-- `verify [--part ...] [--micro]`: per job OK / INCOMPLETE / MISSING / STALE, reusing
-  `dalmax.reporting.leaf_check.check_leaf`, plus the seed-consistency audit.
-  `STALE` (ADR 0014): a job of a re-run part (`dalmax.superseded.RERUN_PARTS`) whose
-  existing leaf is superseded (pre-fix run) or unreadable (`dalmax.superseded.classify_leaf`),
-  so `OK` for those parts can only mean a run of the fixed code.
-  Exit code: 0 all OK; 1 an incomplete/missing/stale job or a FAIL audit; 2 only
-  audit WARNs (a run whose initial-labeled-set log line is missing/unreadable).
-- Run guard (ADR 0014): `run` (also with `--dry-run` or `--no-skip-existing`) refuses to
-  start, before any job, while a selected job of a re-run part has a superseded or
-  unreadable leaf (it would be skipped as complete or overwritten in place): it exits 3,
-  listing the count and the first leaves; the operator archives them first with
-  `make campaign-archive-superseded`. Other parts are never inspected.
+- the *semantic parts* `PARTS` (`paper1`, `upper_bound`, `rnhal`, `texhal`,
+  `texhal_q17`, `hier_transfer`, `control`, `kmh_nq100`, `kmh_nq50`, `kmh_nq10`;
+  comma-separated, or `all`), executed in the fixed `PHASE_LABELS` order;
+- the *GPU parts* `GPU_PARTS` (`part_1_gpu`, `part_2_gpu`, ADR 0016): every group of
+  the two full-scale manifests carries a `gpu_part` and a `gpu_stage`; selecting a
+  GPU part orders its jobs by stage (cheap table-critical groups first, the very
+  long baselines last). The two kinds cannot be mixed in one `--part`.
+
+CLI (`python -m dalmax.campaign <cmd>`; `--manifest` accepts a comma-separated
+list, e.g. the main manifest and the KMH sweep, whose jobs are merged into one
+plan: by GPU stage for a GPU part, manifest by manifest otherwise):
+
+- `list`: print the job table, the counts and the estimated GPU hours per part and
+  per GPU part (`gpu_time_estimates` of the manifest, when it has one).
+- `run --part ... [--micro] [--dry-run] [--skip-existing|--no-skip-existing]
+  [--device cuda]`: execute the jobs sequentially through `tools/trainer.py`
+  (subprocess), logging to `<results_root>/campaign.log` and
+  `<results_root>/failures.log` of the job's manifest, continuing after a failure.
+- `verify [--part ...] [--micro]`: per job OK / INCOMPLETE / MISSING, reusing
+  `dalmax.reporting.leaf_check.check_leaf` (plus the manifest's
+  `required_leaf_files`), and the seed-consistency audit over every selected job.
+  Exit code: 0 all OK; 1 an incomplete/missing job or a FAIL audit; 2 only audit
+  WARNs (a run whose initial-labeled-set log line is missing/unreadable).
 - Every subcommand accepts `--exclude-strategy A,B` (e.g. the two adversarial
   baselines, far too slow for a CPU smoke run): jobs of those strategies are
-  dropped from the list/run/verify/audit. The full manifest still contains them.
+  dropped from the list/run/verify/audit. The manifest still contains them.
 
-Execution order (fixed, independent of `--part`): paper 1 at n_query=100
-first (the shared canonical runs -- KMH and RandomSampling, which papers 2/3 reuse --
-land early, so papers 2/3 comparisons can already be read), then rnhal, texhal, texhal_q17, hier_transfer,
-then paper 1 at n_query=50 and 10, then the two re-run parts of the seven fixed paper-1
-baselines (`paper1_rerun_a`, `paper1_rerun_b`, ADR 0014), then the upper bound. If a session
-budget runs out, what is missing is the least reusable part.
+Semantic execution order (fixed, independent of `--part`): paper 1 at
+n_query=100 first (the shared canonical runs -- KMH and RandomSampling, which
+papers 2/3 reuse -- land early), then rnhal, texhal, texhal_q17, hier_transfer,
+then paper 1 at n_query=50 and 10, then the upper bound.
 """
 
 from __future__ import annotations
@@ -57,15 +61,14 @@ from pathlib import Path
 from typing import Any
 
 from dalmax.config.loader import load_experiment_config, to_dict
-from dalmax.config.schema import FULL_SUPERVISED_STRATEGY
+from dalmax.config.schema import FULL_SUPERVISED_STRATEGY, STRATEGY_ARGS_KEYS
 from dalmax.query_strategies.registry import (
     GENERIC_REPRESENTATION_NAME,
     REPRESENTATION_PRESET_Q,
     REPRESENTATION_PRESETS,
 )
-from dalmax.reporting.leaf_check import check_leaf
+from dalmax.reporting.leaf_check import ROUND_HISTORY_FILES, check_leaf
 from dalmax.seeding import CUBLAS_WORKSPACE_CONFIG
-from dalmax.superseded import RERUN_PARTS, LeafVerdict, classify_leaf, leaf_pattern
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_MANIFEST = "files_config/campaign/manifest.json"
@@ -75,12 +78,11 @@ TRAINER_SCRIPT = "tools/trainer.py"
 # Layout/ownership rule: a run group lives under the FIRST paper that consumes
 # it (paper 1 < 2 < 3) and its `used_by` lists every consumer; e.g. paper 1's
 # `KMH@100` is also the "w/o representation module" row of papers 2 and 3.
-# `paper1_rerun_a` / `paper1_rerun_b` (ADR 0014): the seven paper-1 baselines fixed on 2026-11-11
-# (KI-41/KI-42/KI-45), split in two GPU-time-balanced halves, one per Colab account.
-# The re-run part names come from `dalmax.superseded.RERUN_PARTS` (one definition, shared with the
-# archive script and the manifest builder).
-PARTS: tuple[str, ...] = ("paper1", *RERUN_PARTS, "upper_bound", "rnhal", "texhal",
-                          "texhal_q17", "hier_transfer", "control", "kmh_nq100", "kmh_nq50", "kmh_nq10")
+PARTS: tuple[str, ...] = ("paper1", "upper_bound", "rnhal", "texhal", "texhal_q17", "hier_transfer",
+                          "control", "kmh_nq100", "kmh_nq50", "kmh_nq10")
+
+# The two GPU parts (ADR 0016): one per Colab account, balanced by estimated GPU time.
+GPU_PARTS: tuple[str, ...] = ("part_1_gpu", "part_2_gpu")
 
 # Execution phases (see module docstring). Index = order of execution.
 PHASE_LABELS: tuple[str, ...] = (
@@ -90,7 +92,6 @@ PHASE_LABELS: tuple[str, ...] = (
     "texhal_q17",
     "hier_transfer",
     "paper1_other_nq",
-    *RERUN_PARTS,
     "upper_bound",
     "control",
     "kmh_nq100",
@@ -121,6 +122,8 @@ class RunGroup:
     dir_results: str
     used_by: tuple[dict[str, str], ...]
     note: str = ""
+    gpu_part: str | None = None  # one of GPU_PARTS, or None (manifest without GPU parts)
+    gpu_stage: int | None = None  # execution stage inside the GPU part (lower runs first)
 
 
 @dataclass(frozen=True)
@@ -145,6 +148,11 @@ class Manifest:
     aliases: tuple[Alias, ...]
     tables: dict[str, Any]
     path: str = ""
+    # Files every leaf of this manifest must carry on top of `leaf_check.REQUIRED_FILES`
+    # (ADR 0016: the per-round history files for the campaign on daninhas_full_fixed).
+    required_leaf_files: tuple[str, ...] = ()
+    # Repo-relative path of the GPU-time estimate table (`load_estimates`), or "" for none.
+    gpu_time_estimates: str = ""
 
     def group_by_id(self) -> dict[str, RunGroup]:
         return {g.id: g for g in self.groups}
@@ -185,6 +193,8 @@ def _to_group(raw: dict[str, Any], default_seeds: tuple[int, ...]) -> RunGroup:
             dir_results=raw["dir_results"],
             used_by=tuple(dict(u) for u in raw.get("used_by", [])),
             note=raw.get("note", ""),
+            gpu_part=raw.get("gpu_part"),
+            gpu_stage=int(raw["gpu_stage"]) if raw.get("gpu_stage") is not None else None,
         )
     except KeyError as exc:
         raise CampaignError(f"run group {raw.get('id')!r} is missing key {exc}") from exc
@@ -220,6 +230,8 @@ def load_manifest(path: str | Path, *, validate: bool = True) -> Manifest:
         ),
         tables=raw.get("tables", {}),
         path=str(p),
+        required_leaf_files=tuple(raw.get("required_leaf_files", ())),
+        gpu_time_estimates=raw.get("gpu_time_estimates", ""),
     )
     if validate:
         validate_manifest(manifest)
@@ -260,6 +272,13 @@ def effective_signature(
       `RepresentationStrategy` reads `embedding`/`selection` verbatim -- so a
       preset and its generic equivalent get the same signature iff they
       build the same provider + selection.
+
+    Per-strategy hyperparameters (`strategy_args`, ADR 0015) are reduced to
+    the one block the strategy reads (`STRATEGY_ARGS_KEYS`; none for every
+    other strategy), so two params files that differ only in another
+    strategy's block are the same computation. For the groups executed
+    before ADR 0015 this changes no dedup decision: their params have no
+    `strategy_args`, so every block was the default anyway.
     """
     config = load_experiment_config(
         _resolve_path(params_json),
@@ -276,6 +295,10 @@ def effective_signature(
     dataset = dict(cfg["dataset"])
     embedding = dataset.pop("embedding")
     selection = dataset.pop("selection")
+    strategy_args = dataset.pop("strategy_args")
+    own_args_key = STRATEGY_ARGS_KEYS.get(strategy_name)
+    if own_args_key is not None:
+        dataset["strategy_args"] = {own_args_key: strategy_args[own_args_key]}
 
     behavior: dict[str, Any]
     if strategy_name in REPRESENTATION_PRESETS:
@@ -385,10 +408,17 @@ def validate_manifest(manifest: Manifest) -> None:
     if clash:
         raise CampaignError(f"ids used both as group and alias: {sorted(clash)}")
 
+    unknown_files = sorted(set(manifest.required_leaf_files) - set(ROUND_HISTORY_FILES))
+    if unknown_files:
+        raise CampaignError(f"required_leaf_files: unknown {unknown_files}; known: {ROUND_HISTORY_FILES}")
     leaves: dict[tuple, str] = {}
     for group in manifest.groups:
         if group.part not in PARTS:
             raise CampaignError(f"{group.id}: part {group.part!r} not in {PARTS}")
+        if group.gpu_part is not None and group.gpu_part not in GPU_PARTS:
+            raise CampaignError(f"{group.id}: gpu_part {group.gpu_part!r} not in {GPU_PARTS}")
+        if (group.gpu_part is None) != (group.gpu_stage is None):
+            raise CampaignError(f"{group.id}: gpu_part and gpu_stage must be set together")
         if not group.seeds:
             raise CampaignError(f"{group.id}: no seeds")
         # Every params file must load through the real config loader.
@@ -465,8 +495,21 @@ def phase_index(group: RunGroup, primary_nq: int) -> int:
     return PHASE_LABELS.index(group.part)
 
 
+@dataclass(frozen=True)
+class Selection:
+    """Which groups a command acts on: semantic `parts`, or (if set) `gpu_parts`."""
+
+    parts: tuple[str, ...] = PARTS
+    gpu_parts: tuple[str, ...] | None = None
+
+    def selects(self, group: RunGroup) -> bool:
+        if self.gpu_parts is not None:
+            return group.gpu_part in self.gpu_parts
+        return group.part in self.parts
+
+
 def parse_parts(spec: str) -> tuple[str, ...]:
-    """`"all"` or a comma-separated subset of `PARTS`."""
+    """`"all"` or a comma-separated subset of `PARTS` (semantic parts only)."""
     names = [s.strip() for s in spec.split(",") if s.strip()]
     if not names:
         raise CampaignError("empty --part")
@@ -474,14 +517,26 @@ def parse_parts(spec: str) -> tuple[str, ...]:
         return PARTS
     bad = [n for n in names if n not in PARTS]
     if bad:
-        raise CampaignError(f"unknown part(s) {bad}; valid: {', '.join(PARTS)} or 'all'")
+        raise CampaignError(f"unknown part(s) {bad}; valid: {', '.join(PARTS)}, {', '.join(GPU_PARTS)} or 'all'")
     return tuple(n for n in PARTS if n in names)
 
 
-def parse_exclude_strategies(spec: str | None, manifest: Manifest) -> frozenset[str]:
-    """Comma-separated strategy names to drop; each must exist in the manifest (fail fast)."""
+def parse_selection(spec: str) -> Selection:
+    """`--part`: `"all"`, semantic parts, or GPU parts (`part_1_gpu`, `part_2_gpu`); never both kinds."""
+    names = [s.strip() for s in spec.split(",") if s.strip()]
+    gpu = [n for n in names if n in GPU_PARTS]
+    if not gpu:
+        return Selection(parse_parts(spec))
+    if len(gpu) != len(names):
+        raise CampaignError(f"--part {spec!r}: GPU parts ({', '.join(GPU_PARTS)}) cannot be mixed with other parts")
+    return Selection(PARTS, tuple(n for n in GPU_PARTS if n in gpu))
+
+
+def parse_exclude_strategies(spec: str | None, manifests: Manifest | Sequence[Manifest]) -> frozenset[str]:
+    """Comma-separated strategy names to drop; each must exist in one of the manifests (fail fast)."""
     names = frozenset(s.strip() for s in (spec or "").split(",") if s.strip())
-    known = {g.strategy_name for g in manifest.groups}
+    pool = [manifests] if isinstance(manifests, Manifest) else list(manifests)
+    known = {g.strategy_name for m in pool for g in m.groups}
     bad = sorted(names - known)
     if bad:
         raise CampaignError(f"--exclude-strategy: unknown strategy {bad}; manifest has: {sorted(known)}")
@@ -490,22 +545,61 @@ def parse_exclude_strategies(spec: str | None, manifest: Manifest) -> frozenset[
 
 def expand_jobs(
     manifest: Manifest,
-    parts: Sequence[str] = PARTS,
+    parts: Sequence[str] | Selection = PARTS,
     seeds: Sequence[int] | None = None,
     exclude_strategies: Collection[str] = (),
 ) -> list[Job]:
-    """All `(group, seed)` jobs of `parts`, in execution order. `seeds`
-    restricts to a subset of each group's seeds (smoke runs; default: all);
-    groups whose `strategy_name` is in `exclude_strategies` are dropped."""
+    """All `(group, seed)` jobs of the selection, in execution order. `parts` is a
+    sequence of semantic parts or a `Selection` (a GPU-part selection orders by
+    `gpu_stage` first). `seeds` restricts to a subset of each group's seeds (smoke
+    runs; default: all); groups whose `strategy_name` is in `exclude_strategies`
+    are dropped."""
+    selection = parts if isinstance(parts, Selection) else Selection(tuple(parts))
+    by_stage = selection.gpu_parts is not None
     indexed = [
-        (phase_index(g, manifest.primary_nq), i, g)
+        ((g.gpu_stage or 0) if by_stage else 0, phase_index(g, manifest.primary_nq), i, g)
         for i, g in enumerate(manifest.groups)
-        if g.part in parts and g.strategy_name not in exclude_strategies
+        if selection.selects(g) and g.strategy_name not in exclude_strategies
     ]
-    indexed.sort(key=lambda t: (t[0], t[1]))
+    indexed.sort(key=lambda t: t[:3])
     return [
-        Job(g, seed) for _, _, g in indexed for seed in g.seeds if seeds is None or seed in seeds
+        Job(g, seed) for *_, g in indexed for seed in g.seeds if seeds is None or seed in seeds
     ]
+
+
+@dataclass(frozen=True)
+class Segment:
+    """Consecutive jobs of one manifest inside an execution plan."""
+
+    manifest: Manifest
+    jobs: tuple[Job, ...]
+
+
+def plan_jobs(
+    manifests: Sequence[Manifest],
+    selection: Selection,
+    seeds: Sequence[int] | None = None,
+    exclude_strategies: Collection[str] = (),
+) -> list[Segment]:
+    """The jobs of several manifests as one ordered plan of per-manifest segments.
+
+    For a GPU-part selection the jobs are merged by `gpu_stage` (ties: manifest
+    order), so e.g. the KMH sweep (stage 3) runs between the cheap groups and the
+    long baselines of the main manifest; otherwise manifest after manifest.
+    """
+    keyed: list[tuple[tuple[int, int, int], int, Job]] = []
+    for mi, manifest in enumerate(manifests):
+        for pos, job in enumerate(expand_jobs(manifest, selection, seeds, exclude_strategies)):
+            stage = (job.group.gpu_stage or 0) if selection.gpu_parts is not None else 0
+            keyed.append(((stage, mi, pos), mi, job))
+    keyed.sort(key=lambda t: t[0])
+    segments: list[tuple[int, list[Job]]] = []
+    for _, mi, job in keyed:
+        if segments and segments[-1][0] == mi:
+            segments[-1][1].append(job)
+        else:
+            segments.append((mi, [job]))
+    return [Segment(manifests[mi], tuple(jobs)) for mi, jobs in segments]
 
 
 def count_by_part(jobs: Sequence[Job]) -> dict[str, int]:
@@ -515,12 +609,46 @@ def count_by_part(jobs: Sequence[Job]) -> dict[str, int]:
     return counts
 
 
+def count_by_gpu_part(jobs: Sequence[Job]) -> dict[str, int]:
+    """Jobs per GPU part (`None` = groups without one)."""
+    counts: dict[str, int] = dict.fromkeys(GPU_PARTS, 0)
+    for job in jobs:
+        key = job.group.gpu_part or "none"
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+# --- GPU-time estimates -------------------------------------------------------
+
+
+def load_estimates(manifest: Manifest) -> dict[str, float]:
+    """`{group id: estimated seconds per run}` from the manifest's `gpu_time_estimates`
+    table (`{}` when the manifest has none). The table format is documented in
+    `.specs/experiments/campaign.md` ("GPU-time estimates")."""
+    if not manifest.gpu_time_estimates:
+        return {}
+    path = _resolve_path(manifest.gpu_time_estimates)
+    try:
+        raw = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        raise CampaignError(f"cannot read GPU-time estimates {path}: {exc}") from exc
+    return {gid: float(entry["seconds_per_run"]) for gid, entry in raw["groups"].items()}
+
+
+def estimated_hours(jobs: Sequence[Job], estimates: dict[str, float]) -> tuple[float, int]:
+    """`(hours, jobs without an estimate)` for `jobs`."""
+    seconds = sum(estimates.get(j.group.id, 0.0) for j in jobs)
+    unknown = sum(1 for j in jobs if j.group.id not in estimates)
+    return seconds / 3600, unknown
+
+
 # --- paths / skip-existing ----------------------------------------------------
 
 
 def leaf_glob(group: RunGroup, seed: int) -> str:
-    """Glob (relative to the group's `dir_results`) matching this job's leaf dir."""
-    return leaf_pattern(group.strategy_name, group.n_query, group.n_init_labeled, group.n_round, seed)
+    """Glob (relative to the group's `dir_results`) matching this job's leaf dir (any dataset folder / n_epoch)."""
+    return (f"*/SEED_{seed}/NQ_{group.n_query}_NIL_{group.n_init_labeled}_NR_{group.n_round}_NE_*/"
+            f"{group.strategy_name}")
 
 
 def find_leaves(group: RunGroup, seed: int, *, base: Path | None = None) -> list[Path]:
@@ -541,82 +669,16 @@ def find_leaf(group: RunGroup, seed: int, *, base: Path | None = None) -> Path |
     return matches[0] if matches else None
 
 
-def job_done(job: Job) -> bool:
-    """True iff the job's leaf carries the FULL artifact set (`check_leaf`), so a
-    run killed mid-report is re-run on resume instead of being skipped.
-    (`results.json` is written last by the reporter.)"""
+def job_done(job: Job, required_extra: tuple[str, ...] = ()) -> bool:
+    """True iff the job's leaf carries the FULL artifact set (`check_leaf`, plus the
+    manifest's `required_leaf_files` passed as `required_extra`), so a run killed
+    mid-report is re-run on resume instead of being skipped. (`results.json` is
+    written last by the reporter.)"""
     leaf = find_leaf(job.group, job.seed)
     if leaf is None:
         return False
-    missing, _warnings = check_leaf(leaf)
+    missing, _warnings = check_leaf(leaf, required_extra)
     return not missing
-
-
-# --- superseded leaves of the re-run parts (ADR 0014) -------------------------
-
-
-class SupersededLeavesError(CampaignError):
-    """A selected job of a re-run part still has a superseded or unreadable leaf."""
-
-
-@dataclass(frozen=True)
-class BlockingLeaf:
-    job: Job
-    leaf: Path
-    verdict: LeafVerdict
-
-
-def blocking_leaves(
-    jobs: Sequence[Job], *, base: Path | None = None, cutoff: datetime | None = None
-) -> list[BlockingLeaf]:
-    """Leaves of re-run-part jobs that `classify_leaf` calls superseded or unreadable.
-
-    Jobs of any other part are never inspected. Every matching leaf of a job is
-    checked, not only the first one `find_leaf` returns.
-    """
-    found: list[BlockingLeaf] = []
-    for job in jobs:
-        if job.group.part not in RERUN_PARTS:
-            continue
-        for leaf in find_leaves(job.group, job.seed, base=base):
-            verdict = classify_leaf(leaf, cutoff)
-            if verdict.blocking:
-                found.append(BlockingLeaf(job, leaf, verdict))
-    return found
-
-
-def _display_path(path: Path, base: Path) -> str:
-    try:
-        return path.relative_to(base).as_posix()
-    except ValueError:
-        return str(path)
-
-
-def ensure_no_blocking_leaves(
-    jobs: Sequence[Job], *, base: Path | None = None, cutoff: datetime | None = None, show: int = 5
-) -> None:
-    """Raise `SupersededLeavesError` (listing the count and the first `show` leaves) if any."""
-    found = blocking_leaves(jobs, base=base, cutoff=cutoff)
-    if not found:
-        return
-    root = base if base is not None else REPO_ROOT
-    lines = [
-        f"refusing to run: {len(found)} leaf/leaves of the re-run parts ({', '.join(RERUN_PARTS)}) "
-        "hold a superseded (pre-fix) or unreadable run that skip-existing would keep as complete "
-        "or a new run would overwrite in place (ADR 0014):"
-    ]
-    lines += [
-        f"  {b.verdict.status.upper()} {_display_path(b.leaf, root)} ({b.verdict.reason})"
-        for b in found[:show]
-    ]
-    if len(found) > show:
-        lines.append(f"  ... and {len(found) - show} more")
-    lines.append(
-        "Archive them first: `make campaign-archive-superseded DRY=1`, then "
-        "`make campaign-archive-superseded`, then `make campaign-archive-superseded CHECK=1` "
-        "(must print CHECK OK); see COLAB_RUNBOOK.md section 6d. Nothing was launched."
-    )
-    raise SupersededLeavesError("\n".join(lines))
 
 
 # --- running ------------------------------------------------------------------
@@ -683,13 +745,7 @@ def run_jobs(
     executor: Callable[[list[str], dict[str, str]], int] = _default_executor,
     echo: Callable[[str], None] = print,
 ) -> RunSummary:
-    """Execute jobs sequentially; a failing job is logged and the batch continues.
-
-    Raises `SupersededLeavesError` before anything is launched or logged (also in
-    `dry_run` and without `skip_existing`) when a job of a re-run part still has a
-    superseded or unreadable leaf (ADR 0014).
-    """
-    ensure_no_blocking_leaves(jobs)
+    """Execute jobs (all of `manifest`) sequentially; a failing job is logged and the batch continues."""
     root = REPO_ROOT / manifest.results_root
     campaign_log = root / "campaign.log"
     failures_log = root / "failures.log"
@@ -706,7 +762,7 @@ def run_jobs(
     log(f"CAMPAIGN START manifest={manifest.name} jobs={total} device={device} skip_existing={skip_existing}")
     for n, job in enumerate(jobs, start=1):
         head = f"[{n}/{total}] {job.label()}"
-        if skip_existing and job_done(job):
+        if skip_existing and job_done(job, manifest.required_leaf_files):
             summary.skipped += 1
             log(f"{head} SKIP (complete leaf exists)")
             continue
@@ -739,24 +795,16 @@ def run_jobs(
 @dataclass(frozen=True)
 class JobStatus:
     job: Job
-    status: str  # OK | INCOMPLETE | MISSING | STALE
+    status: str  # OK | INCOMPLETE | MISSING
     missing_files: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
-    detail: str = ""
 
 
-def verify_job(job: Job, *, base: Path | None = None, cutoff: datetime | None = None) -> JobStatus:
+def verify_job(job: Job, *, base: Path | None = None, required_extra: tuple[str, ...] = ()) -> JobStatus:
     leaf = find_leaf(job.group, job.seed, base=base)
     if leaf is None:
         return JobStatus(job, "MISSING")
-    stale = blocking_leaves([job], base=base, cutoff=cutoff)
-    if stale:
-        root = base if base is not None else REPO_ROOT
-        detail = "; ".join(
-            f"{b.verdict.status}: {_display_path(b.leaf, root)} ({b.verdict.reason})" for b in stale
-        )
-        return JobStatus(job, "STALE", detail=detail)
-    missing, warnings = check_leaf(leaf)
+    missing, warnings = check_leaf(leaf, required_extra)
     if missing:
         return JobStatus(job, "INCOMPLETE", tuple(missing), tuple(warnings))
     return JobStatus(job, "OK", (), tuple(warnings))
@@ -843,42 +891,54 @@ def render_verify(statuses: Sequence[JobStatus]) -> str:
             extra = f" (missing {', '.join(st.missing_files)})"
         if st.warnings:
             extra += f" [warnings: {'; '.join(st.warnings)}]"
-        if st.detail:
-            extra += f" [{st.detail}]"
         lines.append(f"{st.status:<10} {st.job.label()}{extra}")
     ok = sum(s.status == "OK" for s in statuses)
     inc = sum(s.status == "INCOMPLETE" for s in statuses)
     mis = sum(s.status == "MISSING" for s in statuses)
-    stale = sum(s.status == "STALE" for s in statuses)
-    lines.append(
-        f"Totals: OK={ok} INCOMPLETE={inc} MISSING={mis} STALE={stale} (of {len(statuses)} jobs)"
-    )
-    if stale:
-        lines.append(
-            f"{stale} job(s) of the re-run parts ({', '.join(RERUN_PARTS)}) still hold a superseded "
-            "(pre-fix) or unreadable leaf: archive with `make campaign-archive-superseded` (ADR 0014)."
-        )
+    lines.append(f"Totals: OK={ok} INCOMPLETE={inc} MISSING={mis} (of {len(statuses)} jobs)")
     return "\n".join(lines)
 
 
 # --- CLI ----------------------------------------------------------------------
 
 
-def render_job_table(jobs: Sequence[Job], primary_nq: int) -> str:
-    lines = [f"{'#':>4}  {'phase':<16} {'run id':<44} {'strategy':<24} {'nq':>4} {'nil':>5} {'nr':>3} seed"]
+def render_job_table(jobs: Sequence[Job], primary_nq: int, estimates: dict[str, float] | None = None) -> str:
+    """The job table of one manifest, then runs / groups / estimated hours per part and per GPU part."""
+    estimates = estimates or {}
+    lines = [f"{'#':>4}  {'phase':<16} {'gpu part':<10} {'stg':>3} {'run id':<44} {'strategy':<24} "
+             f"{'nq':>4} {'nil':>5} {'nr':>3} seed {'est h':>6}"]
     for n, job in enumerate(jobs, start=1):
         g = job.group
+        est = f"{estimates[g.id] / 3600:6.2f}" if g.id in estimates else f"{'-':>6}"
         lines.append(
-            f"{n:>4}  {PHASE_LABELS[phase_index(g, primary_nq)]:<16} {g.id:<44} {g.strategy_name:<24} "
-            f"{g.n_query:>4} {g.n_init_labeled:>5} {g.n_round:>3} {job.seed}"
+            f"{n:>4}  {PHASE_LABELS[phase_index(g, primary_nq)]:<16} {g.gpu_part or '-':<10} "
+            f"{g.gpu_stage if g.gpu_stage is not None else '-':>3} {g.id:<44} {g.strategy_name:<24} "
+            f"{g.n_query:>4} {g.n_init_labeled:>5} {g.n_round:>3} {job.seed:>4} {est}"
         )
-    counts = count_by_part(jobs)
     lines.append("")
-    width = max(len(part) for part in (*PARTS, "TOTAL"))
+    lines.append(render_totals(jobs, estimates))
+    return "\n".join(lines)
+
+
+def _totals_line(label: str, width: int, jobs: Sequence[Job], estimates: dict[str, float]) -> str:
+    line = f"  {label:<{width}} {len(jobs):>4} runs ({len({j.group.id for j in jobs})} run groups)"
+    if estimates:
+        hours, unknown = estimated_hours(jobs, estimates)
+        line += f"  est {hours:6.1f} GPU h" + (f" (+{unknown} runs without estimate)" if unknown else "")
+    return line
+
+
+def render_totals(jobs: Sequence[Job], estimates: dict[str, float]) -> str:
+    """Runs, groups and (with `estimates`) estimated GPU hours per part, per GPU part and in total."""
+    lines: list[str] = []
+    width = max(len(name) for name in (*PARTS, *GPU_PARTS, "TOTAL"))
     for part in PARTS:
-        groups = len({j.group.id for j in jobs if j.group.part == part})
-        lines.append(f"  {part:<{width}} {counts[part]:>4} runs ({groups} run groups)")
-    lines.append(f"  {'TOTAL':<{width}} {len(jobs):>4} runs ({len({j.group.id for j in jobs})} run groups)")
+        lines.append(_totals_line(part, width, [j for j in jobs if j.group.part == part], estimates))
+    if any(j.group.gpu_part for j in jobs):
+        lines.append("  GPU parts (ADR 0016):")
+        for gpu_part in GPU_PARTS:
+            lines.append(_totals_line(gpu_part, width, [j for j in jobs if j.group.gpu_part == gpu_part], estimates))
+    lines.append(_totals_line("TOTAL", width, jobs, estimates))
     return "\n".join(lines)
 
 
@@ -887,16 +947,18 @@ def build_arg_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     def common(p: argparse.ArgumentParser) -> None:
-        p.add_argument("--manifest", default=None, help=f"manifest path (default {DEFAULT_MANIFEST})")
+        p.add_argument("--manifest", default=None,
+                       help=f"manifest path, or a comma-separated list merged into one plan (default {DEFAULT_MANIFEST})")
         p.add_argument("--micro", action="store_true", help=f"use {DEFAULT_MICRO_MANIFEST} (CPU smoke)")
-        p.add_argument("--part", default="all", help=f"{','.join(PARTS)} (comma-separated) or all")
+        p.add_argument("--part", default="all",
+                       help=f"{','.join(PARTS)} (comma-separated) or all; or {' / '.join(GPU_PARTS)}")
         p.add_argument("--seeds", default=None, help="comma-separated subset of the seeds (smoke); default all")
         p.add_argument(
             "--exclude-strategy", default=None,
             help="comma-separated strategy names to drop (e.g. AdversarialBIM,AdversarialDeepFool for CPU smoke)",
         )
 
-    common(sub.add_parser("list", help="print the job table and counts"))
+    common(sub.add_parser("list", help="print the job table, counts and estimated GPU hours"))
     run_p = sub.add_parser("run", help="execute jobs sequentially via tools/trainer.py")
     common(run_p)
     run_p.add_argument("--dry-run", action="store_true", help="echo commands, execute nothing")
@@ -906,12 +968,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     run_p.add_argument("--device", default=None, choices=["cuda", "cpu", "auto"],
                        help="default: cuda (cpu with --micro)")
-    common(sub.add_parser("verify", help="OK/INCOMPLETE/MISSING/STALE per job"))
+    common(sub.add_parser("verify", help="OK/INCOMPLETE/MISSING per job + seed-consistency audit"))
     return parser
 
 
 def verify_exit_code(statuses: Sequence[JobStatus], audits: Sequence[SeedAudit]) -> int:
-    """0: everything OK; 1: an incomplete/missing/stale job or a FAILed audit; 2: only audit WARNs."""
+    """0: everything OK; 1: an incomplete/missing job or a FAILed audit; 2: only audit WARNs."""
     if any(s.status != "OK" for s in statuses) or any(a.status in ("FAIL", "NO_DATA") for a in audits):
         return 1
     return 2 if any(a.status == "WARN" for a in audits) else 0
@@ -919,39 +981,54 @@ def verify_exit_code(statuses: Sequence[JobStatus], audits: Sequence[SeedAudit])
 
 def _dispatch(args: argparse.Namespace) -> int:
     try:
-        manifest_path = args.manifest or (DEFAULT_MICRO_MANIFEST if args.micro else DEFAULT_MANIFEST)
-        manifest = load_manifest(manifest_path)
-        parts = parse_parts(args.part)
-        excluded = parse_exclude_strategies(args.exclude_strategy, manifest)
+        spec = args.manifest or (DEFAULT_MICRO_MANIFEST if args.micro else DEFAULT_MANIFEST)
+        manifests = [load_manifest(path.strip()) for path in spec.split(",") if path.strip()]
+        if not manifests:
+            raise CampaignError("empty --manifest")
+        selection = parse_selection(args.part)
+        excluded = parse_exclude_strategies(args.exclude_strategy, manifests)
+        estimates = {id(m): load_estimates(m) for m in manifests}
     except CampaignError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
     seeds = [int(s) for s in args.seeds.split(",")] if args.seeds else None
-    jobs = expand_jobs(manifest, parts, seeds, excluded)
+    plan = plan_jobs(manifests, selection, seeds, excluded)
     if args.command == "list":
-        print(f"manifest: {manifest.path}  results_root: {manifest.results_root}")
         if excluded:
             print(f"excluded strategies: {', '.join(sorted(excluded))}")
-        print(render_job_table(jobs, manifest.primary_nq))
+        for manifest in manifests:
+            jobs = [j for seg in plan if seg.manifest is manifest for j in seg.jobs]
+            print(f"manifest: {manifest.path}  results_root: {manifest.results_root}")
+            print(render_job_table(jobs, manifest.primary_nq, estimates[id(manifest)]))
+            print()
+        if len(manifests) > 1:
+            print(f"Execution plan ({len(plan)} segments):")
+            for n, seg in enumerate(plan, start=1):
+                print(f"  {n}. {Path(seg.manifest.path).name}: {len(seg.jobs)} runs")
+            combined: dict[str, float] = {}
+            for manifest in manifests:
+                combined.update(estimates[id(manifest)])
+            print("Combined:")
+            print(render_totals([j for seg in plan for j in seg.jobs], combined))
         return 0
     if args.command == "verify":
-        statuses = [verify_job(j) for j in jobs]
+        statuses = [verify_job(j, required_extra=seg.manifest.required_leaf_files)
+                    for seg in plan for j in seg.jobs]
         print(render_verify(statuses))
-        audits = audit_seed_consistency(jobs)
+        audits = audit_seed_consistency([j for seg in plan for j in seg.jobs])
         print()
         print(render_seed_audit(audits))
         return verify_exit_code(statuses, audits)
 
     device = args.device or ("cpu" if args.micro else "cuda")
-    try:
+    failed = 0
+    for seg in plan:
         summary = run_jobs(
-            jobs, manifest, device=device, skip_existing=args.skip_existing, dry_run=args.dry_run
+            seg.jobs, seg.manifest, device=device, skip_existing=args.skip_existing, dry_run=args.dry_run
         )
-    except SupersededLeavesError as exc:
-        print(f"ERROR: {exc}", file=sys.stderr)
-        return 3
-    return 1 if summary.failed else 0
+        failed += summary.failed
+    return 1 if failed else 0
 
 
 def main(argv: list[str] | None = None) -> int:

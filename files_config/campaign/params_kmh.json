@@ -1,7 +1,7 @@
 {
     "_comment": "KMH = hierarchical k-means selection over ImageNet-pretrained ResNet-50 features (resnet_imagenet, q null) with the reference hierarchy [600,200,100]/[30,15,2]; otherwise identical to params_paper1.json. ONE computation consumed by paper 1 (KMH row), paper 2 (6.3 'w/o representation module') and paper 3 (6.3) -- ADR 0009, run once as shared/kmh_nq100 (n_query=100); paper 1 also runs it at n_query 50 and 10.",
     "DANINHAS": {
-        "data_dir": "DATA/daninhas_full/",
+        "data_dir": "DATA/daninhas_full_fixed/",
         "n_epoch": 10,
         "n_drop": 10,
         "n_classes": 5,

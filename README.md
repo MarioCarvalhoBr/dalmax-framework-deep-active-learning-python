@@ -137,8 +137,11 @@ strategies and `BALDDropout` were degenerate, `KMeansSampling`/`KCenterGreedy` u
 untrained embedding layer, and `AdversarialBIM` broke its distance ties in pool order
 (KI-41, KI-42, KI-45 in [`.specs/quality/known-issues.md`](.specs/quality/known-issues.md)). All three are
 fixed in code since 2026-11-11 (ADR 0014; optional params block `"model_args": {"dropout_p": ...}` for the
-MC-dropout strategies) and the 63 affected runs are prepared for re-execution as the campaign parts
-`paper1_rerun_a` / `paper1_rerun_b` (`COLAB_RUNBOOK.md` section 6d), not executed yet.
+MC-dropout strategies). The first campaign also ran on a dataset with byte-identical duplicates inside and across
+train and test (KI-46); since 2026-11-11 (ADR 0016) everything is prepared for a clean re-run on the duplicate-free
+`DATA/daninhas_full_fixed`, with the eight DeepAL+ strategies (`VarRatio`, `MeanSTD`, `KCenterGreedyPCA`,
+`BadgeSampling`, `CEALSampling`, `LossPredictionLoss`, `VAAL`, `WAAL`, ADR 0015) added to paper 1
+(`COLAB_RUNBOOK.md` section 6), not executed yet.
 
 ## Installation
 
@@ -175,14 +178,17 @@ CPU-only strategies.
 
 ## Datasets
 
-### daninhas_full (primary)
+### daninhas_full_fixed (primary since 2026-11-11) and daninhas_full
 
-UAV weed image patches (10,192 images: 8,086 in the pool, 2,106 in the fixed test
-set), five classes, `train/`/`test/` split:
+UAV weed image patches, five classes, `train/`/`test/` split. The canonical dataset is
+`daninhas_full_fixed` (8,238 images: 7,230 in the pool, 1,008 in the fixed test set, plus `MANIFEST.csv` and
+`README.txt`), the duplicate-free version of the original `daninhas_full` (10,192 images: 8,086 / 2,106, with
+byte-identical copies inside and across the splits, KI-46), built by
+`scripts/datasets/build_daninhas_full_fixed.py` and checked by `make dataset-check`. Layout (both):
 
 ```
 DATA/
-    daninhas_full/
+    daninhas_full_fixed/        (daninhas_full/: same layout)
         train/  test/
             DATASET_BRACHIARIA/  DATASET_COLONIAO/  DATASET_GRAMINEA/
             DATASET_MAMONA/      DATASET_OUTRAS_FOLHAS_LARGAS/
@@ -249,29 +255,31 @@ deterministic kernel), so report seed-averaged numbers.
 ## The campaign
 
 Everything the three papers need runs from ONE manifest,
-`files_config/campaign/manifest.json` (222 runs in 74 run groups, all executed, seeds 1 to 3; the 63 runs of the
-seven paper-1 baselines fixed on 2026-11-11 are prepared for re-execution as parts `paper1_rerun_a`/`paper1_rerun_b`, ADR 0014;
-configurations shared by several papers run once and are aliased), driven by the
-engine `dalmax/campaign.py`. See
-[`.specs/experiments/campaign.md`](.specs/experiments/campaign.md) and ADR 0008/0009/0010.
+`files_config/campaign/manifest.json`, plus the paper-1 KMH sweep `manifest_kmh_sweep.json` (configurations shared by
+several papers run once and are aliased), driven by the engine `dalmax/campaign.py`. Since 2026-11-11 (ADR 0016) they
+describe the clean re-run on `DATA/daninhas_full_fixed` (294 + 165 = 459 runs, seeds 1 to 3, prepared, not executed)
+into `results/campaign_fixed/` and `results/campaign_kmh_fixed/`, split into two GPU parts (`part_1_gpu`,
+`part_2_gpu`) of about 48 estimated GPU hours each, one per Colab account. See
+[`.specs/experiments/campaign.md`](.specs/experiments/campaign.md) and ADR 0008/0009/0010/0016.
 
 ```bash
-make campaign-list                 # job table + run counts per part
-make campaign-run PART=all         # sequential, skip-existing: re-run the same command to resume
-make campaign-verify               # OK/INCOMPLETE/MISSING/STALE per job + seed audit
-make campaign-report               # tables + mean confusion matrices -> docs/results/campaign/
-make campaign-smoke                # CPU micro campaign (skips the two adversarial baselines)
+make campaign-list-gpu-part GPU_PART=part_1_gpu   # both manifests, plan order, estimated GPU hours
+make campaign-run-gpu-part GPU_PART=part_1_gpu    # sequential, skip-existing: re-run the same command to resume
+make campaign-verify-gpu-part GPU_PART=part_1_gpu # OK/INCOMPLETE/MISSING per job + seed audit
+make campaign-verify-all                          # both manifests after merging the two parts (expect OK=459)
+make campaign-report-all                          # tables + mean confusion matrices -> docs/results/campaign_fixed/ (+ _kmh_fixed/)
+make campaign-smoke                               # CPU micro campaign (skips the two adversarial baselines)
 ```
 
-Variables: `PART=all|paper1|upper_bound|rnhal|texhal|texhal_q17` (comma-separated
-allowed), `MICRO=1` (micro manifest on CPU, results in `results/smoke_campaign/`),
+Variables: `PART=all|paper1|upper_bound|rnhal|texhal|texhal_q17|hier_transfer` (comma-separated
+allowed) or `PART=part_1_gpu|part_2_gpu`, `MICRO=1` (micro manifest on CPU, results in `results/smoke_campaign_fixed/`),
 `MANIFEST=path` (any other manifest, overrides `MICRO`; e.g. the KI-43 control:
 `make campaign-run MANIFEST=files_config/campaign/manifest_control_ki43.json PART=control`),
 `SEEDS=1`, `EXCLUDE=A,B`, `DEVICE=cuda|cpu|auto` and `RUN_ARGS='--dry-run'`.
 `make campaign-manifest` regenerates the committed manifests from
-`scripts/campaign/build_manifest.py`. The campaign was executed on Google Colab
-Pro (222 of 222 runs OK, seed audit passed); the results are tabulated in the
-campaign spec.
+`scripts/campaign/build_manifest.py`. The first campaign (222 runs on the dataset with duplicates, KI-46) was
+executed on Google Colab Pro (222 of 222 runs OK, seed audit passed); its results are tabulated in the campaign spec
+as history, superseded for the papers by the clean re-run.
 
 Step-by-step operator guides: **[`LAB_RUNBOOK.md`](LAB_RUNBOOK.md)** (lab machine) and
 **[`COLAB_RUNBOOK.md`](COLAB_RUNBOOK.md)** (Colab; the runnable notebook is
@@ -302,9 +310,9 @@ poetry run python tools/loader.py --model results/campaign/.../saved_model.pth
 
 ```bash
 poetry run python tools/predict.py --model results/campaign/.../saved_model.pth \
-    --image DATA/daninhas_full/test/DATASET_GRAMINEA/some_image.jpg
+    --image DATA/daninhas_full_fixed/test/DATASET_GRAMINEA/some_image.jpg
 poetry run python tools/predict.py --model results/campaign/.../saved_model.pth \
-    --dir DATA/daninhas_full/test/DATASET_GRAMINEA --out results/predictions/
+    --dir DATA/daninhas_full_fixed/test/DATASET_GRAMINEA --out results/predictions/
 ```
 
 It writes `predictions.csv` (`Image Index,Predicted Class,Confidence,Path`, plus one
@@ -327,7 +335,7 @@ the reference file of the campaign). `dalmax/config/loader.py` reads the schema 
 ```json
 {
   "DANINHAS": {
-    "data_dir": "DATA/daninhas_full/",
+    "data_dir": "DATA/daninhas_full_fixed/",
     "n_epoch": 10,
     "n_drop": 10,
     "n_classes": 5,

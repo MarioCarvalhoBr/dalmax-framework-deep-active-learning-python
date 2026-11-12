@@ -103,6 +103,7 @@ accepted as-is (author decision 2026-11-02)**, so they leave the open list (docu
 (Update 2026-11-11: **KI-45** (AdversarialBIM ties broken in pool order) added and accepted as-is, disclosed in the thesis like KI-41/KI-42: 10 open, 45 tracked items. KI-43 gained a dated note on the two executions of the reference KMH configuration.)
 (Update 2026-11-11c: **KI-46** (byte-identical duplicate images in DANINHAS, including across train and test) added, OPEN, pending an author decision: 11 open, 46 tracked items.)
 (Update 2026-11-11b: author decision of the same day reverses the "accepted as-is" status of **KI-41, KI-42 and KI-45**: all three are **fixed in code (2026-11-11, ADR 0014)** and their 63 runs are prepared for re-execution as campaign parts `paper1_rerun_a` / `paper1_rerun_b` (not executed yet). They stay out of the open count: 10 open, 45 tracked items.)
+(Update 2026-11-11d: author decision on **KI-46**: everything is re-run on the new canonical dataset `DATA/daninhas_full_fixed` (ADR 0016), so KI-46 is **resolved for future runs**; the first campaign's results stay as history. The KI-41/KI-42/KI-45 re-run now happens inside that campaign (the parts `paper1_rerun_a/b` and the archive step of ADR 0014 were retired before execution). 10 open, 46 tracked items.)
 
 34 tracked items total (KI-34 added 2026-08-26, while reconciling the Phase 3 ablation execution
 batch; KI-33 added/resolved 2026-08-25). Of these, **27 are now fully resolved**: KI-1 through
@@ -274,9 +275,10 @@ the pre-fix ones (tested against a frozen copy of the old class). The value come
 modules in train mode, modes restored, BatchNorm statistics untouched) and raise `MCDropoutError` when the model has no
 dropout with p > 0; they use their `n_drop` argument (equal to `params['n_drop']` in every caller). BALD and
 `EntropySamplingDropout` use `torch.xlogy(p, p)` (no NaN at p = 0). Tests: `tests/test_mc_dropout_and_embeddings.py`.
-Re-run: the 12 groups `p1/{LeastConfidenceDropout,MarginSamplingDropout,EntropySamplingDropout,BALDDropout}/nq*`
-(36 runs) in part `paper1_rerun_b`; the executed runs are moved to `results/old_results_broken/` by
-`make campaign-archive-superseded` before the re-run. The record below describes the first execution.
+Re-run: since ADR 0016 (2026-11-11) inside the clean campaign on `DATA/daninhas_full_fixed` (part `paper1`, new
+results root `results/campaign_fixed/`), together with everything else; the ADR 0014 parts `paper1_rerun_a/b` and the
+archive step were retired before execution, and the first-execution runs stay in `results/campaign/` as history. The
+record below describes the first execution.
 
 **Location**: `dalmax/models/daninhas_resnet50.py::DaninhasModelResNet50` (no `nn.Dropout` anywhere: a
 pretrained backbone, `embedding_layer = nn.Linear(2048, 50)` and `classifier = nn.Linear(2048, n_classes)`);
@@ -321,9 +323,9 @@ from the torch RNG before the classifier's initialisation and its keys are in ev
 change every strategy's training. Only `get_embeddings` consumes `e1`. `KCenterGreedy` also clamps the squared pairwise
 distances at 0 before `np.sqrt` (float cancellation made near-duplicate rows NaN, and a NaN row wins `argmax`);
 `KMeansSampling` is unchanged (it draws from NumPy's global RNG, seeded by `seed_everything`). Tests:
-`tests/test_mc_dropout_and_embeddings.py`, `tests/test_kcenter_greedy.py`. Re-run: the 6 groups
-`p1/{KMeansSampling,KCenterGreedy}/nq*` (18 runs) in part `paper1_rerun_a`. The record below describes the first
-execution.
+`tests/test_mc_dropout_and_embeddings.py`, `tests/test_kcenter_greedy.py`. Re-run: inside the clean campaign of ADR
+0016 (part `paper1`, `results/campaign_fixed/`; the ADR 0014 part `paper1_rerun_a` was retired before execution). The
+record below describes the first execution.
 
 **Location**: `dalmax/models/daninhas_resnet50.py::DaninhasModelResNet50.forward` (`e1 =
 relu(embedding_layer(features))`, `embedding_layer = nn.Linear(2048, 50)`, while `classifier` consumes the
@@ -495,8 +497,10 @@ a random permutation as secondary key (`np.lexsort((rng.permutation(len(dis)), d
 stable argsort. `AdversarialDeepFool` (not re-run) gets no generator and keeps the stable argsort, i.e. its pre-fix code
 path: its distances are continuous, but 1,269 of the 8,086 DANINHAS training files are byte-identical copies of another file (588 groups, never across classes) and duplicates tie exactly, so a random tie-break could change
 which copy it selects; the pool order among identical copies carries no class bias. Tests:
-`tests/test_adversarial_strategies.py`. Re-run: `p1/AdversarialBIM/nq{100,50}` in part `paper1_rerun_a`,
-`p1/AdversarialBIM/nq10` in `paper1_rerun_b` (9 runs). The record below describes the first execution.
+`tests/test_adversarial_strategies.py`. Re-run: inside the clean campaign of ADR 0016 (part `paper1`,
+`results/campaign_fixed/`; the ADR 0014 parts were retired before execution). On `daninhas_full_fixed` no two pool
+images are byte-identical, so DeepFool's pool-order tie-break no longer has exact ties to break. The record below
+describes the first execution.
 
 **Location**: `dalmax/query_strategies/adversarial_base.py::PerSampleAdversarialStrategy.query`, l. 72
 (`return unlabeled_idxs[dis.argsort(kind="stable")[:n]]`); distance computed in
@@ -530,22 +534,32 @@ fix deferred to a future campaign. Fix option: break ties at random (e.g. add a 
 `derive_seed(seed, "adversarial_ties")`, or `np.lexsort((rng.permutation(len(dis)), dis))`) and re-run the 9 BIM
 runs as a new campaign part, old runs kept as history.
 
-### KI-46 — DANINHAS contains byte-identical duplicate images, also across train and test (OPEN, pending author decision; found 2026-11-11)
+### KI-46 — DANINHAS contains byte-identical duplicate images, also across train and test (RESOLVED for future runs 2026-11-11 by the new dataset `daninhas_full_fixed`, ADR 0016; the first campaign's results are affected; found 2026-11-11)
 
 **Found** while implementing ADR 0014 (checking whether DeepFool distances can tie exactly). Evidence, read-only
 `md5sum` over `DATA/daninhas_full/` (2026-11-11): **train** 8,086 files, 7,405 distinct contents; 1,269 files belong to
 588 groups of identical copies, never across classes. **Test** 2,106 files, 1,008 distinct contents (per class:
 Brachiaria 335/172, Coloniao 190/89, Graminea 970/502, Mamona 456/167, Outras folhas largas 155/78). **Across splits**
-171 distinct images occur in both train and test (394 test files are copies of a training image). The copies share the
-tile coordinates and differ in the orthophoto number of the file name (e.g.
-`test/DATASET_MAMONA/ORTOFOTO_234_9001_43609_1.jpg` and `ORTOFOTO_278_9001_43609_1.jpg`), which points to overlapping
-orthophoto exports. Only exact byte duplicates were counted; near-duplicates were not checked.
+171 distinct images occur in both train and test: 394 test files and 198 train files are copies of an image of the
+other split, never across classes. The copies share the tile coordinates and differ in the orthophoto number of the
+file name (e.g. `test/DATASET_MAMONA/ORTOFOTO_234_9001_43609_1.jpg` and `ORTOFOTO_278_9001_43609_1.jpg`), which points
+to overlapping orthophoto exports.
 
-**Consequences** (not acted on): (1) train/test leakage: part of the test set is in the pool, so every method that
-labels those pool images is evaluated partly on images it was trained on; (2) duplicated test files weight those images
-two or more times in every metric; (3) duplicates tie exactly in any per-sample score, which is why ADR 0014 keeps
-`AdversarialDeepFool` on its pool-order tie-break. `DATA/` is immutable (`.claude/rules/data-safety.md`), so any
-remedy (deduplicated evaluation, a documented limitation, a new split) is an author decision; nothing was changed.
-Severity: potentially High for the absolute numbers of all three papers, unknown for the comparisons between methods
-(every method sees the same test set).
+**Consequences for the first campaign** (`results/campaign/`, `results/campaign_kmh/`, executed 2026-09-30 to
+2026-11-11): (1) train/test leakage: part of the test set is in the pool, so every method that labels those pool images
+is evaluated partly on images it was trained on; (2) duplicated test files weight those images two or more times in
+every metric; (3) duplicates tie exactly in any per-sample score, which is why ADR 0014 keeps `AdversarialDeepFool` on
+its pool-order tie-break. Severity: High for the absolute numbers of all three papers, unknown for the comparisons
+between methods (every method saw the same test set). Only the last round's `predictions.csv` was saved per run, so
+the per-round metrics could not be recomputed on the distinct test images.
 
+**Resolution (author decision 2026-11-11, ADR 0016).** A new canonical dataset `DATA/daninhas_full_fixed` was built
+by `scripts/datasets/build_daninhas_full_fixed.py` (commit c7d2e9a; the source folder is untouched): test = one file
+per distinct MD5 of the source test split (1,008); train = one file per distinct MD5 of the source train split minus
+every image also in test and minus four near-duplicates of test images listed in
+`files_config/datasets/daninhas_full_fixed_near_duplicate_leaks.csv` (7,230); plus `MANIFEST.csv` and `README.txt`
+(8,240 files). `--check` verifies that no MD5 repeats inside or across the splits (the Colab setup runs it after
+unzipping). Everything is re-run on it into new roots (`results/campaign_fixed/`, `results/campaign_kmh_fixed/`), no
+old result is reused, and every run now also saves the per-round test predictions and queries
+(`round_predictions.json`, `round_queries.json`) so a later finding of this kind can be re-scored without re-running.
+Remaining: the thesis must replace every number of the first campaign once the new one is executed.

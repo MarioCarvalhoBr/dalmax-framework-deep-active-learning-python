@@ -3,8 +3,10 @@
 Covers: the committed full/micro manifests load and validate (params load via the
 real config loader, no redundant computations, aliases really equal their canonical
 run), the manifests match `scripts/campaign/build_manifest.py`, run counts per part,
-execution order, the redundancy checker, skip-existing / failure handling (fake
-executor, no training), `verify`, and the seed-consistency audit.
+execution order, the GPU parts and their estimated balance (ADR 0016), the
+redundancy checker and the signature, skip-existing / failure handling (fake
+executor, no training), `verify` (including the manifest's required per-round
+files), and the seed-consistency audit.
 """
 
 from __future__ import annotations
@@ -18,16 +20,18 @@ from pathlib import Path
 import pytest
 
 from dalmax import campaign as C
-from dalmax.reporting.leaf_check import REQUIRED_FILES
+from dalmax.reporting.leaf_check import REQUIRED_FILES, ROUND_HISTORY_FILES
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FULL = REPO_ROOT / C.DEFAULT_MANIFEST
 MICRO = REPO_ROOT / C.DEFAULT_MICRO_MANIFEST
 SWEEP = REPO_ROOT / "files_config/campaign/manifest_kmh_sweep.json"
 SWEEP_MICRO = REPO_ROOT / "files_config/campaign/manifest_kmh_sweep_micro.json"
-# Paper 1's run groups: part `paper1` plus the re-run of the seven fixed baselines (ADR 0014).
-PAPER1_PARTS = ("paper1", "paper1_rerun_a", "paper1_rerun_b")
 MC_DROPOUT = ("LeastConfidenceDropout", "MarginSamplingDropout", "EntropySamplingDropout", "BALDDropout")
+DROPOUT_FAMILY = (*MC_DROPOUT, "VarRatio", "MeanSTD")
+DEEPALPLUS = ("VarRatio", "MeanSTD", "KCenterGreedyPCA", "BadgeSampling", "CEALSampling", "LossPredictionLoss",
+              "VAAL", "WAAL")
+LONG = ("AdversarialBIM", "VAAL", "WAAL", "AdversarialDeepFool")
 
 
 def _builder():
@@ -61,8 +65,8 @@ def test_control_ki43_manifest_expands_to_three_jobs() -> None:
     manifest = C.load_manifest(REPO_ROOT / "files_config/campaign/manifest_control_ki43.json")
     jobs = C.expand_jobs(manifest, C.parse_parts("control"))
     assert [(j.group.id, j.seed) for j in jobs] == [("control/random_nq100_ki43", s) for s in (1, 2, 3)]
-    assert manifest.results_root == "results/campaign_control"
-    assert jobs[0].group.dir_results == "results/campaign_control/random_nq100/"
+    assert manifest.results_root == "results/campaign_control_fixed"
+    assert jobs[0].group.dir_results == "results/campaign_control_fixed/random_nq100/"
 
 
 @pytest.mark.parametrize("path", [SWEEP, SWEEP_MICRO])
@@ -73,7 +77,8 @@ def test_kmh_sweep_manifest_counts_and_layout(path: Path) -> None:
     assert sum(counts.values()) == 165 and len(manifest.groups) == 55
     assert len({g.dir_results for g in manifest.groups}) == len(manifest.groups)  # one leaf dir per group
     assert all(g.strategy_name == "RepresentationStrategy" for g in manifest.groups)
-    assert manifest.results_root.endswith("_kmh") and not manifest.results_root.startswith("results/campaign/")
+    # A root of its own (ADR 0016): never the first execution's results/campaign_kmh/.
+    assert manifest.results_root.endswith("_kmh_fixed") and manifest.results_root != "results/campaign_kmh"
     assert {g.part for g in manifest.groups} == {"kmh_nq10", "kmh_nq50", "kmh_nq100"}
 
 
@@ -105,19 +110,19 @@ def test_kmh_sweep_parts_filter_and_order() -> None:
 def test_run_counts_per_part(which: str, request: pytest.FixtureRequest) -> None:
     manifest: C.Manifest = request.getfixturevalue(which)
     counts = C.count_by_part(C.expand_jobs(manifest))
-    assert counts == {"paper1": 54, "paper1_rerun_a": 24, "paper1_rerun_b": 39, "upper_bound": 3, "rnhal": 42,
-                      "texhal": 30, "texhal_q17": 18, "hier_transfer": 12, "control": 0,
-                      "kmh_nq10": 0, "kmh_nq50": 0, "kmh_nq100": 0}
-    assert sum(counts.values()) == 222 and len(manifest.groups) == 74
+    assert counts == {"paper1": 189, "upper_bound": 3, "rnhal": 42, "texhal": 30, "texhal_q17": 18,
+                      "hier_transfer": 12, "control": 0, "kmh_nq10": 0, "kmh_nq50": 0, "kmh_nq100": 0}
+    assert sum(counts.values()) == 294 and len(manifest.groups) == 98
 
 
-def test_paper1_is_12_classical_plus_kmh_and_no_rnhal_texhal_presets(full_manifest: C.Manifest) -> None:
-    p1 = [g for g in full_manifest.groups if g.part in PAPER1_PARTS]
+def test_paper1_is_20_strategies_plus_kmh_and_no_rnhal_texhal_presets(full_manifest: C.Manifest) -> None:
+    p1 = [g for g in full_manifest.groups if g.part == "paper1"]
     strategies = {g.strategy_name for g in p1}
     assert "SSRAEKmeansHCSampling" not in strategies and "VCTexKmeansHCSampling" not in strategies
-    classical = {g.id for g in p1 if g.strategy_name != "RepresentationStrategy"}
-    assert len(classical) == 36  # 35 p1/* groups + shared/random_nq100 (paper-1's RandomSampling@100)
-    assert "shared/random_nq100" in classical
+    assert set(DEEPALPLUS) <= strategies and len(strategies - {"RepresentationStrategy"}) == 20
+    named = {g.id for g in p1 if g.strategy_name != "RepresentationStrategy"}
+    assert len(named) == 60  # 59 p1/* groups + shared/random_nq100 (paper-1's RandomSampling@100)
+    assert "shared/random_nq100" in named
     assert {g.id for g in p1 if g.strategy_name == "RepresentationStrategy"} == {
         "p1/KMH/nq10", "p1/KMH/nq50", "shared/kmh_nq100"}
 
@@ -151,7 +156,7 @@ def test_dedup_aliases_point_at_single_canonical_runs(full_manifest: C.Manifest)
 
 def test_upper_bound_uses_full_supervised_with_pool_size(full_manifest: C.Manifest, micro_manifest: C.Manifest) -> None:
     ub = full_manifest.group_by_id()["p1/upper_bound"]
-    assert (ub.strategy_name, ub.n_init_labeled, ub.n_round) == ("FullSupervised", 8086, 0)
+    assert (ub.strategy_name, ub.n_init_labeled, ub.n_round) == ("FullSupervised", 7230, 0)  # daninhas_full_fixed pool
     ub_micro = micro_manifest.group_by_id()["p1/upper_bound"]
     assert (ub_micro.n_init_labeled, ub_micro.n_round) == (806, 0)
 
@@ -223,48 +228,156 @@ def test_execution_order_paper1_nq100_first_upper_bound_last(full_manifest: C.Ma
     phases = [C.phase_index(j.group, full_manifest.primary_nq) for j in jobs]
     assert phases == sorted(phases)
     assert jobs[0].group.id == "shared/random_nq100"
-    assert all(j.group.n_query == 100 for j in jobs[:18]) and jobs[18].group.part == "rnhal"
+    assert all(j.group.n_query == 100 for j in jobs[:63]) and jobs[63].group.part == "rnhal"
     assert jobs[-1].group.part == "upper_bound"
     assert [C.PHASE_LABELS[p] for p in dict.fromkeys(phases)] == [
-        "paper1_nq100", "rnhal", "texhal", "texhal_q17", "hier_transfer", "paper1_other_nq",
-        "paper1_rerun_a", "paper1_rerun_b", "upper_bound"]
+        "paper1_nq100", "rnhal", "texhal", "texhal_q17", "hier_transfer", "paper1_other_nq", "upper_bound"]
 
 
 @pytest.mark.parametrize("which", ["full_manifest", "micro_manifest"])
-def test_rerun_parts_hold_the_seven_fixed_baselines(which: str, request: pytest.FixtureRequest) -> None:
+def test_paper1_params_per_strategy(which: str, request: pytest.FixtureRequest) -> None:
     manifest: C.Manifest = request.getfixturevalue(which)
-    by_part = {part: {g.id: g for g in manifest.groups if g.part == part}
-               for part in ("paper1_rerun_a", "paper1_rerun_b")}
-    assert sorted(by_part["paper1_rerun_a"]) == sorted(
-        ["p1/AdversarialBIM/nq100", "p1/AdversarialBIM/nq50"]
-        + [f"p1/{s}/nq{nq}" for s in ("KMeansSampling", "KCenterGreedy") for nq in (10, 50, 100)])
-    assert sorted(by_part["paper1_rerun_b"]) == sorted(
-        ["p1/AdversarialBIM/nq10"] + [f"p1/{s}/nq{nq}" for s in MC_DROPOUT for nq in (10, 50, 100)])
-    micro = which == "micro_manifest"
-    root = "results/smoke_campaign" if micro else "results/campaign"
-    suffix = "_micro" if micro else ""
-    for group in [*by_part["paper1_rerun_a"].values(), *by_part["paper1_rerun_b"].values()]:
-        paper_nq = group.id.rsplit("/nq", 1)[1]
-        # Same leaf paths as the first execution: results land where the tables already look.
-        assert group.dir_results == f"{root}/paper1/nq{paper_nq}/"
-        expected = "params_paper1_mc_dropout" if group.strategy_name in MC_DROPOUT else "params_paper1"
-        assert group.params_json == f"files_config/campaign/{expected}{suffix}.json"
-        assert group.used_by and "ADR 0014" in group.note and "old_results_broken" in group.note
-    # Nothing of the fixed strategies is left in part paper1; nothing else moved.
-    fixed = {"AdversarialBIM", "KMeansSampling", "KCenterGreedy", *MC_DROPOUT}
-    assert not [g.id for g in manifest.groups if g.part == "paper1" and g.strategy_name in fixed]
-    assert {g.strategy_name for g in manifest.groups if g.part == "paper1"} == {
-        "RandomSampling", "LeastConfidence", "MarginSampling", "EntropySampling", "AdversarialDeepFool",
-        "RepresentationStrategy"}
+    suffix = "_micro" if which == "micro_manifest" else ""
+    root = "results/smoke_campaign_fixed" if suffix else "results/campaign_fixed"
+    assert manifest.results_root == root
+    for group in manifest.groups:
+        if group.part != "paper1" or group.strategy_name == "RepresentationStrategy":
+            continue
+        if group.strategy_name in DROPOUT_FAMILY:
+            expected = "params_paper1_mc_dropout"
+        elif group.strategy_name == "VAAL":
+            expected = "params_paper1_vaal"
+        else:
+            expected = "params_paper1"
+        assert group.params_json == f"files_config/campaign/{expected}{suffix}.json", group.id
+        assert group.dir_results.startswith(f"{root}/"), group.id
+        assert group.used_by, group.id
 
 
-def test_rerun_parts_are_balanced_by_first_execution_gpu_time(full_manifest: C.Manifest) -> None:
-    # Measured per-run GPU seconds of the first execution (BIM ~2,300, MC dropout ~230, k-means/k-center ~90).
-    seconds = {"AdversarialBIM": 2300, **dict.fromkeys(MC_DROPOUT, 230), "KMeansSampling": 90, "KCenterGreedy": 90}
-    hours = {part: sum(seconds[j.group.strategy_name] for j in C.expand_jobs(full_manifest, (part,))) / 3600
-             for part in ("paper1_rerun_a", "paper1_rerun_b")}
-    assert hours["paper1_rerun_a"] == pytest.approx(4.28, abs=0.01)
-    assert hours["paper1_rerun_b"] == pytest.approx(4.22, abs=0.01)
+def test_full_scale_params_use_the_fixed_dataset_and_vaal_image_32(full_manifest: C.Manifest) -> None:
+    from dalmax.config.loader import load_experiment_config
+
+    sweep = C.load_manifest(SWEEP)
+    paths = {g.params_json for m in (full_manifest, sweep) for g in m.groups}
+    paths |= {a.params_json for m in (full_manifest, sweep) for a in m.aliases}
+    for rel in sorted(paths):
+        data_dir = json.loads((REPO_ROOT / rel).read_text())["DANINHAS"]["data_dir"]
+        assert data_dir == "DATA/daninhas_full_fixed/", rel
+    vaal = load_experiment_config(REPO_ROOT / "files_config/campaign/params_paper1_vaal.json", "DANINHAS",
+                                  strategy_name="VAAL", seed=1, n_init_labeled=100, n_query=100, n_round=8,
+                                  dir_results="x/", device="cpu")
+    assert vaal.dataset.strategy_args.vaal.image_size == 32
+
+
+# --- GPU parts (ADR 0016) ---------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def both_full() -> tuple[C.Manifest, C.Manifest]:
+    return C.load_manifest(FULL), C.load_manifest(SWEEP)
+
+
+def _estimates(manifests: tuple[C.Manifest, ...]) -> dict[str, float]:
+    out: dict[str, float] = {}
+    for manifest in manifests:
+        out.update(C.load_estimates(manifest))
+    return out
+
+
+@pytest.mark.parametrize("paths", [(FULL, SWEEP), (MICRO, SWEEP_MICRO)])
+def test_every_group_has_a_gpu_part_and_stage(paths: tuple[Path, Path]) -> None:
+    for path in paths:
+        manifest = C.load_manifest(path)
+        for group in manifest.groups:
+            assert group.gpu_part in C.GPU_PARTS and isinstance(group.gpu_stage, int), group.id
+        assert set(manifest.required_leaf_files) == set(ROUND_HISTORY_FILES)
+
+
+def test_gpu_parts_are_balanced_by_the_estimates(both_full: tuple[C.Manifest, C.Manifest]) -> None:
+    estimates = _estimates(both_full)
+    all_ids = {g.id for m in both_full for g in m.groups}
+    assert all_ids <= set(estimates), sorted(all_ids - set(estimates))  # every group is estimated
+    hours = {}
+    for gpu_part in C.GPU_PARTS:
+        plan = C.plan_jobs(both_full, C.parse_selection(gpu_part))
+        hours[gpu_part], unknown = C.estimated_hours([j for seg in plan for j in seg.jobs], estimates)
+        assert unknown == 0
+    total = sum(hours.values())
+    assert 90 < total < 105  # 96 GPU hours with the committed estimates
+    assert abs(hours["part_1_gpu"] - hours["part_2_gpu"]) / total < 0.05
+
+
+def test_gpu_parts_cover_every_group_once_and_keep_tables_together(both_full) -> None:
+    main, sweep = both_full
+    p1 = C.plan_jobs(both_full, C.parse_selection("part_1_gpu"))
+    p2 = C.plan_jobs(both_full, C.parse_selection("part_2_gpu"))
+    ids1 = {j.group.id for seg in p1 for j in seg.jobs}
+    ids2 = {j.group.id for seg in p2 for j in seg.jobs}
+    assert not ids1 & ids2 and ids1 | ids2 == {g.id for m in both_full for g in m.groups}
+    groups = {g.id: g for m in both_full for g in m.groups}
+    aliases = {a.id: a.canonical for m in both_full for a in m.aliases}
+    # Every table except paper 1's per-budget KMH-sweep context is inside one GPU part.
+    for manifest in both_full:
+        for paper_tables in manifest.tables.values():
+            for table in paper_tables["tables"]:
+                runs = {aliases.get(r["run"], r["run"]) for r in table["rows"] if "run" in r}
+                parts = {groups[r].gpu_part for r in runs}
+                if table["id"].startswith("paper1_nq") and table["id"] != "paper1_nq100":
+                    # paper 1 at nq50/nq10: every row in part_2_gpu except the upper bound (part_1_gpu)
+                    assert {groups[r].gpu_part for r in runs - {"p1/upper_bound"}} == {"part_2_gpu"}
+                else:
+                    assert len(parts) == 1, (table["id"], parts)
+    # Papers 2/3 comparisons and 6.3 tables reuse the shared nq100 runs, all in part_1_gpu.
+    for gid in ("shared/random_nq100", "shared/kmh_nq100", "shared/texhal_full", "rnhal/6_3/stage_full"):
+        assert groups[gid].gpu_part == "part_1_gpu"
+    by_budget = {g.n_query: {h.gpu_part for h in main.groups if h.part == "paper1" and h.n_query == g.n_query}
+                 for g in main.groups if g.part == "paper1"}
+    assert by_budget == {100: {"part_1_gpu"}, 50: {"part_2_gpu"}, 10: {"part_2_gpu"}}
+    sweep_parts = {g.part: g.gpu_part for g in sweep.groups}
+    assert sweep_parts == {"kmh_nq100": "part_1_gpu", "kmh_nq50": "part_1_gpu", "kmh_nq10": "part_2_gpu"}
+
+
+def test_gpu_part_plan_runs_cheap_groups_first_sweep_in_the_middle_long_ones_last(both_full) -> None:
+    main, sweep = both_full
+    for gpu_part in C.GPU_PARTS:
+        plan = C.plan_jobs(both_full, C.parse_selection(gpu_part))
+        assert [seg.manifest.name for seg in plan] == [main.name, sweep.name, main.name]
+        jobs = [j for seg in plan for j in seg.jobs]
+        stages = [j.group.gpu_stage for j in jobs]
+        assert stages == sorted(stages)
+        tail = [j.group.strategy_name for j in plan[-1].jobs]
+        assert set(tail) <= set(LONG) and tail[-1] == "AdversarialDeepFool"
+        assert not [j for seg in plan[:-1] for j in seg.jobs if j.group.strategy_name in LONG]
+        if gpu_part == "part_1_gpu":
+            assert jobs[0].group.id == "shared/random_nq100"
+
+
+def test_parse_selection_gpu_parts_and_mixing() -> None:
+    assert C.parse_selection("part_2_gpu") == C.Selection(C.PARTS, ("part_2_gpu",))
+    assert C.parse_selection("part_2_gpu,part_1_gpu").gpu_parts == C.GPU_PARTS
+    assert C.parse_selection("rnhal").gpu_parts is None
+    with pytest.raises(C.CampaignError, match="cannot be mixed"):
+        C.parse_selection("part_1_gpu,rnhal")
+    with pytest.raises(C.CampaignError):
+        C.parse_parts("part_1_gpu")  # semantic parts only
+
+
+def test_cli_list_gpu_part_prints_estimates(capsys: pytest.CaptureFixture[str]) -> None:
+    manifests = f"{FULL},{SWEEP}"
+    assert C.main(["list", "--manifest", manifests, "--part", "part_2_gpu"]) == 0
+    out = capsys.readouterr().out
+    assert "Execution plan (3 segments)" in out and "GPU parts (ADR 0016):" in out
+    combined = out.split("Combined:")[1]
+    assert "part_2_gpu     177 runs (59 run groups)  est" in combined
+    assert "part_1_gpu       0 runs" in combined
+
+
+def test_cli_run_gpu_part_dry_run_logs_nothing(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    code = C.main(["run", "--manifest", f"{MICRO},{SWEEP_MICRO}", "--part", "part_2_gpu", "--seeds", "1",
+                   "--dry-run", "--no-skip-existing", "--device", "cpu"])
+    assert code == 0
+    out = capsys.readouterr().out
+    assert out.count("CAMPAIGN START") == 3 and "DRY-RUN" in out
 
 
 def test_hier_transfer_part_is_four_no_resampling_groups(full_manifest: C.Manifest) -> None:
@@ -300,7 +413,8 @@ def _tiny_manifest(tmp_path: Path) -> C.Manifest:
                       aliases=(), tables={})
 
 
-def _write_leaf(leaf: Path, *, omit: tuple[str, ...] = (), initial: str | None = None, n_round: int = 1) -> None:
+def _write_leaf(leaf: Path, *, omit: tuple[str, ...] = (), initial: str | None = None, n_round: int = 1,
+                round_files: bool = False) -> None:
     leaf.mkdir(parents=True, exist_ok=True)
     payload = {"all_acc": [0.5, 0.6], "all_f1_score": [0.5, 0.6], "all_f1_macro": [0.4, 0.5],
                "rounds": list(range(n_round + 1))}
@@ -310,7 +424,10 @@ def _write_leaf(leaf: Path, *, omit: tuple[str, ...] = (), initial: str | None =
         "run_metadata.json": json.dumps({"config": {}, "git_commit": "abc"}),
         "log-dalmax.log": f"Initial labeled idxs (sorted): {initial or '[1, 2, 3]'}\n",
     }
-    for name in REQUIRED_FILES:
+    if round_files:
+        files["round_predictions.json"] = json.dumps({"predictions": [[0]] * (n_round + 1)})
+        files["round_queries.json"] = json.dumps({"rounds": [{"round": r} for r in range(n_round + 1)]})
+    for name in (*REQUIRED_FILES, *(ROUND_HISTORY_FILES if round_files else ())):
         if name in omit:
             continue
         (leaf / name).write_text(files.get(name, "x"))
@@ -501,7 +618,7 @@ def test_exclude_strategy_filter_drops_only_those_groups(full_manifest: C.Manife
     dropped = [j for j in jobs if j not in kept]
     assert dropped and {j.group.strategy_name for j in dropped} == set(ADVERSARIAL)
     assert len(dropped) == 2 * 3 * 3  # 2 strategies x 3 n_query x 3 seeds
-    assert len(kept) == len(jobs) - len(dropped) == 222 - 18
+    assert len(kept) == len(jobs) - len(dropped) == 294 - 18
     assert all(j.group.strategy_name not in ADVERSARIAL for j in kept)
     assert [j for j in jobs if j in kept] == kept  # order preserved
 
@@ -518,7 +635,7 @@ def test_cli_exclude_strategy_applies_to_list(capsys: pytest.CaptureFixture[str]
     out = capsys.readouterr().out
     assert "excluded strategies: AdversarialBIM, AdversarialDeepFool" in out
     assert "Adversarial" not in out.split("excluded strategies:")[1].split("\n", 1)[1]
-    assert "TOTAL" in out and "68 runs" in out  # 74 micro seed-1 jobs - 2 strategies x 3 n_query
+    assert "TOTAL" in out and "92 runs" in out  # 98 micro seed-1 jobs - 2 strategies x 3 n_query
     assert C.main(["list", "--micro", "--exclude-strategy", "Nope"]) == 2
 
 
@@ -540,3 +657,67 @@ def test_cli_broken_pipe_is_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(C.os, "dup2", lambda *a, **k: None)
     monkeypatch.setattr(C.sys, "stdout", type("S", (), {"fileno": lambda self: 1})())
     assert C.main(["list"]) == 0
+
+
+# --- required per-round files (ADR 0016) ------------------------------------------------
+
+
+def test_required_leaf_files_make_old_style_leaves_incomplete(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manifest = replace(_tiny_manifest(tmp_path), required_leaf_files=ROUND_HISTORY_FILES)
+    monkeypatch.setattr(C, "REPO_ROOT", tmp_path)
+    g = manifest.groups[0]
+    _write_leaf(_leaf_of(g, 1))  # the artifact set of the earlier trees, no per-round files
+    _write_leaf(_leaf_of(g, 2), round_files=True)
+    job1, job2 = C.Job(g, 1), C.Job(g, 2)
+    assert C.verify_job(job1).status == "OK"  # without the requirement: old trees still verify
+    status = C.verify_job(job1, required_extra=manifest.required_leaf_files)
+    assert status.status == "INCOMPLETE" and set(status.missing_files) == set(ROUND_HISTORY_FILES)
+    assert C.verify_job(job2, required_extra=manifest.required_leaf_files).status == "OK"
+    assert not C.job_done(job1, manifest.required_leaf_files) and C.job_done(job2, manifest.required_leaf_files)
+    calls: list[list[str]] = []
+    summary = C.run_jobs([job1, job2], manifest, device="cpu", executor=lambda cmd, env: calls.append(cmd) or 0,
+                         echo=lambda _: None)
+    assert (summary.executed, summary.skipped) == (1, 1) and len(calls) == 1  # the old-style leaf is re-run
+
+
+def test_round_history_with_a_wrong_round_count_warns(tmp_path: Path) -> None:
+    from dalmax.reporting.leaf_check import check_leaf
+
+    manifest = _tiny_manifest(tmp_path)
+    leaf = _leaf_of(manifest.groups[0], 1)
+    _write_leaf(leaf, round_files=True)
+    (leaf / "round_queries.json").write_text(json.dumps({"rounds": [{"round": 0}]}))  # NR_1 needs 2 rounds
+    missing, warnings = check_leaf(leaf, ROUND_HISTORY_FILES)
+    assert not missing and any("round_queries.json: 1 rounds" in w for w in warnings)
+    with pytest.raises(ValueError, match="unknown extra"):
+        check_leaf(leaf, ("nope.json",))
+
+
+def test_validate_rejects_unknown_required_files_and_half_gpu_fields(tmp_path: Path) -> None:
+    manifest = _tiny_manifest(tmp_path)
+    with pytest.raises(C.CampaignError, match="required_leaf_files"):
+        C.validate_manifest(replace(manifest, required_leaf_files=("nope.json",)))
+    half = replace(manifest.groups[0], gpu_part="part_1_gpu")
+    with pytest.raises(C.CampaignError, match="set together"):
+        C.validate_manifest(replace(manifest, groups=(half, manifest.groups[1])))
+    bad = replace(manifest.groups[0], gpu_part="part_3_gpu", gpu_stage=1)
+    with pytest.raises(C.CampaignError, match="gpu_part"):
+        C.validate_manifest(replace(manifest, groups=(bad, manifest.groups[1])))
+
+
+# --- signature: strategy_args reduced to the strategy's own block (ADR 0015/0016) ---------
+
+
+def test_signature_ignores_other_strategies_args_blocks() -> None:
+    args = ("DANINHAS",)
+    base, vaal = "files_config/campaign/params_paper1.json", "files_config/campaign/params_paper1_vaal.json"
+    for strategy in ("RandomSampling", "LeastConfidence", "CEALSampling", "WAAL", "AdversarialDeepFool"):
+        # params_paper1_vaal.json differs from params_paper1.json only by the VAAL block
+        assert (C.effective_signature(base, *args, strategy, 100, 100, 8)
+                == C.effective_signature(vaal, *args, strategy, 100, 100, 8)), strategy
+    # VAAL reads its block: image_size 32 vs the default 64 is a different computation.
+    assert (C.effective_signature(base, *args, "VAAL", 100, 100, 8)
+            != C.effective_signature(vaal, *args, "VAAL", 100, 100, 8))
+    sig = json.loads(C.effective_signature(vaal, *args, "VAAL", 100, 100, 8))
+    assert list(sig["dataset"]["strategy_args"]) == ["vaal"] and sig["dataset"]["strategy_args"]["vaal"]["image_size"] == 32
+    assert "strategy_args" not in json.loads(C.effective_signature(vaal, *args, "RandomSampling", 100, 100, 8))["dataset"]

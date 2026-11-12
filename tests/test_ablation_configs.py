@@ -130,7 +130,7 @@ METHOD_NAME_PAIRS = [(method, name) for method, rows in METHODS.items() for name
 
 def _assert_full_scale_dataset_fields(config: ExperimentConfig) -> None:
     assert config.dataset.n_classes == 5
-    assert config.dataset.data_dir == "DATA/daninhas_full/"
+    assert config.dataset.data_dir == "DATA/daninhas_full_fixed/"  # ADR 0016
     assert config.dataset.n_epoch == 10
     assert config.dataset.train_args.batch_size == 256
     assert config.dataset.train_args.num_workers == 4

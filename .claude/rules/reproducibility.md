@@ -37,6 +37,20 @@ locations.
   `KMeans(n_clusters=n)` without `random_state`: it draws from NumPy's legacy global RNG, which `seed_everything`
   seeds, so it is reproducible (it is the one legacy strategy still reading that ambient state; do not copy that
   pattern into new code).
+- **Auxiliary networks and loaders of a strategy (2026-11-11, ADR 0015)**: a strategy that builds its own
+  network (a loss-prediction module, a VAE, a discriminator, a critic) constructs it inside
+  `dalmax.seeding.isolated_torch_seed(derive_seed(config.seed, "<tag>"))`: the CPU torch RNG is forked and seeded
+  from the sub-seed, so the auxiliary weights never consume the run's global torch stream and the task model's
+  initialisation and data order stay exactly where they would be without the strategy (build on CPU inside the
+  block, move to the device afterwards). Every other draw it makes is explicit: `dalmax.seeding.torch_generator(seed)`
+  for noise (e.g. the VAE reparameterisation) and an explicit `generator=` on every auxiliary `DataLoader` (never the
+  ambient default generator). Tags in use: see `.specs/adr/0015-deepalplus-strategies.md`. New strategies follow the
+  same pattern; a strategy that only ranks the task model's outputs needs none of this.
+- **Per-round history (2026-11-11, ADR 0016)**: every run also writes `round_predictions.json` (the test predictions of
+  every round) and `round_queries.json` (the pool indices labeled in every round, with labels and image paths), so a
+  later finding about the test set or the pool can be re-scored from the saved runs instead of re-running them. The
+  pool order follows `os.listdir`, which is file-system dependent: identify images by path, not by pool index, when
+  comparing runs made on different machines.
 - `torch.backends.cudnn.enabled = False` was used as a determinism
   shortcut in the historical `demo.py:59` (line no longer exists); it globally disabled cuDNN and cost performance on the
   the lab GPUs. **Now uses** `torch.backends.cudnn.deterministic = True` +

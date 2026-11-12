@@ -38,7 +38,7 @@ session: silent misconfiguration that only shows up after hours of training.
 3. **Results directory naming.** Confirm the expected output path matches
    `dalmax/experiment/runner.py`'s convention:
    `{dir_results}/{dataset_folder}/SEED_{seed}/NQ_{n_query}_NIL_{n_init_labeled}_NR_{n_round}_NE_{n_epoch}/{strategy_name}/`
-   and that `--dir_results` in the run script (e.g. the campaign's `results/campaign/`) does not
+   and that `--dir_results` in the run script (e.g. the campaign's `results/campaign_fixed/`, ADR 0016) does not
    collide with an existing run whose results must not be overwritten
    (`.claude/rules/data-safety.md`: `results/` is append-only).
 

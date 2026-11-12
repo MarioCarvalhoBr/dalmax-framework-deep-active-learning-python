@@ -173,7 +173,7 @@ machine and recording the resulting macro-F1 numbers.
 ## Running and reporting
 
 Run the configs through the campaign only: `make campaign-run PART=rnhal` (or `texhal`) on a GPU machine,
-`make campaign-verify PART=rnhal`, then `make campaign-report` (tables in `docs/results/campaign/`, missing
+`make campaign-verify PART=rnhal`, then `make campaign-report` (tables in `docs/results/campaign_fixed/`, missing
 runs render as `TBD`). Locally, `make campaign-smoke` CPU-smoke-tests every config on
 `DATA/daninhas_micro/` (skipping the two adversarial baselines) -- always green this before a GPU run.
 The already-executed 2026-08-26 RNHAL batch lives at the legacy `results/ablations/{6_1,6_2,6_3}/` with
