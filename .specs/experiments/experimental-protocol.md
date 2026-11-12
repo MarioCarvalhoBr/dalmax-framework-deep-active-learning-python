@@ -28,7 +28,17 @@ every existing params JSON keep working unchanged. See
 
 ## Datasets
 
-- **`daninhas_full`** (primary): `DATA/daninhas_full/{train,test}/DATASET_<CLASS>/`,
+- **`daninhas_full_fixed`** (primary since 2026-11-11, ADR 0016): `DATA/daninhas_full_fixed/{train,test}/DATASET_<CLASS>/`,
+  the duplicate-free version of `daninhas_full` (KI-46): 7,230 train / 1,008 test images, no MD5 repeated inside or
+  across the splits, plus `MANIFEST.csv` (one row per kept image with its dropped source copies) and `README.txt`
+  (8,240 files). Built once by `scripts/datasets/build_daninhas_full_fixed.py` (refuses an existing destination;
+  `--check` / `make dataset-check` verifies it); immutable afterwards. Every full-scale params JSON of the campaign,
+  the KMH sweep, the ablations and the lab/Colab checks points to it (`"data_dir": "DATA/daninhas_full_fixed/"`), so
+  the results leaf folder and the embedding cache key read `daninhas_full_fixed`. Same 5 classes and loader as below.
+- **`daninhas_full`** (primary until 2026-11-11; the dataset of the first campaign, kept immutable as history):
+  `DATA/daninhas_full/{train,test}/DATASET_<CLASS>/` (8,086 train / 2,106 test files, with byte-identical duplicates
+  inside and across the splits, KI-46); the source of `daninhas_full_fixed` and of the micro dataset
+  `DATA/daninhas_micro/` (golden fixtures, unchanged),
   5 classes (`BRACHIARIA`, `COLONIAO`, `GRAMINEA`, `MAMONA`,
   `OUTRAS_FOLHAS_LARGAS`), loaded by `dalmax.data.loaders.get_DANINHAS`
   (was `utils.data.get_DANINHAS`, moved in Phase 4), images
@@ -131,7 +141,8 @@ to historical GPU runs at the same seed (CPU runs are unaffected).
 
 ## Query strategies exercised
 
-Full `--strategy_name` choice list (from `demo.py` (historical) → `dalmax/cli.py`, unchanged plus one addition):
+Full `--strategy_name` choice list (from `demo.py` (historical) → `dalmax/cli.py`, unchanged plus one addition;
+plus the eight DeepAL+ ports of 2026-11-11 listed after the caveats below):
 `RandomSampling`, `LeastConfidence`, `MarginSampling`, `EntropySampling`,
 `LeastConfidenceDropout`, `MarginSamplingDropout`, `EntropySamplingDropout`,
 `KMeansSampling`, `KCenterGreedy`, `BALDDropout`, `AdversarialBIM`,
@@ -150,7 +161,7 @@ reads `"embedding"`/`"selection"` from the params JSON verbatim — see
 ablations.
 
 Caveats on three families (found 2026-11-02 and 2026-11-11; **fixed in code 2026-11-11, ADR 0014**; the first
-campaign execution ran with the defects, the re-run is prepared as parts `paper1_rerun_a`/`paper1_rerun_b`): the
+campaign execution ran with the defects; they are re-run inside the clean campaign on `daninhas_full_fixed`, ADR 0016): the
 MC-dropout strategies (`LeastConfidenceDropout`, `MarginSamplingDropout`, `EntropySamplingDropout`, `BALDDropout`)
 ran on a model with no dropout layer, so they were not MC-dropout and BALD's mutual information was zero up to
 noise (`quality/known-issues.md` KI-41); they now need `"model_args": {"dropout_p": ...}` (campaign:
@@ -159,6 +170,64 @@ noise (`quality/known-issues.md` KI-41); they now need `"model_args": {"dropout_
 features. `AdversarialBIM` broke distance ties in pool order (KI-45); ties are now broken at random with a
 generator derived from the seed (`derive_seed(seed, "adversarial_ties")`); `AdversarialDeepFool` keeps the pool-order
 tie-break of its executed runs (its only exact ties are byte-identical duplicate images).
+
+**DeepAL+ ports (2026-11-11, ADR 0015; in paper 1 of the campaign since ADR 0016).** Eight further
+`--strategy_name` choices port every method of DeepAL+ (Zhan et al., 2022, arXiv 2203.13450) that DalMax lacked:
+`VarRatio`, `MeanSTD` (both MC dropout: run with `files_config/campaign/params_paper1_mc_dropout.json`,
+`dropout_p` 0.5, fail fast without it), `KCenterGreedyPCA`, `BadgeSampling`, `CEALSampling`, `LossPredictionLoss`,
+`VAAL` (`files_config/campaign/params_paper1_vaal.json`: its defaults except `image_size: 32`, the author's cost
+decision for the campaign on `daninhas_full_fixed`, ADR 0016), `WAAL` (all others: `params_paper1.json`). Since
+ADR 0016 all eight are in paper 1 of the campaign at `n_query` 10/50/100. Every protocol knob (seeds, `n_init_labeled`, `n_query`,
+`n_round`, `n_epoch`, optimizer) is shared with the other strategies. Three of them change the training of the task
+model: `LossPredictionLoss` trains a loss-prediction module jointly (same `n_epoch`, the module's gradient reaches the
+backbone during the first `floor(0.6 * n_epoch)` epochs), `WAAL` replaces the cross-entropy training by its min-max
+training on labeled + unlabeled data (every round, round 0 included, so its round-0 model differs from the others'),
+and `CEALSampling` adds pseudo-labelled samples to the next training only (round 0 is plain training). `VAAL` trains
+the task model normally and a VAE + discriminator at every query (images area-resized from 128 to `image_size` for
+the VAE: default 64, 32 in the campaign). Deviations
+from DeepAL+ (including two upstream defects it fixes: VAAL's discriminator targets and VarRatio collapsing to
+LeastConfidence) are listed in ADR 0015. `KMeansSamplingGPU` is not ported (same method as `KMeansSampling`).
+
+**`strategy_args` params block (2026-11-11, ADR 0015).** Optional per-dataset block of per-strategy hyperparameters,
+keyed by strategy name; every key optional (defaults below = `dalmax/config/schema.py::StrategyArgs`), unknown
+strategy names or keys and wrongly typed values raise `ConfigError` (`"_comment"` keys allowed); the fully
+resolved block (all five sub-blocks, defaults included) appears in `run_metadata.json` under
+`config.dataset.strategy_args`:
+
+```json
+"strategy_args": {
+  "CEALSampling": {"base_strategy": "EntropySampling", "delta": 0.05, "delta_decay": 0.0033, "delta_schedule": "linear"},
+  "KCenterGreedyPCA": {"n_components": 50},
+  "LossPredictionLoss": {"margin": 1.0, "weight": 1.0, "detach_fraction": 0.6, "interm_dim": 128, "module_lr": 0.01},
+  "VAAL": {"epochs": 30, "latent_dim": 32, "beta": 1.0, "adversary_param": 1.0,
+           "num_vae_steps": 2, "num_adv_steps": 1, "lr": 0.0005, "image_size": 64},
+  "WAAL": {"alpha": 0.001, "gp_weight_task": 5.0, "gp_weight_critic": 2.0, "gamma_ratio": 1.0, "selection": 10.0}
+}
+```
+
+`CEALSampling.base_strategy` is one of `LeastConfidence`, `MarginSampling`, `EntropySampling`; its entropy threshold at
+query round `t` (1-based, clamped at 0) is `delta - delta_decay * t` with `delta_schedule: "linear"` (the default) or
+`delta - delta_decay * t (t + 1) / 2` with `"cumulative"` (DeepAL+'s literal reading). The defaults `delta` 0.05 and
+`delta_decay` 0.0033 are the CEAL paper's CACD setting (DeepAL+'s 5e-5 / 3.3e-7 pseudo-labels nothing on DANINHAS,
+ADR 0015).
+
+**`strategy_diagnostics`** (reporting only, never fed back into selection or training): all eight DeepAL+ ports write
+per-round series under this optional `results.json` key (every other strategy writes no such key, so their schema is
+unchanged). Every port records `pool_order_fraction` per query (the KI-45 signature: fraction of the batch among the
+first `2n` unlabeled pool positions; about `2n/|U|` for an informative strategy, 1.0 for a collapse to pool order),
+and six of them add their own series:
+`VarRatio` `var_ratio_n_nonzero`; `MeanSTD` `mean_std_score_mean`, `mean_std_score_std`; `CEALSampling` `ceal_round`,
+`ceal_delta`, `ceal_n_pseudo_labels`, `ceal_pseudo_label_accuracy` (null when nothing was pseudo-labelled) and, per
+training, `ceal_train_size`; `LossPredictionLoss` `lpl_labeled_spearman`, `lpl_n_labeled`, `lpl_pool_score_std`,
+`lpl_pool_score_n_unique`; `VAAL` `vaal_discriminator_auc`, `vaal_score_std`, `vaal_score_n_unique`, `vaal_mean_kl`,
+`vaal_mu_dim_std`; `WAAL` (per training) `waal_n_steps`, `waal_wasserstein_last_epoch` and (per query)
+`waal_critic_labeled_mean/std`, `waal_critic_unlabeled_mean/std`, `waal_critic_init_corr`, `waal_uncertainty_std`,
+`waal_critic_term_std`. `KCenterGreedyPCA` and `BadgeSampling` record `pool_order_fraction` only. The campaign's
+pilot report prints them (`.specs/experiments/campaign.md`, "Pilot").
+
+For deduplication (`dalmax.campaign.effective_signature`, ADR 0016) only the block of the strategy being run counts:
+two params files that differ only in another strategy's `strategy_args` block are the same computation for every
+strategy that does not read it.
 
 ## New CLI flags (Phase 2, additive — every other flag/default is unchanged)
 
@@ -220,29 +289,44 @@ run through `dalmax.cli`/`demo.py` (historical) from this commit onward. See
 ```
 
 where `dataset_folder = os.path.basename(params[dataset_name]['data_dir'].rstrip('/'))`
-— i.e. `daninhas_full` or `DATA_CIFAR10`, taken from the params JSON's
+— i.e. `daninhas_full_fixed` (or the historical `daninhas_full`) or `DATA_CIFAR10`, taken from the params JSON's
 `data_dir`, not from `--dataset_name` directly
 (`dalmax/experiment/runner.py::results_dir_for`, byte-identical logic to the
 pre-Phase-2 `demo.py` (historical)). Each leaf directory contains:
 `results.json` (config + per-round metric lists, now including the macro
 keys above), `predictions.csv` (per-test-image prediction record),
 `confusion_matrix.pdf`, `accuracy.pdf`/`precision.pdf`/`recall.pdf`/
-`f1_score.pdf`, `log-dalmax.log`, the saved model (`saved_model.pth`), and
-**`run_metadata.json` (NEW, Phase 2)** — see below.
+`f1_score.pdf`, `log-dalmax.log`, the saved model (`saved_model.pth`),
+**`run_metadata.json` (NEW, Phase 2)** — see below — and, since 2026-11-11 (ADR 0016), the per-round history:
+
+- `round_predictions.json` (compact JSON): `{"format": "dalmax-round-predictions", "version": 1, "class_names":
+  [...], "rounds": [0, 1, ...], "test_paths": [...], "test_labels": [...], "predictions": [[...], ...]}`, where
+  `predictions[r][i]` is the predicted class index of test image `i` (path `test_paths[i]`, true class
+  `test_labels[i]`) after round `r`; the last row equals `predictions.csv`.
+- `round_queries.json` (compact JSON): `{"format": "dalmax-round-queries", "version": 1, "class_names": [...],
+  "n_pool": N, "rounds": [{"round": 0, "kind": "initial", "pool_idxs": [...], "labels": [...], "paths": [...]},
+  {"round": 1, "kind": "query", ...}, ...]}`: the sorted pool indices labeled in each round (round 0 = the initial
+  labeled set), their true classes and image paths. Pool indices follow the loaders' sorted order (classes = sorted
+  folder names, files = sorted names in each class folder; KI-47, `run_metadata.json` `data_order`); compare runs by
+  the paths (`<class>/<file>`), as the campaign's seed audit does.
+
+Both are additive (`results.json`, `predictions.csv` and the log lines are unchanged) and written before
+`results.json`. `dalmax/reporting/leaf_check.py` requires them only for manifests that list them in
+`required_leaf_files` (every manifest of the clean campaign), so the leaves of the earlier trees still verify.
 
 ## Upper bound: `FullSupervised` (2026-09-29)
 
 Paper 1's upper bound is "a full training session using the entire pool of images" (thesis
 chapter 2). It is the registered strategy `FullSupervised`: every training image is labeled at
-initialization (`n_init_labeled` is forced to the pool size — 8,086 for `daninhas_full`; a different
-CLI value is overridden with a logged warning, and `run_metadata.json`/the results dir carry the real
-size, `NIL_8086`), only round 0 runs (`--n_round` must be 0, else `ConfigError`), `query()` raises,
+initialization (`n_init_labeled` is forced to the pool size — 7,230 for `daninhas_full_fixed`, 8,086 for the
+historical `daninhas_full`; a different CLI value is overridden with a logged warning, and `run_metadata.json`/the
+results dir carry the real size, `NIL_7230`), only round 0 runs (`--n_round` must be 0, else `ConfigError`), `query()` raises,
 `n_epoch=10` as every other run, evaluation on the fixed test set, seeds {1,2,3}; the normal
 artifacts are written (`results.json` with one round). **There is no validation split** in this
 project's protocol (pool/test only, as in the thesis) and none is invented for the upper bound.
-Results leaf: `.../NQ_100_NIL_8086_NR_0_NE_10/FullSupervised/`. Run by the campaign
+Results leaf: `.../NQ_100_NIL_7230_NR_0_NE_10/FullSupervised/`. Run by the campaign
 (`.specs/experiments/campaign.md`); CLI form:
-`--strategy_name FullSupervised --n_query 100 --n_init_labeled 8086 --n_round 0`.
+`--strategy_name FullSupervised --n_query 100 --n_init_labeled 7230 --n_round 0`.
 
 ## Run metadata (NEW, Phase 2)
 
@@ -251,8 +335,11 @@ Every leaf results directory now also contains `run_metadata.json`
 with: the fully-resolved config as loaded (including the new `embedding`/
 `selection`/`device` fields, and `params_json_path`), `git_commit`
 (best-effort `git rev-parse HEAD`, `None` if unavailable), `python_version`,
-`torch_version`, `cuda_available`, `started_at` (UTC ISO-8601), and (2026-09-29) `determinism` (`seed`,
-`deterministic_algorithms`, `cudnn_deterministic`, `cudnn_benchmark`, `cublas_workspace_config`). This is
+`torch_version`, `cuda_available`, `started_at` (UTC ISO-8601), (2026-09-29) `determinism` (`seed`,
+`deterministic_algorithms`, `cudnn_deterministic`, `cudnn_benchmark`, `cublas_workspace_config`), and (2026-11-12,
+KI-47) `data_order` (`contract` = `"sorted-names-v1"`, `train_paths_hash` and `test_paths_hash` = the first 12 hex
+digits of the SHA-256 of the ordered `<class>/<file>` paths of each split, `n_train`, `n_test`; what the run's pool
+and test indices name, compared across leaves by `campaign verify`). This is
 what makes `.claude/rules/reproducibility.md`'s "(params JSON + CLI args +
 seed + git commit) fully determine a run" verifiable after the fact — see
 `research-rules/reproducibility.md`.

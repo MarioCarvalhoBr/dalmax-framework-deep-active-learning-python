@@ -38,16 +38,18 @@ session: silent misconfiguration that only shows up after hours of training.
 3. **Results directory naming.** Confirm the expected output path matches
    `dalmax/experiment/runner.py`'s convention:
    `{dir_results}/{dataset_folder}/SEED_{seed}/NQ_{n_query}_NIL_{n_init_labeled}_NR_{n_round}_NE_{n_epoch}/{strategy_name}/`
-   and that `--dir_results` in the run script (e.g. the campaign's `results/campaign/`) does not
+   and that `--dir_results` in the run script (e.g. the campaign's `results/campaign_fixed/`, ADR 0016) does not
    collide with an existing run whose results must not be overwritten
    (`.claude/rules/data-safety.md`: `results/` is append-only).
 
 4. **Embedding cache validity.** Check `results/cache/embeddings/` for existing
-   `{dataset}__{extractor}__Q{q}__{variant}__{split}__pool{pool_hash}.pkl` files
+   `{dataset}__{extractor}__Q{q}__{variant}__{split}__order{order_hash}__pool{pool_hash}.pkl` files
    (`dalmax/embeddings/cache.py::EmbeddingCache`). The key already includes `(dataset, extractor, Q,
-   variant, split, pool_hash)`, so a stale cache from a different `Q`/dataset/variant cannot be
-   silently reused by construction — but still sanity-check the actual filename against the run's
-   config before trusting it. Also note that the pre-Phase-2 unkeyed
+   variant, split, order_hash, pool_hash)`, so a stale cache from a different `Q`/dataset/variant or
+   image order cannot be silently reused by construction (since KI-47 the payload also stores and
+   checks the cached images' paths) — but still sanity-check the actual filename against the run's
+   config before trusting it, and that the leaves of a campaign agree on `run_metadata.json`
+   `data_order` (`campaign verify`'s data-order audit). Also note that the pre-Phase-2 unkeyed
    `results/features_dict_ssrae.pkl`/`results/features_dict_vctex.pkl`/`results/Y_train.pkl` files
    may still be sitting on the lab machine's disk, orphaned and unread by any current code path
    (`.specs/quality/known-issues.md` KI-3) — never let the auditor delete them

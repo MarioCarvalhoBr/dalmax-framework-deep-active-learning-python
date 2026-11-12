@@ -2,7 +2,8 @@
 
 `dalmax.reporting.campaign_report` builds the per-paper tables and mean confusion matrices of
 the campaign (`.specs/experiments/campaign.md`); `dalmax.reporting.leaf_check` is the artifact-completeness
-check of one run directory.
+check of one run directory; `dalmax.reporting.pilot_report` is the read-only summary of a campaign pilot
+(`python -m dalmax.campaign pilot-report`).
 
 The rest of this package (`extract_confusion_matrices.py`, `chunk_results.py`,
 `average_confusion_matrices.py`, `average_results.py`, `build_method_metrics.py`,

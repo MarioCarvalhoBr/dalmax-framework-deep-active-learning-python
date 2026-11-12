@@ -179,7 +179,7 @@ def build_config(nq: int, h: Hierarchy, knob: tuple[str, str, Any] | None, *, mi
     return {
         "_comment": comment,
         "DANINHAS": {
-            "data_dir": "DATA/daninhas_micro/" if micro else "DATA/daninhas_full/",
+            "data_dir": "DATA/daninhas_micro/" if micro else "DATA/daninhas_full_fixed/",
             "n_epoch": 1 if micro else 10,
             "n_drop": 10,
             "n_classes": 5,

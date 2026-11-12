@@ -1,0 +1,5 @@
+md5,reason
+6ec03de911d82c6c55085f8770ff9fa2,near-duplicate (mean absolute pixel difference 2.15) of test images of the same class
+c0310c852f63d897de184216c8099bed,near-duplicate (mean absolute pixel difference 2.22) of test images of the same class
+e2e04b7518537db7f737a18ef6438939,near-duplicate (mean absolute pixel difference 2.14) of test images of the same class
+edc3da342732910712ad259c42c687d8,near-duplicate (mean absolute pixel difference 2.20) of test images of the same class

@@ -1,5 +1,5 @@
 {
-    "_comment": "Micro (CPU smoke) mirror of params_paper1_mc_dropout.json: identical to params_paper1_micro.json plus model_args.dropout_p = 0.5 (KI-41, ADR 0014), for the MC-dropout groups of files_config/campaign/manifest_micro.json.",
+    "_comment": "Micro (CPU smoke) mirror of params_paper1_mc_dropout.json: identical to params_paper1_micro.json plus model_args.dropout_p = 0.5 (KI-41, ADR 0014), for the dropout-family groups of files_config/campaign/manifest_micro.json.",
     "DANINHAS": {
         "data_dir": "DATA/daninhas_micro/",
         "n_epoch": 1,

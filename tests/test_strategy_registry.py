@@ -22,6 +22,8 @@ import pytest
 from dalmax.config.loader import load_experiment_config
 from dalmax.config.schema import ConfigError
 from dalmax.query_strategies.registry import (
+    DEEPALPLUS_STRATEGY_KWARGS,
+    DEEPALPLUS_STRATEGY_REGISTRY,
     GENERIC_REPRESENTATION_NAME,
     LEGACY_STRATEGY_REGISTRY,
     REPRESENTATION_PRESETS,
@@ -68,6 +70,21 @@ def _dataset_and_net():
 
 def test_strategy_registry_covers_all_legacy_names():
     assert set(LEGACY_STRATEGY_REGISTRY) <= set(STRATEGY_REGISTRY)
+
+
+def test_strategy_registry_covers_the_deepalplus_ports():
+    # ADR 0015: every port has a kwargs factory and no name collides with another family.
+    assert set(DEEPALPLUS_STRATEGY_REGISTRY) <= set(STRATEGY_REGISTRY)
+    assert set(DEEPALPLUS_STRATEGY_KWARGS) == set(DEEPALPLUS_STRATEGY_REGISTRY)
+    assert not set(DEEPALPLUS_STRATEGY_REGISTRY) & set(LEGACY_STRATEGY_REGISTRY)
+
+
+@pytest.mark.parametrize("name", sorted(DEEPALPLUS_STRATEGY_REGISTRY))
+def test_build_strategy_deepalplus_names_construct_their_class(name):
+    dataset, net = _dataset_and_net()
+    strategy = build_strategy(name, dataset, net, _config(name), logger=None, rng=np.random.default_rng(0))
+    assert type(strategy) is DEEPALPLUS_STRATEGY_REGISTRY[name]
+    assert strategy.dataset is dataset and strategy.net is net
 
 
 def test_strategy_registry_covers_presets_and_generic_name():

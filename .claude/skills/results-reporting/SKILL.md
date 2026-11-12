@@ -81,7 +81,8 @@ prefixes are gone, since a name starting with a digit can't be used with
   where it writes derived output before running it against a shared results
   tree.
 - There is also `dalmax/reporting/campaign_report.py` (`make campaign-report`), which builds the
-  per-paper tables/confusion matrices for the campaign from `results/campaign/` — see
+  per-paper tables/confusion matrices for the campaign from `results/campaign_fixed/` (the clean re-run, ADR 0016;
+  `results/campaign/` is the first campaign, history) — see
   `.specs/experiments/campaign.md`, not part of this numbered pipeline.
 - `.claude/commands/results-report.md` wraps steps 2-4 (and optionally 5) as a
   single command for a given results directory.

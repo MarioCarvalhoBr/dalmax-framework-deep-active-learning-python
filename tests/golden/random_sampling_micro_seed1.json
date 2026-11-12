@@ -28,10 +28,29 @@
         "n_round": 1,
         "seed": 1,
         "all_acc": [0.215311004784689, 0.215311004784689],
-        "all_precision": [0.046358828781392365, 0.046581707765918294],
+        "all_precision": [0.046358828781392365, 0.046358828781392365],
         "all_recall": [0.215311004784689, 0.215311004784689],
-        "all_f1_score": [0.07629130090796066, 0.07659284755186566],
+        "all_f1_score": [0.07629130090796066, 0.07629130090796066],
         "rounds": [0, 1]
+    },
+    "data_order": {
+        "note": "run_metadata.json data_order of this run since KI-47 (2026-11-12): the hash of the ordered relative paths of the micro dataset's train and test lists under the loaders' sorted-name contract (dalmax/data_order.py). Not asserted by the test; recorded so a later change of DATA/daninhas_micro/ or of the order contract is visible.",
+        "contract": "sorted-names-v1",
+        "train_paths_hash": "0985fe1d1536",
+        "test_paths_hash": "3610a468cacc",
+        "n_train": 806,
+        "n_test": 209
+    },
+    "pre_ki47_unsorted_listing_values": {
+        "note": "Values of this fixture before 2026-11-12 (KI-47), kept for the record. The loaders used to list each class folder with an unsorted os.listdir, so the pool/test order was the file system's listing order of DATA/daninhas_micro/ on the machine that captured the fixture. Since KI-47 the loaders sort the file names; the micro dataset itself was NOT regenerated (same 806 + 209 files). The initial and round-1 indices are unchanged (they come from the seeded index shuffle/choice alone), but the indices now name other images, so the round-1 training set and the round-1 weighted precision/F1 changed; round 0 is unchanged because the 1-epoch model predicts a single class on both orders.",
+        "git_commit": "2b0a93a",
+        "results_json": {
+            "all_acc": [0.215311004784689, 0.215311004784689],
+            "all_precision": [0.046358828781392365, 0.046581707765918294],
+            "all_recall": [0.215311004784689, 0.215311004784689],
+            "all_f1_score": [0.07629130090796066, 0.07659284755186566],
+            "rounds": [0, 1]
+        }
     },
     "previous_micro_2class_values": {
         "note": "Values recorded here for the historical record before the 2026-08-23 micro-dataset redefinition (chore/micro-10pct): DATA/daninhas_micro/ used to be a hand-picked 2-class (DATASET_BRACHIARIA, DATASET_GRAMINEA), 25-train/10-test-per-class subset (n_classes=2 in files_config/params_micro.json). It is now a 10%-stratified, all-5-class replica of DATA/daninhas_full/ (n_classes=5), giving a more realistic pre-lab end-to-end check. Indices/metrics below are NOT reproducible against the current DATA/daninhas_micro/ or files_config/params_micro.json -- they describe the old dataset definition only.",
@@ -48,6 +67,7 @@
         }
     },
     "notes": [
+        "2026-11-12 (KI-47): regenerated deliberately after the loaders switched from an unsorted os.listdir to sorted file names (see pre_ki47_unsorted_listing_values). Captured on top of commit 2b0a93a plus the uncommitted KI-47 change set, in a scratch copy of the repository with its own copy of DATA/daninhas_micro/ (the real micro dataset was not touched or regenerated); verified bit-identical across 2 separate CPU processes (indices and every results.json metric, macro included).",
         "Verified deterministic across 2 separate CPU processes on the local dev notebook (no GPU): initial labeled idxs, query idxs, and all metrics in results.json were bit-identical across both runs (this is the same determinism-verification pattern the pre-redefinition fixture used, run again against the redefined dataset).",
         "Indices (initial labeled + queried) are produced purely by numpy's global RNG (np.random.seed(args.seed) + np.random.shuffle/np.random.choice), independent of the ResNet50 forward/backward pass, so their determinism does not depend on CPU floating-point reduction order.",
         "Metrics come from a single ResNet50 (ImageNet-pretrained) epoch of training on 10/15 labeled images at round 0/1, evaluated against 209 test images across 5 classes; with only 1 epoch and a tiny CPU-only setup, round-0/round-1 accuracy (0.215) sits close to 5-class chance (0.2) -- expected for this harder, more realistic 5-class problem versus the old fixture's 2-class chance-level accuracy (0.5), not a regression.",

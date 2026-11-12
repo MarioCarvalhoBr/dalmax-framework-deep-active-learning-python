@@ -38,6 +38,7 @@ class _FakeDataset:
     def __init__(self, n_pool: int, seed: int = 0) -> None:
         rng = np.random.default_rng(seed)
         self.X_train = rng.integers(0, 256, size=(n_pool, 8, 8, 3), dtype=np.uint8)
+        self.Z_train_paths = [f"DATA/fake/train/c{i % 2}/img{i:03d}.png" for i in range(n_pool)]
         self.labeled_idxs = np.zeros(n_pool, dtype=bool)
         self.dataset_folder = "fake_micro_dataset"
 
@@ -191,3 +192,53 @@ def test_query_non_positive_budget_returns_empty(tmp_path, budget):
     strategy, _ = _make_strategy(tmp_path)
     selected = strategy.query(budget)
     assert len(selected) == 0
+
+
+class _CountingProvider:
+    """Wraps a real provider and counts `embed` calls (cache hits make none)."""
+
+    def __init__(self, inner) -> None:
+        self.inner = inner
+        self.name = inner.name
+        self.q = inner.q
+        self.calls = 0
+
+    def embed(self, images: np.ndarray) -> np.ndarray:
+        self.calls += 1
+        return self.inner.embed(images)
+
+    def key(self, *args, **kwargs):
+        return self.inner.key(*args, **kwargs)
+
+
+def _strategy_on(dataset, cache_root, provider):
+    dataset.labeled_idxs[:N_LABELED_INITIALLY] = True
+    return RepresentationStrategy(
+        dataset, net=None, config=_make_config(), logger=None, embedding_provider=provider,
+        selection=FlatKMeansClosest(), rng=np.random.default_rng(1), cache=EmbeddingCache(root=cache_root),
+    )
+
+
+def test_same_images_same_order_hit_the_cache_and_select_identically(tmp_path):
+    provider = _CountingProvider(SSRAEProvider(q=Q, device="cpu"))
+    first = _strategy_on(_FakeDataset(N_POOL), tmp_path / "cache", provider).query(3)
+    second = _strategy_on(_FakeDataset(N_POOL), tmp_path / "cache", provider).query(3)
+    assert provider.calls == 1  # the second strategy loaded the cache
+    np.testing.assert_array_equal(first, second)
+
+
+def test_another_image_order_never_reuses_the_cache(tmp_path):
+    """KI-47: the same pool ids under another order are other images, so they must not load
+    the first order's features (the key's order hash differs, a second file is written)."""
+    provider = _CountingProvider(SSRAEProvider(q=Q, device="cpu"))
+    _strategy_on(_FakeDataset(N_POOL), tmp_path / "cache", provider).query(3)
+
+    permuted = _FakeDataset(N_POOL)
+    perm = np.random.default_rng(7).permutation(N_POOL)
+    permuted.X_train = permuted.X_train[perm]
+    permuted.Z_train_paths = [permuted.Z_train_paths[i] for i in perm]
+    _strategy_on(permuted, tmp_path / "cache", provider).query(3)
+
+    assert provider.calls == 2
+    files = sorted(p.name for p in (tmp_path / "cache").iterdir())
+    assert len(files) == 2 and len({name.split("__order")[1].split("__")[0] for name in files}) == 2

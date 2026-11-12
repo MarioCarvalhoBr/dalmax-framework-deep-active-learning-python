@@ -1,6 +1,12 @@
 """Generate `files_config/campaign/manifest.json`, `manifest_micro.json`, `manifest_control_ki43.json`
 and the KMH sweep manifests `manifest_kmh_sweep.json` / `manifest_kmh_sweep_micro.json`.
 
+Since ADR 0016 they describe the clean re-execution of everything on `DATA/daninhas_full_fixed`
+(results under `results/campaign_fixed/` and `results/campaign_kmh_fixed/`), with every group of the
+two full-scale manifests also assigned to one of the two GPU parts (`part_1_gpu`, `part_2_gpu`, one
+per Colab account). The manifests of the first execution (dataset with duplicates, KI-46) are in the
+git history (commit d668673 and earlier).
+
 The manifests are committed artifacts (single source of truth, see
 `.specs/experiments/campaign.md`); this script is how they are produced,
 and `tests/test_campaign.py` fails if the committed files drift from what it
@@ -23,8 +29,8 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-from dalmax.campaign import Alias, derive_used_by  # noqa: E402
-from dalmax.superseded import RERUN_PARTS as SUPERSEDED_RERUN_PARTS  # noqa: E402
+from dalmax.campaign import GPU_PARTS, Alias, derive_used_by  # noqa: E402
+from dalmax.reporting.leaf_check import ROUND_HISTORY_FILES  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import build_kmh_sweep_configs as sweep  # noqa: E402
@@ -37,44 +43,46 @@ CLASSICAL_STRATEGIES = [
     "KMeansSampling", "KCenterGreedy", "BALDDropout", "AdversarialBIM",
     "AdversarialDeepFool",
 ]
+# Paper 1 since ADR 0016: the eight DeepAL+ ports of ADR 0015, at the same three budgets.
+DEEPALPLUS_STRATEGIES = [
+    "VarRatio", "MeanSTD", "KCenterGreedyPCA", "BadgeSampling", "CEALSampling", "LossPredictionLoss",
+    "VAAL", "WAAL",
+]
+PAPER1_STRATEGIES = [*CLASSICAL_STRATEGIES, *DEEPALPLUS_STRATEGIES]
 # KMH = plain hierarchical k-means on ImageNet ResNet-50 features (no SSRAE/VCTex);
 # interpretation CONFIRMED by the user 2026-09-29 (see .specs/experiments/campaign.md).
 KMH = "KMH"
 KMH_LABEL = "KMH (hierarchical k-means, ImageNet ResNet-50 features)"
-# Paper-1 methods eligible for "best paper-1 method @ nq=100": 12 classical + KMH.
-PAPER1_METHODS = [*CLASSICAL_STRATEGIES, KMH]
-
-# Re-run of the seven baselines fixed on 2026-11-11 (ADR 0014; KI-41 MC dropout, KI-42 embeddings,
-# KI-45 BIM ties). Their 21 groups keep id, dir_results and table rows, and move from part `paper1` to
-# two parts balanced by the GPU time of the first execution (BIM ~2,300 s per run, MC-dropout ~230 s,
-# k-means/k-center ~90 s), one per Colab account: A = BIM nq100/nq50 + KMeans/KCenter (24 runs),
-# B = BIM nq10 + the four MC-dropout strategies (39 runs).
-# The part names come from dalmax/superseded.py (one definition, shared with the campaign engine's
-# run guard / STALE verify status and with archive_superseded_runs.py).
-RERUN_PART_A, RERUN_PART_B = SUPERSEDED_RERUN_PARTS
-MC_DROPOUT_STRATEGIES = ["LeastConfidenceDropout", "MarginSamplingDropout", "EntropySamplingDropout", "BALDDropout"]
+# Paper-1 methods eligible for "best paper-1 method @ nq=100": the 20 strategies + KMH.
+PAPER1_METHODS = [*PAPER1_STRATEGIES, KMH]
 PAPER1_BUDGETS = (10, 50, 100)
-# strategy -> {paper nq -> part}; a (strategy, nq) absent here stays in part `paper1`.
-RERUN_PARTS: dict[str, dict[int, str]] = {
-    "AdversarialBIM": {100: RERUN_PART_A, 50: RERUN_PART_A, 10: RERUN_PART_B},
-    "KMeansSampling": dict.fromkeys(PAPER1_BUDGETS, RERUN_PART_A),
-    "KCenterGreedy": dict.fromkeys(PAPER1_BUDGETS, RERUN_PART_A),
-    **{strat: dict.fromkeys(PAPER1_BUDGETS, RERUN_PART_B) for strat in MC_DROPOUT_STRATEGIES},
-}
-RERUN_NOTES: dict[str, str] = {
-    "AdversarialBIM": "Re-run (ADR 0014, KI-45): BIM distance ties broken at random with a seed-derived generator "
-                      "(they were broken in pool order, i.e. by class).",
-    "KMeansSampling": "Re-run (ADR 0014, KI-42): clusters the trained 2048-d pooled features (was an untrained "
-                      "random 50-d projection).",
-    "KCenterGreedy": "Re-run (ADR 0014, KI-42): k-center on the trained 2048-d pooled features (was an untrained "
-                     "random 50-d projection); NaN-free distances.",
-    **dict.fromkeys(MC_DROPOUT_STRATEGIES,
-                    "Re-run (ADR 0014, KI-41): trains and predicts with a dropout layer (p=0.5) before the "
-                    "classifier, MC passes with only dropout active (params_paper1_mc_dropout.json); the "
-                    "network had no dropout before."),
-}
-SUPERSEDED_NOTE = ("The executed run of this group (2026-09-30 to 2026-10-05) is superseded and archived to "
-                   "results/old_results_broken/ by scripts/campaign/archive_superseded_runs.py.")
+# The dropout family trains with a dropout layer before the classifier (KI-41, ADR 0014):
+# the four MC-dropout strategies and the two DeepAL+ ones that sample it (VarRatio, MeanSTD).
+DROPOUT_STRATEGIES = [
+    "LeastConfidenceDropout", "MarginSamplingDropout", "EntropySamplingDropout", "BALDDropout", "VarRatio", "MeanSTD",
+]
+
+# --- GPU parts (ADR 0016) ----------------------------------------------------------------------------
+# A second, orthogonal partition of BOTH full-scale manifests (main + KMH sweep) into two halves of about
+# equal estimated GPU time (files_config/campaign/gpu_time_estimates.json), one per Colab account. A group
+# never splits; groups read together in one table stay in one part where the balance allows:
+#   part_1_gpu = paper 1 at nq100 (with the shared random/KMH runs), the upper bound, every ablation part
+#                of papers 2/3 (all their tables and comparisons are at nq100), the KMH sweep at nq100 and
+#                at nq50 (the nq50 sweep is the balancing item: its own tables stay in one part);
+#   part_2_gpu = paper 1 at nq50 and nq10, the KMH sweep at nq10.
+PART_1_GPU, PART_2_GPU = GPU_PARTS
+PAPER1_GPU_PART: dict[int, str] = {100: PART_1_GPU, 50: PART_2_GPU, 10: PART_2_GPU}
+SWEEP_GPU_PART: dict[int, str] = {100: PART_1_GPU, 50: PART_1_GPU, 10: PART_2_GPU}
+ABLATION_GPU_PART = PART_1_GPU
+UPPER_BOUND_GPU_PART = PART_1_GPU
+# Execution stage inside a GPU part (both manifests share the numbering; `campaign run --part part_N_gpu`
+# orders by it): cheap table-critical groups first, the very long ones last, so that an exhausted credit
+# budget leaves complete tables.
+STAGE_PAPER1 = 1  # paper-1 strategies other than the long ones, KMH, the upper bound
+STAGE_ABLATIONS = 2  # rnhal, texhal, texhal_q17, hier_transfer
+STAGE_KMH_SWEEP = 3  # the KMH sweep manifest
+LONG_STRATEGY_STAGE: dict[str, int] = {"AdversarialBIM": 4, "VAAL": 5, "WAAL": 5, "AdversarialDeepFool": 6}
+GPU_TIME_ESTIMATES = "files_config/campaign/gpu_time_estimates.json"
 
 
 @dataclass(frozen=True)
@@ -83,27 +91,53 @@ class Scale:
 
     name: str
     results_root: str
+    sweep_results_root: str
     paper1_params: str
     paper1_mc_dropout_params: str
+    paper1_vaal_params: str
     kmh_params: str
     abl_subdir: str  # "" or "micro/"
     nq_by_paper_nq: dict[int, int]  # paper nq -> actual --n_query
     n_init: int
     n_round: int
     upper_bound_n_init: int
+    gpu_time_estimates: str  # "" = none (the micro mirror: its costs are not the GPU ones)
 
 
+# Results go to NEW roots (ADR 0016): nothing collides with the executed trees results/campaign/ and
+# results/campaign_kmh/ (dataset with duplicates, KI-46), which stay untouched. Upper bound n_init = the
+# pool of DATA/daninhas_full_fixed (7,230 training images).
 FULL = Scale(
-    "campaign", "results/campaign", "files_config/campaign/params_paper1.json",
-    "files_config/campaign/params_paper1_mc_dropout.json", "files_config/campaign/params_kmh.json", "",
-    {10: 10, 50: 50, 100: 100}, 100, 8, 8086,
+    "campaign_fixed", "results/campaign_fixed", "results/campaign_kmh_fixed",
+    "files_config/campaign/params_paper1.json", "files_config/campaign/params_paper1_mc_dropout.json",
+    "files_config/campaign/params_paper1_vaal.json", "files_config/campaign/params_kmh.json", "",
+    {10: 10, 50: 50, 100: 100}, 100, 8, 7230, GPU_TIME_ESTIMATES,
 )
 MICRO = Scale(
-    "campaign_micro", "results/smoke_campaign", "files_config/campaign/params_paper1_micro.json",
-    "files_config/campaign/params_paper1_mc_dropout_micro.json", "files_config/campaign/params_kmh_micro.json",
+    "campaign_fixed_micro", "results/smoke_campaign_fixed", "results/smoke_campaign_kmh_fixed",
+    "files_config/campaign/params_paper1_micro.json", "files_config/campaign/params_paper1_mc_dropout_micro.json",
+    "files_config/campaign/params_paper1_vaal_micro.json", "files_config/campaign/params_kmh_micro.json",
     "micro/",
-    {10: 3, 50: 4, 100: 5}, 10, 1, 806,
+    {10: 3, 50: 4, 100: 5}, 10, 1, 806, "",
 )
+
+
+def paper1_params(scale: Scale, strategy: str) -> str:
+    """Params file of a paper-1 strategy: the dropout family, VAAL, or the common file."""
+    if strategy in DROPOUT_STRATEGIES:
+        return scale.paper1_mc_dropout_params
+    if strategy == "VAAL":
+        return scale.paper1_vaal_params
+    return scale.paper1_params
+
+
+def manifest_header(scale: Scale) -> dict[str, Any]:
+    """Keys shared by the main and the sweep manifest of one scale (ADR 0016)."""
+    header: dict[str, Any] = {"required_leaf_files": list(ROUND_HISTORY_FILES)}
+    if scale.gpu_time_estimates:
+        header["gpu_time_estimates"] = scale.gpu_time_estimates
+    return header
+
 
 # (id suffix, params basename, table label) -- ablation rows per study, per method.
 RNHAL_61 = [("rep_spatial", "Spatial-only"), ("rep_spectral", "Spectral-only")]
@@ -150,10 +184,11 @@ def build(scale: Scale) -> dict[str, Any]:
     alias_notes: dict[str, list[str]] = {}
 
     def add_group(gid: str, part: str, params: str, strategy: str, nq: int, nil: int, nr: int,
-                  dir_results: str, note: str = "") -> None:
+                  dir_results: str, note: str = "", *, gpu_part: str, stage: int) -> None:
         groups.append({
-            "id": gid, "part": part, "params_json": params, "strategy_name": strategy,
-            "n_query": nq, "n_init_labeled": nil, "n_round": nr, "seeds": list(SEEDS),
+            "id": gid, "part": part, "gpu_part": gpu_part,
+            "gpu_stage": LONG_STRATEGY_STAGE.get(strategy, stage), "params_json": params,
+            "strategy_name": strategy, "n_query": nq, "n_init_labeled": nil, "n_round": nr, "seeds": list(SEEDS),
             "dir_results": dir_results, "used_by": [], "note": note,
         })
 
@@ -168,35 +203,35 @@ def build(scale: Scale) -> dict[str, Any]:
     # `used_by` (derived from the tables) lists all consumers either way.
     shared_note = "Consumed by several papers (see used_by): ONE run, every table points here."
 
-    # --- paper 1 (12 classical + KMH) x nq {100, 50, 10} ---------------------
+    # --- paper 1 (20 strategies + KMH) x nq {100, 50, 10} ----------------------
     # First job of the whole campaign: the cheapest run (a quick GPU/environment sanity check).
+    p1_stage = {"gpu_part": PAPER1_GPU_PART[100], "stage": STAGE_PAPER1}
     add_group("shared/random_nq100", "paper1", scale.paper1_params, "RandomSampling", primary,
-              scale.n_init, scale.n_round, f"{root}/shared/random_nq100/", shared_note)
+              scale.n_init, scale.n_round, f"{root}/shared/random_nq100/", shared_note, **p1_stage)
     for paper_nq in (100, 50, 10):
         nq = scale.nq_by_paper_nq[paper_nq]
-        for strat in CLASSICAL_STRATEGIES:
+        at_nq = {"gpu_part": PAPER1_GPU_PART[paper_nq], "stage": STAGE_PAPER1}
+        for strat in PAPER1_STRATEGIES:
             if paper_nq == 100 and strat == "RandomSampling":
-                continue  # shared/random_nq100 (below): baseline of papers 1, 2 and 3
-            part = RERUN_PARTS.get(strat, {}).get(paper_nq, "paper1")
-            params = scale.paper1_mc_dropout_params if strat in MC_DROPOUT_STRATEGIES else scale.paper1_params
-            note = f"{RERUN_NOTES[strat]} {SUPERSEDED_NOTE}" if part != "paper1" else ""
-            add_group(f"p1/{strat}/nq{paper_nq}", part, params, strat, nq,
-                      scale.n_init, scale.n_round, f"{root}/paper1/nq{paper_nq}/", note)
+                continue  # shared/random_nq100 (above): baseline of papers 1, 2 and 3
+            add_group(f"p1/{strat}/nq{paper_nq}", "paper1", paper1_params(scale, strat), strat, nq,
+                      scale.n_init, scale.n_round, f"{root}/paper1/nq{paper_nq}/", **at_nq)
         if paper_nq == 100:
             add_group("shared/kmh_nq100", "paper1", kmh_params, "RepresentationStrategy", nq,
                       scale.n_init, scale.n_round, f"{root}/shared/kmh_nq100/",
                       "KMH @ n_query=100 = hierarchical k-means on ImageNet ResNet-50 features (reference "
                       "hierarchy [600,200,100]) = the 'w/o representation module' row of papers 2 and 3. "
-                      + shared_note)
+                      + shared_note, **at_nq)
         else:
             add_group(f"p1/{KMH}/nq{paper_nq}", "paper1", kmh_params, "RepresentationStrategy", nq,
                       scale.n_init, scale.n_round, f"{root}/paper1/nq{paper_nq}/",
                       "KMH: hierarchical k-means selection on ImageNet ResNet-50 features (reference "
-                      "hierarchy [600,200,100]), no SSRAE/VCTex.")
+                      "hierarchy [600,200,100]), no SSRAE/VCTex.", **at_nq)
     add_group("p1/upper_bound", "upper_bound", scale.paper1_params, "FullSupervised", primary,
               scale.upper_bound_n_init, 0, f"{root}/paper1/upper_bound/",
               "Upper bound (not active learning): train once on the ENTIRE pool "
-              "(n_init_labeled == pool size, n_round 0), evaluate on the fixed test set.")
+              "(n_init_labeled == pool size, n_round 0), evaluate on the fixed test set.",
+              gpu_part=UPPER_BOUND_GPU_PART, stage=STAGE_PAPER1)
 
     # --- rnhal / texhal ablation groups (full rows are ONE canonical run) -----
     def ablation_groups(method: str, study_rows: dict[str, list[str]], part: str | None = None) -> None:
@@ -205,7 +240,7 @@ def build(scale: Scale) -> dict[str, Any]:
             for cfg in cfgs:
                 add_group(f"{method}/{study}/{cfg}", part or method, (abl % method) + f"{cfg}.json",
                           "RepresentationStrategy", primary, scale.n_init, scale.n_round,
-                          f"{root}/{method}/{study}/{cfg}/")
+                          f"{root}/{method}/{study}/{cfg}/", gpu_part=ABLATION_GPU_PART, stage=STAGE_ABLATIONS)
 
     ablation_groups("rnhal", {
         "6_1": [c for c, _ in RNHAL_61],
@@ -231,7 +266,8 @@ def build(scale: Scale) -> dict[str, Any]:
     add_group("shared/texhal_full", "texhal", (abl % "texhal") + "stage_full.json",
               "RepresentationStrategy", primary, scale.n_init, scale.n_round,
               f"{root}/shared/texhal_full/",
-              "TexHAL 'full' (VCTex q=[5,17] + reference hierarchy). " + shared_note)
+              "TexHAL 'full' (VCTex q=[5,17] + reference hierarchy). " + shared_note,
+              gpu_part=ABLATION_GPU_PART, stage=STAGE_ABLATIONS)
 
     # --- aliases -------------------------------------------------------------
     add_alias("p1/RandomSampling/nq100", "shared/random_nq100", scale.paper1_params,
@@ -252,7 +288,7 @@ def build(scale: Scale) -> dict[str, Any]:
 
     q17_ref = "texhal/6_1/rep_q17"
     q17_why = ("TexHAL canonical Q=17 (ADR 0011): the reference hierarchy L=3 k=[600,200,100] with VCTex "
-               "q=[17] IS the already-executed texhal/6_1/rep_q17 run (byte-identical config).")
+               "q=[17] IS the texhal/6_1/rep_q17 run (byte-identical config).")
     add_alias("texhal_q17/6_2/hier_ref", q17_ref, (abl % "texhal") + "rep_q17.json", q17_why)
     add_alias("texhal_q17/6_3/stage_full", q17_ref, (abl % "texhal") + "rep_q17.json", q17_why)
     add_alias("texhal_q17/6_3/stage_no_representation", "shared/kmh_nq100", kmh_params,
@@ -355,11 +391,12 @@ def build(scale: Scale) -> dict[str, Any]:
 
     return {
         "name": scale.name,
-        "description": "Single source of truth for the one-shot re-execution of everything papers 1-3 need "
-                       "(.specs/experiments/campaign.md, ADR 0008/0009). Generated by "
+        "description": "Single source of truth for the clean re-execution of everything papers 1-3 need on "
+                       "DATA/daninhas_full_fixed (.specs/experiments/campaign.md, ADR 0008/0009/0016). Generated by "
                        "scripts/campaign/build_manifest.py -- do not edit by hand.",
         "dataset_name": "DANINHAS",
         "results_root": scale.results_root,
+        **manifest_header(scale),
         "seeds": SEEDS,
         "primary_nq": primary,
         "groups": groups,
@@ -373,15 +410,17 @@ def build_control_ki43() -> dict[str, Any]:
 
     Same configuration as `shared/random_nq100` (paper-1 params, nq 100, NIL 100, NR 8, seeds 1-3) so
     its round-0 / final metrics can be compared with the campaign runs at the same seeds. No aliases
-    and no tables (so `used_by` is empty and the manifest validates trivially).
+    and no tables (so `used_by` is empty and the manifest validates trivially). Since ADR 0016 it runs on
+    DATA/daninhas_full_fixed (the params it shares with the campaign) into a root of its own.
     """
-    root = "results/campaign_control"
+    root = "results/campaign_control_fixed"
     return {
         "name": "campaign_control_ki43",
         "description": "KI-43 control run (.specs/experiments/campaign.md, 'Control run for KI-43'). "
                        "Generated by scripts/campaign/build_manifest.py -- do not edit by hand.",
         "dataset_name": "DANINHAS",
         "results_root": root,
+        "required_leaf_files": list(ROUND_HISTORY_FILES),
         "seeds": SEEDS,
         "primary_nq": FULL.nq_by_paper_nq[100],
         "groups": [{
@@ -390,7 +429,7 @@ def build_control_ki43() -> dict[str, Any]:
             "n_query": FULL.nq_by_paper_nq[100], "n_init_labeled": FULL.n_init, "n_round": FULL.n_round,
             "seeds": list(SEEDS), "dir_results": f"{root}/random_nq100/", "used_by": [],
             "note": "KI-43 control: RandomSampling @ n_query=100 re-executed in ONE session on ONE runtime "
-                    "image. Compare against results/campaign/shared/random_nq100/ at the same seeds "
+                    "image. Compare against results/campaign_fixed/shared/random_nq100/ at the same seeds "
                     "(round-0 and final weighted F1) to measure the cross-runtime deviation.",
         }],
         "aliases": [],
@@ -418,10 +457,10 @@ def build_kmh_sweep(scale: Scale) -> dict[str, Any]:
     directory (every group shares strategy/NQ/NIL/NR, so a shared directory would make the leaf glob
     ambiguous). At nq100 the budget-matched L3 shape IS the reference: `kmh/nq100/hier_L3_matched` is an
     alias of `kmh/nq100/hier_L3_ref` (and `hier_L1_k{nq}` is `hier_L1_k100`, so it is not listed).
-    Results go to a NEW root (`<campaign root>_kmh`); the reference is re-run inside it so every
-    comparison is within one runtime image (KI-43).
+    Results go to a root of their own (`scale.sweep_results_root`); the reference is re-run inside it so
+    every comparison of a sweep table is within one runtime image (KI-43) and one GPU part (ADR 0016).
     """
-    root = f"{scale.results_root}_kmh"
+    root = scale.sweep_results_root
     params_dir = f"files_config/ablations/kmh_sweep/{scale.abl_subdir}"
     by_name = {h.name: h for h in sweep.HIERARCHIES}
     groups: list[dict[str, Any]] = []
@@ -441,8 +480,8 @@ def build_kmh_sweep(scale: Scale) -> dict[str, Any]:
             note = (f"KMH sweep @ n_query={paper_nq}: hierarchy k={sweep._fmt(clusters)}"
                     + (f", knob {knob[1]}={knob[2]!r}." if knob else " (hierarchy axis, other knobs default)."))
             groups.append({
-                "id": gid(paper_nq, name), "part": part,
-                "params_json": f"{params_dir}nq{paper_nq}/{name}.json",
+                "id": gid(paper_nq, name), "part": part, "gpu_part": SWEEP_GPU_PART[paper_nq],
+                "gpu_stage": STAGE_KMH_SWEEP, "params_json": f"{params_dir}nq{paper_nq}/{name}.json",
                 "strategy_name": "RepresentationStrategy", "n_query": nq,
                 "n_init_labeled": scale.n_init, "n_round": scale.n_round, "seeds": list(SEEDS),
                 "dir_results": f"{root}/nq{paper_nq}/{name}/", "used_by": [], "note": note,
@@ -504,6 +543,7 @@ def build_kmh_sweep(scale: Scale) -> dict[str, Any]:
                        "sweep'). Generated by scripts/campaign/build_manifest.py -- do not edit by hand.",
         "dataset_name": "DANINHAS",
         "results_root": root,
+        **manifest_header(scale),
         "seeds": SEEDS,
         "primary_nq": scale.nq_by_paper_nq[100],
         "groups": groups,

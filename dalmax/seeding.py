@@ -128,6 +128,29 @@ def record_nondeterministic_ops() -> Iterator[list[str]]:
         yield seen
 
 
+@contextmanager
+def isolated_torch_seed(seed: int) -> Iterator[None]:
+    """Run the block with the CPU torch RNG seeded to `seed`, then restore the global state.
+
+    For auxiliary networks of a strategy (a loss-prediction module, a VAE, a critic;
+    ADR 0015): constructing them inside this block initialises their weights from
+    `seed` without consuming the run's global torch stream, so the task model and the
+    data order of the run stay where they would be without the auxiliary network. Only
+    the CPU generator is forked and seeded (`torch.default_generator`), so build the
+    module on CPU inside the block and move it to the device afterwards.
+    """
+    with torch.random.fork_rng(devices=[]):
+        torch.default_generator.manual_seed(seed)
+        yield
+
+
+def torch_generator(seed: int) -> torch.Generator:
+    """A CPU `torch.Generator` seeded with `seed`, for explicit (never ambient) draws."""
+    generator = torch.Generator()
+    generator.manual_seed(seed)
+    return generator
+
+
 def derive_seed(seed: int, tag: str) -> int:
     """Deterministically derive an integer sub-seed from `seed` and `tag`.
 

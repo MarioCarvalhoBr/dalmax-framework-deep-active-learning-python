@@ -1,0 +1,46 @@
+{
+    "_comment": "Paper-1 params for VAAL (ADR 0015) on DATA/daninhas_full_fixed/ (ADR 0016): identical to params_paper1.json plus an explicit strategy_args.VAAL block: the defaults of dalmax.config.schema.VAALArgs (DeepAL+/original VAAL: 30 VAE/discriminator epochs per query over the joint labeled/unlabeled loader, latent 32, beta 1, adversary weight 1, 2 VAE steps and 1 discriminator step per batch, Adam lr 5e-4) except image_size = 32: the 128 x 128 images are area-resized to 32 x 32 for the VAE (author's cost decision 2026-11-11, about 4x cheaper than the default 64; the VAE supports any multiple of 16). The task model is trained exactly as for every other strategy. See .specs/adr/0015-deepalplus-strategies.md and .specs/adr/0016-clean-rerun-fixed-dataset.md.",
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_full_fixed/",
+        "n_epoch": 10,
+        "n_drop": 10,
+        "n_classes": 5,
+        "train_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "test_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "optimizer_args": {
+            "lr": 0.05,
+            "momentum": 0.3
+        },
+        "config_kmh": {
+            "n_clusters": [
+                600,
+                200,
+                100
+            ],
+            "n_levels": 3,
+            "sample_sizes": [
+                30,
+                15,
+                2
+            ]
+        },
+        "strategy_args": {
+            "VAAL": {
+                "epochs": 30,
+                "latent_dim": 32,
+                "beta": 1.0,
+                "adversary_param": 1.0,
+                "num_vae_steps": 2,
+                "num_adv_steps": 1,
+                "lr": 0.0005,
+                "image_size": 32
+            }
+        }
+    }
+}

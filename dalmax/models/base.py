@@ -73,10 +73,20 @@ class DeepLearning:
         self.clf, meta = load_checkpoint(path, device=self.device)
         return meta
 
+    def build_model(self) -> torch.nn.Module:
+        """A fresh, untrained task model on `self.device`:
+        `net(params["n_classes"], **model_kwargs)`.
+
+        The single place a task model is constructed, shared by `train` and by the
+        strategy-specific trainers of ADR 0015 (`dalmax.models.loss_prediction`,
+        `dalmax.models.waal`), so all of them draw the same initial weights from the
+        run's torch stream.
+        """
+        return self.net(self.params['n_classes'], **self.model_kwargs).to(self.device)
+
     def train(self, data):
         n_epoch = self.params['n_epoch']
-        n_classes = self.params['n_classes']
-        self.clf = self.net(n_classes, **self.model_kwargs).to(self.device)
+        self.clf = self.build_model()
         self.clf.train()
         optimizer = optim.SGD(self.clf.parameters(), **self.params['optimizer_args'])
 
@@ -95,7 +105,7 @@ class DeepLearning:
                 all_acc.append(acc)
                 loss.backward()
                 optimizer.step()
-            # Calcular a loss e a acurácia
+            # Mean loss and accuracy of the epoch.
             mean_loss = np.mean(all_loss)
             mean_acc = np.mean(all_acc)
             print(f" - Epoch {epoch}/{n_epoch} Loss: {mean_loss:.4f} Acc: {mean_acc:.4f}")
@@ -182,6 +192,26 @@ class DeepLearning:
                 out, e1 = self.clf(x)
                 embeddings[idxs] = e1.cpu()
         return embeddings
+
+
+    def predict_logits_and_embeddings(self, data) -> tuple[torch.Tensor, torch.Tensor]:
+        """Logits and `e1` embeddings of every sample in one eval-mode pass, shapes
+        `[len(data), n_classes]` and `[len(data), get_embedding_dim()]` (CPU tensors).
+
+        For the strategies that need both from the same forward pass (`BadgeSampling`,
+        ADR 0015); `e1` is the input of the final linear layer for both registered
+        models (in eval mode their dropout is the identity).
+        """
+        self.clf.eval()
+        logits = torch.zeros([len(data), self.params['n_classes']])
+        embeddings = torch.zeros([len(data), self.clf.get_embedding_dim()])
+        loader = DataLoader(data, shuffle=False, **self.params['test_args'])
+        with torch.no_grad():
+            for x, _y, idxs in loader:
+                out, e1 = self.clf(x.to(self.device))
+                logits[idxs] = out.cpu()
+                embeddings[idxs] = e1.cpu()
+        return logits, embeddings
 
 
 def _check_n_drop(n_drop: int) -> None:

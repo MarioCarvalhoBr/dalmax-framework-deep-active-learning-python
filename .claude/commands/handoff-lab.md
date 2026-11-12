@@ -23,10 +23,11 @@ Steps:
    git pull
    make lab-setup                 # poetry install + torch/CUDA visibility check
    make lab-check GPU=0           # one short real-data sanity run before committing to the campaign
-   make campaign-list             # expect 222 runs / 74 groups
-   make campaign-run PART=all     # or one process per GPU: CUDA_VISIBLE_DEVICES=0 ... PART=paper1,upper_bound
-                                  #                          CUDA_VISIBLE_DEVICES=1 ... PART=rnhal,texhal
-   make campaign-verify && make campaign-report
+   make dataset-check             # DATA/daninhas_full_fixed present, no repeated MD5 (ADR 0016)
+   make campaign-list-gpu-part GPU_PART=part_1_gpu   # expect 282 runs / 94 groups (part_2_gpu: 177 / 59)
+   CUDA_VISIBLE_DEVICES=0 make campaign-run-gpu-part GPU_PART=part_1_gpu   # one GPU part per GPU (or in sequence)
+   CUDA_VISIBLE_DEVICES=1 make campaign-run-gpu-part GPU_PART=part_2_gpu
+   make campaign-verify-all && make campaign-report-all          # expect OK=459
    ```
    After the first job finishes, check `environment.gpus[0].name` in its `run_metadata.json`.
 5. If this is a relaunch (e.g. after a crash), `make campaign-run` skips every job whose leaf is

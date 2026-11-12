@@ -32,7 +32,8 @@ the per-GPU ablation scripts, `make ablations-*`/`ablation-report*`/`smoke-ablat
 
 Check per run (`.claude/agents/experiment-auditor.md`): (a) `run_metadata.json` shows the intended
 `embedding`/`selection` config, (b) the embedding cache file actually used
-(`results/cache/embeddings/{dataset}__{extractor}__Q{q}__{variant}__{split}__pool{hash}.pkl`) matches the
+(`results/cache/embeddings/{dataset}__{extractor}__Q{q}__{variant}__{split}__order{order_hash}__pool{hash}.pkl`,
+the `order` segment since 2026-11-12, KI-47) matches the
 intended `Q`/variant/dataset, (c) the hierarchy matches the §6.2 row (`config.dataset.selection.hierarchy`),
 (d) `all_f1_macro` (not the weighted `all_f1_score`) is what gets reported -- `research-rules/metrics.md`,
 (e) `results/campaign/failures.log` is empty or every failure has been re-run, and (f)

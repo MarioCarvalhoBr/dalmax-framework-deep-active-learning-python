@@ -23,26 +23,24 @@ explicitly says "local notebook" (`.claude/rules/data-safety.md`,
 
 The campaign (`files_config/campaign/manifest.json`, ADR 0008/0009,
 [`.specs/experiments/campaign.md`](.specs/experiments/campaign.md)) is the single way to
-execute everything the three papers need (222 runs / 74 groups: `paper1` 54, `paper1_rerun_a` 24,
-`paper1_rerun_b` 39, `upper_bound` 3, `rnhal` 42, `texhal` 30, `texhal_q17` 18, `hier_transfer` 12; the two
-re-run parts are the seven paper-1 baselines fixed on 2026-11-11, ADR 0014, run after
-`make campaign-archive-superseded`, see `COLAB_RUNBOOK.md` section 6d) on ONE environment; see `COLAB_RUNBOOK.md`'s "The campaign"
-section for the step list (`make campaign-list` / `campaign-run` / `campaign-verify` /
-`campaign-report`). With two GPUs the parts can run concurrently, one process per
-GPU (the runner reads `CUDA_VISIBLE_DEVICES`, default 0); with one GPU run `PART=all`:
+execute everything the three papers need; since 2026-11-11 (ADR 0016) it is the clean re-run on
+`DATA/daninhas_full_fixed` (main manifest 294 runs / 98 groups into `results/campaign_fixed/`, KMH sweep 165 / 55 into
+`results/campaign_kmh_fixed/`). The dataset must be at `DATA/daninhas_full_fixed/` (`make dataset-check` must print
+`OK: no repeated md5 inside or across splits`). See `COLAB_RUNBOOK.md` section 6 for the step list. The two GPU parts
+are disjoint, so with two GPUs they can run concurrently, one process per GPU (the runner reads
+`CUDA_VISIBLE_DEVICES`, default 0); with one GPU run them one after the other:
 
 ```bash
-# tmux pane 1 (GPU 0): paper 1 (117 runs + upper bound)
-CUDA_VISIBLE_DEVICES=0 make campaign-run PART=paper1,paper1_rerun_a,paper1_rerun_b,upper_bound
-# tmux pane 2 (GPU 1): papers 2 and 3
-CUDA_VISIBLE_DEVICES=1 make campaign-run PART=rnhal,texhal,texhal_q17
+# tmux pane 1 (GPU 0)
+CUDA_VISIBLE_DEVICES=0 make campaign-run-gpu-part GPU_PART=part_1_gpu
+# tmux pane 2 (GPU 1)
+CUDA_VISIBLE_DEVICES=1 make campaign-run-gpu-part GPU_PART=part_2_gpu
 # then, from either shell:
-make campaign-verify && make campaign-report
+make campaign-verify-all && make campaign-report-all
 ```
 
-Papers 2/3's comparison tables read paper 1's `shared/*` runs (KMH@100, RandomSampling@100), so the
-report needs both panes finished. Both processes share `results/campaign/campaign.log` (append) and
-the same `results/campaign/` tree; groups never overlap between the two commands.
+Both processes append to the same `campaign.log` of each results root and write disjoint leaves; groups never
+overlap between the two commands.
 
 - **Check the environment in the first run**: after the first job finishes, confirm
   `environment.gpus[0].name` in its `run_metadata.json` (`results/campaign/shared/random_nq100/.../RandomSampling/`)
@@ -50,10 +48,13 @@ the same `results/campaign/` tree; groups never overlap between the two commands
   ops that had no deterministic kernel are listed in `nondeterministic_op_warnings`).
 - **Resume**: `campaign-run` skips a job only when its leaf holds the full artifact set
   (`results.json` is written last), so relaunching after a crash or reboot resumes cleanly.
-- **`campaign-verify` exit code**: 0 all OK, 1 incomplete/missing job or FAIL seed audit, 2 only
-  audit WARNs (log without the initial-labeled-set line).
+- **`campaign-verify` exit code**: 0 all OK, 1 incomplete/missing job or FAIL seed audit (round-0 image
+  paths) or FAIL data-order audit (KI-47), 2 only audit WARNs (no readable initial set, or a leaf without
+  `run_metadata.json` `data_order`).
+- **Disk space**: `campaign-run` refuses to start (exit 4) unless the results disk holds the remaining
+  runs x 96 MB x 1.2, and stops the batch (exit 4) when it fills up; `make campaign-space` prints the check.
 - **Out of GPU memory**: the same batch size (256) is used for every run, including the
-  `FullSupervised` upper bound (all 8,086 images). A job that runs out of memory is logged to
+  `FullSupervised` upper bound (all 7,230 pool images of `daninhas_full_fixed`). A job that runs out of memory is logged to
   `failures.log` and the batch continues -- do not lower the batch size silently (it would change
   the protocol); report it (see Troubleshooting).
 - **Disk**: 222 checkpoints (~95 MB each) are about 21 GB under `results/campaign/`.
@@ -126,23 +127,23 @@ the same `results/campaign/` tree; groups never overlap between the two commands
 - [ ] **Confirm the dataset is present** (`DATA/` is gitignored — it is never
   pulled by `git pull`, and must be copied onto the lab machine independently):
   ```bash
-  find DATA/daninhas_full -type f | wc -l   # expect 10193
+  find DATA/daninhas_full_fixed -type f | wc -l   # expect 8240 (7,230 train + 1,008 test + MANIFEST.csv + README.txt)
+  make dataset-check                              # OK: no repeated md5 inside or across splits
   ```
-  If `DATA/daninhas_full/` is missing or the count doesn't match, copy it from
-  the source machine, e.g.:
+  Since 2026-11-11 (ADR 0016) the campaign runs on the duplicate-free `DATA/daninhas_full_fixed/` (KI-46);
+  `DATA/daninhas_full/` is only needed to rebuild it or the micro dataset. If `DATA/daninhas_full_fixed/` is
+  missing or the count doesn't match, copy it from the source machine, e.g.:
   ```bash
   # from the source machine:
-  zip -r daninhas_full.zip DATA/daninhas_full/
-  scp daninhas_full.zip <lab-user>@<lab-host>:~/dalmax-deep-active-learning-python/
+  (cd DATA && zip -qr daninhas_full_fixed.zip daninhas_full_fixed)
+  scp DATA/daninhas_full_fixed.zip <lab-user>@<lab-host>:~/dalmax-deep-active-learning-python/DATA/
 
   # on the lab machine:
-  unzip daninhas_full.zip -d .
+  (cd DATA && unzip -q daninhas_full_fixed.zip)
   ```
-  (or `rsync -avz DATA/daninhas_full/ <lab-user>@<lab-host>:.../DATA/daninhas_full/`
-  as an alternative to zip+scp). After copying, cross-check
-  `DATA/daninhas_full/arquivos.txt` against the source machine's copy (e.g.
-  `diff` the two files, or at least compare line counts) to catch a partial
-  transfer. **Never write into `DATA/daninhas_full/`** once it's in place
+  (or `rsync -avz DATA/daninhas_full_fixed/ <lab-user>@<lab-host>:.../DATA/daninhas_full_fixed/`
+  as an alternative to zip+scp). After copying, `make dataset-check` must pass and the file count must match
+  (`MANIFEST.csv` lists every kept image). **Never write into `DATA/daninhas_full_fixed/`** once it's in place
   (`.claude/rules/data-safety.md`) — it is read-only input for every run below.
 
 - [ ] **Optional cleanup: orphaned pre-refactor cache files.** If any of these
@@ -182,7 +183,7 @@ the same `results/campaign/` tree; groups never overlap between the two commands
   make micro-dataset
   ```
 
-- [ ] **Real-data GPU check — one short run on the actual `daninhas_full`
+- [ ] **Real-data GPU check — one short run on the actual `daninhas_full_fixed`
   dataset**, before committing to a multi-hour batch:
   ```bash
   make lab-check GPU=0
@@ -210,7 +211,7 @@ the same `results/campaign/` tree; groups never overlap between the two commands
   machine).
 
   **Expected artifacts** under
-  `results/lab_check/daninhas_full/SEED_1/NQ_100_NIL_100_NR_1_NE_10/SSRAEKmeansHCSampling/`:
+  `results/lab_check/daninhas_full_fixed/SEED_1/NQ_100_NIL_100_NR_1_NE_10/SSRAEKmeansHCSampling/`:
   - `results.json` (now including `all_precision_macro`/`all_recall_macro`/`all_f1_macro`
     alongside the legacy weighted metrics)
   - `predictions.csv`
@@ -227,15 +228,15 @@ the same `results/campaign/` tree; groups never overlap between the two commands
 
   **Verify the checkpoint is real and loadable:**
   ```bash
-  poetry run python tools/loader.py --model results/lab_check/daninhas_full/SEED_1/NQ_100_NIL_100_NR_1_NE_10/SSRAEKmeansHCSampling/saved_model.pth
+  poetry run python tools/loader.py --model results/lab_check/daninhas_full_fixed/SEED_1/NQ_100_NIL_100_NR_1_NE_10/SSRAEKmeansHCSampling/saved_model.pth
   ```
   Expect `format: dalmax-checkpoint`, a nonzero `total params`/`trainable
   params` count, and `forward pass OK`. Then run a single-image prediction to
   confirm inference end-to-end:
   ```bash
   poetry run python tools/predict.py \
-      --model results/lab_check/daninhas_full/SEED_1/NQ_100_NIL_100_NR_1_NE_10/SSRAEKmeansHCSampling/saved_model.pth \
-      --image DATA/daninhas_full/test/DATASET_GRAMINEA/<some_image>.jpg
+      --model results/lab_check/daninhas_full_fixed/SEED_1/NQ_100_NIL_100_NR_1_NE_10/SSRAEKmeansHCSampling/saved_model.pth \
+      --image DATA/daninhas_full_fixed/test/DATASET_GRAMINEA/<some_image>.jpg
   ```
   (substitute any real file under that test folder). Expect a predicted class
   + confidence line and a `predictions.csv` written alongside the image.

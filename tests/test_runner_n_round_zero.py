@@ -89,6 +89,9 @@ class _FakeStrategy:
     def update(self, pos_idxs, neg_idxs=None) -> None:
         raise AssertionError("strategy.update() must not be called when n_round=0")
 
+    def diagnostics(self) -> dict:
+        return {}  # `Strategy.diagnostics` default (ADR 0015): nothing to report
+
     def save_model(self, dir_results: str, *, model_name, class_names, img_size, extra=None) -> None:
         self.net.save_model(
             dir_results + "/saved_model.pth",
@@ -106,6 +109,9 @@ class _FakeDataset:
 
     def __init__(self) -> None:
         self.labeled_idxs = np.zeros(20, dtype=bool)
+        self.n_pool = 20
+        self.Y_train = np.array([i % 2 for i in range(20)])
+        self.Z_train_paths = [f"t{i}.png" for i in range(20)]
         self.Y_test = torch.tensor([0, 1, 0, 1, 0])
         self.Z_test_paths = [f"p{i}.png" for i in range(5)]
 

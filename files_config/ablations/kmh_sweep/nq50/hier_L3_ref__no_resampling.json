@@ -1,7 +1,7 @@
 {
     "_comment": "KMH sweep stage 1: ImageNet ResNet-50 features + hierarchical k-means at n_query=50, hierarchy k=[600,200,100] sample_sizes=[30,15,2], knob n_resamples=0 (default elsewhere); otherwise identical to params_kmh.json. See .specs/experiments/campaign.md, 'KMH parameter sweep'.",
     "DANINHAS": {
-        "data_dir": "DATA/daninhas_full/",
+        "data_dir": "DATA/daninhas_full_fixed/",
         "n_epoch": 10,
         "n_drop": 10,
         "n_classes": 5,

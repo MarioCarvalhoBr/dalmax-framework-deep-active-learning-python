@@ -1,7 +1,7 @@
 {
-    "_comment": "Paper-1 (DAL benchmark) params for the single campaign: identical to files_config/benchmark/params_df_gpu_0.json's DANINHAS block (n_epoch 10, batch 256, lr 0.05, momentum 0.3, config_kmh [600,200,100]/[30,15,2]); the DANINHAS-only subset. One file for all 14 strategies -- the legacy strategies ignore config_kmh, the SSRAE/VCTex presets read it (dalmax.query_strategies.registry). See .specs/experiments/campaign.md.",
+    "_comment": "Paper-1 (DAL benchmark) params of the campaign on DATA/daninhas_full_fixed/ (ADR 0016): n_epoch 10, batch 256, lr 0.05, momentum 0.3, config_kmh [600,200,100]/[30,15,2] (the DANINHAS block of files_config/benchmark/params_df_gpu_0.json, data_dir repointed to the duplicate-free dataset, KI-46). Used by every paper-1 strategy except the dropout family (params_paper1_mc_dropout.json) and VAAL (params_paper1_vaal.json), by the upper bound and by make lab-check/colab-check (SSRAEKmeansHCSampling reads config_kmh; the other strategies ignore it). See .specs/experiments/campaign.md.",
     "DANINHAS": {
-        "data_dir": "DATA/daninhas_full/",
+        "data_dir": "DATA/daninhas_full_fixed/",
         "n_epoch": 10,
         "n_drop": 10,
         "n_classes": 5,

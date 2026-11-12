@@ -1,6 +1,9 @@
 # ADR 0014: Fix the seven degenerate paper-1 baselines and re-run them as two campaign parts
 
-- **Status:** Accepted (author decision 2026-11-11); code fixed 2026-11-11, re-run prepared, not executed
+- **Status:** Accepted (author decision 2026-11-11); code fixed 2026-11-11. Operational part (Decision 4-5 and the
+  amendment: re-run parts, archive script, superseded-leaf guard) **superseded by ADR-0016** on 2026-11-11 before any
+  execution: everything is re-run on `DATA/daninhas_full_fixed` into new roots, the 21 groups are back in `paper1`, and
+  `dalmax/superseded.py` / `scripts/campaign/archive_superseded_runs.py` were deleted. The code fixes (Decision 1-3) stand.
 - **Date:** 2026-11-11
 
 ## Context

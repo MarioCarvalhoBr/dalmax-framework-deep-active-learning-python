@@ -88,7 +88,20 @@ distinct from "hierarchical" and matters for the ablation in
 - The paper under revision is `phd_files/Artigo_melhorias_Active_Learning_Mario.pdf`
   (LaTeX sources: `phd_files/Active_Learning_Mario/`).
 - **Implementation findings, accepted as-is (2026-11-02, author decision)**: the ResNet-50 model has no dropout (the 4 MC-dropout/BALD strategies are degenerate, KI-41) and `KMeansSampling`/`KCenterGreedy` use an untrained random embedding (KI-42); paper-1 numbers are reported as executed with disclosure, see `quality/known-issues.md`. **Reversed 2026-11-11 (ADR 0014)**: KI-41, KI-42 and KI-45 (AdversarialBIM ties) are fixed in code and the 63 affected runs are prepared as campaign parts `paper1_rerun_a`/`paper1_rerun_b` (not executed).
-- **Campaign executed (2026-09-30 to 2026-10-05, verified 2026-11-01; part `texhal_q17` executed 2026-11-01, verified 2026-11-02: 210/210)**: all runs of the three
+- **Clean re-run prepared (2026-11-11, ADR 0016, not executed)**: the first campaign's dataset `DATA/daninhas_full` has
+  byte-identical duplicates inside and across train and test (KI-46: 171 distinct images in both splits). Author
+  decision: EVERYTHING is re-run on the duplicate-free `DATA/daninhas_full_fixed` (7,230 train / 1,008 test), with the
+  eight DeepAL+ strategies of ADR 0015 added to paper 1 (20 strategies + KMH x 3 budgets): main manifest 294 runs + KMH
+  sweep 165 runs into `results/campaign_fixed/` and `results/campaign_kmh_fixed/`, split into two GPU parts for two
+  Colab accounts (about 96 estimated GPU hours in total; `COLAB_RUNBOOK.md` section 6). Every number in the next bullet
+  is history of the first campaign and is superseded for the papers by this re-run.
+- **Pre-flight fix KI-47 (2026-11-12, ADR 0016 amendment)**: the loaders listed each class folder in file-system order,
+  which differed between Colab sessions, so in the first campaign the same seed started from other images in each
+  later session and the cached embeddings served later sessions the features of other images (the KMH sweep,
+  `texhal_q17`, `hier_transfer`, paper-1 KMH nq50/nq10; very likely the cause of KI-43). Fixed before the clean
+  re-run: sorted file order, `data_order` hashes in `run_metadata.json`, an order-keyed and path-validated cache, the
+  seed audit by image paths plus a data-order audit; also a Drive quota gate and a VAAL/WAAL pilot.
+- **(History) Campaign executed (2026-09-30 to 2026-10-05, verified 2026-11-01; part `texhal_q17` executed 2026-11-01, verified 2026-11-02: 210/210)**: all runs of the three
   papers (one manifest, 3 seeds, Google Colab Pro) completed, 0 incomplete/missing, seed audit PASS;
   numbers in `.specs/experiments/campaign.md` (execution record), reports in `docs/results/campaign/`
   (local-only, gitignored). Headline (nq=100, weighted F1): upper bound 0.9157; RNHAL 0.8805 (best

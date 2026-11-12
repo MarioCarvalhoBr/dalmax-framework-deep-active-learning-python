@@ -53,3 +53,12 @@ file (and `core/`/`utils/` generally) was deleted/moved in Phase 4's package con
 0002's final amendment) and no longer exists on disk. This does not change the Decision — the
 `EmbeddingProvider`/`EmbeddingCache` abstraction it describes was already live under `dalmax/` since
 Phase 2, unaffected by the later physical move of the legacy files it replaced.
+
+## Amendment (2026-11-12, KI-47)
+
+The cache key gained `order_hash` (`dalmax/data_order.py::ordered_paths_hash` of the split's ordered image list):
+`pool_hash` hashes pool indices, and indices named different images under the unsorted per-session file order of the
+first campaign, so later Colab sessions loaded features of other images. File name
+`{dataset}__{extractor}__Q{q}__{variant}__{split}__order{order_hash}__pool{pool_hash}.pkl`; the payload (version 2)
+also stores the key, the ids and the relative paths of the cached images and is validated on load (refused or
+unreadable: warning + recompute); writes are atomic. Decision record: ADR 0016's 2026-11-12 amendment.

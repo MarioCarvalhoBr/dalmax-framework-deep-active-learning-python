@@ -23,6 +23,10 @@ from torchvision.models import ResNet50_Weights, resnet50
 # Width of the legacy `embedding_layer` (see `DaninhasModelResNet50.__init__`).
 _LEGACY_EMBEDDING_WIDTH = 50
 
+# Positions of `layer1`..`layer4` in `feature_extractor` (conv1, bn1, relu, maxpool,
+# layer1, layer2, layer3, layer4, avgpool), see `forward_with_stages`.
+_STAGE_INDICES = (4, 5, 6, 7)
+
 
 class DaninhasModelResNet50(nn.Module):
     def __init__(self, n_classes: int, dropout_p: float = 0.0) -> None:
@@ -64,3 +68,27 @@ class DaninhasModelResNet50(nn.Module):
 
     def get_embedding_dim(self) -> int:
         return self.embedding_dim
+
+    def forward_with_stages(
+        self, x: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, list[torch.Tensor]]:
+        """`forward`, plus the output maps of the four residual stages (`layer1`..`layer4`).
+
+        Runs the same modules in the same order as `forward` (an `nn.Sequential` is
+        exactly this loop), so logits and features are identical; used by the
+        loss-prediction module of `LossPredictionLoss` (ADR 0015). Adds no
+        parameter, state or random draw to the model.
+        """
+        stages: list[torch.Tensor] = []
+        h = x
+        for index, module in enumerate(self.feature_extractor):
+            h = module(h)
+            if index in _STAGE_INDICES:
+                stages.append(h)
+        features = h.view(h.size(0), -1)
+        logits = self.classifier(self.dropout(features))
+        return logits, features, stages
+
+    def stage_channels(self) -> tuple[int, ...]:
+        """Channel count of each map returned by `forward_with_stages`."""
+        return tuple(self.feature_extractor[i][-1].bn3.num_features for i in _STAGE_INDICES)

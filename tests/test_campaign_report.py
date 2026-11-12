@@ -21,11 +21,12 @@ def _group(tmp: Path, gid: str, strategy: str, part: str = "paper1") -> C.RunGro
         id=gid, part=part, params_json="files_config/campaign/params_paper1_micro.json", strategy_name=strategy,
         n_query=100, n_init_labeled=100, n_round=8, seeds=SEEDS,
         dir_results=str(tmp / gid.replace("/", "_")) + "/", used_by=(),
+        dataset_folder="daninhas_micro",  # basename of params_paper1_micro.json's data_dir
     )
 
 
 def _write_run(group: C.RunGroup, seed: int, f1: float, *, preds: list[tuple[str, str]]) -> None:
-    leaf = Path(group.dir_results) / "daninhas_full" / f"SEED_{seed}" / "NQ_100_NIL_100_NR_8_NE_10" / group.strategy_name
+    leaf = Path(group.dir_results) / group.dataset_folder / f"SEED_{seed}" / "NQ_100_NIL_100_NR_8_NE_10" / group.strategy_name
     leaf.mkdir(parents=True)
     (leaf / "results.json").write_text(json.dumps({
         "all_acc": [0.1, f1], "all_precision": [0.1, f1], "all_recall": [0.1, f1],

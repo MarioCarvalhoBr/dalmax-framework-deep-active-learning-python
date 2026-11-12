@@ -1,7 +1,7 @@
 """Report generator for the single campaign (`files_config/campaign/manifest.json`).
 
-    python -m dalmax.reporting.campaign_report --root results/campaign \
-        --out docs/results/campaign
+    python -m dalmax.reporting.campaign_report --root results/campaign_fixed \
+        --out docs/results/campaign_fixed
 
 Reads the manifest's `tables` section (rows -> run ids; aliased rows resolve to
 the ONE canonical run, so a value such as "TexHAL full" is identical in every
@@ -20,7 +20,9 @@ table of every paper) and writes, under `--out`:
   seeds (from each run's `predictions.csv`) for every run group with data.
 
 `--root` rebases the manifest's `results_root` (default: use the manifest's own),
-`--micro` selects the micro manifest (smoke).
+`--out` defaults to `docs/results/<last component of the results_root>` (e.g.
+`docs/results/campaign_fixed`, `docs/results/campaign_kmh_fixed`), `--micro` selects
+the micro manifest (smoke).
 """
 
 from __future__ import annotations
@@ -351,7 +353,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--manifest", default=None, help=f"default {DEFAULT_MANIFEST}")
     parser.add_argument("--micro", action="store_true", help=f"use {DEFAULT_MICRO_MANIFEST}")
     parser.add_argument("--root", default=None, help="results root (default: the manifest's results_root)")
-    parser.add_argument("--out", default="docs/results/campaign")
+    parser.add_argument("--out", default=None,
+                        help="output dir (default docs/results/<last component of the manifest's results_root>)")
     return parser
 
 
@@ -361,7 +364,7 @@ def main(argv: list[str] | None = None) -> None:
     root = Path(args.root) if args.root else None
     if root is not None and not root.is_absolute():
         root = Path.cwd() / root
-    out_dir = Path(args.out)
+    out_dir = Path(args.out) if args.out else Path("docs/results") / Path(manifest.results_root).name
     if not out_dir.is_absolute():
         out_dir = REPO_ROOT / out_dir
     stats = generate_report(manifest, root, out_dir)

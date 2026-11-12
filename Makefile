@@ -1,7 +1,9 @@
 .PHONY: setup lint format test test-all smoke clean micro-dataset \
 	lab-setup lab-check colab-setup colab-check \
-	campaign-list campaign-run campaign-verify campaign-report campaign-smoke campaign-smoke-kmh campaign-manifest kmh-sweep-configs \
-	campaign-archive-superseded
+	campaign-list campaign-run campaign-verify campaign-report campaign-report-all campaign-smoke campaign-smoke-kmh \
+	campaign-list-gpu-part campaign-run-gpu-part campaign-verify-gpu-part campaign-verify-all campaign-smoke-gpu-part \
+	campaign-space campaign-space-gpu-part campaign-pilot campaign-pilot-report \
+	campaign-manifest kmh-sweep-configs gpu-time-estimates dataset-check
 
 # GPU index used by `lab-check` (sets CUDA_VISIBLE_DEVICES).
 # Override on the command line, e.g. `make lab-check GPU=1`.
@@ -74,8 +76,9 @@ lab-setup:
 
 # One short real-data GPU run (n_round=1) into results/lab_check/ before a full
 # batch. `GPU` selects CUDA_VISIBLE_DEVICES. Uses the campaign's own paper-1 params
-# (files_config/campaign/params_paper1.json, which carries the config_kmh
-# hierarchy SSRAEKmeansHCSampling needs), so the check exercises the same config.
+# (files_config/campaign/params_paper1.json, DATA/daninhas_full_fixed/, which carries
+# the config_kmh hierarchy SSRAEKmeansHCSampling needs), so the check exercises the
+# same config and dataset as the campaign.
 lab-check:
 	CUDA_VISIBLE_DEVICES=$(GPU) poetry run python tools/trainer.py \
 		--params_json files_config/campaign/params_paper1.json \
@@ -84,11 +87,18 @@ lab-check:
 		--device cuda --dir_results results/lab_check/
 
 # One-time-per-session Colab setup: verify Drive is mounted, build/reuse the
-# DATA/daninhas_full.zip on Drive, unzip it onto the local runtime disk, and
-# symlink results/ to Drive (scripts/colab/setup_colab.sh). Idempotent. Override
-# the Drive path with `DRIVE_ROOT=... make colab-setup`.
+# DATA/daninhas_full_fixed.zip on Drive, unzip it onto the local runtime disk,
+# check it (file count + scripts/datasets/build_daninhas_full_fixed.py --check: no
+# repeated MD5), and symlink results/ to Drive (scripts/colab/setup_colab.sh).
+# Idempotent. DRIVE_ROOT (the Drive folder holding DATA/) is REQUIRED:
+# `DRIVE_ROOT=/content/drive/MyDrive/<your folder> make colab-setup` (the notebook exports it).
 colab-setup:
 	bash scripts/colab/setup_colab.sh
+
+# Verify the canonical dataset (KI-46, ADR 0016): no repeated MD5 inside or across
+# DATA/daninhas_full_fixed/{train,test}. Read-only.
+dataset-check:
+	poetry run python scripts/datasets/build_daninhas_full_fixed.py --check
 
 # The same real-data GPU check as `lab-check`, into results/colab_check/ and
 # pinned to GPU 0. Run once per session, right after `colab-setup`.
@@ -99,29 +109,29 @@ colab-check:
 		--n_query 100 --n_init_labeled 100 --n_round 1 --seed 1 \
 		--device cuda --dir_results results/colab_check/
 
-# --- The campaign (ADR 0008/0009) ---------------------------------------------
-# One manifest (files_config/campaign/manifest.json) drives the single clean
-# execution of everything papers 1-3 need -- no redundant runs. See
-# .specs/experiments/campaign.md, COLAB_RUNBOOK.md and LAB_RUNBOOK.md.
+# --- The campaign (ADR 0008/0009/0016) ----------------------------------------
+# One manifest (files_config/campaign/manifest.json) drives the clean execution of
+# everything papers 1-3 need on DATA/daninhas_full_fixed/ -- no redundant run inside
+# it -- into results/campaign_fixed/; the KMH sweep (manifest_kmh_sweep.json) goes to
+# results/campaign_kmh_fixed/ and repeats the reference KMH configuration of the main
+# manifest on purpose (3 groups, a determinism check reported by campaign-verify-all).
+# See .specs/experiments/campaign.md, COLAB_RUNBOOK.md and LAB_RUNBOOK.md.
+# `campaign-run*` refuse to start (exit 4) without free space for the remaining runs
+# (96 MB per run + 20%) and stop the batch (exit 4) on a no-space failure.
 # Variables (all optional):
-#   PART=all|paper1|paper1_rerun_a|paper1_rerun_b|upper_bound|rnhal|texhal|texhal_q17|hier_transfer|control|kmh_nq10|kmh_nq50|kmh_nq100
-#               (comma-separated allowed; default all). paper1_rerun_a / paper1_rerun_b: the re-run of the seven
-#               paper-1 baselines fixed on 2026-11-11 (ADR 0014), one part per Colab account (COLAB_RUNBOOK.md 6d).
-#   MICRO=1     -> files_config/campaign/manifest_micro.json (CPU smoke, results/smoke_campaign/)
-#   MANIFEST=path -> any other manifest (overrides MICRO), e.g. the KI-43 control (3 RandomSampling
-#                  nq100 runs into results/campaign_control/, see .specs/experiments/campaign.md):
-#                    make campaign-list MANIFEST=files_config/campaign/manifest_control_ki43.json
-#                    make campaign-run  MANIFEST=files_config/campaign/manifest_control_ki43.json PART=control
-#                  The KMH parameter sweep (paper 1, prepared, not executed; 135 runs, 45 groups, results/campaign_kmh/):
+#   PART=all|paper1|upper_bound|rnhal|texhal|texhal_q17|hier_transfer|control|kmh_nq10|kmh_nq50|kmh_nq100
+#               (comma-separated allowed; default all), or a GPU part: part_1_gpu|part_2_gpu (ADR 0016).
+#   MICRO=1     -> files_config/campaign/manifest_micro.json (CPU smoke, results/smoke_campaign_fixed/)
+#   MANIFEST=path -> any other manifest (overrides MICRO), e.g. the KMH sweep or the KI-43 control:
 #                    make campaign-list   MANIFEST=files_config/campaign/manifest_kmh_sweep.json
-#                    make campaign-run    MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=kmh_nq10  # kmh_nq50|kmh_nq100
-#                    make campaign-verify MANIFEST=files_config/campaign/manifest_kmh_sweep.json
-#                    make campaign-report MANIFEST=files_config/campaign/manifest_kmh_sweep.json REPORT_ROOT=results/campaign_kmh REPORT_OUT=docs/results/campaign_kmh
+#                    make campaign-run    MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=kmh_nq10
+#                    make campaign-list   MANIFEST=files_config/campaign/manifest_control_ki43.json
 #                  (its configs: `make kmh-sweep-configs`; CPU smoke: `make campaign-smoke-kmh`)
-#   REPORT_ROOT / REPORT_OUT -> `campaign-report` results root / output dir (defaults: results/campaign, docs/results/campaign)
+#   REPORT_ROOT / REPORT_OUT -> `campaign-report` results root / output dir
+#                  (defaults: results/campaign_fixed, docs/results/campaign_fixed)
 #   SEEDS=1     -> restrict to a subset of the seeds (smoke)
 #   EXCLUDE=... -> comma-separated strategies to drop (default: none; with MICRO=1 the
-#                  two adversarial baselines, far too slow on CPU -- override with
+#                  baselines far too slow on CPU, SMOKE_EXCLUDE -- override with
 #                  `SMOKE_EXCLUDE=` to include them)
 #   DEVICE=cuda|cpu|auto, default cuda (cpu with MICRO=1)
 #   RUN_ARGS='--no-skip-existing' / '--dry-run' -> extra flags for `campaign-run`
@@ -130,7 +140,7 @@ SMOKE_EXCLUDE ?= AdversarialBIM,AdversarialDeepFool
 EXCLUDE ?= $(if $(MICRO),$(SMOKE_EXCLUDE))
 CAMPAIGN_FLAGS = --part $(PART) $(if $(MANIFEST),--manifest $(MANIFEST),$(if $(MICRO),--micro)) $(if $(SEEDS),--seeds $(SEEDS)) $(if $(EXCLUDE),--exclude-strategy $(EXCLUDE))
 
-# Print the job table and the run counts per part/total.
+# Print the job table, the run counts and the estimated GPU hours per part / GPU part / total.
 campaign-list:
 	poetry run python -m dalmax.campaign list $(CAMPAIGN_FLAGS)
 
@@ -138,40 +148,88 @@ campaign-list:
 campaign-run:
 	poetry run python -m dalmax.campaign run $(CAMPAIGN_FLAGS) $(if $(DEVICE),--device $(DEVICE)) $(RUN_ARGS)
 
-# Per-job OK/INCOMPLETE/MISSING/STALE (STALE: superseded re-run leaf, ADR 0014) + the seed-consistency audit.
+# Per-job OK/INCOMPLETE/MISSING + the seed-consistency audit (round-0 image paths) + the data-order audit.
 # Exit 0 all OK, 1 incomplete/missing job or FAIL audit, 2 only audit WARNs.
 campaign-verify:
 	poetry run python -m dalmax.campaign verify $(CAMPAIGN_FLAGS)
 
-# Tables (md/tex/csv), seed audit and mean confusion matrices from results/campaign/
-# into docs/results/campaign/ (MICRO=1: results/smoke_campaign/ -> results/smoke_campaign/report/).
-REPORT_ROOT ?= results/campaign
-REPORT_OUT ?= docs/results/campaign
-campaign-report:
-	poetry run python -m dalmax.reporting.campaign_report $(if $(MANIFEST),--manifest $(MANIFEST) --root $(REPORT_ROOT) --out $(REPORT_OUT),$(if $(MICRO),--micro --root results/smoke_campaign --out results/smoke_campaign/report,--root $(REPORT_ROOT) --out $(REPORT_OUT)))
+# Free space of the results file system(s) vs the remaining runs (exit 4 when short). Read only.
+campaign-space:
+	poetry run python -m dalmax.campaign space $(CAMPAIGN_FLAGS)
 
-# Micro campaign on CPU, seed 1 only, into results/smoke_campaign/ (every run
-# group once; the two adversarial baselines are skipped by default: 68 of the 74
-# jobs). Verify afterwards with `make campaign-verify MICRO=1 SEEDS=1`.
+# --- One GPU part across BOTH manifests (ADR 0016: one Colab account per GPU part) ---
+#   GPU_PART=part_1_gpu|part_2_gpu (required). The main manifest and the KMH sweep are merged into one
+#   plan ordered by execution stage: cheap table-critical groups, ablations, the KMH sweep, then the long
+#   baselines (AdversarialBIM, VAAL/WAAL, AdversarialDeepFool) last. Resume = re-run the same command.
+#   MICRO=1 -> the two micro manifests (CPU smoke). SEEDS / EXCLUDE / DEVICE / RUN_ARGS as above.
+GPU_MANIFESTS = $(if $(MICRO),files_config/campaign/manifest_micro.json$(,)files_config/campaign/manifest_kmh_sweep_micro.json,files_config/campaign/manifest.json$(,)files_config/campaign/manifest_kmh_sweep.json)
+, := ,
+GPU_PART_FLAGS = --part $(GPU_PART) --manifest $(GPU_MANIFESTS) $(if $(SEEDS),--seeds $(SEEDS)) $(if $(EXCLUDE),--exclude-strategy $(EXCLUDE))
+define require_gpu_part
+	@case "$(GPU_PART)" in part_1_gpu|part_2_gpu) ;; *) echo "ERROR: set GPU_PART=part_1_gpu or GPU_PART=part_2_gpu (got '$(GPU_PART)')"; exit 2;; esac
+endef
+
+campaign-list-gpu-part:
+	$(require_gpu_part)
+	poetry run python -m dalmax.campaign list $(GPU_PART_FLAGS)
+
+campaign-run-gpu-part:
+	$(require_gpu_part)
+	poetry run python -m dalmax.campaign run $(GPU_PART_FLAGS) $(if $(DEVICE),--device $(DEVICE),$(if $(MICRO),--device cpu)) $(RUN_ARGS)
+
+campaign-verify-gpu-part:
+	$(require_gpu_part)
+	poetry run python -m dalmax.campaign verify $(GPU_PART_FLAGS)
+
+campaign-space-gpu-part:
+	$(require_gpu_part)
+	poetry run python -m dalmax.campaign space $(GPU_PART_FLAGS)
+
+# The pilot of a GPU part (run it before campaign-run-gpu-part): seed 1 of the part's VAAL and WAAL groups at its
+# largest budget (nq100 in part_1_gpu, nq50 in part_2_gpu) and RandomSampling at that budget. Its leaves are the
+# normal ones, so the full run skips them. Then read `make campaign-pilot-report GPU_PART=...` (wall time vs
+# estimate, strategy_diagnostics, degeneracy flags; read only).
+campaign-pilot:
+	$(require_gpu_part)
+	poetry run python -m dalmax.campaign run $(GPU_PART_FLAGS) --pilot $(if $(DEVICE),--device $(DEVICE),$(if $(MICRO),--device cpu)) $(RUN_ARGS)
+
+campaign-pilot-report:
+	$(require_gpu_part)
+	poetry run python -m dalmax.campaign pilot-report $(GPU_PART_FLAGS)
+
+# Both manifests, every group (after merging the two GPU parts locally): expect OK=459, the seed audit PASS for
+# seeds 1-3 (compared by round-0 image paths), the data-order audit PASS, and the duplicate-pair report.
+campaign-verify-all:
+	poetry run python -m dalmax.campaign verify --part all --manifest $(GPU_MANIFESTS) $(if $(SEEDS),--seeds $(SEEDS)) $(if $(EXCLUDE),--exclude-strategy $(EXCLUDE))
+
+# Tables (md/tex/csv), seed audit and mean confusion matrices from results/campaign_fixed/
+# into docs/results/campaign_fixed/ (MICRO=1: results/smoke_campaign_fixed/ -> results/smoke_campaign_fixed/report/).
+REPORT_ROOT ?= results/campaign_fixed
+REPORT_OUT ?= docs/results/campaign_fixed
+campaign-report:
+	poetry run python -m dalmax.reporting.campaign_report $(if $(MANIFEST),--manifest $(MANIFEST) --root $(REPORT_ROOT) --out $(REPORT_OUT),$(if $(MICRO),--micro --root results/smoke_campaign_fixed --out results/smoke_campaign_fixed/report,--root $(REPORT_ROOT) --out $(REPORT_OUT)))
+
+# Both reports of the clean campaign: main -> docs/results/campaign_fixed/, KMH sweep -> docs/results/campaign_kmh_fixed/.
+campaign-report-all:
+	poetry run python -m dalmax.reporting.campaign_report --root results/campaign_fixed --out docs/results/campaign_fixed
+	poetry run python -m dalmax.reporting.campaign_report --manifest files_config/campaign/manifest_kmh_sweep.json \
+		--root results/campaign_kmh_fixed --out docs/results/campaign_kmh_fixed
+
+# Micro campaign on CPU, seed 1 only, into results/smoke_campaign_fixed/ (every run
+# group once; the baselines in SMOKE_EXCLUDE are skipped by default).
+# Verify afterwards with `make campaign-verify MICRO=1 SEEDS=1`.
 campaign-smoke:
 	poetry run python -m dalmax.campaign run --part all --micro --seeds 1 $(if $(SMOKE_EXCLUDE),--exclude-strategy $(SMOKE_EXCLUDE))
 
-# Micro KMH sweep on CPU, seed 1 only, into results/smoke_campaign_kmh/ (45 jobs).
+# Micro KMH sweep on CPU, seed 1 only, into results/smoke_campaign_kmh_fixed/ (55 jobs).
 # Verify afterwards with
 # `make campaign-verify MANIFEST=files_config/campaign/manifest_kmh_sweep_micro.json SEEDS=1`.
 campaign-smoke-kmh:
 	poetry run python -m dalmax.campaign run --part all --manifest files_config/campaign/manifest_kmh_sweep_micro.json --seeds 1 --device cpu
 
-# Re-run of the seven fixed paper-1 baselines (ADR 0014): MOVE the superseded leaves of the parts
-# paper1_rerun_a / paper1_rerun_b (run_metadata.json started_at before the fix cutoff) from the live
-# tree to results/old_results_broken/<same path below results/>, never deleting or overwriting
-# anything (scripts/campaign/archive_superseded_runs.py; log: results/old_results_broken/ARCHIVE_LOG.tsv).
-#   DRY=1    -> report what would move, move nothing
-#   CHECK=1  -> move nothing; exit 1 if a live leaf of those parts predates the cutoff (run it before
-#               campaign-run and after merging downloaded results)
-#   BEFORE=<ISO-8601 UTC> -> override the cutoff; MANIFEST=path -> another manifest (e.g. the micro one)
-campaign-archive-superseded:
-	poetry run python scripts/campaign/archive_superseded_runs.py $(if $(MANIFEST),--manifest $(MANIFEST),$(if $(MICRO),--manifest files_config/campaign/manifest_micro.json)) $(if $(DRY),--dry-run) $(if $(CHECK),--check) $(if $(BEFORE),--before $(BEFORE))
+# Micro run of one GPU part across both micro manifests (the same plan as campaign-run-gpu-part), seed 1.
+campaign-smoke-gpu-part:
+	$(MAKE) campaign-run-gpu-part MICRO=1 SEEDS=1 GPU_PART=$(GPU_PART)
 
 # Regenerate the KMH sweep params files (files_config/ablations/kmh_sweep/, full + micro).
 kmh-sweep-configs:
@@ -180,3 +238,8 @@ kmh-sweep-configs:
 # Regenerate the committed manifests (and the sweep configs they reference) from scripts/campaign/.
 campaign-manifest: kmh-sweep-configs
 	poetry run python scripts/campaign/build_manifest.py
+
+# Rebuild files_config/campaign/gpu_time_estimates.json from the first execution's trees
+# (results/campaign/, results/campaign_kmh/; read only). A no-op where those trees are absent.
+gpu-time-estimates:
+	poetry run python scripts/campaign/build_gpu_time_estimates.py

@@ -32,7 +32,11 @@ DATA/daninhas_full/
 Loaded by `dalmax.data.loaders.get_DANINHAS` (was `utils.data.get_DANINHAS`, moved in Phase 4): classes are discovered as
 `sorted(os.listdir(train_dir))` (i.e. the 5 `DATASET_*` folder names, sorted
 alphabetically — this sort order fixes the integer class index mapping used
-everywhere downstream, e.g. in confusion matrices). Images are opened,
+everywhere downstream, e.g. in confusion matrices). Inside each class folder the files are taken in plain
+lexicographic order of their names (`dalmax.data.loaders.list_image_names`, since 2026-11-12; before that an unsorted
+`os.listdir`, whose order differed between machines and Colab sessions, KI-47), so the pool and test lists, and what
+every pool/test index names, are the same everywhere (`dalmax/data_order.py`; `run_metadata.json` `data_order`
+records their hashes). Images are opened,
 converted to RGB, and resized to 128×128 (`img_size=128` default parameter).
 
 ## Per-class counts (measured directly, `find ... | wc -l`, confirms `arquivos.txt`)
@@ -50,6 +54,26 @@ converted to RGB, and resized to 128×128 (`img_size=128` default parameter).
 `Average: 1617.2` train / `421.2` test per class — matches. Grand total
 10,192 files; SHARED_CONTEXT's "~10,193" figure is consistent within
 rounding/an off-by-one, not investigated further.)
+
+## Canonical since 2026-11-11: `daninhas_full_fixed` (KI-46, ADR 0016)
+
+`daninhas_full` holds byte-identical copies inside and across the splits (`.specs/quality/known-issues.md` KI-46).
+The duplicate-free `DATA/daninhas_full_fixed/` (built by `scripts/datasets/build_daninhas_full_fixed.py`, same layout
+and class folders, plus `MANIFEST.csv` and `README.txt`) is the dataset of every run from 2026-11-11 on. Counts
+(measured with `find ... -type f | wc -l` on the built folder, 2026-11-11):
+
+| Class | train | test |
+|---|---|---|
+| `DATASET_BRACHIARIA` | 365 | 172 |
+| `DATASET_COLONIAO` | 982 | 89 |
+| `DATASET_GRAMINEA` | 1,156 | 502 |
+| `DATASET_MAMONA` | 3,056 | 167 |
+| `DATASET_OUTRAS_FOLHAS_LARGAS` | 1,671 | 78 |
+| **Total** | **7,230** | **1,008** |
+
+Total files 8,240 (8,238 images + `MANIFEST.csv` + `README.txt`; the Colab setup checks this count and runs the
+builder's `--check`). The tables above and below describe the original `daninhas_full`, kept as the dataset of the
+first campaign.
 
 ## Class imbalance notes
 

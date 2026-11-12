@@ -9,6 +9,18 @@ the historical `demo.py` (`.claude/rules/spec-sync.md`: changing the results dir
 layout or `results.json` schema requires a spec update; this module keeps
 every legacy key and only *adds* `all_precision_macro`/`all_recall_macro`/
 `all_f1_macro`, so no existing consumer of `results.json` breaks).
+
+Two additive files (ADR 0016) keep the per-round history so that any metric can be
+recomputed later on any subset of the test set or of the queried samples (when KI-46
+was found, only the last round's `predictions.csv` existed):
+
+- `round_predictions.json`: the predicted class index of every test image at every
+  round, with the test images' paths and true class indices (test-set order).
+- `round_queries.json`: per round, the pool indices labeled in that round (round 0 =
+  the initial labeled set), sorted, with their true class indices and image paths.
+  Pool indices follow the loaders' sorted order (KI-47; `run_metadata.json`'s
+  `data_order` hashes it); the paths stay the identifier to compare runs by
+  (`dalmax.data_order.relative_image_path`), and the campaign's seed audit does.
 """
 
 from __future__ import annotations
@@ -24,6 +36,11 @@ from sklearn.metrics import confusion_matrix
 from dalmax.data.registry import get_img_size
 from dalmax.experiment.run_metadata import snapshot
 from dalmax.experiment.runner import RunResult
+from dalmax.reporting.leaf_check import ROUND_PREDICTIONS_FILE, ROUND_QUERIES_FILE
+
+ROUND_PREDICTIONS_FORMAT = "dalmax-round-predictions"
+ROUND_QUERIES_FORMAT = "dalmax-round-queries"
+ROUND_HISTORY_VERSION = 1
 
 
 def _plot_confusion_matrix(cm, class_names: list[str], dir_results: str) -> None:
@@ -71,6 +88,11 @@ def _write_results_json(result: RunResult, dir_results: str) -> str:
         "all_recall_macro": result.all_recall_macro,
         "all_f1_macro": result.all_f1_macro,
     }
+    # ADR 0015: strategy-specific per-round reporting (e.g. CEAL's pseudo-labels);
+    # absent for every strategy that reports nothing, so their schema is unchanged.
+    diagnostics = result.strategy.diagnostics()
+    if diagnostics:
+        payload["strategy_diagnostics"] = diagnostics
     json_path = os.path.join(dir_results, "results.json")
     with open(json_path, "w") as f:
         json.dump(payload, f, indent=4)
@@ -96,6 +118,52 @@ def _write_predictions_csv(result: RunResult, dir_results: str) -> str:
     predictions_csv_path = os.path.join(dir_results, "predictions.csv")
     predictions_df.to_csv(predictions_csv_path, index=False)
     return predictions_csv_path
+
+
+def _write_compact_json(path: str, payload: dict) -> None:
+    with open(path, "w") as f:
+        json.dump(payload, f, separators=(",", ":"))
+
+
+def _write_round_predictions(result: RunResult, dir_results: str) -> str:
+    """`round_predictions.json`: every round's test-set predictions (module docstring)."""
+    dataset = result.dataset
+    payload = {
+        "format": ROUND_PREDICTIONS_FORMAT,
+        "version": ROUND_HISTORY_VERSION,
+        "class_names": list(result.class_names),
+        "rounds": list(result.all_rounds),
+        "test_paths": [str(path) for path in dataset.Z_test_paths],
+        "test_labels": [int(y) for y in dataset.Y_test],
+        "predictions": result.round_predictions,
+    }
+    path = os.path.join(dir_results, ROUND_PREDICTIONS_FILE)
+    _write_compact_json(path, payload)
+    return path
+
+
+def _write_round_queries(result: RunResult, dir_results: str) -> str:
+    """`round_queries.json`: the pool indices labeled in each round (module docstring)."""
+    dataset = result.dataset
+    rounds = []
+    for round_idx, idxs in enumerate(result.round_queries):
+        rounds.append({
+            "round": round_idx,
+            "kind": "initial" if round_idx == 0 else "query",
+            "pool_idxs": idxs,
+            "labels": [int(dataset.Y_train[i]) for i in idxs],
+            "paths": [str(dataset.Z_train_paths[i]) for i in idxs],
+        })
+    payload = {
+        "format": ROUND_QUERIES_FORMAT,
+        "version": ROUND_HISTORY_VERSION,
+        "class_names": list(result.class_names),
+        "n_pool": int(dataset.n_pool),
+        "rounds": rounds,
+    }
+    path = os.path.join(dir_results, ROUND_QUERIES_FILE)
+    _write_compact_json(path, payload)
+    return path
 
 
 def _build_checkpoint_extra(result: RunResult) -> dict:
@@ -153,6 +221,8 @@ def write_report(result: RunResult, path_logger: str) -> None:
     )
 
     predictions_csv_path = _write_predictions_csv(result, dir_results)
+    _write_round_predictions(result, dir_results)
+    _write_round_queries(result, dir_results)
     # `results.json` is written LAST: it is the "run finished" marker that
     # `dalmax.campaign.job_done` (skip-existing/resume) relies on, so a run
     # killed mid-report can never look complete.
