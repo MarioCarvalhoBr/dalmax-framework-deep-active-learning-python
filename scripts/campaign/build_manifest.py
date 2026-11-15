@@ -79,12 +79,17 @@ DROPOUT_STRATEGIES = [
 #                at nq50 (the nq50 sweep is the balancing item: its own tables stay in one part);
 #   part_2_gpu = paper 1 at nq50 and nq10, the KMH sweep at nq10, and (ADR 0018) the whole KMH wide-top
 #                exploration `kmh_wide` (every budget: account B already holds the ImageNet feature cache).
+#   (ADR 0019) the KMH feature post-processing round `kmh_norm` (every budget) goes to part_1_gpu: account A
+#                runs it in parallel with `kmh_wide` on account B, and its Drive holds the same ImageNet cache.
 PART_1_GPU, PART_2_GPU = GPU_PARTS
 PAPER1_GPU_PART: dict[int, str] = {100: PART_1_GPU, 50: PART_2_GPU, 10: PART_2_GPU}
 SWEEP_GPU_PART: dict[int, str] = {100: PART_1_GPU, 50: PART_1_GPU, 10: PART_2_GPU}
 # The KMH wide-top exploration (ADR 0018, 2026-11-15): one semantic part, every budget, all on account B.
 WIDE_PART = "kmh_wide"
 WIDE_GPU_PART = PART_2_GPU
+# The KMH feature post-processing round (ADR 0019, 2026-11-15): one semantic part, every budget, all on account A.
+NORM_PART = "kmh_norm"
+NORM_GPU_PART = PART_1_GPU
 ABLATION_GPU_PART = PART_1_GPU
 UPPER_BOUND_GPU_PART = PART_1_GPU
 # Execution stage inside a GPU part (both manifests share the numbering; `campaign run --part part_N_gpu`
@@ -92,7 +97,7 @@ UPPER_BOUND_GPU_PART = PART_1_GPU
 # budget leaves complete tables.
 STAGE_PAPER1 = 1  # paper-1 strategies other than the long ones, KMH, the upper bound
 STAGE_ABLATIONS = 2  # rnhal, texhal, texhal_q17, hier_transfer, texhal_q13
-STAGE_KMH_SWEEP = 3  # the KMH sweep manifest (incl. kmh_wide, ADR 0018)
+STAGE_KMH_SWEEP = 3  # the KMH sweep manifest (incl. kmh_wide, ADR 0018, and kmh_norm, ADR 0019)
 LONG_STRATEGY_STAGE: dict[str, int] = {
     "AdversarialBIM": 4, "VAAL": 5, "WAAL": 5, WAAL_CONTROL: 5, "AdversarialDeepFool": 6,
 }
@@ -515,7 +520,10 @@ def build_kmh_sweep(scale: Scale) -> dict[str, Any]:
     Results go to a root of their own (`scale.sweep_results_root`); the reference is re-run inside it so
     every comparison of a sweep table is within one runtime image (KI-43) and one GPU part (ADR 0016).
     The wide-top exploration (ADR 0018) is appended after them: part `kmh_wide`, ids `kmh_wide/nq{N}/<config>`,
-    results under `<root>/wide/nq{N}/<config>/`, tables `kmh_wide_nq{N}`.
+    results under `<root>/wide/nq{N}/<config>/`, tables `kmh_wide_nq{N}`. Then the feature post-processing
+    round (ADR 0019): part `kmh_norm`, ids `kmh_norm/nq{N}/<variant>`, results under `<root>/norm/nq{N}/<variant>/`,
+    tables `kmh_norm_nq{N}` whose first row is the alias `kmh_norm/nq{N}/none` (explicit identity) of the
+    executed reference `kmh/nq{N}/hier_L3_ref`.
     """
     root = scale.sweep_results_root
     params_dir = f"files_config/ablations/kmh_sweep/{scale.abl_subdir}"
@@ -614,6 +622,45 @@ def build_kmh_sweep(scale: Scale) -> dict[str, Any]:
             "title": f"KMH wide-top exploration (ADR 0018), n_query={paper_nq}", "rows": rows,
         })
 
+    # Feature post-processing round (ADR 0019): appended after kmh_wide, so nothing executed or in progress moves.
+    # Part `kmh_norm`, all in part_1_gpu (account A, whose Drive holds the ImageNet feature cache of seeds 1-3; the
+    # cache keeps the raw vectors and its key ignores the post-processing), results under <root>/norm/ so the part
+    # can be zipped alone. One table per budget: the executed raw-feature reference (through the alias of the
+    # explicit identity, whose signature the manifest validation checks against the reference) and the variants.
+    reference_name = sweep.NORM_HIERARCHY
+    for paper_nq in sorted(sweep.BUDGETS, reverse=True):
+        nq = scale.nq_by_paper_nq[paper_nq]
+        clusters = sweep.clusters_for(by_name[reference_name], paper_nq)
+        rows = []
+        for name, variant, block, label in sweep.norm_points():
+            norm_id = f"{NORM_PART}/nq{paper_nq}/{variant}"
+            params = f"{params_dir}nq{paper_nq}/{name}.json"
+            if block == sweep.NORM_IDENTITY[1]:
+                aliases.append({
+                    "id": norm_id, "canonical": gid(paper_nq, reference_name), "params_json": params,
+                    "strategy_name": "RepresentationStrategy",
+                    "reason": "embedding.postprocess {\"method\": \"none\"} is the identity (ADR 0019): the same "
+                              "computation as the executed raw-feature reference, one run.",
+                })
+                rows.append({"label": f"{label}, {gid(paper_nq, reference_name)}", "run": norm_id})
+                continue
+            groups.append({
+                "id": norm_id, "part": NORM_PART, "gpu_part": NORM_GPU_PART,
+                "gpu_stage": STAGE_KMH_SWEEP, "params_json": params,
+                "strategy_name": "RepresentationStrategy", "n_query": nq,
+                "n_init_labeled": scale.n_init, "n_round": scale.n_round, "seeds": list(SEEDS),
+                "dir_results": f"{root}/norm/nq{paper_nq}/{variant}/", "used_by": [],
+                "note": f"KMH feature post-processing (ADR 0019) @ n_query={paper_nq}: reference hierarchy "
+                        f"k={sweep._fmt(clusters)}, embedding.postprocess "
+                        + ", ".join(f"{k}={v}" for k, v in block.items()) + ".",
+            })
+            rows.append({"label": label, "run": norm_id})
+        tables.append({
+            "id": f"kmh_norm_nq{paper_nq}", "kind": "ablation",
+            "title": f"KMH feature post-processing (ADR 0019), reference hierarchy, n_query={paper_nq}",
+            "rows": rows,
+        })
+
     all_tables = {"paper1": {"tables": tables}}
     used = derive_used_by(all_tables, {a["id"]: Alias(a["id"], a["canonical"], a["params_json"],
                                                       a["strategy_name"], a["reason"]) for a in aliases})
@@ -622,8 +669,9 @@ def build_kmh_sweep(scale: Scale) -> dict[str, Any]:
     return {
         "name": f"{scale.name}_kmh_sweep",
         "description": "Paper-1 KMH parameter sweep, stages 1 and 2 (.specs/experiments/campaign.md, 'KMH parameter "
-                       "sweep'), plus the wide-top exploration kmh_wide (ADR 0018). Generated by "
-                       "scripts/campaign/build_manifest.py -- do not edit by hand.",
+                       "sweep'), plus the wide-top exploration kmh_wide (ADR 0018) and the feature post-processing "
+                       "round kmh_norm (ADR 0019). Generated by scripts/campaign/build_manifest.py -- do not edit "
+                       "by hand.",
         "dataset_name": "DANINHAS",
         "results_root": root,
         **manifest_header(scale),

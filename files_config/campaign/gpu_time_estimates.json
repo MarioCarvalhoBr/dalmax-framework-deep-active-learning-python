@@ -1006,6 +1006,51 @@
    "seconds_per_run": 936,
    "basis": "estimate",
    "rule": "linear in the total number of clusters: least-squares line of the measured KMH-sweep groups (default knobs) of the same query size and number of levels, at sum(n_clusters)=1610"
+  },
+  "kmh_norm/nq100/l2": {
+   "seconds_per_run": 571,
+   "basis": "estimate",
+   "rule": "equal to the measured reference hierarchy at the same query size (kmh/nq100/hier_L3_ref): same hierarchy, selection and training plus a post-processing of the frozen features; no speed-up assumed for pca_l2"
+  },
+  "kmh_norm/nq100/zscore": {
+   "seconds_per_run": 571,
+   "basis": "estimate",
+   "rule": "equal to the measured reference hierarchy at the same query size (kmh/nq100/hier_L3_ref): same hierarchy, selection and training plus a post-processing of the frozen features; no speed-up assumed for pca_l2"
+  },
+  "kmh_norm/nq100/pca64_l2": {
+   "seconds_per_run": 571,
+   "basis": "estimate",
+   "rule": "equal to the measured reference hierarchy at the same query size (kmh/nq100/hier_L3_ref): same hierarchy, selection and training plus a post-processing of the frozen features; no speed-up assumed for pca_l2"
+  },
+  "kmh_norm/nq50/l2": {
+   "seconds_per_run": 564,
+   "basis": "estimate",
+   "rule": "equal to the measured reference hierarchy at the same query size (kmh/nq50/hier_L3_ref): same hierarchy, selection and training plus a post-processing of the frozen features; no speed-up assumed for pca_l2"
+  },
+  "kmh_norm/nq50/zscore": {
+   "seconds_per_run": 564,
+   "basis": "estimate",
+   "rule": "equal to the measured reference hierarchy at the same query size (kmh/nq50/hier_L3_ref): same hierarchy, selection and training plus a post-processing of the frozen features; no speed-up assumed for pca_l2"
+  },
+  "kmh_norm/nq50/pca64_l2": {
+   "seconds_per_run": 564,
+   "basis": "estimate",
+   "rule": "equal to the measured reference hierarchy at the same query size (kmh/nq50/hier_L3_ref): same hierarchy, selection and training plus a post-processing of the frozen features; no speed-up assumed for pca_l2"
+  },
+  "kmh_norm/nq10/l2": {
+   "seconds_per_run": 553,
+   "basis": "estimate",
+   "rule": "equal to the measured reference hierarchy at the same query size (kmh/nq10/hier_L3_ref): same hierarchy, selection and training plus a post-processing of the frozen features; no speed-up assumed for pca_l2"
+  },
+  "kmh_norm/nq10/zscore": {
+   "seconds_per_run": 553,
+   "basis": "estimate",
+   "rule": "equal to the measured reference hierarchy at the same query size (kmh/nq10/hier_L3_ref): same hierarchy, selection and training plus a post-processing of the frozen features; no speed-up assumed for pca_l2"
+  },
+  "kmh_norm/nq10/pca64_l2": {
+   "seconds_per_run": 553,
+   "basis": "estimate",
+   "rule": "equal to the measured reference hierarchy at the same query size (kmh/nq10/hier_L3_ref): same hierarchy, selection and training plus a post-processing of the frozen features; no speed-up assumed for pca_l2"
   }
  }
 }

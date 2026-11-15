@@ -35,6 +35,12 @@ the trees of the first execution (read only, never written):
   measured groups follow such a line closely (at nq100, L=1 k 20..600 and the L=3..5 shapes up to a
   total of 2,700 clusters). The one-level k=1200/2400 points extrapolate beyond the measured one-level
   range (k <= 600): treat them as the least certain entries.
+- **estimate by reference** groups (ADR 0019, 2026-11-15): the KMH feature post-processing round `kmh_norm`,
+  never run in the first execution (`REFERENCE_PREFIXES`), takes the measured value of the reference
+  hierarchy at the same query size (`kmh/nq{N}/hier_L3_ref`): the same hierarchy, selection and training,
+  plus a post-processing of the frozen features that costs seconds per run (a full SVD of the 7,230 x 2,048
+  pool for `pca_l2`). `pca_l2` clusters 64-d instead of 2,048-d vectors and may well be faster; no speed-up
+  is assumed.
 
 Caveats: the first execution ran on the dataset with duplicates (8,086 pool / 2,106 test images; the
 new one has 7,230 / 1,008), on the GPU class of that execution, and `KMeansSampling` /
@@ -116,6 +122,24 @@ FIT_PREFIXES: dict[str, str] = {
 }
 SWEEP_ID_PREFIX = "kmh/"
 
+# Id prefix of a never-run part -> (id of the measured group it is estimated from, `{nq}` = the group's budget
+# folder, e.g. "nq50"; rule text).
+REFERENCE_PREFIXES: dict[str, tuple[str, str]] = {
+    "kmh_norm/": ("kmh/{nq}/hier_L3_ref", "equal to the measured reference hierarchy at the same query size "
+                                          "(kmh/{nq}/hier_L3_ref): same hierarchy, selection and training plus a "
+                                          "post-processing of the frozen features; no speed-up assumed for pca_l2"),
+}
+
+
+def reference_estimate(group: RunGroup, measured: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    """Entry of a never-run group estimated from its measured reference (`REFERENCE_PREFIXES`), or None."""
+    for prefix, (reference, rule) in REFERENCE_PREFIXES.items():
+        if group.id.startswith(prefix):
+            nq = group.id[len(prefix):].split("/", 1)[0]
+            return {"seconds_per_run": measured[reference.format(nq=nq)]["seconds_per_run"], "basis": "estimate",
+                    "rule": rule.format(nq=nq)}
+    return None
+
 
 def _clusters(group: RunGroup) -> tuple[int, ...]:
     params = json.loads((REPO_ROOT / group.params_json).read_text())
@@ -173,7 +197,8 @@ def measure(groups: list[RunGroup]) -> tuple[dict[str, dict[str, Any]], float]:
     done = _done_elapsed()
     raw: dict[str, list[tuple[float | None, float | None]]] = {}
     for group in groups:
-        if group.strategy_name in ESTIMATE_RULES or any(group.id.startswith(p) for p in (*TWIN_PREFIXES, *FIT_PREFIXES)):
+        if group.strategy_name in ESTIMATE_RULES or any(
+                group.id.startswith(p) for p in (*TWIN_PREFIXES, *FIT_PREFIXES, *REFERENCE_PREFIXES)):
             continue
         raw[group.id] = [(done.get((group.id, s)), _total_time(group, s)) for s in group.seeds]
     overheads = [d - t for runs in raw.values() for d, t in runs if d is not None and t is not None]
@@ -213,10 +238,13 @@ def build() -> dict[str, Any]:
     for group in groups:
         twin = twin_estimate(group, measured)
         fit = fit_estimate(group, groups, measured)
+        reference = reference_estimate(group, measured)
         if twin is not None:
             entries[group.id] = twin
         elif fit is not None:
             entries[group.id] = fit
+        elif reference is not None:
+            entries[group.id] = reference
         elif group.strategy_name in ESTIMATE_RULES:
             entries[group.id] = estimate(group, measured)
         elif group.id in measured:

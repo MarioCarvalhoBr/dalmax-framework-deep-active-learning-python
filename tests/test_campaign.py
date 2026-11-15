@@ -34,6 +34,8 @@ DROPOUT_FAMILY = (*MC_DROPOUT, "VarRatio", "MeanSTD")
 DEEPALPLUS = ("VarRatio", "MeanSTD", "KCenterGreedyPCA", "BadgeSampling", "CEALSampling", "LossPredictionLoss",
               "VAAL", "WAAL")
 LONG = ("AdversarialBIM", "VAAL", "WAAL", "WAALRandomQuery", "AdversarialDeepFool")
+# Parts added after the ADR 0016 split, each assigned to one account (ADR 0017, 0018, 0019).
+ADD_ON_PARTS = ("texhal_q13", "kmh_wide", "kmh_norm")
 WAAL_CONTROL_ID = "p1_control/WAALRandomQuery/nq100"
 
 
@@ -78,19 +80,24 @@ def test_kmh_sweep_manifest_counts_and_layout(path: Path) -> None:
     counts = C.count_by_part(C.expand_jobs(manifest))
     assert counts["kmh_nq10"] == counts["kmh_nq50"] == 51 and counts["kmh_nq100"] == 63
     assert counts["kmh_wide"] == 39  # ADR 0018: the wide-top exploration, appended
-    assert sum(counts.values()) == 204 and len(manifest.groups) == 68
+    assert counts["kmh_norm"] == 27  # ADR 0019: the feature post-processing round, appended
+    assert sum(counts.values()) == 231 and len(manifest.groups) == 77
     assert len({g.dir_results for g in manifest.groups}) == len(manifest.groups)  # one leaf dir per group
     assert all(g.strategy_name == "RepresentationStrategy" for g in manifest.groups)
     # A root of its own (ADR 0016): never the first execution's results/campaign_kmh/.
     assert manifest.results_root.endswith("_kmh_fixed") and manifest.results_root != "results/campaign_kmh"
-    assert {g.part for g in manifest.groups} == {"kmh_nq10", "kmh_nq50", "kmh_nq100", "kmh_wide"}
+    assert {g.part for g in manifest.groups} == {"kmh_nq10", "kmh_nq50", "kmh_nq100", "kmh_wide", "kmh_norm"}
 
 
 def test_kmh_sweep_aliases_resolve_to_the_reference() -> None:
     manifest = C.load_manifest(SWEEP)
     aliases = manifest.alias_by_id()
-    assert set(aliases) == {"kmh/nq100/hier_L3_matched"}
+    # ADR 0019: kmh_norm/nq{N}/none = the explicit identity = the executed reference of that budget.
+    assert set(aliases) == {"kmh/nq100/hier_L3_matched", "kmh_norm/nq100/none", "kmh_norm/nq50/none",
+                            "kmh_norm/nq10/none"}
     assert aliases["kmh/nq100/hier_L3_matched"].canonical == "kmh/nq100/hier_L3_ref"
+    for nq in (100, 50, 10):
+        assert aliases[f"kmh_norm/nq{nq}/none"].canonical == f"kmh/nq{nq}/hier_L3_ref"
     assert "kmh/nq100/hier_L1_kNQ" not in manifest.group_by_id()
     table_runs = {r["run"] for t in manifest.tables["paper1"]["tables"] for r in t["rows"]}
     assert "kmh/nq100/hier_L3_matched" in table_runs  # the row exists, as an alias
@@ -103,8 +110,10 @@ def test_kmh_sweep_parts_filter_and_order() -> None:
     assert C.parse_parts("kmh_nq10") == ("kmh_nq10",)
     assert C.parse_parts("kmh_nq10,kmh_nq100") == ("kmh_nq100", "kmh_nq10")  # PARTS order: nq100 first
     jobs_all = C.expand_jobs(manifest, C.parse_parts("all"))
-    assert [j.group.part for j in jobs_all][:63] == ["kmh_nq100"] * 63 and jobs_all[-1].group.part == "kmh_wide"
-    assert [j.group.part for j in jobs_all][-40] == "kmh_nq10"  # kmh_wide (ADR 0018) runs after the sweep
+    assert [j.group.part for j in jobs_all][:63] == ["kmh_nq100"] * 63 and jobs_all[-1].group.part == "kmh_norm"
+    # kmh_wide (ADR 0018) runs after the sweep, kmh_norm (ADR 0019) after kmh_wide
+    assert [j.group.part for j in jobs_all][-66:] == ["kmh_wide"] * 39 + ["kmh_norm"] * 27
+    assert [j.group.part for j in jobs_all][-67] == "kmh_nq10"
     jobs = C.expand_jobs(manifest, C.parse_parts("kmh_nq50"))
     assert len(jobs) == 51 and {j.group.part for j in jobs} == {"kmh_nq50"}
     order = [C.PHASE_LABELS[C.phase_index(g, manifest.primary_nq)] for g in manifest.groups]
@@ -117,7 +126,7 @@ def test_run_counts_per_part(which: str, request: pytest.FixtureRequest) -> None
     counts = C.count_by_part(C.expand_jobs(manifest))
     assert counts == {"paper1": 189, "paper1_control": 3, "upper_bound": 3, "rnhal": 42, "texhal": 30,
                       "texhal_q17": 18, "hier_transfer": 12, "texhal_q13": 24, "control": 0, "kmh_nq10": 0,
-                      "kmh_nq50": 0, "kmh_nq100": 0, "kmh_wide": 0}
+                      "kmh_nq50": 0, "kmh_nq100": 0, "kmh_wide": 0, "kmh_norm": 0}
     assert sum(counts.values()) == 321 and len(manifest.groups) == 107
 
 
@@ -354,14 +363,15 @@ def test_gpu_parts_are_balanced_by_the_estimates(both_full: tuple[C.Manifest, C.
         hours[gpu_part], unknown = C.estimated_hours([j for seg in plan for j in seg.jobs], estimates)
         assert unknown == 0
     total = sum(hours.values())
-    assert 105 < total < 115  # 109 GPU hours with the committed estimates (ADR 0018)
+    assert 110 < total < 118  # 113.5 GPU hours with the committed estimates (ADR 0019)
     # The ADR 0016 split is balanced; the later add-on parts go to the account they were assigned to
-    # (texhal_q13 -> part_1_gpu, ADR 0017; kmh_wide -> part_2_gpu, ADR 0018) and are left out of the balance.
+    # (texhal_q13 -> part_1_gpu, ADR 0017; kmh_wide -> part_2_gpu, ADR 0018; kmh_norm -> part_1_gpu, ADR 0019)
+    # and are left out of the balance.
     base = {}
     for gpu_part in C.GPU_PARTS:
         plan = C.plan_jobs(both_full, C.parse_selection(gpu_part))
         base[gpu_part], _ = C.estimated_hours([j for seg in plan for j in seg.jobs
-                                               if j.group.part not in ("texhal_q13", "kmh_wide")], estimates)
+                                               if j.group.part not in ADD_ON_PARTS], estimates)
     assert abs(base["part_1_gpu"] - base["part_2_gpu"]) / sum(base.values()) < 0.05
 
 
@@ -383,6 +393,11 @@ def test_gpu_parts_cover_every_group_once_and_keep_tables_together(both_full) ->
                 if table["id"].startswith("paper1_nq") and table["id"] != "paper1_nq100":
                     # paper 1 at nq50/nq10: every row in part_2_gpu except the upper bound (part_1_gpu)
                     assert {groups[r].gpu_part for r in runs - {"p1/upper_bound"}} == {"part_2_gpu"}
+                elif table["id"] == "kmh_norm_nq10":
+                    # ADR 0019: the whole kmh_norm round runs on account A (part_1_gpu); its nq10 table's first
+                    # row is the executed raw-feature reference of the nq10 sweep (part_2_gpu, account B).
+                    assert {groups[r].gpu_part for r in runs - {"kmh/nq10/hier_L3_ref"}} == {"part_1_gpu"}
+                    assert groups["kmh/nq10/hier_L3_ref"].gpu_part == "part_2_gpu"
                 else:
                     assert len(parts) == 1, (table["id"], parts)
     # Papers 2/3 comparisons and 6.3 tables reuse the shared nq100 runs, all in part_1_gpu.
@@ -393,7 +408,7 @@ def test_gpu_parts_cover_every_group_once_and_keep_tables_together(both_full) ->
     assert by_budget == {100: {"part_1_gpu"}, 50: {"part_2_gpu"}, 10: {"part_2_gpu"}}
     sweep_parts = {g.part: g.gpu_part for g in sweep.groups}
     assert sweep_parts == {"kmh_nq100": "part_1_gpu", "kmh_nq50": "part_1_gpu", "kmh_nq10": "part_2_gpu",
-                           "kmh_wide": "part_2_gpu"}
+                           "kmh_wide": "part_2_gpu", "kmh_norm": "part_1_gpu"}
 
 
 def test_gpu_part_plan_runs_cheap_groups_first_sweep_in_the_middle_long_ones_last(both_full) -> None:
@@ -441,11 +456,13 @@ def test_cli_run_gpu_part_dry_run_logs_nothing(tmp_path: Path, capsys: pytest.Ca
 
 
 def test_cli_list_gpu_part_1_counts_include_texhal_q13(capsys: pytest.CaptureFixture[str]) -> None:
-    """ADR 0017: part_1_gpu grows by the 24 texhal_q13 runs (285 -> 309 runs, 95 -> 103 groups)."""
+    """ADR 0017: part_1_gpu grows by the 24 texhal_q13 runs (285 -> 309 runs, 95 -> 103 groups); ADR 0019: by
+    the 27 kmh_norm runs (309 -> 336 runs, 103 -> 112 groups)."""
     assert C.main(["list", "--manifest", f"{FULL},{SWEEP}", "--part", "part_1_gpu"]) == 0
     combined = capsys.readouterr().out.split("Combined:")[1]
-    assert "part_1_gpu      309 runs (103 run groups)  est" in combined
+    assert "part_1_gpu      336 runs (112 run groups)  est" in combined
     assert "texhal_q13       24 runs (8 run groups)  est" in combined
+    assert "kmh_norm         27 runs (9 run groups)  est" in combined
 
 
 TEXHAL_Q13_GROUPS = (
@@ -653,7 +670,7 @@ def test_kmh_wide_part_layout(path: Path) -> None:
 def test_kmh_wide_signatures_differ_from_every_v3_group(both_full) -> None:
     """ADR 0018: no kmh_wide group repeats a computation of either manifest (executed or texhal_q13)."""
     main, sweep = both_full
-    old = {C.group_signature(m, g) for m in both_full for g in m.groups if g.part != "kmh_wide"}
+    old = {C.group_signature(m, g) for m in both_full for g in m.groups if g.part not in SWEEP_PARTS_AFTER_V3}
     new = [C.group_signature(sweep, g) for g in sweep.groups if g.part == "kmh_wide"]
     assert len(set(new)) == len(new) == 13
     assert not set(new) & old
@@ -674,7 +691,91 @@ def test_kmh_wide_estimates_follow_the_fit_rule(both_full) -> None:
             assert table[g.id] == module.fit_estimate(g, groups, measured), g.id
         else:
             assert module.fit_estimate(g, groups, measured) is None
-    assert list(table)[-13:] == list(KMH_WIDE_GROUPS)
+    assert list(table)[-22:-9] == list(KMH_WIDE_GROUPS)  # kmh_norm's 9 entries follow (ADR 0019)
+
+
+# ADR 0019: the 9 kmh_norm groups -> their embedding.postprocess block, in manifest order.
+KMH_NORM_GROUPS: dict[str, dict] = {
+    f"kmh_norm/nq{nq}/{variant}": block
+    for nq in (100, 50, 10)
+    for variant, block in (("l2", {"method": "l2", "pca_dim": None}),
+                           ("zscore", {"method": "zscore", "pca_dim": None}),
+                           ("pca64_l2", {"method": "pca_l2", "pca_dim": 64}))
+}
+
+
+@pytest.mark.parametrize("path", [SWEEP, SWEEP_MICRO])
+def test_kmh_norm_part_layout(path: Path) -> None:
+    """ADR 0019: 9 groups x 3 seeds, part_1_gpu, the sweep's stage, results under <root>/norm/nq{N}/<variant>/,
+    appended after kmh_wide; each group is the executed reference `kmh/nq{N}/hier_L3_ref` (same budget, NIL, NR,
+    seeds, hierarchy, extractor) except the post-processing; own tables kmh_norm_nq{N} whose first row is the
+    alias of that reference (explicit identity)."""
+    manifest = C.load_manifest(path)
+    micro = path == SWEEP_MICRO
+    norm = [g for g in manifest.groups if g.part == "kmh_norm"]
+    assert [g.id for g in norm] == list(KMH_NORM_GROUPS)
+    assert list(manifest.groups[-9:]) == norm  # appended last
+    by_id = manifest.group_by_id()
+    for g in norm:
+        nq_dir, variant = g.id.split("/")[1:]
+        reference = by_id[f"kmh/{nq_dir}/hier_L3_ref"]
+        name = f"hier_L3_ref__norm_{variant}"
+        assert g.params_json == f"files_config/ablations/kmh_sweep/{'micro/' if micro else ''}{nq_dir}/{name}.json"
+        assert g.dir_results == f"{manifest.results_root}/norm/{nq_dir}/{variant}/"
+        assert (g.gpu_part, g.gpu_stage, g.seeds) == ("part_1_gpu", 3, reference.seeds) == ("part_1_gpu", 3, (1, 2, 3))
+        assert (g.strategy_name, g.n_query, g.n_init_labeled, g.n_round) == (
+            reference.strategy_name, reference.n_query, reference.n_init_labeled, reference.n_round)
+        assert {u["table"] for u in g.used_by} == {f"kmh_norm_{nq_dir}"}
+        # The resolved computation is the reference's plus the post-processing block, nothing else.
+        sig = json.loads(C.group_signature(manifest, g))
+        ref_sig = json.loads(C.group_signature(manifest, reference))
+        assert sig["behavior"].pop("postprocess") == KMH_NORM_GROUPS[g.id]
+        assert sig == ref_sig, g.id
+        if not micro:
+            assert g.n_query == int(nq_dir[2:]) and g.n_init_labeled == 100 and g.n_round == 8
+    tables = {t["id"]: t for t in manifest.tables["paper1"]["tables"]}
+    assert [t for t in tables if t.startswith("kmh_norm")] == ["kmh_norm_nq100", "kmh_norm_nq50", "kmh_norm_nq10"]
+    aliases = manifest.alias_by_id()
+    for nq in (100, 50, 10):
+        rows = tables[f"kmh_norm_nq{nq}"]["rows"]
+        assert [r["run"] for r in rows] == [f"kmh_norm/nq{nq}/{v}" for v in ("none", "l2", "zscore", "pca64_l2")]
+        alias = aliases[f"kmh_norm/nq{nq}/none"]
+        reference = by_id[f"kmh/nq{nq}/hier_L3_ref"]
+        assert alias.canonical == reference.id
+        assert C.effective_signature(alias.params_json, manifest.dataset_name, alias.strategy_name, reference.n_query,
+                                     reference.n_init_labeled, reference.n_round) == C.group_signature(manifest, reference)
+    # Every table that existed at v4 keeps its id and rows.
+    assert [t for t in tables if not t.startswith("kmh_norm")] == [
+        t["id"] for t in manifest.tables["paper1"]["tables"][: len(tables) - 3]]
+
+
+def test_kmh_norm_signatures_differ_from_every_v4_group(both_full) -> None:
+    """ADR 0019: no kmh_norm group repeats a computation of either manifest (executed, texhal_q13, kmh_wide)."""
+    main, sweep = both_full
+    old = {C.group_signature(m, g) for m in both_full for g in m.groups if g.part != "kmh_norm"}
+    new = [C.group_signature(sweep, g) for g in sweep.groups if g.part == "kmh_norm"]
+    assert len(set(new)) == len(new) == 9
+    assert not set(new) & old
+
+
+def test_kmh_norm_estimates_follow_the_reference_rule(both_full) -> None:
+    """ADR 0019: each kmh_norm estimate is the measured reference hierarchy of its budget (no speed-up assumed)."""
+    spec = importlib.util.spec_from_file_location(
+        "build_gpu_time_estimates", REPO_ROOT / "scripts/campaign/build_gpu_time_estimates.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    table = json.loads((REPO_ROOT / "files_config/campaign/gpu_time_estimates.json").read_text())["groups"]
+    measured = {k: v for k, v in table.items() if v["basis"] == "measured"}
+    for g in (g for m in both_full for g in m.groups):
+        entry = module.reference_estimate(g, measured)
+        if g.part == "kmh_norm":
+            nq_dir = g.id.split("/")[1]
+            assert table[g.id] == entry and entry["basis"] == "estimate", g.id
+            assert entry["seconds_per_run"] == measured[f"kmh/{nq_dir}/hier_L3_ref"]["seconds_per_run"]
+        else:
+            assert entry is None, g.id
+    assert list(table)[-9:] == list(KMH_NORM_GROUPS)
+    assert sum(table[g]["seconds_per_run"] for g in KMH_NORM_GROUPS) * 3 == 15192  # 4.2 GPU h
 
 
 def test_paper2_tables_use_texhal_q13_and_keep_the_executed_q17_and_q5_17_tables(full_manifest: C.Manifest) -> None:
