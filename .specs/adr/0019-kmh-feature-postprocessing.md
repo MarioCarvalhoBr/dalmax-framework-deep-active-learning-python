@@ -66,9 +66,21 @@ KMH sweep manifest on Colab account A.
 ### The identity guarantee, and how it is tested
 
 With the key absent or `"none"` the code path is behaviour-identical to tag `campaign-fixed-v4`: the identity's
-`fit` reads only the matrix shape and stores nothing, its `transform` returns the array itself (no copy, no cast),
-no log line and no diagnostics are added, no random number is drawn anywhere (construction, fit, transform), and the
-cache key is untouched. Evidence:
+`fit` reads only the matrix shape (it keeps a shape summary that nothing downstream reads), its `transform` returns
+the array itself (no copy, no cast), no log line and no diagnostics are added, no random number is drawn anywhere
+(construction, fit, transform), and the cache key is untouched. Per file of `git diff campaign-fixed-v4 -- dalmax/`:
+
+| file | change | default (absent / `"none"`) path |
+|---|---|---|
+| `config/schema.py` | `PostprocessConfig`; `EmbeddingConfig.postprocess` (default identity) | validation only; a params file without the key resolves to the default; `to_dict` gains one key, so the `run_metadata.json` snapshot gains `embedding.postprocess` (bookkeeping, nothing reads it back) |
+| `config/loader.py` | `_build_postprocess_config`; `_build_embedding_config` takes a context string | absent key -> `PostprocessConfig()`; `extractor`, `q`, `variant` parsed exactly as before |
+| `embeddings/postprocess.py` | new module | only `IdentityPostprocessor` is reached |
+| `embeddings/registry.py` | `POSTPROCESS_REGISTRY`, `build_postprocessor` | builds one object; no RNG, no I/O |
+| `query_strategies/registry.py` | `postprocessor=build_postprocessor(...)` passed to `RepresentationStrategy` | built after the provider, the selection and its generator, in the same order as before; no draw |
+| `query_strategies/representation.py` | constructor argument, `first_query` flag, fit/transform calls, `diagnostics()` override | the same stacked, sliced float32 array object reaches `select`; the same log lines; `diagnostics()` returns `{}` like the base class; the cache-key code is untouched |
+| `campaign.py` | `_postprocess_behavior` in `effective_signature`; `kmh_norm` in `PARTS`/`PHASE_LABELS` | not executed by `tools/trainer.py`; identity adds nothing to a signature (pinned digests) |
+
+Evidence:
 
 1. The golden-run tests (`tests/test_golden_run.py`, fixtures unchanged) pass.
 2. `tests/test_postprocess_identity.py::test_micro_run_with_and_without_explicit_none_is_identical` (`dataset`,
@@ -91,9 +103,7 @@ cache key is untouched. Evidence:
    under the new signature code (digest computed with the v4 code on a checkout of the tag, for the full and micro
    manifests); `test_postprocess_none_keeps_the_signature_and_other_methods_change_it`.
 
-`git diff campaign-fixed-v4 -- dalmax/` touches `config/schema.py`, `config/loader.py`, `embeddings/postprocess.py`
-(new), `embeddings/registry.py`, `query_strategies/registry.py`, `query_strategies/representation.py` and
-`campaign.py`; the line-by-line argument is in the branch's hand-off report and is the content of points 1-5.
+`tools/` is unchanged between the tags.
 
 ### KI-50 is not fixed here
 
@@ -152,11 +162,16 @@ disclosed as selected on the test set.
   other scales), and a null result does not rule out other feature spaces.
 - `pca_l2` changes two things at once (dimension and normalisation); `l2` alone separates the normalisation.
 
-## Pre-flight
+## Pre-flight (2026-11-15, CPU, local)
 
-See the execution record in `.specs/experiments/campaign.md` ("KMH feature post-processing"): CPU micro run of the 9
-micro mirrors and a real-data check of the three variants on the seed-1 initial pool (explained variance, norms,
-exactly `n_query` distinct images at nq 10/50/100, no empty cluster, no top-up).
+Recorded in `.specs/experiments/campaign.md` ("KMH feature post-processing"). In short: golden runs, the identity
+tests (including the end-to-end micro run with and without the explicit `"none"`) and the pinned v4 digests pass; the
+9 micro mirrors run 9/9 and verify OK=9 with audits PASS; on the real ImageNet features of the seed-1 initial pool
+(7,130 images) raw norms 14.0 to 30.7 (median 19.2) become 1 after `l2`/`pca_l2` and 24.2 to 170.7 (median 39.3)
+after `zscore` (no constant dimension, no zero-norm vector), the 64 principal components explain 0.8956 of the pool
+variance, and for every variant and budget (10, 50, 100) the reference hierarchy returns exactly `n_query` distinct
+images with no empty cluster and no top-up. The local tree verifies OK=486, MISSING=66 (39 `kmh_wide` + 27
+`kmh_norm`), and a dry run of `part_1_gpu` would start only the 27 new jobs.
 
 ## Consequences
 

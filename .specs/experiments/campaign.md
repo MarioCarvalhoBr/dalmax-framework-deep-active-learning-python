@@ -177,6 +177,33 @@ confirmed on seeds 4-6 with `RandomSampling` and `WAAL` before any claim (as ADR
 `campaign-fixed-v5`, which, unlike v3 and v4, changes code a `tools/trainer.py` run executes (behind the new key; the
 default path is tested identical, ADR 0019); only account A uses it. Operator steps: `COLAB_RUNBOOK.md` section 6g.
 
+*Pre-flight checks of `kmh_norm` (2026-11-15, CPU, local, branch `feat/kmh-feature-norm`).* Identity guarantee: the
+golden runs pass unchanged (2/2); `tests/test_postprocess_identity.py` passes, including the end-to-end micro run (key
+absent vs `{"method": "none"}`: identical queries, `round_queries.json`, `round_predictions.json`, every metric of
+`results.json`, `run_metadata.json` config; `l2`: identical round 0) and the comparison with the `campaign-fixed-v4`
+class; the 175 v4 groups keep their pinned digests. Micro run `make campaign-run
+MANIFEST=files_config/campaign/manifest_kmh_sweep_micro.json PART=kmh_norm SEEDS=1 DEVICE=cpu` into the new smoke tree
+`results/smoke_campaign_kmh_fixed/norm/`: 9/9 DONE, 0 failed (22 to 30 s per run), the micro ImageNet cache file read,
+not rewritten; `make campaign-verify` on it OK=9, one commit, seed audit PASS, data-order audit PASS; each leaf has the
+`Embedding post-processing (ADR 0019)` log line and the `postprocess_*` diagnostics (micro `pca_l2`: 64 components
+explain 0.9089 of the 796-image pool). Real data (CPU, read only): the ImageNet ResNet-50 vectors of the 7,230 training
+images in loader order (order hash `805314e2dae2`), seed-1 initial unlabeled pool (7,130 images, the round-1 pool of
+every seed-1 run), each variant built from its committed params file and fitted/transformed as at the first query,
+then the real `HierarchicalKMeansSelection` with the reference hierarchy and the run's selection generator. Raw vector
+norms min 14.00 / p5 16.05 / median 19.19 / p95 23.30 / max 30.74; after `l2` and `pca_l2` every norm 1.0000; after
+`zscore` min 24.19 / p5 29.35 / median 39.34 / p95 70.02 / max 170.66 (no constant dimension in the pool, guarded 0;
+no zero-norm vector for `l2`/`pca_l2`). `pca_l2`: the 64 components explain 0.8956 of the pool variance (first five
+0.2021, 0.1118, 0.0901, 0.0675, 0.0425; 8 / 16 / 32 components 0.6151 / 0.7369 / 0.8306); the full SVD took 105 s on
+the loaded local CPU. For `none`, `l2`, `zscore` and `pca64_l2` at nq 10, 50 and 100 the selection returned exactly
+`n_query` distinct pool images, the vendored sampling returned `n_query` unique positions before the wrapper's
+defensive top-up (no top-up), and no level had an empty cluster (600 / 200 / 100 non-empty). `none` and `pca64_l2` ran
+as separate `select` calls per budget; `l2` and `zscore` at nq50/nq100 replayed the nq10 clustering (identical by
+construction: the same selection generator reseeds the global streams before the k-means; the replay asserted the
+equal NumPy state), after separate full calls at nq10. Local merged tree: `make campaign-verify-all` OK=486,
+MISSING=66 (39 `kmh_wide` + 27 `kmh_norm`), two commits (`464a5cc` v2 for 462 leaves, `49c9ffe` v3 for the 24
+`texhal_q13` leaves), seed and data-order audits PASS, duplicate pairs SAME; a dry run of `run --part part_1_gpu` SKIPs
+the 309 executed leaves and would start only the 27 `kmh_norm` jobs (sweep segment `skipped=114 dry_run=27`).
+
 **Unchanged rules.** Protocol (`n_init_labeled` 100, `n_round` 8, `n_epoch` 10, batch 256, lr 0.05, momentum 0.3,
 reference hierarchy `[600,200,100]`/`[30,15,2]`, SSRAE `q=13`, VCTex as in ADR 0017: canonical `q=[13]`, ADR 0011's
 `q=[17]` until 2026-11-15), seeds and determinism and the
@@ -355,10 +382,12 @@ below.
 
 **Execution record**: the 462 runs were executed, merged locally and verified (recorded by the author with ADR 0017,
 2026-11-15: OK=462, one commit, seed and data-order audits PASS, duplicate pairs SAME). Part `texhal_q13` (24 runs):
-not executed. Part `kmh_wide` (39 runs, ADR 0018): not executed; local check of 2026-11-15 on the merged tree:
+not executed at the time of ADR 0018; executed afterwards on account A with tag `campaign-fixed-v3` and merged locally
+(found 2026-11-15 during the ADR 0019 pre-flight: 24 OK leaves with commit `49c9ffe`, OK=486 over both manifests). Part `kmh_wide` (39 runs, ADR 0018): not executed; local check of 2026-11-15 on the merged tree:
 `make campaign-verify-all` OK=462, MISSING=63 (24 `texhal_q13` + 39 `kmh_wide`), one commit, seed and data-order
 audits PASS, duplicate pairs SAME; a dry run of `run --part part_2_gpu` SKIPs the 177 executed leaves and would start
-only the 39 `kmh_wide` jobs.
+only the 39 `kmh_wide` jobs. Part `kmh_norm` (27 runs, ADR 0019): not executed; local check of 2026-11-15 in the
+pre-flight paragraph of section "KMH feature post-processing" above (OK=486, MISSING=66).
 
 ---
 

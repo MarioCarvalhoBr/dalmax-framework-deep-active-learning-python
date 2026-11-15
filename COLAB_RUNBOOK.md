@@ -514,8 +514,9 @@ the seed; it does not depend on the query size or the hierarchy, so the features
    ```bash
    cd <repo root>
    unzip -n part_2_gpu__kmh_wide.zip     # -n: never overwrite; only new leaves and the two new log names
-   make campaign-verify-all              # with texhal_q13 also merged: expect OK=525 INCOMPLETE=0 MISSING=0;
-                                         # without it: OK=501 MISSING=24 (the texhal_q13 jobs, listed by name);
+   make campaign-verify-all              # with texhal_q13 also merged: expect OK=525 INCOMPLETE=0 MISSING=0
+                                         # (since ADR 0019: OK=552 once kmh_norm, section 6g, is merged too, else
+                                         # MISSING=27 for its jobs); without texhal_q13: OK=501 MISSING=24;
                                          # up to three commits (WARN, expected), seed and data-order audits PASS,
                                          # the 3 KMH duplicate pairs SAME
    make campaign-report-all              # KMH sweep report gains the tables kmh_wide_nq100 / _nq50 / _nq10
