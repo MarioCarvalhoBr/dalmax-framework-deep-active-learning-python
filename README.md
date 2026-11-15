@@ -79,9 +79,12 @@ Specifications are the source of truth: [`.specs/00-overview.md`](.specs/00-over
   ([ADR 0016](.specs/adr/0016-clean-rerun-fixed-dataset.md)) has been executed (462 runs, code pinned at the git
   tag `campaign-fixed-v2`). From it, TexHAL's canonical configuration became VCTex `Q = 13`
   ([ADR 0017](.specs/adr/0017-texhal-q13.md)); its 24 hierarchy and stage ablation runs (part `texhal_q13`) are
-  prepared under the tag `campaign-fixed-v3`. An exploration of wider KMH hierarchies (part `kmh_wide` of the
+  executed under the tag `campaign-fixed-v3`. An exploration of wider KMH hierarchies (part `kmh_wide` of the
   KMH sweep, 39 runs, [ADR 0018](.specs/adr/0018-kmh-wide-exploration.md)) is prepared under the tag
-  `campaign-fixed-v4`, which the Colab notebook checks out. No results of the clean campaign are reported here yet.
+  `campaign-fixed-v4` (account B), and a round that post-processes the frozen KMH features before clustering
+  (part `kmh_norm`, 27 runs, [ADR 0019](.specs/adr/0019-kmh-feature-postprocessing.md)) under the tag
+  `campaign-fixed-v5` (account A), which the Colab notebook checks out. No results of the clean campaign are
+  reported here yet.
 
 ## Installation
 
@@ -136,7 +139,9 @@ next section), `--device {auto,cuda,cpu}` (pass `cuda` explicitly on GPU machine
 
 The params JSON is keyed by dataset name and holds the training settings (`data_dir`, `n_epoch`, `n_drop`,
 `n_classes`, loader and optimizer args) plus optional blocks: `embedding` / `selection` (for
-`RepresentationStrategy`), `config_kmh` (legacy hierarchy, read as a hierarchical selection), `model_args`
+`RepresentationStrategy`; `embedding` may carry `postprocess`, the geometry of the features before selection:
+`none` by default, `l2`, `zscore` or `pca_l2` with `pca_dim`, [ADR 0019](.specs/adr/0019-kmh-feature-postprocessing.md)),
+`config_kmh` (legacy hierarchy, read as a hierarchical selection), `model_args`
 (e.g. `dropout_p` for the MC-dropout strategies) and `strategy_args` (hyperparameters of the DeepAL+ ports).
 The full schema is in [`.specs/experiments/experimental-protocol.md`](.specs/experiments/experimental-protocol.md);
 the ablation configs are explained in [`files_config/ablations/README.md`](files_config/ablations/README.md).
@@ -260,15 +265,15 @@ run seeds 1 to 3 on `daninhas_full_fixed` into new results roots:
 | Manifest | Content | Runs / groups | Results root |
 |---|---|---|---|
 | `files_config/campaign/manifest.json` | paper 1 (20 strategies + KMH at `n_query` 10/50/100), the WAAL control, the upper bound, the TexHAL/RNHAL ablations (incl. `texhal_q13`, ADR 0017) | 321 / 107 | `results/campaign_fixed/` |
-| `files_config/campaign/manifest_kmh_sweep.json` | KMH parameter sweep ([ADR 0012](.specs/adr/0012-kmh-parameter-sweep.md)), incl. the wide-top exploration `kmh_wide` ([ADR 0018](.specs/adr/0018-kmh-wide-exploration.md)) | 204 / 68 | `results/campaign_kmh_fixed/` |
+| `files_config/campaign/manifest_kmh_sweep.json` | KMH parameter sweep ([ADR 0012](.specs/adr/0012-kmh-parameter-sweep.md)), incl. the wide-top exploration `kmh_wide` ([ADR 0018](.specs/adr/0018-kmh-wide-exploration.md)) and the feature post-processing round `kmh_norm` ([ADR 0019](.specs/adr/0019-kmh-feature-postprocessing.md)) | 231 / 77 | `results/campaign_kmh_fixed/` |
 
-The 525 runs are split into two **GPU parts**, one per Colab account, run in parallel (of similar estimated cost
-before the two later parts `texhal_q13` and `kmh_wide`).
+The 552 runs are split into two **GPU parts**, one per Colab account, run in parallel (of similar estimated cost
+before the three later parts `texhal_q13`, `kmh_wide` and `kmh_norm`).
 Counts are from `make campaign-list-gpu-part`; estimates from `files_config/campaign/gpu_time_estimates.json`:
 
 | `GPU_PART` | Content | Runs / groups | Est. GPU h |
 |---|---|---|---|
-| `part_1_gpu` | paper 1 at nq100 (with the WAAL control), upper bound, all ablations (incl. `texhal_q13`), KMH sweep nq100 + nq50 | 309 / 103 | 51.3 |
+| `part_1_gpu` | paper 1 at nq100 (with the WAAL control), upper bound, all ablations (incl. `texhal_q13`), KMH sweep nq100 + nq50, `kmh_norm` | 336 / 112 | 55.5 |
 | `part_2_gpu` | paper 1 at nq50 and nq10, KMH sweep nq10, `kmh_wide` | 216 / 72 | 58.0 |
 
 Inside a part the plan runs cheap paper-1 groups first, then ablations, the KMH sweep, and the long baselines

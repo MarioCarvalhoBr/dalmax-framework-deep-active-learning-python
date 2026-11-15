@@ -3,7 +3,8 @@
 Step-by-step notebook guide for running the DalMax **campaign** (everything papers 1-3 need)
 on Google Colab Pro (single GPU, session-limited). **Current job: section 6, the clean re-run on
 `DATA/daninhas_full_fixed` (ADR 0016), split over two Colab accounts (`part_1_gpu`, `part_2_gpu`); its 462 runs
-are executed, and the 24 runs of the `texhal_q13` part (ADR 0017) remain, on account A: section 6e.**
+and the 24 runs of the `texhal_q13` part (ADR 0017, section 6e) are executed; the 39 runs of `kmh_wide` (ADR 0018,
+account B, tag v4: section 6f) and the 27 runs of `kmh_norm` (ADR 0019, account A, tag v5: section 6g) remain.**
 Sections 6b, 6c and 6d at the end are the historical record of the first campaign (dataset with
 duplicates, KI-46) and no longer apply. This is the Colab companion to
 [`LAB_RUNBOOK.md`](LAB_RUNBOOK.md) (the lab-machine equivalent) and
@@ -275,6 +276,11 @@ Only proceed to §6 (the campaign) once all of the above pass.
 > expects `part_2_gpu` = 216 runs / 72 groups (account B) and `part_1_gpu` unchanged (309 / 103), 525 in total.
 > Account B runs the 39 new runs as described in section 6f. Account A may run `texhal_q13` with either tag, v3 or v4
 > (the trainer code is identical); the merged code-version audit then lists up to three commits, all explained.
+>
+> **2026-11-15 (ADR 0019).** With the new part `kmh_norm` of the KMH sweep the notebook (tag `campaign-fixed-v5`)
+> expects `part_1_gpu` = 336 runs / 112 groups (account A) and `part_2_gpu` unchanged (216 / 72), 552 in total. Account
+> A runs the 27 new runs as described in section 6g. **Only account A uses v5**: account B keeps the v4 notebook until
+> `kmh_wide` is finished (never a third code version inside one part).
 
 **Prepared 2026-11-11, not executed.** Everything the three papers need is re-run on the duplicate-free dataset
 (KI-46), no old result reused: the main manifest (`files_config/campaign/manifest.json`, 297 runs / 99 groups: paper 1
@@ -404,8 +410,8 @@ except the long baselines' rows. Add about 15 minutes per session for sections 0
 - **Before zipping**, `make campaign-verify-gpu-part` must print no integrity problem (`INCOMPLETE ... (integrity:`)
   and no code-version `WARN:` line (more than one `git_commit`, or a leaf without one). The zip cell already refuses
   an incomplete part; the commit warning is only printed, so read it. Explained exceptions: account A after the
-  `texhal_q13` runs (section 6e) lists two commits, v2 and v3 (or v4); account B after the `kmh_wide` runs (section
-  6f) lists two commits, v2 and v4.
+  `texhal_q13` runs (section 6e) lists two commits, v2 and v3 (or v4), and after the `kmh_norm` runs (section 6g)
+  three, v2, v3 and v5; account B after the `kmh_wide` runs (section 6f) lists two commits, v2 and v4.
 
 **Optional per-account report**: `!make campaign-report-all` on one account renders the tables of its part only (rows of
 the other part read `TBD`).
@@ -477,7 +483,9 @@ cache of seeds 1-3 written by the nq10 sweep (the cache key is dataset, extracto
 the seed; it does not depend on the query size or the hierarchy, so the features are loaded, not recomputed).
 
 1. **Upload the regenerated notebook** (`notebooks/colab_runbook.ipynb` of tag `campaign-fixed-v4`) to account B's
-   Colab, replacing the earlier copy.
+   Colab, replacing the earlier copy. **Keep this v4 notebook until `kmh_wide` is finished**: do NOT switch account B
+   to the later `campaign-fixed-v5` notebook (section 6g, account A only) in the middle of the part, which would put a
+   third code version into `part_2_gpu`.
 2. **Parameters cell** (account B): `DRIVE_ROOT` = account B's folder (the one holding `DATA/daninhas_full_fixed/`
    and `results/`), `GPU_PART = "part_2_gpu"`, `GIT_REF = "campaign-fixed-v4"` (the notebook default), and
    **`PILOT_REVIEWED = True`** (the pilot was reviewed in the first execution; its leaves are complete). The banner
@@ -516,6 +524,81 @@ the seed; it does not depend on the query size or the hierarchy, so the features
    Reading the result: a `kmh_wide` configuration that beats the executed sweep at some query size was selected on the
    test set; before any claim against WAAL it is confirmed on new seeds (4, 5, 6) with `RandomSampling` and `WAAL`
    (ADR 0018, a later part, not prepared yet).
+
+## 6g. KMH feature post-processing (`kmh_norm`, account A)
+
+**Prepared 2026-11-15, not executed.** ADR 0019: KMH clusters the raw 2,048-d ImageNet ResNet-50 vectors with a
+Euclidean k-means; this round changes only their geometry before clustering, through the new optional params key
+`embedding.postprocess`: `l2`, per-dimension `zscore` and `pca_l2` to 64 dimensions, each fitted once per run on the
+initial unlabeled pool. 9 groups / **27 runs** (the reference hierarchy `[600,200,100]`, nq 10, 50 and 100, seeds 1-3)
+into `results/campaign_kmh_fixed/norm/nq{N}/{l2,zscore,pca64_l2}/`, in `part_1_gpu` at the sweep's stage (about 4.2
+estimated GPU h, each run estimated like the executed reference, 9 to 10 minutes). They run on **account A**, in
+parallel with `kmh_wide` on account B; account A's Drive already holds the 309 complete leaves of `part_1_gpu` and the
+ImageNet feature cache of seeds 1-3 (written by `shared/kmh_nq100` and the nq100/nq50 sweep): the cache keeps the raw
+vectors under an unchanged key (dataset, extractor, data order, INITIAL pool of the seed), so the features are loaded,
+not recomputed. Tag `campaign-fixed-v5` is the first tag of this campaign that changes code a `tools/trainer.py` run
+executes (the new step, behind the new key; with the key absent the behaviour is tested identical to v4, ADR 0019).
+
+1. **Upload the regenerated notebook** (`notebooks/colab_runbook.ipynb` of tag `campaign-fixed-v5`) to account A's
+   Colab, replacing the earlier copy. Account B is not touched (section 6f; it keeps v4).
+2. **Parameters cell** (account A): `DRIVE_ROOT` = the default of account A (the folder holding
+   `DATA/daninhas_full_fixed/` and `results/`), `GPU_PART = "part_1_gpu"`, `GIT_REF = "campaign-fixed-v5"` (the notebook
+   default), and **`PILOT_REVIEWED = True`** (the pilot was reviewed in the first execution; its leaves are complete).
+   The banner must print `expect 336 runs (112 run groups)`.
+3. **Run all.** Sections 0-5 as usual (section 2 must print the v5 commit). The list cell ends with
+   `TOTAL 336 runs (112 run groups)`; the pre-run gate passes (no leaf of `part_2_gpu` on this Drive; the space check
+   needs only the 27 remaining runs, about 3.1 GB). The pilot cell prints `SKIP` for its 3 jobs (`shared/random_nq100`,
+   `p1/VAAL/nq100`, `p1/WAAL/nq100`, seed 1: complete). The run cell prints `SKIP` for every one of the **309** executed
+   leaves and runs only the **27** `kmh_norm/...` jobs. The plan has three segments, each with its own `CAMPAIGN END`
+   line: main manifest stages 1-2 (180 jobs, all skipped), the KMH sweep (141 jobs: `executed=27 skipped=114
+   failed=0`) and the main manifest's long baselines (15 jobs, all skipped). Resume after a session drop = re-run, as
+   in section 6.
+4. **Verify** (`make campaign-verify-gpu-part GPU_PART=part_1_gpu`): expect `Totals: OK=336 INCOMPLETE=0 MISSING=0`,
+   seed audit PASS for seeds 1-3, data-order audit PASS (one order). **The code-version audit lists THREE commits**
+   (`464a5cc` = `campaign-fixed-v2` for the 285 earlier leaves, `49c9ffe` = `campaign-fixed-v3` for the 24 `texhal_q13`
+   leaves, the `campaign-fixed-v5` commit for the 27 new ones) and prints a `WARN:` line: expected and explained (ADR
+   0017, ADR 0019). Any other commit, or a leaf without one, is not expected: stop and report.
+5. **Post-run checks of the new leaves** (a notebook cell, read only):
+
+   ```python
+   import glob, json
+   for f in sorted(glob.glob("results/campaign_kmh_fixed/norm/nq*/*/daninhas_full_fixed/SEED_*/*/RepresentationStrategy/results.json")):
+       r = json.load(open(f))
+       d = r["strategy_diagnostics"]
+       print(f.split("/")[3:5], "seed", r["seed"], "round-0 F1 %.4f" % r["all_f1_score"][0],
+             d["postprocess_method"][0], d["postprocess_output_dim"][0], d["postprocess_explained_variance"][0])
+   ```
+
+   - **Round 0 equals the executed KMH runs seed by seed**: weighted F1 **0.3839** (seed 1), **0.4783** (seed 2),
+     **0.2469** (seed 3), the value of every executed `resnet_imagenet` group on both accounts (KI-50 is deliberately
+     not fixed, ADR 0019; round 0 is trained before the first query, so the post-processing cannot change it). A
+     different value means the run did not start from the same model as the reference: stop and report.
+   - `postprocess_method` is `l2` / `zscore` / `pca_l2` as the folder says, `postprocess_output_dim` 2048 (64 for
+     `pca64_l2`), `postprocess_explained_variance` set only for `pca64_l2`; each leaf's `log-dalmax.log` has one
+     `Embedding post-processing (ADR 0019): ...` line and no `Embedding cache not usable` line (the cache was loaded).
+   - `run_metadata.json` of a new leaf shows `config.dataset.embedding.postprocess` with the block of its params file.
+6. **Zip only the new part**: in the zip cell set `ZIP_ONLY_PART = "kmh_norm"` (leave `ZIP_PARTIAL = False`). It still
+   requires `OK=336` for the whole part, then writes `/content/part_1_gpu__kmh_norm.zip` with only
+   `results/campaign_kmh_fixed/norm/` plus `results/campaign_kmh_fixed/campaign_part_1_gpu__kmh_norm.log` and
+   `failures_part_1_gpu__kmh_norm.log` (the sweep root's full logs under new names, so they never collide with the
+   `campaign_part_1_gpu.log` already merged locally), checks **27** checkpoints, and copies it to `<DRIVE_ROOT>/`.
+   Download it.
+7. **Merge locally and verify**:
+
+   ```bash
+   cd <repo root>
+   unzip -n part_1_gpu__kmh_norm.zip     # -n: never overwrite; only new leaves and the two new log names
+   make campaign-verify-all              # with kmh_wide also merged: expect OK=552 INCOMPLETE=0 MISSING=0;
+                                         # without it: OK=513 MISSING=39 (the kmh_wide jobs, listed by name);
+                                         # up to four commits (v2, v3, v4, v5: WARN, expected), seed and data-order
+                                         # audits PASS, the 3 KMH duplicate pairs SAME
+   make campaign-report-all              # KMH sweep report gains the tables kmh_norm_nq100 / _nq50 / _nq10
+   ```
+
+   Reading the result: each `kmh_norm_nq{N}` table puts the three variants next to the executed raw-feature reference
+   (the nq10 reference ran on account B). A variant that beats the reference was selected on the test set; before any
+   claim against WAAL it is confirmed on new seeds (4, 5, 6) with `RandomSampling` and `WAAL` (ADR 0018/0019, a later
+   part, not prepared yet).
 
 ---
 

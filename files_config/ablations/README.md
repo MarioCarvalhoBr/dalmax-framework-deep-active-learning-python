@@ -233,7 +233,7 @@ The first is the winner of the KMH sweep stage 2 at nq100 (same hierarchy as the
 `n_resamples=0`. Executed only through the campaign (`make campaign-run PART=hier_transfer`); validated by
 `tests/test_ablation_configs.py`.
 
-## `kmh_sweep/` (2026-11-07; stage 1 executed 2026-11-07/08, stage 2 executed 2026-11-09/10, 165/165 verified; `kmh_wide` prepared 2026-11-15)
+## `kmh_sweep/` (2026-11-07; stage 1 executed 2026-11-07/08, stage 2 executed 2026-11-09/10, 165/165 verified; `kmh_wide` and `kmh_norm` prepared 2026-11-15)
 
 Paper-1 KMH parameter sweep, stage 1 (45 configs per scale) plus stage 2 (nq100 only, 10 more configs, 2026-11-08; 55 per scale in total) in `nq{10,50,100}/` (hierarchy axis
 `hier_*`, knob axis `<hier>__{init_random,leaf_closest,no_resampling,resample_random}`) plus the CPU
@@ -251,3 +251,15 @@ by the same `max(2, round_half_up(0.05 k))` rule, every knob at its default. Run
 (ids `kmh_wide/nq{N}/<config>`, results under `results/campaign_kmh_fixed/wide/`, `part_2_gpu`):
 `make campaign-run-gpu-part GPU_PART=part_2_gpu`, or
 `make campaign-run MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=kmh_wide` on the sweep alone.
+
+**`kmh_norm` (2026-11-15, ADR 0019; prepared, not executed).** 4 more configs per budget and scale, generated from
+`build_kmh_sweep_configs.py::NORM_VARIANTS` / `NORM_IDENTITY` into the same `nq{N}/` folders (every earlier file
+byte-identical): `hier_L3_ref__norm_l2.json`, `hier_L3_ref__norm_zscore.json`, `hier_L3_ref__norm_pca64_l2.json` =
+`hier_L3_ref.json` of the same budget plus `"embedding": {..., "postprocess": {"method": "l2"}}` /
+`{"method": "zscore"}` / `{"method": "pca_l2", "pca_dim": 64}` (nothing else differs; tested), and
+`hier_L3_ref__norm_none.json`, the explicit identity `{"method": "none"}`, used only as the params of the manifest
+alias `kmh_norm/nq{N}/none` of the executed reference (same computation, checked by signature). Micro mirrors keep
+`pca_dim` 64 (micro pool 796 images). Run as the campaign part `kmh_norm` (ids `kmh_norm/nq{N}/{l2,zscore,pca64_l2}`,
+results under `results/campaign_kmh_fixed/norm/`, `part_1_gpu`): `make campaign-run-gpu-part GPU_PART=part_1_gpu`, or
+`make campaign-run MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=kmh_norm` on the sweep alone. Key
+syntax: `.specs/experiments/experimental-protocol.md` (`embedding.postprocess`).

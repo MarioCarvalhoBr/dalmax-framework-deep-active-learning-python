@@ -71,7 +71,9 @@ make lab-check GPU=0                  # one short real-data GPU run (n_round=1) 
 # -> results/campaign_kmh_fixed/; those 462 runs were executed and verified (2026-11-15). Since ADR 0017 (2026-11-15)
 # the main manifest also has the part texhal_q13 (24 runs, part_1_gpu, prepared, not executed): 321 / 107, 486 in total;
 # since ADR 0018 (2026-11-15) the KMH sweep also has the part kmh_wide (39 runs, part_2_gpu, prepared, not executed):
-# 204 / 68, part_2_gpu 216 / 72, 525 in total, tag campaign-fixed-v4;
+# 204 / 68, part_2_gpu 216 / 72, 525 in total, tag campaign-fixed-v4; since ADR 0019 (2026-11-15) also the part kmh_norm
+# (27 runs, part_1_gpu, prepared, not executed; texhal_q13 executed with v3): 231 / 77, part_1_gpu 336 / 112, 552 in
+# total, tag campaign-fixed-v5 (account A only; account B finishes kmh_wide with v4);
 # two GPU parts, one per Colab account (see .specs/experiments/campaign.md and COLAB_RUNBOOK.md section 6):
 make campaign-list-gpu-part GPU_PART=part_1_gpu     # both manifests in plan order + est. GPU hours (account B: part_2_gpu)
 make campaign-space-gpu-part GPU_PART=part_1_gpu    # free space vs remaining runs x 96 MB x 1.2 (exit 4 when short; read only)
@@ -81,13 +83,13 @@ make campaign-run-gpu-part GPU_PART=part_1_gpu      # cheap groups, ablations, K
                                                     #   (refuses to start / stops with exit 4 when the Drive is short of space)
 make campaign-verify-gpu-part GPU_PART=part_1_gpu   # OK/INCOMPLETE/MISSING (integrity problems = INCOMPLETE) + git_commit audit
                                                     #   (WARN only) + seed audit (image paths) + data-order audit (0/1/2)
-make campaign-verify-all                            # after merging both parts locally: expect OK=525 (OK=462 + MISSING=63 = 24 texhal_q13 + 39 kmh_wide
-                                                    #   until they run), up to three commits (v2, v3, v4: expected WARN, ADR 0017/0018), both audits PASS, + the
-                                                    #   3 intentional KMH duplicate pairs (SAME/DIFFERENT, informational)
+make campaign-verify-all                            # after merging both parts locally: expect OK=552 (OK=486 + MISSING=66 = 39 kmh_wide + 27 kmh_norm
+                                                    #   until they run), up to four commits (v2, v3, v4, v5: expected WARN, ADR 0017/0018/0019), both audits
+                                                    #   PASS, + the 3 intentional KMH duplicate pairs (SAME/DIFFERENT, informational)
 make campaign-report-all                            # docs/results/campaign_fixed/ + docs/results/campaign_kmh_fixed/
 make campaign-list                                  # main manifest alone; PART=paper1|paper1_control|upper_bound|rnhal|texhal|texhal_q17|hier_transfer|texhal_q13
                                                     #   (comma-separated ok) or PART=part_1_gpu|part_2_gpu
-make campaign-list MANIFEST=files_config/campaign/manifest_kmh_sweep.json     # the KMH sweep alone (ADR 0012); PART=kmh_nq100|kmh_nq50|kmh_nq10|kmh_wide
+make campaign-list MANIFEST=files_config/campaign/manifest_kmh_sweep.json     # the KMH sweep alone (ADR 0012); PART=kmh_nq100|kmh_nq50|kmh_nq10|kmh_wide|kmh_norm
 make campaign-list MANIFEST=files_config/campaign/manifest_control_ki43.json  # KI-43 control (prepared, not run)
 make campaign-smoke-gpu-part GPU_PART=part_2_gpu    # micro plan of one GPU part on CPU (seed 1), skips AdversarialBIM/DeepFool
 make campaign-smoke / campaign-smoke-kmh            # micro main manifest / micro KMH sweep on CPU (seed 1)
@@ -266,10 +268,25 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   merged one up to three. Paper 1's KMH row (thesis rule) then ranges over `kmh_nq{N}` + `kmh_wide`; a configuration
   chosen from it is selected on the test set and is confirmed on seeds 4-6 with RandomSampling and WAAL before any claim
   (planned, not built). `COLAB_RUNBOOK.md` 6f.
+- **KMH feature post-processing (2026-11-15, branch `feat/kmh-feature-norm`, ADR 0019; prepared, not executed)**: KMH
+  feeds raw 2048-d ImageNet vectors to a Euclidean k-means; under the reference hierarchy at nq100 another descriptor
+  moved the score by 4 to 7 points (VCTex Q=13 0.8341, SSRAE 0.8608, ImageNet 0.7921). New optional params key
+  `embedding.postprocess` (`dalmax/embeddings/postprocess.py`, registry `POSTPROCESS_REGISTRY`): `none` (default,
+  identity), `l2`, `zscore`, `pca_l2` + `pca_dim`, fitted once per run on the initial unlabeled pool, applied by
+  `RepresentationStrategy` after the cache load and the variant slice (cache unchanged), no RNG draw; the default path is
+  tested identical to tag `campaign-fixed-v4` (spy vs the v4 class, golden runs, end-to-end micro run with and without
+  an explicit `"none"`, pinned v4 digest of the 175 groups). New part `kmh_norm` of the KMH sweep: 9 groups / 27 runs,
+  the reference hierarchy with `l2` / `zscore` / `pca_l2` (64) at nq 10/50/100, ids `kmh_norm/nq{N}/{l2,zscore,pca64_l2}`,
+  results `results/campaign_kmh_fixed/norm/nq{N}/<variant>/`, `part_1_gpu` (account A), stage 3; estimates = the measured
+  reference (4.2 GPU h); tables `kmh_norm_nq{100,50,10}` with the executed reference as an alias row. Sweep 231 / 77,
+  `part_1_gpu` 336 / 112, 552 in total. KI-50 kept on purpose: round 0 must equal the executed KMH runs (0.3839 / 0.4783
+  / 0.2469). Notebook: `GIT_REF` `campaign-fixed-v5` (unlike v3/v4 it changes trainer code, behind the new key),
+  `EXPECTED` part_1_gpu (336, 112), `ZIP_ONLY_PART = "kmh_norm"`; account A's audit lists three commits (v2, v3, v5), the
+  merged one up to four. Same seeds 4-6 confirmation rule. `COLAB_RUNBOOK.md` 6g.
 
 Next milestone: execute the clean re-run (`COLAB_RUNBOOK.md` section 6), then rewrite the thesis numbers from its reports; advisor review of the ablation section
 (`paper_drafts/ablation_section.tex`, weighted-primary/macro-secondary framing still pending
-confirmation, see `.specs/experiments/ablation-study.md`), of the TexHAL `Q=17` decision (already executed and tabulated; superseded by `Q=13`, ADR 0017, whose 24-run `texhal_q13` part is to be executed next, `COLAB_RUNBOOK.md` section 6e, like the 39-run `kmh_wide` part of ADR 0018 on account B, section 6f) and of the RNHAL
+confirmation, see `.specs/experiments/ablation-study.md`), of the TexHAL `Q=17` decision (already executed and tabulated; superseded by `Q=13`, ADR 0017, whose 24-run `texhal_q13` part was executed with v3, `COLAB_RUNBOOK.md` section 6e; next to execute: the 39-run `kmh_wide` part of ADR 0018 on account B, section 6f, and the 27-run `kmh_norm` part of ADR 0019 on account A, section 6g) and of the RNHAL
 `L=4` hierarchy; a lab-machine smoke run confirming the Phase 4 and `tools/` moves is still separately
 outstanding.
 
@@ -360,7 +377,8 @@ outstanding.
   2026-11-12; upper_bound 3 with `n_init_labeled` 7,230; rnhal 42, texhal 30, texhal_q17 18, hier_transfer 12; since ADR
   0017, 2026-11-15, also texhal_q13 24, so 321 / 107) under `results/campaign_fixed/`, and `manifest_kmh_sweep.json`
   165 / 55 under `results/campaign_kmh_fixed/` (since ADR 0018, 2026-11-15, also kmh_wide 39 under `wide/`, so 204 / 68,
-  all of kmh_wide in `part_2_gpu`). Every group of both carries `gpu_part` (`part_1_gpu` = paper 1 nq100,
+  all of kmh_wide in `part_2_gpu`; since ADR 0019, 2026-11-15, also kmh_norm 27 under `norm/`, so 231 / 77, all of
+  kmh_norm in `part_1_gpu`). Every group of both carries `gpu_part` (`part_1_gpu` = paper 1 nq100,
   upper bound, all ablations, sweep nq100+nq50; `part_2_gpu` = paper 1 nq50+nq10, sweep nq10) and `gpu_stage`
   (1 cheap paper-1, 2 ablations, 3 KMH sweep, 4 BIM, 5 VAAL/WAAL/WAAL control, 6 DeepFool); `--part part_N_gpu` selects by it,
   `--manifest A,B` merges manifests into one plan. Params: dropout family (4 MC-dropout + `VarRatio`, `MeanSTD`)
@@ -389,3 +407,10 @@ outstanding.
 - **Optional `selection.hierarchy` keys (ADR 0012)**: `n_resamples` (default 10), `init_method`
   (`kmeans++`|`random`), `resample_strategy` (`closest`|`random`), `leaf_sampling` (`random`|`closest`);
   the defaults reproduce the previous behaviour, so existing params JSONs and executed runs are unchanged.
+- **Optional `embedding.postprocess` key (ADR 0019, 2026-11-15)**: `{"method": "none"|"l2"|"zscore"|"pca_l2",
+  "pca_dim": <int, pca_l2 only>}` inside the `"embedding"` block; absent = `"none"` (identity, resolved
+  `{"method": "none", "pca_dim": null}` in `run_metadata.json`); fitted once per run on the initial unlabeled pool, applied
+  by `RepresentationStrategy` (presets and generic) after the cache load and the variant slice; never cached; fail-fast
+  `ConfigError` (unknown method/key, `pca_dim` missing for `pca_l2` or set for another method, `pca_dim` above the pool
+  or the feature dimension); a non-identity method adds a log line and `postprocess_*` `strategy_diagnostics`; the
+  campaign signature counts it only when not `none`. Syntax: `.specs/experiments/experimental-protocol.md`.
