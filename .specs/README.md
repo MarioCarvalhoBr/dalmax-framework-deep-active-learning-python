@@ -48,6 +48,7 @@ decisions** (ADRs) about the codebase supporting that research. Hence:
 │   ├── 0010-cleanup-tools-and-hardware-agnostic.md         # tools/ CLIs, campaign as the only run path, hardware-agnostic repo
 │   ├── 0011-texhal-canonical-q17.md                        # TexHAL canonical config Q=17 (superseded by 0017, 2026-11-15)
 │   ├── 0017-texhal-q13.md                                  # TexHAL canonical config Q=13 on the clean dataset; part texhal_q13, tag v3
+│   ├── 0018-kmh-wide-exploration.md                        # KMH wide-top exploration, part kmh_wide (account B), tag v4
 │   └── template.md                       # [owned elsewhere]
 ├── experiments/
 │   ├── experimental-protocol.md          # datasets, splits, seeds, budgets, metrics, results layout
