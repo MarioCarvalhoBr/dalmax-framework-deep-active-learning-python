@@ -941,6 +941,71 @@
    "basis": "measured",
    "runs": 3,
    "from_campaign_log": 3
+  },
+  "kmh_wide/nq100/hier_L1_k1200": {
+   "seconds_per_run": 730,
+   "basis": "estimate",
+   "rule": "linear in the total number of clusters: least-squares line of the measured KMH-sweep groups (default knobs) of the same query size and number of levels, at sum(n_clusters)=1200"
+  },
+  "kmh_wide/nq100/hier_L1_k2400": {
+   "seconds_per_run": 1377,
+   "basis": "estimate",
+   "rule": "linear in the total number of clusters: least-squares line of the measured KMH-sweep groups (default knobs) of the same query size and number of levels, at sum(n_clusters)=2400"
+  },
+  "kmh_wide/nq100/hier_L3_k1200_400_100": {
+   "seconds_per_run": 998,
+   "basis": "estimate",
+   "rule": "linear in the total number of clusters: least-squares line of the measured KMH-sweep groups (default knobs) of the same query size and number of levels, at sum(n_clusters)=1700"
+  },
+  "kmh_wide/nq50/hier_L3_k600_200_50": {
+   "seconds_per_run": 537,
+   "basis": "estimate",
+   "rule": "linear in the total number of clusters: least-squares line of the measured KMH-sweep groups (default knobs) of the same query size and number of levels, at sum(n_clusters)=850"
+  },
+  "kmh_wide/nq50/hier_L2_k600_50": {
+   "seconds_per_run": 446,
+   "basis": "estimate",
+   "rule": "linear in the total number of clusters: least-squares line of the measured KMH-sweep groups (default knobs) of the same query size and number of levels, at sum(n_clusters)=650"
+  },
+  "kmh_wide/nq50/hier_L1_k1200": {
+   "seconds_per_run": 726,
+   "basis": "estimate",
+   "rule": "linear in the total number of clusters: least-squares line of the measured KMH-sweep groups (default knobs) of the same query size and number of levels, at sum(n_clusters)=1200"
+  },
+  "kmh_wide/nq50/hier_L1_k2400": {
+   "seconds_per_run": 1380,
+   "basis": "estimate",
+   "rule": "linear in the total number of clusters: least-squares line of the measured KMH-sweep groups (default knobs) of the same query size and number of levels, at sum(n_clusters)=2400"
+  },
+  "kmh_wide/nq50/hier_L3_k1200_400_50": {
+   "seconds_per_run": 964,
+   "basis": "estimate",
+   "rule": "linear in the total number of clusters: least-squares line of the measured KMH-sweep groups (default knobs) of the same query size and number of levels, at sum(n_clusters)=1650"
+  },
+  "kmh_wide/nq10/hier_L3_k600_200_10": {
+   "seconds_per_run": 504,
+   "basis": "estimate",
+   "rule": "linear in the total number of clusters: least-squares line of the measured KMH-sweep groups (default knobs) of the same query size and number of levels, at sum(n_clusters)=810"
+  },
+  "kmh_wide/nq10/hier_L2_k600_10": {
+   "seconds_per_run": 392,
+   "basis": "estimate",
+   "rule": "linear in the total number of clusters: least-squares line of the measured KMH-sweep groups (default knobs) of the same query size and number of levels, at sum(n_clusters)=610"
+  },
+  "kmh_wide/nq10/hier_L1_k1200": {
+   "seconds_per_run": 714,
+   "basis": "estimate",
+   "rule": "linear in the total number of clusters: least-squares line of the measured KMH-sweep groups (default knobs) of the same query size and number of levels, at sum(n_clusters)=1200"
+  },
+  "kmh_wide/nq10/hier_L1_k2400": {
+   "seconds_per_run": 1364,
+   "basis": "estimate",
+   "rule": "linear in the total number of clusters: least-squares line of the measured KMH-sweep groups (default knobs) of the same query size and number of levels, at sum(n_clusters)=2400"
+  },
+  "kmh_wide/nq10/hier_L3_k1200_400_10": {
+   "seconds_per_run": 936,
+   "basis": "estimate",
+   "rule": "linear in the total number of clusters: least-squares line of the measured KMH-sweep groups (default knobs) of the same query size and number of levels, at sum(n_clusters)=1610"
   }
  }
 }

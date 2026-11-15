@@ -20,7 +20,7 @@ Two orthogonal partitions select groups (`--part`):
 
 - the *semantic parts* `PARTS` (`paper1`, `paper1_control`, `upper_bound`, `rnhal`,
   `texhal`, `texhal_q17`, `hier_transfer`, `texhal_q13`, `control`, `kmh_nq100`, `kmh_nq50`,
-  `kmh_nq10`;
+  `kmh_nq10`, `kmh_wide`;
   comma-separated, or `all`), executed in the fixed `PHASE_LABELS` order;
 - the *GPU parts* `GPU_PARTS` (`part_1_gpu`, `part_2_gpu`, ADR 0016): every group of
   the two full-scale manifests carries a `gpu_part` and a `gpu_stage`; selecting a
@@ -122,8 +122,10 @@ TRAINER_SCRIPT = "tools/trainer.py"
 # `WAALRandomQuery` at nq100: WAAL's training with a random query); a table of their own, never a benchmark row.
 # `control` is the separate KI-43 control manifest.
 # `texhal_q13` (ADR 0017): TexHAL's 6.2/6.3 ablations with its canonical VCTex Q=13.
+# `kmh_wide` (ADR 0018): the KMH wide-top exploration of the sweep manifest.
 PARTS: tuple[str, ...] = ("paper1", "paper1_control", "upper_bound", "rnhal", "texhal", "texhal_q17",
-                          "hier_transfer", "texhal_q13", "control", "kmh_nq100", "kmh_nq50", "kmh_nq10")
+                          "hier_transfer", "texhal_q13", "control", "kmh_nq100", "kmh_nq50", "kmh_nq10",
+                          "kmh_wide")
 
 # The two GPU parts (ADR 0016): one per Colab account, balanced by estimated GPU time.
 GPU_PARTS: tuple[str, ...] = ("part_1_gpu", "part_2_gpu")
@@ -143,6 +145,7 @@ PHASE_LABELS: tuple[str, ...] = (
     "kmh_nq100",
     "kmh_nq50",
     "kmh_nq10",
+    "kmh_wide",
 )
 
 

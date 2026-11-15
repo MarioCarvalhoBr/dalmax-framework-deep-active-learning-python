@@ -25,6 +25,16 @@ the trees of the first execution (read only, never written):
   execution, takes the measured value of the same group id under `texhal_q17` (`TWIN_PREFIXES`): the
   same hierarchy and selection with a single VCTex RAE whose hidden size differs (13 instead of 17), a
   negligible part of a run.
+- **estimate by fit** groups (ADR 0018, 2026-11-15): the KMH wide-top exploration `kmh_wide`, never run
+  in the first execution (`FIT_PREFIXES`). Rule: at the same query size and the same number of levels,
+  the least-squares line of the measured seconds per run against the total number of clusters
+  `sum(n_clusters)`, over the measured KMH-sweep groups with every knob at its default (no `__` suffix
+  in the id), evaluated at the group's own total. The cost of the selection grows linearly with the
+  number of clusters: every Lloyd iteration of the vendored k-means recomputes the centroids in a Python
+  loop over the clusters (`kmeans_gpu.compute_centroids`), at every level and resampling step; the
+  measured groups follow such a line closely (at nq100, L=1 k 20..600 and the L=3..5 shapes up to a
+  total of 2,700 clusters). The one-level k=1200/2400 points extrapolate beyond the measured one-level
+  range (k <= 600): treat them as the least certain entries.
 
 Caveats: the first execution ran on the dataset with duplicates (8,086 pool / 2,106 test images; the
 new one has 7,230 / 1,008), on the GPU class of that execution, and `KMeansSampling` /
@@ -99,6 +109,38 @@ def twin_estimate(group: RunGroup, measured: dict[str, dict[str, Any]]) -> dict[
     return None
 
 
+# Id prefix of a never-run part estimated by the per-(budget, levels) linear fit on the measured sweep groups.
+FIT_PREFIXES: dict[str, str] = {
+    "kmh_wide/": ("linear in the total number of clusters: least-squares line of the measured KMH-sweep "
+                  "groups (default knobs) of the same query size and number of levels, at sum(n_clusters)={total}"),
+}
+SWEEP_ID_PREFIX = "kmh/"
+
+
+def _clusters(group: RunGroup) -> tuple[int, ...]:
+    params = json.loads((REPO_ROOT / group.params_json).read_text())
+    return tuple(params[next(k for k in params if not k.startswith("_"))]["selection"]["hierarchy"]["n_clusters"])
+
+
+def fit_estimate(group: RunGroup, groups: list[RunGroup], measured: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    """Entry of a never-run group estimated by the linear fit of `FIT_PREFIXES`, or None."""
+    rule = next((r for prefix, r in FIT_PREFIXES.items() if group.id.startswith(prefix)), None)
+    if rule is None:
+        return None
+    clusters = _clusters(group)
+    points = [(sum(_clusters(g)), measured[g.id]["seconds_per_run"]) for g in groups
+              if g.id.startswith(SWEEP_ID_PREFIX) and "__" not in g.id and g.id in measured
+              and g.n_query == group.n_query and len(_clusters(g)) == len(clusters)]
+    if len({x for x, _ in points}) < 2:
+        raise SystemExit(f"{group.id}: fewer than two measured sweep shapes to fit (budget, levels)")
+    mean_x = statistics.fmean(x for x, _ in points)
+    mean_y = statistics.fmean(y for _, y in points)
+    slope = sum((x - mean_x) * (y - mean_y) for x, y in points) / sum((x - mean_x) ** 2 for x, _ in points)
+    total = sum(clusters)
+    seconds = mean_y + slope * (total - mean_x)
+    return {"seconds_per_run": round(seconds), "basis": "estimate", "rule": rule.format(total=total)}
+
+
 def _old_dir(group: RunGroup) -> Path:
     for new, old in MEASURED_ROOTS.items():
         if group.dir_results.startswith(new + "/"):
@@ -131,7 +173,7 @@ def measure(groups: list[RunGroup]) -> tuple[dict[str, dict[str, Any]], float]:
     done = _done_elapsed()
     raw: dict[str, list[tuple[float | None, float | None]]] = {}
     for group in groups:
-        if group.strategy_name in ESTIMATE_RULES or any(group.id.startswith(p) for p in TWIN_PREFIXES):
+        if group.strategy_name in ESTIMATE_RULES or any(group.id.startswith(p) for p in (*TWIN_PREFIXES, *FIT_PREFIXES)):
             continue
         raw[group.id] = [(done.get((group.id, s)), _total_time(group, s)) for s in group.seeds]
     overheads = [d - t for runs in raw.values() for d, t in runs if d is not None and t is not None]
@@ -170,8 +212,11 @@ def build() -> dict[str, Any]:
     entries: dict[str, dict[str, Any]] = {}
     for group in groups:
         twin = twin_estimate(group, measured)
+        fit = fit_estimate(group, groups, measured)
         if twin is not None:
             entries[group.id] = twin
+        elif fit is not None:
+            entries[group.id] = fit
         elif group.strategy_name in ESTIMATE_RULES:
             entries[group.id] = estimate(group, measured)
         elif group.id in measured:

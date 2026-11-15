@@ -77,12 +77,13 @@ def test_kmh_sweep_manifest_counts_and_layout(path: Path) -> None:
     manifest = C.load_manifest(path)  # validates: params load, no redundant computation, aliases == canonical
     counts = C.count_by_part(C.expand_jobs(manifest))
     assert counts["kmh_nq10"] == counts["kmh_nq50"] == 51 and counts["kmh_nq100"] == 63
-    assert sum(counts.values()) == 165 and len(manifest.groups) == 55
+    assert counts["kmh_wide"] == 39  # ADR 0018: the wide-top exploration, appended
+    assert sum(counts.values()) == 204 and len(manifest.groups) == 68
     assert len({g.dir_results for g in manifest.groups}) == len(manifest.groups)  # one leaf dir per group
     assert all(g.strategy_name == "RepresentationStrategy" for g in manifest.groups)
     # A root of its own (ADR 0016): never the first execution's results/campaign_kmh/.
     assert manifest.results_root.endswith("_kmh_fixed") and manifest.results_root != "results/campaign_kmh"
-    assert {g.part for g in manifest.groups} == {"kmh_nq10", "kmh_nq50", "kmh_nq100"}
+    assert {g.part for g in manifest.groups} == {"kmh_nq10", "kmh_nq50", "kmh_nq100", "kmh_wide"}
 
 
 def test_kmh_sweep_aliases_resolve_to_the_reference() -> None:
@@ -102,7 +103,8 @@ def test_kmh_sweep_parts_filter_and_order() -> None:
     assert C.parse_parts("kmh_nq10") == ("kmh_nq10",)
     assert C.parse_parts("kmh_nq10,kmh_nq100") == ("kmh_nq100", "kmh_nq10")  # PARTS order: nq100 first
     jobs_all = C.expand_jobs(manifest, C.parse_parts("all"))
-    assert [j.group.part for j in jobs_all][:63] == ["kmh_nq100"] * 63 and jobs_all[-1].group.part == "kmh_nq10"
+    assert [j.group.part for j in jobs_all][:63] == ["kmh_nq100"] * 63 and jobs_all[-1].group.part == "kmh_wide"
+    assert [j.group.part for j in jobs_all][-40] == "kmh_nq10"  # kmh_wide (ADR 0018) runs after the sweep
     jobs = C.expand_jobs(manifest, C.parse_parts("kmh_nq50"))
     assert len(jobs) == 51 and {j.group.part for j in jobs} == {"kmh_nq50"}
     order = [C.PHASE_LABELS[C.phase_index(g, manifest.primary_nq)] for g in manifest.groups]
@@ -115,7 +117,7 @@ def test_run_counts_per_part(which: str, request: pytest.FixtureRequest) -> None
     counts = C.count_by_part(C.expand_jobs(manifest))
     assert counts == {"paper1": 189, "paper1_control": 3, "upper_bound": 3, "rnhal": 42, "texhal": 30,
                       "texhal_q17": 18, "hier_transfer": 12, "texhal_q13": 24, "control": 0, "kmh_nq10": 0,
-                      "kmh_nq50": 0, "kmh_nq100": 0}
+                      "kmh_nq50": 0, "kmh_nq100": 0, "kmh_wide": 0}
     assert sum(counts.values()) == 321 and len(manifest.groups) == 107
 
 
@@ -352,8 +354,15 @@ def test_gpu_parts_are_balanced_by_the_estimates(both_full: tuple[C.Manifest, C.
         hours[gpu_part], unknown = C.estimated_hours([j for seg in plan for j in seg.jobs], estimates)
         assert unknown == 0
     total = sum(hours.values())
-    assert 90 < total < 105  # 96 GPU hours with the committed estimates
-    assert abs(hours["part_1_gpu"] - hours["part_2_gpu"]) / total < 0.05
+    assert 105 < total < 115  # 109 GPU hours with the committed estimates (ADR 0018)
+    # The ADR 0016 split is balanced; the later add-on parts go to the account they were assigned to
+    # (texhal_q13 -> part_1_gpu, ADR 0017; kmh_wide -> part_2_gpu, ADR 0018) and are left out of the balance.
+    base = {}
+    for gpu_part in C.GPU_PARTS:
+        plan = C.plan_jobs(both_full, C.parse_selection(gpu_part))
+        base[gpu_part], _ = C.estimated_hours([j for seg in plan for j in seg.jobs
+                                               if j.group.part not in ("texhal_q13", "kmh_wide")], estimates)
+    assert abs(base["part_1_gpu"] - base["part_2_gpu"]) / sum(base.values()) < 0.05
 
 
 def test_gpu_parts_cover_every_group_once_and_keep_tables_together(both_full) -> None:
@@ -383,7 +392,8 @@ def test_gpu_parts_cover_every_group_once_and_keep_tables_together(both_full) ->
                  for g in main.groups if g.part == "paper1"}
     assert by_budget == {100: {"part_1_gpu"}, 50: {"part_2_gpu"}, 10: {"part_2_gpu"}}
     sweep_parts = {g.part: g.gpu_part for g in sweep.groups}
-    assert sweep_parts == {"kmh_nq100": "part_1_gpu", "kmh_nq50": "part_1_gpu", "kmh_nq10": "part_2_gpu"}
+    assert sweep_parts == {"kmh_nq100": "part_1_gpu", "kmh_nq50": "part_1_gpu", "kmh_nq10": "part_2_gpu",
+                           "kmh_wide": "part_2_gpu"}
 
 
 def test_gpu_part_plan_runs_cheap_groups_first_sweep_in_the_middle_long_ones_last(both_full) -> None:
@@ -417,7 +427,8 @@ def test_cli_list_gpu_part_prints_estimates(capsys: pytest.CaptureFixture[str]) 
     out = capsys.readouterr().out
     assert "Execution plan (3 segments)" in out and "GPU parts (ADR 0016):" in out
     combined = out.split("Combined:")[1]
-    assert "part_2_gpu      177 runs (59 run groups)  est" in combined
+    assert "part_2_gpu      216 runs (72 run groups)  est" in combined  # 177 / 59 + kmh_wide (ADR 0018)
+    assert "kmh_wide         39 runs (13 run groups)  est" in combined
     assert "part_1_gpu        0 runs" in combined
 
 
@@ -481,6 +492,11 @@ def test_texhal_q13_part_mirrors_texhal_q17_with_q13(which: str, request: pytest
 # change of any of them means an executed leaf no longer matches its manifest entry (ADR 0017).
 EXECUTED_MAIN_DIGEST = "e72b50c1a7df09584dafb8827978151e1e45e13a8804f25984f52720a837b5a1"
 EXECUTED_SWEEP_DIGEST = "402e72cad2e22ce0bb0b60a0410380a070672a8d54ca0e1e268a12cc03cae06a"
+# The same digest of the state of tag campaign-fixed-v3 (ADR 0017): every group of the main manifest (the 99
+# executed + the 24-run texhal_q13 part, possibly running on account A) and of the sweep (55 groups, executed).
+# The kmh_wide part (ADR 0018) is appended to the sweep and must not move or change any of them.
+V3_MAIN_DIGEST = "d8ba3dde51c515fe0e163bd5b8e3e79adc3d1bf4e09a92739fb17712f9cba9c2"
+V3_SWEEP_DIGEST = EXECUTED_SWEEP_DIGEST
 
 
 def _identity_digest(manifest: C.Manifest, groups: Sequence[C.RunGroup]) -> tuple[int, int, str]:
@@ -494,7 +510,102 @@ def test_executed_groups_keep_their_identity(both_full) -> None:
     executed = [g for g in main.groups if g.part != "texhal_q13"]
     assert list(main.groups[: len(executed)]) == executed  # the new part is appended, nothing executed moves
     assert _identity_digest(main, executed) == (99, 297, EXECUTED_MAIN_DIGEST)
-    assert _identity_digest(sweep, sweep.groups) == (55, 165, EXECUTED_SWEEP_DIGEST)
+    sweep_v3 = [g for g in sweep.groups if g.part != "kmh_wide"]
+    assert list(sweep.groups[: len(sweep_v3)]) == sweep_v3  # kmh_wide is appended, nothing executed moves
+    assert _identity_digest(sweep, sweep_v3) == (55, 165, EXECUTED_SWEEP_DIGEST)
+
+
+def test_v3_groups_keep_their_identity(both_full) -> None:
+    """ADR 0018: the 107 + 55 groups of tag campaign-fixed-v3 (486 runs) keep id, parts, stage, params,
+    budgets, seeds, results dir and effective signature; kmh_wide only appends."""
+    main, sweep = both_full
+    assert _identity_digest(main, main.groups) == (107, 321, V3_MAIN_DIGEST)
+    sweep_v3 = [g for g in sweep.groups if g.part != "kmh_wide"]
+    assert _identity_digest(sweep, sweep_v3) == (55, 165, V3_SWEEP_DIGEST)
+
+
+# ADR 0018: the 13 kmh_wide groups -> (n_clusters, sample_sizes), in manifest order.
+KMH_WIDE_GROUPS: dict[str, tuple[tuple[int, ...], tuple[int, ...]]] = {
+    "kmh_wide/nq100/hier_L1_k1200": ((1200,), (60,)),
+    "kmh_wide/nq100/hier_L1_k2400": ((2400,), (120,)),
+    "kmh_wide/nq100/hier_L3_k1200_400_100": ((1200, 400, 100), (60, 20, 5)),
+    "kmh_wide/nq50/hier_L3_k600_200_50": ((600, 200, 50), (30, 10, 3)),
+    "kmh_wide/nq50/hier_L2_k600_50": ((600, 50), (30, 3)),
+    "kmh_wide/nq50/hier_L1_k1200": ((1200,), (60,)),
+    "kmh_wide/nq50/hier_L1_k2400": ((2400,), (120,)),
+    "kmh_wide/nq50/hier_L3_k1200_400_50": ((1200, 400, 50), (60, 20, 3)),
+    "kmh_wide/nq10/hier_L3_k600_200_10": ((600, 200, 10), (30, 10, 2)),
+    "kmh_wide/nq10/hier_L2_k600_10": ((600, 10), (30, 2)),
+    "kmh_wide/nq10/hier_L1_k1200": ((1200,), (60,)),
+    "kmh_wide/nq10/hier_L1_k2400": ((2400,), (120,)),
+    "kmh_wide/nq10/hier_L3_k1200_400_10": ((1200, 400, 10), (60, 20, 2)),
+}
+
+
+def _hierarchy(params_json: str) -> dict:
+    return json.loads((REPO_ROOT / params_json).read_text())["DANINHAS"]["selection"]["hierarchy"]
+
+
+@pytest.mark.parametrize("path", [SWEEP, SWEEP_MICRO])
+def test_kmh_wide_part_layout(path: Path) -> None:
+    """ADR 0018: 13 groups x 3 seeds, part_2_gpu, the sweep's stage, ImageNet features, NIL/NR of the sweep,
+    every knob at its default, results under <root>/wide/nq{N}/<config>/, own tables kmh_wide_nq{N}."""
+    manifest = C.load_manifest(path)
+    micro = path == SWEEP_MICRO
+    wide = [g for g in manifest.groups if g.part == "kmh_wide"]
+    assert [g.id for g in wide] == list(KMH_WIDE_GROUPS)
+    reference = manifest.group_by_id()["kmh/nq100/hier_L3_ref"]
+    for g in wide:
+        nq_dir, name = g.id.split("/")[1:]
+        assert g.params_json == f"files_config/ablations/kmh_sweep/{'micro/' if micro else ''}{nq_dir}/{name}.json"
+        assert g.dir_results == f"{manifest.results_root}/wide/{nq_dir}/{name}/"
+        assert (g.gpu_part, g.gpu_stage, tuple(g.seeds)) == ("part_2_gpu", 3, (1, 2, 3))
+        assert (g.strategy_name, g.n_init_labeled, g.n_round) == (
+            "RepresentationStrategy", reference.n_init_labeled, reference.n_round)
+        assert {u["table"] for u in g.used_by} == {f"kmh_wide_{nq_dir}"}
+        h = _hierarchy(g.params_json)
+        assert set(h) == {"n_clusters", "n_levels", "sample_sizes"}  # every other knob at its default
+        if not micro:
+            assert (tuple(h["n_clusters"]), tuple(h["sample_sizes"])) == KMH_WIDE_GROUPS[g.id]
+            assert g.n_query == int(nq_dir[2:])
+        # Only the hierarchy shape (and the budget) differs from the executed sweep reference.
+        sig = json.loads(C.group_signature(manifest, g))
+        ref_sig = json.loads(C.group_signature(manifest, reference))
+        assert sig["behavior"]["hierarchy"]["n_resamples"] == 10
+        for key in ("n_clusters", "n_levels", "sample_sizes"):
+            sig["behavior"]["hierarchy"][key] = ref_sig["behavior"]["hierarchy"][key]
+        sig["n_query"] = ref_sig["n_query"]
+        assert sig == ref_sig, g.id
+    tables = {t["id"]: t for t in manifest.tables["paper1"]["tables"]}
+    assert [t for t in tables if t.startswith("kmh_wide")] == ["kmh_wide_nq100", "kmh_wide_nq50", "kmh_wide_nq10"]
+    assert sum(len(tables[t]["rows"]) for t in tables if t.startswith("kmh_wide")) == 13
+
+
+def test_kmh_wide_signatures_differ_from_every_v3_group(both_full) -> None:
+    """ADR 0018: no kmh_wide group repeats a computation of either manifest (executed or texhal_q13)."""
+    main, sweep = both_full
+    old = {C.group_signature(m, g) for m in both_full for g in m.groups if g.part != "kmh_wide"}
+    new = [C.group_signature(sweep, g) for g in sweep.groups if g.part == "kmh_wide"]
+    assert len(set(new)) == len(new) == 13
+    assert not set(new) & old
+
+
+def test_kmh_wide_estimates_follow_the_fit_rule(both_full) -> None:
+    """ADR 0018: the committed estimates of kmh_wide are what `fit_estimate` gives on the committed measured
+    entries (the first-execution trees are not needed); every other entry is untouched."""
+    spec = importlib.util.spec_from_file_location(
+        "build_gpu_time_estimates", REPO_ROOT / "scripts/campaign/build_gpu_time_estimates.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    table = json.loads((REPO_ROOT / "files_config/campaign/gpu_time_estimates.json").read_text())["groups"]
+    measured = {k: v for k, v in table.items() if v["basis"] == "measured"}
+    groups = [g for m in both_full for g in m.groups]
+    for g in groups:
+        if g.part == "kmh_wide":
+            assert table[g.id] == module.fit_estimate(g, groups, measured), g.id
+        else:
+            assert module.fit_estimate(g, groups, measured) is None
+    assert list(table)[-13:] == list(KMH_WIDE_GROUPS)
 
 
 def test_paper2_tables_use_texhal_q13_and_keep_the_executed_q17_and_q5_17_tables(full_manifest: C.Manifest) -> None:
