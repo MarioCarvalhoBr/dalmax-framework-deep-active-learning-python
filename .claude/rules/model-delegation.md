@@ -90,6 +90,7 @@ mechanical work at `low`.
 | `paper-liaison` | `opus` | prose and code-to-paper consistency |
 | `spec-keeper` | `sonnet` | documentation sync from established facts |
 | `mechanic` | `haiku` | mechanical, checkable work |
+| `visual-analyst` | `opus` | owns figures: selection of example images, captions that match the picture, visual audits (2026-11-15) |
 
 A call may override the tier upward with the Agent tool's `model` argument; never downward for
 the first four agents.
