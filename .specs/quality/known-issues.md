@@ -739,4 +739,7 @@ inside `dalmax.seeding.isolated_torch_seed(derive_seed(seed, "embedding_provider
 requires for auxiliary networks, and add a test that the round-0 model of `RepresentationStrategy` with every extractor
 equals that of `RandomSampling` for the same seed.
 
-**Status**: open, disclosed in the thesis (paper 1 setup and limitations).
+**Status**: open, disclosed in the thesis (paper 1 setup and limitations). Kept on purpose by ADR 0019 (2026-11-15):
+the `kmh_norm` runs must start from the same round-0 classifier per seed as every executed KMH run (0.3839 / 0.4783 /
+0.2469), so that a difference can be attributed to the feature post-processing; fixing KI-50 before that part runs
+would change round 0 and break the comparison.

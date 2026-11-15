@@ -35,6 +35,7 @@ forward. See ADR 0002's final amendment for the itemized before/after and
 | Representation strategy (generic) | `dalmax/query_strategies/representation.py` (`RepresentationStrategy`) | The single class backing the four legacy `*Kmeans*Sampling`/`SSLStrategy` CLI names (as fixed-behavior presets) plus the new generic `RepresentationStrategy` CLI choice used by the ablation studies. Holds its own `{id: embedding}` map, recomputed non-destructively from `dataset.labeled_idxs` each `query()` call — never mutates `dataset.features_dict`. |
 | Strategy registry | `dalmax/query_strategies/registry.py` (`STRATEGY_REGISTRY`, `LEGACY_STRATEGY_REGISTRY`, `REPRESENTATION_PRESETS`, `build_strategy`) | Replaces the deleted `utils/orchestrator.py::get_strategy`'s if/elif chain. Every `SelectionStrategy` gets its RNG seed from `dalmax.seeding.derive_seed(config.seed, "selection")`, never a hardcoded literal. |
 | Embedding providers + cache | `dalmax/embeddings/{base,ssrae_provider,vctex_provider,resnet_imagenet_provider,cache,variants,registry}.py` | `EmbeddingCache` keys every cache file on `(dataset, extractor, Q, variant, split, order_hash, pool_hash)` and stores/validates the cached images' paths (KI-47) — see §3. |
+| Embedding post-processing (2026-11-15, ADR 0019) | `dalmax/embeddings/postprocess.py` (`FeaturePostprocessor`, `IdentityPostprocessor`, `L2Postprocessor`, `ZScorePostprocessor`, `PCAL2Postprocessor`, `PostprocessSummary`), registry `dalmax/embeddings/registry.py::POSTPROCESS_REGISTRY` / `build_postprocessor` | The params JSON's optional `embedding.postprocess` (`none` default, `l2`, `zscore`, `pca_l2` + `pca_dim`; `dalmax/config/schema.py::PostprocessConfig`). Built by `build_strategy` and injected into `RepresentationStrategy`, fitted once on the initial unlabeled pool, applied after the cache load and the variant slice; draws no random number; the identity returns the array itself; see §3. |
 | Selection strategies | `dalmax/selection/{base,flat_kmeans_closest,flat_kmeans_proportional,hierarchical_kmeans,registry}.py` | `FlatKMeansClosest` (was the `ssrae_kmeans_sampling.py`/`vctex_kmeans_sampling.py` logic, now seeded); `HierarchicalKMeansSelection` (was `ssl_ssrae_sampling.py`'s `SSLStrategy`, now takes `hierarchy`/`device` via constructor injection — see §4). |
 | Vendored tools | `dalmax/tools/SSRAE/{extractor,rnn,splitter,classifier,classification}.py`, `dalmax/tools/VCTex/{VCTexMethod,extractor,rnn,split,classification}.py`, `dalmax/tools/SSL/src/{hierarchical_kmeans_gpu,hierarchical_sampling,clusters,kmeans_gpu,utils,dist_comm,distributed_kmeans_gpu}.py` | Moved unchanged (contents untouched) from `core/tools/`; `SSL/` remains Meta-licensed, wrap-don't-edit still applies to file *contents*. |
 | Experiment orchestration | `dalmax/experiment/{runner,reporter,run_metadata,disk_space}.py` | `ExperimentRunner.run()` drives the round loop; `reporter.write_report` writes `results.json`/`predictions.csv`/plots; `run_metadata.write_run_metadata` writes `run_metadata.json` (see §8; the runner adds `data_order`, KI-47); since ADR 0016 the reporter also writes `round_predictions.json` / `round_queries.json` (per-round test predictions and queried pool indices). `disk_space.py` (2026-11-12): per-run size, margin and free-space helpers of the campaign's Drive quota gate, and `NO_SPACE_EXIT_CODE` (28), which `dalmax.cli.main` returns when a run dies on a no-space error. |
@@ -126,6 +127,14 @@ Selection strategies do **not** mutate a shared `features_dict`: `Representation
 own `{id: embedding}` map and recomputes the current unlabeled subset from `dataset.labeled_idxs`
 on every `query()` call, non-destructively.
 
+**Post-processing (2026-11-15, ADR 0019).** After the cache load and the `variant` slice, every query passes the
+matrix through the injected `FeaturePostprocessor` (`dalmax/embeddings/postprocess.py`) before `selection.select`.
+It is fitted once, at the first query, on that query's matrix (the initial unlabeled pool), and reused in every
+later round. Nothing about the cache changes (the raw `"full"` vectors stay cached under the same key). With the
+params key absent (or `"none"`) the `IdentityPostprocessor` returns the array itself, adds no log line and no
+`strategy_diagnostics`, and draws no random number: behaviour identical to tag `campaign-fixed-v4`
+(`tests/test_postprocess_identity.py`).
+
 ## 4. How hierarchical sampling is configured (`config_kmh`)
 
 `dalmax/selection/hierarchical_kmeans.py::HierarchicalKMeansSelection` takes `hierarchy` via
@@ -202,7 +211,10 @@ resolved as `{"dropout_p": null}`; `files_config/campaign/params_paper1_mc_dropo
 2026-11-11 (ADR 0015) `"strategy_args": {"<StrategyName>": {...}}` (per-strategy hyperparameters of
 `CEALSampling`, `KCenterGreedyPCA`, `LossPredictionLoss`, `VAAL`, `WAAL`; every key optional with the defaults of
 `dalmax/config/schema.py::StrategyArgs`, resolved in full into `run_metadata.json`; unknown names/keys and
-wrong types rejected; syntax in `.specs/experiments/experimental-protocol.md`). Every raised error is a
+wrong types rejected; syntax in `.specs/experiments/experimental-protocol.md`), and since 2026-11-15 (ADR 0019)
+`"embedding": {..., "postprocess": {"method": "none"|"l2"|"zscore"|"pca_l2", "pca_dim": <int, pca_l2 only>}}` (the
+geometry of the embeddings before selection; absent = `"none"`, resolved as `{"method": "none", "pca_dim": null}`;
+fitted on the initial unlabeled pool). Every raised error is a
 `dalmax.config.schema.ConfigError` naming the missing/invalid key. See
 `.specs/experiments/experimental-protocol.md` and `.specs/experiments/ablation-study.md` for the
 exact new-key syntax used by the ablations.

@@ -109,6 +109,14 @@ distinct from "hierarchical" and matters for the ablation in
   `campaign-fixed-v4`; `COLAB_RUNBOOK.md` section 6f): wide tops ending at the query size and one-level `k=1200`/`2400`
   hierarchies. Sweep 204 runs / 68 groups, `part_2_gpu` 216 / 72, 525 runs in total. A configuration chosen from it is
   selected on the test set and must be confirmed on seeds 4-6 with RandomSampling and WAAL before any claim (planned).
+- **KMH feature post-processing (2026-11-15, ADR 0019)**: new optional params key `embedding.postprocess`
+  (`none` default = identity, `l2`, `zscore`, `pca_l2` + `pca_dim`; `dalmax/embeddings/postprocess.py`, fitted once on
+  the initial unlabeled pool, applied by `RepresentationStrategy` before the selection; the default path is tested
+  identical to tag `campaign-fixed-v4`). New part `kmh_norm` of the KMH sweep (9 groups / 27 runs in `part_1_gpu`,
+  prepared, not executed; tag `campaign-fixed-v5`, which unlike v3/v4 changes trainer code behind the new key;
+  `COLAB_RUNBOOK.md` section 6g): the reference hierarchy with the ImageNet features post-processed by `l2`, `zscore`
+  and `pca_l2` (64) at nq 10/50/100. Sweep 231 runs / 77 groups, `part_1_gpu` 336 / 112, 552 runs in total. Same
+  confirmation rule on seeds 4-6 before any claim.
 - **Pre-flight fix KI-47 (2026-11-12, ADR 0016 amendment)**: the loaders listed each class folder in file-system order,
   which differed between Colab sessions, so in the first campaign the same seed started from other images in each
   later session and the cached embeddings served later sessions the features of other images (the KMH sweep,

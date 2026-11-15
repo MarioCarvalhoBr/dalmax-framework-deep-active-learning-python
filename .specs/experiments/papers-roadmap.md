@@ -123,6 +123,19 @@ B; prepared, not executed): the wide top with the last level equal to the query 
 configuration chosen from this round is confirmed on new seeds (4, 5, 6) together with `RandomSampling` and `WAAL`
 before any claim against WAAL (planned, not built).
 
+## Paper 1 KMH: feature post-processing (2026-11-15, ADR 0019)
+
+KMH clusters the raw 2,048-d ImageNet ResNet-50 vectors with a Euclidean k-means. Under the reference hierarchy at
+nq100, replacing them by a descriptor moved the score by several points (VCTex `Q=13` 0.8341, SSRAE 0.8608, ImageNet
+0.7921), while the hierarchy knobs moved it inside the seed noise, so paper 1 names the feature space as KMH's open
+lever. Author decision (plan B, in the background, account A in parallel with `kmh_wide` on account B): part `kmh_norm`
+of the KMH sweep (9 groups / 27 runs, `part_1_gpu`; prepared, not executed), the reference hierarchy with the same frozen
+features post-processed before clustering (`l2`, per-dimension `zscore`, `pca_l2` to 64 dimensions; new optional params
+key `embedding.postprocess`), at nq 10, 50 and 100. It varies the geometry of the same features, not the features. The
+thesis rule for paper 1's KMH row then ranges over `kmh_nq{N}`, `kmh_wide` and `kmh_norm` of that size; a configuration
+taken from it is selected on the test set and is confirmed on seeds 4-6 with `RandomSampling` and `WAAL` before any
+claim (as ADR 0018). Round 0 of every new run equals that of the executed KMH runs (KI-50 deliberately kept).
+
 ## Campaign executed; decisions of 2026-11-01 (first campaign; the Q=17 decision is superseded by ADR 0017)
 
 The campaign's first 192 runs finished on 2026-10-05 and the 18-run `texhal_q17` part on 2026-11-01

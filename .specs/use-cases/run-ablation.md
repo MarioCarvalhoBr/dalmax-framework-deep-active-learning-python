@@ -31,7 +31,8 @@ the per-GPU ablation scripts, `make ablations-*`/`ablation-report*`/`smoke-ablat
 ## Verification before trusting results
 
 Check per run (`.claude/agents/experiment-auditor.md`): (a) `run_metadata.json` shows the intended
-`embedding`/`selection` config, (b) the embedding cache file actually used
+`embedding`/`selection` config (`embedding.postprocess` = `{"method": "none", "pca_dim": null}` for every ablation,
+ADR 0019), (b) the embedding cache file actually used
 (`results/cache/embeddings/{dataset}__{extractor}__Q{q}__{variant}__{split}__order{order_hash}__pool{hash}.pkl`,
 the `order` segment since 2026-11-12, KI-47) matches the
 intended `Q`/variant/dataset, (c) the hierarchy matches the §6.2 row (`config.dataset.selection.hierarchy`),

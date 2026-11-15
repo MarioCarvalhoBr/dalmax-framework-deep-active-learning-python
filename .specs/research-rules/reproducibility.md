@@ -190,14 +190,21 @@ also more complete now: it gained `all_precision_macro`/`all_recall_macro`/`all_
 see `research-rules/metrics.md`), though it still does not duplicate the full params JSON —
 `run_metadata.json` is the file to consult for that, not `results.json`.
 
-**Code version of a campaign (KI-48, 2026-11-12; convention extended by ADR 0017 and ADR 0018, 2026-11-15).** Every Colab session
+**Code version of a campaign (KI-48, 2026-11-12; convention extended by ADR 0017, ADR 0018 and ADR 0019, 2026-11-15).** Every Colab session
 checks out the campaign's tag detached; `campaign verify` lists the distinct `git_commit` values of the OK leaves and
 more than one is a WARN. A later part of the same campaign may run under a new tag only when nothing a
 `tools/trainer.py` run executes changed between the tags (checked with `git diff --stat <old tag> -- dalmax/ tools/`
 and argued in the ADR); the two-commit WARN then stays a WARN and the ADR explains it (ADR 0017: `campaign-fixed-v2`
 for the 462 executed leaves, `campaign-fixed-v3` for the 24 `texhal_q13` leaves; ADR 0018: `campaign-fixed-v4` for the
 39 `kmh_wide` leaves, and `texhal_q13` may run under v3 or v4 because the trainer code is identical, so the merged
-verify lists up to three commits, each explained).
+verify lists up to three commits, each explained). **The one exception, `campaign-fixed-v5` (ADR 0019):** it DOES
+change code a trainer run executes (the optional `embedding.postprocess` step of `RepresentationStrategy`, its config
+and its registry), allowed because the change is behind a new params key whose absent/`"none"` path is tested
+behaviour-identical to v4 (same arrays handed to the selection, same ids, RNG consumption and cache key; golden runs;
+an end-to-end micro run with and without the explicit `"none"`; the pinned identity digest of the 175 v4 groups).
+Only the 27 `kmh_norm` runs use the key and the tag (account A); account B finishes `kmh_wide` with v4 and never
+switches tags in the middle of a part. Account A's `part_1_gpu` then lists three commits (v2, v3, v5) and the merged
+verify up to four (v2, v3, v4, v5), each explained. Any further exception needs the same evidence and its own ADR.
 
 Original text (pre-Phase-2): **Not currently implemented.** `demo.py` (historical) logs the full `args` and the
 selected dataset's `params` block to `log-dalmax.log` via

@@ -63,6 +63,26 @@ writing code.
    **different** selections (this is the automated version of the "does it actually use the seed"
    check that would have caught KI-5 originally).
 
+### A.2b New feature post-processing (geometry of the embeddings before selection, ADR 0019)
+
+If the idea is "the same features, another geometry" (normalise, standardise, project), it is not a
+new provider nor a new selection: add a method to the params JSON's `embedding.postprocess` block.
+
+1. Subclass `dalmax.embeddings.postprocess.FeaturePostprocessor` in `dalmax/embeddings/postprocess.py`:
+   a class attribute `method = "<name>"`, `_fit(pool)` computing statistics from the float64 matrix of
+   the INITIAL unlabeled pool (rows = images; never labels, test images or the classifier) and returning
+   a `PostprocessSummary`, `_transform(matrix)` (float64 in, float64 out; the base class validates the
+   input and casts to float32). Override `from_config` only if the method takes a parameter (as
+   `PCAL2Postprocessor` takes `pca_dim`). **Draw no random number** (a randomised solver would shift
+   nothing today but must take an explicit `derive_seed(seed, "<tag>")` generator if ever needed).
+2. Register it in `dalmax/embeddings/registry.py::POSTPROCESS_REGISTRY` and add `"<name>"` to
+   `dalmax/config/schema.py::VALID_POSTPROCESS_METHODS` (a parameter goes into `PostprocessConfig`, validated
+   in `__post_init__`, rejected for the methods that do not use it).
+3. Tests in `tests/test_embedding_postprocess.py`: shapes, the property the method guarantees, determinism,
+   guards, fail-fast errors and no RNG consumption. The identity (`"none"`) must stay the default; never change
+   what `IdentityPostprocessor` returns (`tests/test_postprocess_identity.py` pins it against tag
+   `campaign-fixed-v4`).
+
 ### A.3 Wire it into the CLI (only needed if you want a **preset** shortcut name)
 
 If your new `(extractor, selection)` combination should be reachable under its own

@@ -243,6 +243,33 @@ For deduplication (`dalmax.campaign.effective_signature`, ADR 0016) only the blo
 two params files that differ only in another strategy's `strategy_args` block are the same computation for every
 strategy that does not read it.
 
+**`embedding.postprocess` (2026-11-15, ADR 0019).** Optional key inside a dataset entry's `"embedding"` block: the
+geometry of the embeddings handed to the selection by `RepresentationStrategy` (the four presets and the generic
+name):
+
+```json
+"embedding": {"extractor": "resnet_imagenet", "q": null, "variant": "full",
+              "postprocess": {"method": "pca_l2", "pca_dim": 64}}
+```
+
+`method` is one of `none` (identity; the default, also when the key is absent), `l2` (each vector divided by its
+Euclidean norm, a zero vector stays zero), `zscore` (each dimension standardised with the mean and population
+standard deviation of the initial unlabeled pool; a dimension constant over the pool maps to 0) and `pca_l2` (centred
+on the pool mean, projected on the first `pca_dim` principal components of the pool by a full deterministic SVD, then
+`l2`). A present block must name its `method`; `pca_dim` (integer > 0) is required for `pca_l2` and rejected for every
+other method; unknown keys or methods raise `ConfigError` (`"_comment"` keys allowed); a `pca_dim` above
+`min(pool size, feature dimension)` raises `ConfigError` at the first query. The statistics are fitted once per run on
+the embeddings of the INITIAL unlabeled pool (no labels, no test images, nothing from the classifier) and reused in
+every round; the step comes after the embedding cache (which keeps the raw `"full"` vectors, key unchanged) and after
+the SSRAE `variant` slice. Resolved value in `run_metadata.json` under `config.dataset.embedding.postprocess`
+(`{"method": "none", "pca_dim": null}` when absent). A non-identity method writes one log line at the fit and the
+per-round `strategy_diagnostics` series `postprocess_method`, `postprocess_fit_pool_size`, `postprocess_input_dim`,
+`postprocess_output_dim`, `postprocess_guarded` (zero-norm vectors or constant dimensions handled by a guard at the
+fit) and `postprocess_explained_variance` (`pca_l2` only, else null); the identity writes neither, so every run without
+the key keeps its log and `results.json` schema. Draws no random number. In `effective_signature` the block counts only
+when its method is not `none` (absent and `"none"` are the same computation as before the key existed). Used by the
+campaign part `kmh_norm` (`.specs/experiments/campaign.md`).
+
 ## New CLI flags (Phase 2, additive — every other flag/default is unchanged)
 
 - `--device {auto,cuda,cpu}` (default `auto`): compute device for the

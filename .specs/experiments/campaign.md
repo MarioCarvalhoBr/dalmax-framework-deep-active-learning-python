@@ -31,6 +31,10 @@ by `scripts/campaign/build_manifest.py`; micro mirror `manifest_micro.json`) plu
 > **2026-11-15 (ADR 0018).** From the 55 executed sweep groups the author added the part **`kmh_wide`** to the KMH
 > sweep manifest (13 groups / 39 runs, `part_2_gpu`, prepared, not executed; section "KMH wide-top exploration"
 > below): sweep 204 / 68, `part_2_gpu` 216 / 72, both manifests 525.
+>
+> **2026-11-15 (ADR 0019).** The author added the part **`kmh_norm`** to the KMH sweep manifest (9 groups / 27 runs,
+> `part_1_gpu`, prepared, not executed; section "KMH feature post-processing" below), with the new optional params key
+> `embedding.postprocess`: sweep 231 / 77, `part_1_gpu` 336 / 112, both manifests 552.
 
 **Why**: KI-46 (train/test leakage and duplicated test images in `DATA/daninhas_full`). Author decisions
 (2026-11-11): the new canonical dataset is `DATA/daninhas_full_fixed` (7,230 train / 1,008 test images, plus
@@ -64,8 +68,9 @@ bound's `n_init_labeled` is 7,230.
 | sweep | `kmh_nq50` | 17 x 3 | 51 | | 4.9 |
 | sweep | `kmh_nq10` | 17 x 3 | 51 | | 4.0 |
 | sweep | `kmh_wide` | 13 x 3 | 39 | KMH wide-top exploration, nq 10/50/100 (ADR 0018, added 2026-11-15) | 9.2 |
-| sweep | **total** | **68 x 3** | **204** | | **28.1** |
-| both | **total** | **175 x 3** | **525** | | **109.3** |
+| sweep | `kmh_norm` | 9 x 3 | 27 | KMH feature post-processing, reference hierarchy, nq 10/50/100 (ADR 0019, added 2026-11-15) | 4.2 |
+| sweep | **total** | **77 x 3** | **231** | | **32.3** |
+| both | **total** | **184 x 3** | **552** | | **113.6** |
 
 Params per paper-1 strategy: the dropout family (`LeastConfidenceDropout`, `MarginSamplingDropout`,
 `EntropySamplingDropout`, `BALDDropout`, `VarRatio`, `MeanSTD`) `params_paper1_mc_dropout.json` (`model_args.dropout_p`
@@ -147,6 +152,31 @@ cluster (nq10 `[2400]`: 10 images from 10 of the 2,400 clusters; nq10 `[600,10]`
 of the 10 top clusters), and the wrapper returned `n_query` unique ids; repeated at 6,430 points (round 8) for the
 direction-(a) shapes, nq10 `[2400]` and nq10 `[1200,400,10]`, with the same outcome.
 
+**KMH feature post-processing (part `kmh_norm`, ADR 0019, author decision 2026-11-15; prepared, not executed).** KMH
+feeds the raw 2,048-d pooled ImageNet vectors to a Euclidean k-means. Under the reference hierarchy at nq100, replacing
+them by another descriptor moved the score by several points (TexHAL, VCTex `Q=13`, 0.8341; RNHAL, SSRAE, 0.8608; KMH
+0.7921), while the sweep's hierarchy knobs moved it inside the seed noise. This round changes ONLY the geometry of the
+same frozen features before clustering, through the new optional params key `embedding.postprocess`
+(`{"method": "none" | "l2" | "zscore" | "pca_l2", "pca_dim": <int, pca_l2 only>}`, absent = `"none"`, the identity;
+`dalmax/embeddings/postprocess.py`, fitted once per run on the embeddings of the INITIAL unlabeled pool, applied after
+the cache load and the variant slice; the cache keeps the raw vectors and its key is unchanged). Part `kmh_norm`: the
+REFERENCE hierarchy `[600,200,100]`/`[30,15,2]` with every knob at its default (fixed beforehand), ImageNet features,
+`l2`, `zscore` and `pca_l2` with `pca_dim = 64`, at nq 10, 50 and 100, seeds 1-3: 9 groups / 27 runs, ids
+`kmh_norm/nq{N}/{l2,zscore,pca64_l2}`, params `files_config/ablations/kmh_sweep/nq{N}/hier_L3_ref__norm_<variant>.json`,
+results `results/campaign_kmh_fixed/norm/nq{N}/<variant>/`, `part_1_gpu` (account A, whose Drive holds the ImageNet
+feature cache of seeds 1-3), stage 3, appended after `kmh_wide`; each group's resolved config equals that of the
+executed `kmh/nq{N}/hier_L3_ref` except the post-processing block (tested). Estimates: the measured reference of the
+same budget, no speed-up assumed for `pca_l2` (4.2 GPU h). Report tables `kmh_norm_nq100`, `kmh_norm_nq50`,
+`kmh_norm_nq10`: the executed raw-feature reference row (alias `kmh_norm/nq{N}/none` -> `kmh/nq{N}/hier_L3_ref`, params
+`hier_L3_ref__norm_none.json` with the explicit identity, its signature checked equal to the reference's by the
+manifest validation), then the three variants; the nq10 table spans the two GPU parts (reference executed on account
+B). The 175 groups of tag `campaign-fixed-v4` keep their identity (`tests/test_campaign.py::test_v4_groups_keep_their_identity`).
+KI-50 is deliberately not fixed, so round 0 of every new run is expected to equal that of the executed KMH runs seed
+by seed (weighted F1 0.3839 / 0.4783 / 0.2469). Selection on the test set: a configuration taken from this round is
+confirmed on seeds 4-6 with `RandomSampling` and `WAAL` before any claim (as ADR 0018). Code version: tag
+`campaign-fixed-v5`, which, unlike v3 and v4, changes code a `tools/trainer.py` run executes (behind the new key; the
+default path is tested identical, ADR 0019); only account A uses it. Operator steps: `COLAB_RUNBOOK.md` section 6g.
+
 **Unchanged rules.** Protocol (`n_init_labeled` 100, `n_round` 8, `n_epoch` 10, batch 256, lr 0.05, momentum 0.3,
 reference hierarchy `[600,200,100]`/`[30,15,2]`, SSRAE `q=13`, VCTex as in ADR 0017: canonical `q=[13]`, ADR 0011's
 `q=[17]` until 2026-11-15), seeds and determinism and the
@@ -161,7 +191,7 @@ manifests carries `gpu_part` and `gpu_stage`. A group never splits (its three se
 
 | GPU part | Account | Content | Runs / groups | Est. GPU h |
 |---|---|---|---|---|
-| `part_1_gpu` | A | paper 1 at nq100 (incl. `shared/random_nq100`, `shared/kmh_nq100`), the WAAL control, the upper bound, `rnhal`, `texhal`, `texhal_q17`, `hier_transfer`, `texhal_q13` (ADR 0017), KMH sweep at nq100 and nq50 | 309 / 103 (285 / 95 before ADR 0017) | 51.3 |
+| `part_1_gpu` | A | paper 1 at nq100 (incl. `shared/random_nq100`, `shared/kmh_nq100`), the WAAL control, the upper bound, `rnhal`, `texhal`, `texhal_q17`, `hier_transfer`, `texhal_q13` (ADR 0017), KMH sweep at nq100 and nq50, `kmh_norm` (ADR 0019) | 336 / 112 (285 / 95 before ADR 0017, 309 / 103 before ADR 0019) | 55.5 |
 | `part_2_gpu` | B | paper 1 at nq50 and nq10, KMH sweep at nq10, `kmh_wide` (ADR 0018) | 216 / 72 (177 / 59 before ADR 0018) | 58.0 |
 
 Execution order inside a part (`gpu_stage`; the main manifest and the sweep are merged into one plan): 1 paper-1
@@ -176,11 +206,13 @@ treat gaps within the session-to-session variation as ties):
 - paper 1 at nq50 and nq10 vs the upper bound (`p1/upper_bound` is in `part_1_gpu`);
 - paper 1 at nq50 vs the KMH sweep at nq50 (paper 1 reports KMH per budget from the sweep, ADR 0012; the sweep at nq50
   is the balancing item, in `part_1_gpu`);
-- any cross-budget reading of paper 1 (nq100 in `part_1_gpu`, nq50/nq10 in `part_2_gpu`).
+- any cross-budget reading of paper 1 (nq100 in `part_1_gpu`, nq50/nq10 in `part_2_gpu`);
+- the `kmh_norm_nq10` table (ADR 0019): its three variants in `part_1_gpu`, its raw-feature reference row
+  (`kmh/nq10/hier_L3_ref`) executed in `part_2_gpu`; equal round-0 models per seed on both accounts are the check.
 
 Inside one part: every paper-1 table of one budget (20 strategies + KMH reference), every 6.1/6.2/6.3 table and
 comparison table of papers 2 and 3 (all at nq100, with `shared/random_nq100`, `shared/kmh_nq100` and the best paper-1
-method at nq100), and every KMH-sweep table. `tests/test_campaign.py::test_gpu_parts_cover_every_group_once_and_keep_tables_together`
+method at nq100), and every KMH-sweep table except `kmh_norm_nq10`. `tests/test_campaign.py::test_gpu_parts_cover_every_group_once_and_keep_tables_together`
 asserts this.
 
 **GPU-time estimates** (`files_config/campaign/gpu_time_estimates.json`, referenced by both full-scale manifests as
@@ -212,6 +244,7 @@ results/campaign_fixed/                         # main manifest
 ├── texhal_q13/<study>/<config>/...             # ADR 0017
 results/campaign_kmh_fixed/nq{10,50,100}/<config>/...   # KMH sweep
 results/campaign_kmh_fixed/wide/nq{10,50,100}/<config>/...   # KMH wide-top exploration, part kmh_wide (ADR 0018)
+results/campaign_kmh_fixed/norm/nq{10,50,100}/{l2,zscore,pca64_l2}/...   # KMH feature post-processing, part kmh_norm (ADR 0019)
 docs/results/campaign_fixed/, docs/results/campaign_kmh_fixed/   # reports (local-only, docs/* is gitignored)
 results/smoke_campaign_fixed/, results/smoke_campaign_kmh_fixed/ # CPU micro smoke
 ```
@@ -240,6 +273,11 @@ code unchanged): every session fetches the tags and checks it out detached, no b
 explained in ADR 0017; it stays a WARN. `campaign-fixed-v4` since ADR 0018 (2026-11-15) = v3 + the `kmh_wide` part,
 run-affecting code unchanged again: `part_2_gpu` then carries two commits (177 leaves with v2's, 39 with v4's), and
 account A may run `texhal_q13` under v3 or v4, so the merged verify lists up to three commits, all explained.
+`campaign-fixed-v5` since ADR 0019 (2026-11-15) = v4 + the `kmh_norm` part and the `embedding.postprocess` step:
+unlike v3 and v4 it changes code a trainer run executes, behind the new key, with the default path tested identical
+to v4 (ADR 0019, "The identity guarantee"). Only account A uses it (account B finishes `kmh_wide` with v4, never a
+third version inside one part): `part_1_gpu` then carries three commits (285 leaves with v2's, 24 with v3's, 27 with
+v5's) and the merged verify up to four (v2, v3, v4, v5), all explained.
 
 **Data order, cache identity and audits (KI-47, ADR 0016 amendment of 2026-11-12).** The first campaign's loaders
 listed each class folder in file-system order, which differed between Colab sessions: the same seed selected the same
@@ -254,7 +292,7 @@ by **image paths** (round 0 of `round_queries.json`; logged indices only for lea
 naming other images FAIL, and (2) the **data-order audit**: per dataset folder, every leaf must record the same
 `data_order` hashes (FAIL otherwise, WARN for a leaf without the record). Exit codes as before: 0 / 1 (a job not OK or
 a FAIL) / 2 (only WARNs). After merging both parts expect one order for `daninhas_full_fixed` over all 462 leaves
-(486 after the `texhal_q13` part, ADR 0017; 525 after `kmh_wide`, ADR 0018).
+(486 after the `texhal_q13` part, ADR 0017; 525 after `kmh_wide`, ADR 0018; 552 after `kmh_norm`, ADR 0019).
 
 **Intentional duplicate computations.** Three groups of the main manifest have the effective signature of a KMH-sweep
 group: `shared/kmh_nq100` = `kmh/nq100/hier_L3_ref`, `p1/KMH/nq50` = `kmh/nq50/hier_L3_ref`, `p1/KMH/nq10` =
@@ -292,7 +330,7 @@ make campaign-pilot           GPU_PART=part_1_gpu   # seed 1 of VAAL/WAAL (+ Ran
 make campaign-pilot-report    GPU_PART=part_1_gpu   # wall time vs estimate, strategy_diagnostics, flags (read only)
 make campaign-run-gpu-part    GPU_PART=part_1_gpu   # resumable: re-run the same command
 make campaign-verify-gpu-part GPU_PART=part_1_gpu   # OK/INCOMPLETE/MISSING + commits + seed audit + data-order audit
-make campaign-verify-all                            # after merging: OK=525 (462 + texhal_q13 + kmh_wide), up to three commits (v2, v3, v4), audits PASS, duplicate pairs
+make campaign-verify-all                            # after merging: OK=552 (462 + texhal_q13 + kmh_wide + kmh_norm), up to four commits (v2, v3, v4, v5), audits PASS, duplicate pairs
 make campaign-report-all                            # docs/results/campaign_fixed/ + docs/results/campaign_kmh_fixed/
 make campaign-list                                  # main manifest alone (PART=paper1|... or part_1_gpu|part_2_gpu)
 make campaign-smoke-gpu-part GPU_PART=part_2_gpu    # CPU micro plan of one GPU part, seed 1

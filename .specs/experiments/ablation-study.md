@@ -156,6 +156,12 @@ naive halving is never silently wrong again.
   — pick the winning config there first, or use the `scripts/benchmark/run_pipe_gpu_0.sh`
   reference `n_clusters=[600,200,100]`, `n_levels=3`, `sample_sizes=[30,15,2]`
   as a provisional fixed point, as done in the exact config below).
+- Optional `embedding.postprocess` key (2026-11-15, ADR 0019; syntax in
+  `experimental-protocol.md`): a geometry step (`l2`, `zscore`, `pca_l2`)
+  applied after the cache load and the `variant` slice, before the
+  selection. No RNHAL/TexHAL ablation config sets it: absent = the identity,
+  so every 6.1/6.2/6.3 run hands the selection exactly the sliced embedding
+  described here. It is used only by the KMH part `kmh_norm` of the campaign.
 
 ### 6.1 run table
 

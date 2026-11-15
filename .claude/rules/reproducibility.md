@@ -62,13 +62,19 @@ locations.
   Compare runs by `dalmax.data_order.relative_image_path` (`<class>/<file>`), never by index alone.
 - **One code version per campaign (2026-11-12, KI-48)**: every Colab session checks out the campaign's tag (`GIT_REF`,
   default `campaign-fixed-v2` since 2026-11-12, `campaign-fixed-v3` since 2026-11-15, ADR 0017, `campaign-fixed-v4`
-  since 2026-11-15, ADR 0018) detached, never pulls a branch; `campaign verify` lists the distinct `run_metadata.json`
+  since 2026-11-15, ADR 0018, `campaign-fixed-v5` since 2026-11-15, ADR 0019, account A only) detached, never pulls a
+  branch; `campaign verify` lists the distinct `run_metadata.json`
   `git_commit` values of the OK leaves and a second value (or a missing one) is a WARN that must be explained before
   the results are used. A new tag for a later part of the same campaign is allowed only when nothing a
   `tools/trainer.py` run executes changed between the tags (`git diff --stat <old tag> -- dalmax/ tools/` limited to
   the campaign engine/reporting/docs, argued in the ADR); the resulting two-commit WARN stays a WARN and is explained
   in that ADR (ADR 0017: v2 for 462 leaves, v3 for the 24 `texhal_q13` leaves; ADR 0018: v4 for the 39 `kmh_wide`
-  leaves, and `texhal_q13` under v3 or v4, so up to three commits after merging, all explained). A leaf counts as complete only when its JSON artifacts parse with the expected round count
+  leaves, and `texhal_q13` under v3 or v4, so up to three commits after merging, all explained). **One exception,
+  argued in ADR 0019 (v5):** a tag may change trainer code when the change sits behind a new params key whose default
+  (absent) path is tested behaviour-identical to the previous tag (same arrays, ids, RNG consumption and cache key:
+  `tests/test_postprocess_identity.py`, the pinned v4 digest in `tests/test_campaign.py`, the golden runs); only the new
+  part's runs use the key and the new tag, and an account in the middle of a part never switches tags (no third code
+  version inside one part). After v5 the merged verify lists up to four commits (v2, v3, v4, v5), all explained. A leaf counts as complete only when its JSON artifacts parse with the expected round count
   and its checkpoint is non-empty (`dalmax/reporting/leaf_check.py::LeafCheck`), and a job's leaf is looked up only
   under the dataset folder of its own params (`RunGroup.dataset_folder`).
 - `torch.backends.cudnn.enabled = False` was used as a determinism
@@ -144,6 +150,13 @@ before the fix is ever found. The payload (format `dalmax-embedding-cache` versi
 `compute_pool_embeddings` then logs a warning and recomputes, as it does for an unreadable/truncated file. Writes
 are atomic (temporary file in the same directory + `os.replace`). New caching code must store and check the identity
 of what it caches the same way, never rely on positional ids alone.
+
+**Post-processing is never cached (2026-11-15, ADR 0019).** `embedding.postprocess` (`l2`, `zscore`, `pca_l2`) is
+applied by `RepresentationStrategy` after the cache load and the variant slice, fitted on the initial unlabeled pool
+of the run; the cache keeps holding the raw `"full"` vectors under the unchanged key. Never write post-processed
+vectors into the embedding cache (their statistics depend on the run's pool), and keep any geometry step free of
+random draws (or give it an explicit `derive_seed` generator), so a run's round 0 and RNG streams stay those of the
+identity run.
 
 The `utils/data.py::cache_file_path(name, dataset_folder, q=None, pool_hash=None)` helper described
 below (Phase 1 fix) was **deleted in Phase 4** along with the rest of `utils/data.py` — it had been
