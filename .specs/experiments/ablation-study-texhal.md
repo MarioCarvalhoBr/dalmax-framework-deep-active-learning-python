@@ -28,6 +28,18 @@ and budgets consistent with `experimental-protocol.md`, and report **both weight
 (same "which F1 is primary" framing as `ablation-study.md` — weighted primary / macro secondary,
 pending final advisor sign-off, applies identically here once numbers exist).
 
+> **Canonical configuration since 2026-11-15: VCTex `Q=13` (ADR 0017, supersedes ADR 0011's `Q=17`).** The numbers
+> in this file are the FIRST campaign's (dataset with duplicates, KI-46; KI-47 session order), superseded for the
+> papers. The clean campaign on `DATA/daninhas_full_fixed` (ADR 0016) measured the 6.1 rows (nq100, final-round
+> weighted F1, mean of seeds 1-3, std): `Q=13` 0.8341 (0.0188), `Q=[5,17]` 0.8038 (0.0173), `Q=5` 0.7766 (0.0639),
+> `Q=17` 0.7703 (0.0519); KMH 0.7921 (0.0617). TexHAL = `texhal/6_1/rep_q13` (reference hierarchy, `q=[13]`). Its
+> 6.2/6.3 rows are the campaign part `texhal_q13` (`files_config/ablations/texhal_q13/`, the `texhal_q17` configs with
+> `q=[13]`, plus the two ADR 0013 hierarchy-transfer shapes; 8 groups / 24 runs; prepared, not executed); the
+> reference/full rows are aliases of `texhal/6_1/rep_q13`, "w/o representation" is the shared KMH run. Report tables
+> of paper 2: `6_2`/`6_3` = Q=13, `6_2_q17`/`6_3_q17` = the executed Q=17 rows (supplementary), `6_2_q5_17`/`6_3_q5_17`
+> = Q=[5,17] (history). Q is chosen on the test set (disclosed; ADR 0017). Where this file says "canonical Q=17" it
+> describes the ADR 0011 period.
+
 ## Authoritative execution record: the campaign (2026-09-30 to 2026-10-05)
 
 Executed once in the campaign (`experiments/campaign.md`: Google Colab Pro, 3 seeds, 192/192 runs OK,
@@ -183,7 +195,9 @@ Identical structure and run-table shape to RNHAL's §6.2 (`ablation-study.md`) �
 `n_clusters`/`n_levels`/`sample_sizes` grid, `n_query=100` for every row — with `embedding` fixed
 at VCTex multi-scale (`q: [5, 17]`, `variant: "full"`) instead of SSRAE full. **Since 2026-11-01 (ADR 0011) the
 canonical 6.2 is the same grid with `q: [17]`** (part `texhal_q17`, `files_config/ablations/texhal_q17/`; the
-Q=[5,17] execution is kept as history).
+Q=[5,17] execution is kept as history). **Since 2026-11-15 (ADR 0017) the canonical 6.2 uses `q: [13]`** (part
+`texhal_q13`, `files_config/ablations/texhal_q13/`, the same grid plus the two ADR 0013 shapes; Q=17 kept as the
+supplementary tables `6_2_q17`/`6_3_q17`).
 
 ### 6.2 run table
 
@@ -225,7 +239,8 @@ CUDA_VISIBLE_DEVICES=<gpu> poetry run python tools/trainer.py \
 ## 6.3 Contribution of the two TexHAL stages
 
 - **TexHAL (full)**: VCTex `q=[5,17]` + hierarchical selection, reference hierarchy —
-  `stage_full.json` (Q=17 canonical since ADR 0011: `texhal/rep_q17.json`, same run as campaign `texhal/6_1/rep_q17`).
+  `stage_full.json` (Q=17 canonical since ADR 0011: `texhal/rep_q17.json`, same run as campaign `texhal/6_1/rep_q17`;
+  Q=13 canonical since ADR 0017, 2026-11-15: `texhal/rep_q13.json`, campaign `texhal/6_1/rep_q13`).
 - **Without representation module**: keep hierarchical selection, replace VCTex embeddings with
   **ImageNet-pretrained ResNet embeddings** (`dalmax/embeddings/resnet_imagenet_provider.py`) —
   `files_config/campaign/params_kmh.json` (the former `stage_no_representation.json`; neither

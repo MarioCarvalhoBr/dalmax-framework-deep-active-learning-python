@@ -61,9 +61,12 @@ locations.
   `os.listdir`, whose order differed between Colab sessions: equal indices named other images (first campaign).
   Compare runs by `dalmax.data_order.relative_image_path` (`<class>/<file>`), never by index alone.
 - **One code version per campaign (2026-11-12, KI-48)**: every Colab session checks out the campaign's tag (`GIT_REF`,
-  default `campaign-fixed-v2` since 2026-11-12) detached, never pulls a branch; `campaign verify` lists the distinct `run_metadata.json`
+  default `campaign-fixed-v2` since 2026-11-12, `campaign-fixed-v3` since 2026-11-15, ADR 0017) detached, never pulls a branch; `campaign verify` lists the distinct `run_metadata.json`
   `git_commit` values of the OK leaves and a second value (or a missing one) is a WARN that must be explained before
-  the results are used. A leaf counts as complete only when its JSON artifacts parse with the expected round count
+  the results are used. A new tag for a later part of the same campaign is allowed only when nothing a
+  `tools/trainer.py` run executes changed between the tags (`git diff --stat <old tag> -- dalmax/ tools/` limited to
+  the campaign engine/reporting/docs, argued in the ADR); the resulting two-commit WARN stays a WARN and is explained
+  in that ADR (ADR 0017: v2 for 462 leaves, v3 for the 24 `texhal_q13` leaves). A leaf counts as complete only when its JSON artifacts parse with the expected round count
   and its checkpoint is non-empty (`dalmax/reporting/leaf_check.py::LeafCheck`), and a job's leaf is looked up only
   under the dataset folder of its own params (`RunGroup.dataset_folder`).
 - `torch.backends.cudnn.enabled = False` was used as a determinism

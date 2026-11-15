@@ -96,6 +96,13 @@ distinct from "hierarchical" and matters for the ablation in
   sweep 165 runs into `results/campaign_fixed/` and `results/campaign_kmh_fixed/`, split into two GPU parts for two
   Colab accounts (about 99 estimated GPU hours in total; `COLAB_RUNBOOK.md` section 6). Every number in the next bullet
   is history of the first campaign and is superseded for the papers by this re-run.
+- **Clean campaign executed; TexHAL canonical `Q=13` (2026-11-15, ADR 0017)**: the 462 runs above were executed, merged
+  locally and verified (OK=462, one commit = tag `campaign-fixed-v2`, seed and data-order audits PASS). From its paper-2
+  6.1 table (nq100 weighted F1: VCTex `Q=13` 0.8341, `Q=[5,17]` 0.8038, `Q=5` 0.7766, `Q=17` 0.7703; KMH 0.7921) the
+  author made `Q=13` TexHAL's canonical configuration (superseding ADR 0011's `Q=17`; Q chosen on the test set,
+  disclosed). Its 6.2/6.3 ablations are the new part `texhal_q13` (8 groups / 24 runs in `part_1_gpu`, prepared, not
+  executed; tag `campaign-fixed-v3`; `COLAB_RUNBOOK.md` section 6e): main manifest 321 runs / 107 groups, 486 in total
+  with the sweep.
 - **Pre-flight fix KI-47 (2026-11-12, ADR 0016 amendment)**: the loaders listed each class folder in file-system order,
   which differed between Colab sessions, so in the first campaign the same seed started from other images in each
   later session and the cached embeddings served later sessions the features of other images (the KMH sweep,

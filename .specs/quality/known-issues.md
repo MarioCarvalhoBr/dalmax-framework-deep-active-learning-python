@@ -264,6 +264,15 @@ not a code bug). Status: Resolved (executed); advisor confirmation of the Q=17 d
 Related note (no action): the RNHAL pending decision on whether the canonical hierarchy
 becomes `L=4 [800,600,200,100]` is tracked in `papers-roadmap.md`.
 
+**Update 2026-11-15 (ADR 0017): the `Q=17` resolution above is superseded.** Every number above is the first
+campaign's (KI-46 duplicates; `texhal_q17` also ran under the KI-47 session order and cache). On the clean dataset the
+6.1 rows read (nq100, weighted F1, mean of seeds 1-3, std): `Q=13` 0.8341 (0.0188), `Q=[5,17]` 0.8038 (0.0173), `Q=5`
+0.7766 (0.0639), `Q=17` 0.7703 (0.0519). Author decision: TexHAL's canonical configuration is VCTex `Q=13`
+(`texhal/6_1/rep_q13`); its 6.2/6.3 ablations are the part `texhal_q13` (24 runs, prepared, not executed); paper 2's
+`6_2`/`6_3` tables come from it, the clean Q=17 tables stay as `6_2_q17`/`6_3_q17`. The underlying issue of KI-40
+(the multi-scale `Q=[5,17]` is not TexHAL's best setting) holds on the clean data too. Q is chosen on the test set,
+disclosed in the thesis.
+
 ### KI-41 — no dropout layer in the ResNet-50 head: MC-dropout strategies and BALD are degenerate (FIXED IN CODE 2026-11-11, re-run prepared, not executed; ADR 0014; was accepted as-is 2026-11-02; found 2026-11-02)
 
 **Fix (2026-11-11, ADR 0014; author decision of 2026-11-11 to fix and re-run).** `DaninhasModelResNet50(n_classes,

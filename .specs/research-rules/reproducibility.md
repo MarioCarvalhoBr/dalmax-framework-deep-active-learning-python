@@ -190,6 +190,13 @@ also more complete now: it gained `all_precision_macro`/`all_recall_macro`/`all_
 see `research-rules/metrics.md`), though it still does not duplicate the full params JSON —
 `run_metadata.json` is the file to consult for that, not `results.json`.
 
+**Code version of a campaign (KI-48, 2026-11-12; convention extended by ADR 0017, 2026-11-15).** Every Colab session
+checks out the campaign's tag detached; `campaign verify` lists the distinct `git_commit` values of the OK leaves and
+more than one is a WARN. A later part of the same campaign may run under a new tag only when nothing a
+`tools/trainer.py` run executes changed between the tags (checked with `git diff --stat <old tag> -- dalmax/ tools/`
+and argued in the ADR); the two-commit WARN then stays a WARN and the ADR explains it (ADR 0017: `campaign-fixed-v2`
+for the 462 executed leaves, `campaign-fixed-v3` for the 24 `texhal_q13` leaves).
+
 Original text (pre-Phase-2): **Not currently implemented.** `demo.py` (historical) logs the full `args` and the
 selected dataset's `params` block to `log-dalmax.log` via
 `logger.warning(json.dumps(...))` (visible in `dir_results/log-dalmax.log`

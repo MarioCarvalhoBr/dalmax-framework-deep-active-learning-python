@@ -97,7 +97,21 @@ All three papers are re-executed **once**, together, on one GPU environment from
   `RepresentationStrategy`), reused by the 6.1 "full", 6.2 reference and 6.3 "full" rows and by the
   comparison tables.
 
-## Campaign executed; decisions of 2026-11-01
+## Clean campaign executed; decision of 2026-11-15 (ADR 0017)
+
+The clean campaign on `DATA/daninhas_full_fixed` (ADR 0016, 462 runs, tag `campaign-fixed-v2`) was executed, merged
+locally and verified (OK=462, one commit, seed and data-order audits PASS). Author decision of 2026-11-15:
+
+- **Paper 2 (TexHAL) canonical configuration becomes VCTex `Q=13`** (single RAE), superseding the `Q=17` of ADR 0011
+  (whose evidence came from first-campaign runs affected by KI-46 and KI-47). Clean 6.1 at nq100 (final-round
+  weighted F1, mean of seeds 1-3, std): `Q=13` 0.8341 (0.0188), `Q=[5,17]` 0.8038 (0.0173), `Q=5` 0.7766 (0.0639),
+  `Q=17` 0.7703 (0.0519); KMH 0.7921 (0.0617). Q is chosen on the test set (disclosed in the thesis).
+- Its 6.2/6.3 ablations run as the new part `texhal_q13` (8 groups / 24 runs, `part_1_gpu`; prepared, not executed);
+  paper 2's 6.2/6.3 tables come from it, the executed Q=17 tables stay as supplementary (`6_2_q17`/`6_3_q17`) and
+  the Q=[5,17] ones as history. The TexHAL row of the comparison tables of papers 2 **and 3** is `texhal/6_1/rep_q13`.
+- `Q=13` is also SSRAE's hidden size (paper 3); the papers should say so explicitly.
+
+## Campaign executed; decisions of 2026-11-01 (first campaign; the Q=17 decision is superseded by ADR 0017)
 
 The campaign's first 192 runs finished on 2026-10-05 and the 18-run `texhal_q17` part on 2026-11-01
 (210/210 runs OK on 2026-11-02, seed audit PASS; execution record and all numbers in `campaign.md`). Decisions taken by the user on 2026-11-01:

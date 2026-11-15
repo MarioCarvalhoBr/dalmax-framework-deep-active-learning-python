@@ -3,7 +3,7 @@ description: Report campaign progress (files_config/campaign/manifest.json vs re
 ---
 
 Report the state of the campaign (ADR 0008/0009/0010, `.specs/experiments/campaign.md`). Treat `$ARGUMENTS`
-as `[part]` (optional; `all` | `paper1` | `upper_bound` | `rnhal` | `texhal` | `texhal_q17` | `hier_transfer`,
+as `[part]` (optional; `all` | `paper1` | `paper1_control` | `upper_bound` | `rnhal` | `texhal` | `texhal_q17` | `hier_transfer` | `texhal_q13`,
 comma-separated allowed, or a GPU part `part_1_gpu` | `part_2_gpu`; default `all`). This command is read-only: it never
 runs training and never writes under `results/`. Since ADR 0016 the manifests describe the clean re-run on
 `DATA/daninhas_full_fixed`; pass both manifests: `M=files_config/campaign/manifest.json,files_config/campaign/manifest_kmh_sweep.json`.
@@ -11,9 +11,10 @@ runs training and never writes under `results/`. Since ADR 0016 the manifests de
 Steps:
 
 1. `poetry run python -m dalmax.campaign list --manifest $M --part <part>` -- the expected job table, the counts and
-   the estimated GPU hours (full scale: main 297 runs / 99 groups: `paper1` 189, `paper1_control` 3 (the WAAL
-   control `WAALRandomQuery`), `upper_bound` 3, `rnhal` 42, `texhal` 30, `texhal_q17` 18, `hier_transfer` 12; KMH
-   sweep 165 / 55; GPU parts `part_1_gpu` 285 runs, `part_2_gpu` 177 runs).
+   the estimated GPU hours (full scale: main 321 runs / 107 groups: `paper1` 189, `paper1_control` 3 (the WAAL
+   control `WAALRandomQuery`), `upper_bound` 3, `rnhal` 42, `texhal` 30, `texhal_q17` 18, `hier_transfer` 12,
+   `texhal_q13` 24 (ADR 0017); KMH sweep 165 / 55; GPU parts `part_1_gpu` 309 runs, `part_2_gpu` 177 runs; 486 in
+   total).
 2. `poetry run python -m dalmax.campaign verify --manifest $M --part <part>` -- per job OK / INCOMPLETE / MISSING
    (`dalmax/reporting/leaf_check.py` artifact and integrity check: a truncated/empty file shows as
    `INCOMPLETE ... (integrity: ...)`), the code-version audit (distinct `git_commit` of the OK leaves; WARN on more

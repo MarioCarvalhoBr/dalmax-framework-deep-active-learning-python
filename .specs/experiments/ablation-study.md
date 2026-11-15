@@ -620,6 +620,13 @@ than removing the representation module" does **not** hold in the campaign (-0.0
 F1). Whether `L=4 [800,600,200,100]` becomes RNHAL's canonical hierarchy is **pending the advisor**
 (decision of 2026-11-01); until then the reference hierarchy stays `L=3 [600,200,100]`.
 
+**2026-11-15 (ADR 0017), paper 3's comparison table.** The TexHAL row of paper 3's comparison (RNHAL vs TexHAL vs
+RandomSampling, best paper-1 method) is now "TexHAL (VCTex Q=13 + hierarchical)" -> `texhal/6_1/rep_q13` (TexHAL's
+canonical configuration on the clean dataset; was `texhal/6_1/rep_q17` under ADR 0011). RNHAL's own rows and runs are
+unchanged. Note for the paper text: `Q=13` is now both SSRAE's hidden size (RNHAL) and TexHAL's VCTex `Q`; the two
+descriptors remain different (SSRAE spatio-spectral RAE vs VCTex texture RAE). The numbers in this section are the
+first campaign's (KI-46/KI-47), superseded by the clean campaign (`campaign.md`).
+
 ## Execution record (2026-08-25/26)
 
 **Where**: Google Colab Pro, one NVIDIA T4 GPU (single-GPU session, not the lab machine's 2×10 GB
