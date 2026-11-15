@@ -48,8 +48,27 @@ def test_committed_configs_match_the_generator() -> None:
 
 def test_file_counts_per_budget() -> None:
     per_nq = {nq: sum(f"/nq{nq}/" in rel and "/micro/" not in rel for rel in EXPECTED) for nq in GEN.BUDGETS}
-    assert per_nq == {10: 17, 50: 17, 100: 21}
-    assert sum(per_nq.values()) == 55
+    assert per_nq == {10: 17 + 5, 50: 17 + 5, 100: 21 + 3}  # sweep stages 1-2 + kmh_wide (ADR 0018)
+    assert sum(len(GEN.grid(nq)) for nq in GEN.BUDGETS) == 55
+    assert sum(len(GEN.wide_points(nq)) for nq in GEN.BUDGETS) == 13
+
+
+def test_wide_points_follow_the_sample_size_rule_and_never_reuse_a_sweep_file() -> None:
+    """ADR 0018: kmh_wide shapes use the 0.05 rule (max(2, round_half_up(0.05 k))), no knob, levels
+    strictly decreasing; their file names never collide with a stage-1/2 file of the same budget."""
+    for nq in GEN.BUDGETS:
+        sweep_names = {name for name, _, _ in GEN.grid(nq)}
+        for name, h in GEN.wide_points(nq):
+            assert name not in sweep_names
+            h_cfg = _load(f"files_config/ablations/kmh_sweep/nq{nq}/{name}.json", nq).dataset.selection.hierarchy
+            assert h_cfg.n_clusters == h.base and h_cfg.sample_sizes == GEN.sample_sizes_for(h.base)
+            assert all(a > b for a, b in zip(h.base, h.base[1:], strict=False))  # each level wider than the next
+            assert (h_cfg.n_resamples, h_cfg.init_method, h_cfg.resample_strategy, h_cfg.leaf_sampling) == (
+                10, "kmeans++", "closest", "random")
+            if len(h.base) > 1:
+                assert h.base[-1] == nq  # every multi-level kmh_wide shape ends at the query size
+    assert GEN.sample_sizes_for((600, 200, 10)) == (30, 10, 2) and GEN.sample_sizes_for((2400,)) == (120,)
+    assert GEN.sample_sizes_for((1200, 400, 50)) == (60, 20, 3)
 
 
 @pytest.mark.parametrize("rel", sorted(EXPECTED))

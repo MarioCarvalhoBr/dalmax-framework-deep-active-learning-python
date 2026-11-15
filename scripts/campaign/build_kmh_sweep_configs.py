@@ -3,7 +3,9 @@
 Stage 1 of the paper-1 KMH sweep (`.specs/experiments/campaign.md`, "KMH parameter sweep"): for each
 budget `n_query` in {10, 50, 100} a hierarchy axis (different `n_clusters`) and a knob axis (one
 non-default hierarchical-k-means knob at a time, applied to the reference and the budget-matched
-3-level hierarchy). The grid is plain data at the top of this file so that a later stage can extend it.
+3-level hierarchy). The grid is plain data at the top of this file so that a later stage can extend it:
+stage 2 (nq100, 2026-11-08) and the wide-top exploration `kmh_wide` (`WIDE_POINTS`, 2026-11-15, ADR 0018)
+are appended that way, every earlier file byte-identical.
 
 Full-scale files go to `kmh_sweep/nq{N}/<config>.json`, the CPU smoke mirror to
 `kmh_sweep/micro/nq{N}/<config>.json`. Committed artifacts; `tests/test_kmh_sweep_configs.py` fails
@@ -88,6 +90,32 @@ STAGE2_SAMPLE_X2 = Hierarchy("hier_L4_k800_600_200_100__sample_x2", "L=4, k={k} 
                              "fixed", (800, 600, 200, 100), sample_factor=2)
 STAGE2_LATE_KNOB_COMBOS: tuple[tuple[str, str], ...] = (("hier_L2_matched", "no_resampling"),)
 
+# Wide-top exploration `kmh_wide` (2026-11-15, ADR 0018; appended, every earlier file stays byte-identical):
+# fixed shapes per budget, every knob at its default, sample sizes by the 0.05 rule. Direction (a): a wide
+# first level with the last level equal to the query size (never run at nq10/nq50); direction (b): a wider
+# first level (one level k=1200 / 2400, three levels [1200,400,nq]). Order = row order of `kmh_wide_nq*`.
+WIDE_POINTS: dict[int, tuple[Hierarchy, ...]] = {
+    100: (
+        Hierarchy("hier_L1_k1200", "L=1, k={k}", "fixed", (1200,)),
+        Hierarchy("hier_L1_k2400", "L=1, k={k}", "fixed", (2400,)),
+        Hierarchy("hier_L3_k1200_400_100", "L=3, k={k}", "fixed", (1200, 400, 100)),
+    ),
+    50: (
+        Hierarchy("hier_L3_k600_200_50", "L=3, k={k} (last level = n_query)", "fixed", (600, 200, 50)),
+        Hierarchy("hier_L2_k600_50", "L=2, k={k} (last level = n_query)", "fixed", (600, 50)),
+        Hierarchy("hier_L1_k1200", "L=1, k={k}", "fixed", (1200,)),
+        Hierarchy("hier_L1_k2400", "L=1, k={k}", "fixed", (2400,)),
+        Hierarchy("hier_L3_k1200_400_50", "L=3, k={k}", "fixed", (1200, 400, 50)),
+    ),
+    10: (
+        Hierarchy("hier_L3_k600_200_10", "L=3, k={k} (last level = n_query)", "fixed", (600, 200, 10)),
+        Hierarchy("hier_L2_k600_10", "L=2, k={k} (last level = n_query)", "fixed", (600, 10)),
+        Hierarchy("hier_L1_k1200", "L=1, k={k}", "fixed", (1200,)),
+        Hierarchy("hier_L1_k2400", "L=1, k={k}", "fixed", (2400,)),
+        Hierarchy("hier_L3_k1200_400_10", "L=3, k={k}", "fixed", (1200, 400, 10)),
+    ),
+}
+
 # --- derivation ------------------------------------------------------------------------------------
 
 
@@ -143,8 +171,10 @@ def is_stage2(h: Hierarchy, knob: tuple[str, str, Any] | None, nq: int) -> bool:
     return nq == STAGE2_NQ and name in {n for n, _, _ in stage2_points()}
 
 
-def build_config(nq: int, h: Hierarchy, knob: tuple[str, str, Any] | None, *, micro: bool) -> dict[str, Any]:
-    """The params JSON content of one grid point (`knob` None = the hierarchy-axis config)."""
+def build_config(nq: int, h: Hierarchy, knob: tuple[str, str, Any] | None, *, micro: bool,
+                 wide: bool = False) -> dict[str, Any]:
+    """The params JSON content of one grid point (`knob` None = the hierarchy-axis config; `wide` = a
+    `kmh_wide` point, ADR 0018)."""
     full_clusters = clusters_for(h, nq)
     reference = h.kind == "reference"
     full_samples = sample_sizes_for(full_clusters, reference=reference, factor=h.sample_factor)
@@ -173,6 +203,10 @@ def build_config(nq: int, h: Hierarchy, knob: tuple[str, str, Any] | None, *, mi
         comment = (f"KMH sweep stage 2 (nq100 only, 2026-11-08): ImageNet ResNet-50 features + hierarchical "
                    f"k-means at n_query={nq}, {what}; otherwise identical to params_kmh.json. See "
                    ".specs/experiments/campaign.md, 'KMH parameter sweep'.")
+    if wide and not micro:
+        comment = (f"KMH wide-top exploration (kmh_wide, 2026-11-15, ADR 0018): ImageNet ResNet-50 features + "
+                   f"hierarchical k-means at n_query={nq}, {what}; otherwise identical to params_kmh.json. See "
+                   ".specs/experiments/campaign.md, 'KMH wide-top exploration'.")
     if micro:
         comment = (f"Micro (CPU smoke) mirror (clusters / {MICRO_DIVISOR}, min 2) of the full-scale "
                    f"config of the same name: n_query={nq}, {what}.")
@@ -210,6 +244,11 @@ def grid(nq: int) -> list[tuple[str, Hierarchy, tuple[str, str, Any] | None]]:
     return items
 
 
+def wide_points(nq: int) -> list[tuple[str, Hierarchy]]:
+    """`(config name, hierarchy)` of the `kmh_wide` points at budget `nq` (ADR 0018), in table-row order."""
+    return [(config_name(h, nq), h) for h in WIDE_POINTS.get(nq, ())]
+
+
 def expected_files() -> dict[str, str]:
     """`{repo-relative path: file text}` of every generated params file."""
     files: dict[str, str] = {}
@@ -218,6 +257,11 @@ def expected_files() -> dict[str, str]:
         for nq in BUDGETS:
             for name, h, knob in grid(nq):
                 files[f"{sub}/nq{nq}/{name}.json"] = json.dumps(build_config(nq, h, knob, micro=micro), indent=4) + "\n"
+            for name, h in wide_points(nq):
+                rel = f"{sub}/nq{nq}/{name}.json"
+                if rel in files:
+                    raise ValueError(f"kmh_wide point {rel} collides with a sweep file")
+                files[rel] = json.dumps(build_config(nq, h, None, micro=micro, wide=True), indent=4) + "\n"
     return files
 
 
