@@ -90,8 +90,8 @@ def test_expected_counts_match_the_manifests() -> None:
         jobs = [j for seg in C.plan_jobs(manifests, C.parse_selection(gpu_part)) for j in seg.jobs]
         assert f'"{gpu_part}": ({len(jobs)}, {len({j.group.id for j in jobs})})' in params
     # ADR 0017: part_1_gpu = 285 executed runs + the 24 texhal_q13 runs; ADR 0018: part_2_gpu = 177 executed
-    # runs + the 39 kmh_wide runs.
-    assert 'EXPECTED = {"part_1_gpu": (309, 103), "part_2_gpu": (216, 72)}' in params
+    # runs + the 39 kmh_wide runs; ADR 0019: part_1_gpu + the 27 kmh_norm runs.
+    assert 'EXPECTED = {"part_1_gpu": (336, 112), "part_2_gpu": (216, 72)}' in params
 
 
 def test_no_personal_path_and_no_old_dataset() -> None:
@@ -192,7 +192,7 @@ def test_every_session_checks_out_the_pinned_git_ref_detached() -> None:
     """2026-11-12: one code version for the whole campaign; a push during it must not reach a session."""
     sources = _code_sources()
     params = sources[0]
-    assert 'GIT_REF = "campaign-fixed-v4"' in params and "BRANCH" not in params  # ADR 0018
+    assert 'GIT_REF = "campaign-fixed-v5"' in params and "BRANCH" not in params  # ADR 0019
     clone = next(s for s in sources if "git" in s and "clone" in s)
     assert '"clone", REPO_URL, REPO_DIR' in clone and "--branch" not in clone
     assert '"fetch", "--tags", "origin"' in clone and '"checkout", "--detach", GIT_REF' in clone
@@ -224,14 +224,14 @@ def _zip_selection(zip_only_part: str, gpu_part: str = "part_1_gpu") -> dict:
     assert 'ZIP_ONLY_PART = ""' in prologue  # default: the whole GPU part
     prologue = prologue.replace('ZIP_ONLY_PART = ""', f"ZIP_ONLY_PART = {zip_only_part!r}", 1)
     scope = {"GPU_PART": gpu_part, "RESULTS_ROOTS": ["results/campaign_fixed", "results/campaign_kmh_fixed"],
-             "EXPECTED_RUNS": 309}
+             "EXPECTED_RUNS": 336}
     exec(prologue, scope)  # noqa: S102 -- the generated cell, imports only
     return scope
 
 
 def test_zip_cell_default_zips_the_whole_part() -> None:
     scope = _zip_selection("")
-    assert scope["zip_name"] == "part_1_gpu" and scope["expected_models"] == 309
+    assert scope["zip_name"] == "part_1_gpu" and scope["expected_models"] == 336
     assert scope["zip_dirs"] == scope["log_roots"] == ["results/campaign_fixed", "results/campaign_kmh_fixed"]
 
 
@@ -269,3 +269,22 @@ def test_zip_cell_zip_only_part_kmh_wide_ships_the_sweep_wide_folder() -> None:
     assert 'shutil.copy(log, f"{stage}/{root}/{name}_{zip_name}.log")' in cell  # -> campaign_part_2_gpu__kmh_wide.log
     with pytest.raises(ValueError, match="belongs to part_2_gpu"):
         _zip_selection("kmh_wide", gpu_part="part_1_gpu")
+
+
+def test_zip_cell_zip_only_part_kmh_norm_ships_the_sweep_norm_folder() -> None:
+    """ADR 0019: ZIP_ONLY_PART = "kmh_norm" (account A) zips results/campaign_kmh_fixed/norm/ (27 checkpoints) and
+    the sweep root's logs under new names (campaign_part_1_gpu__kmh_norm.log), into part_1_gpu__kmh_norm.zip; the
+    two earlier parts keep working."""
+    scope = _zip_selection("kmh_norm", gpu_part="part_1_gpu")
+    assert scope["zip_name"] == "part_1_gpu__kmh_norm"
+    assert scope["zip_dirs"] == ["results/campaign_kmh_fixed/norm"] and scope["expected_models"] == 27
+    assert scope["log_roots"] == ["results/campaign_kmh_fixed"]
+    sweep = C.load_manifest(REPO_ROOT / "files_config/campaign/manifest_kmh_sweep.json")
+    own = [g for g in sweep.groups if g.part == "kmh_norm"]
+    assert sum(len(g.seeds) for g in own) == 27
+    assert {g.id for g in sweep.groups if g.dir_results.startswith("results/campaign_kmh_fixed/norm/")} == {
+        g.id for g in own}
+    with pytest.raises(ValueError, match="belongs to part_1_gpu"):
+        _zip_selection("kmh_norm", gpu_part="part_2_gpu")
+    assert _zip_selection("texhal_q13")["expected_models"] == 24
+    assert _zip_selection("kmh_wide", gpu_part="part_2_gpu")["expected_models"] == 39

@@ -53,7 +53,12 @@ REPO_URL = "https://github.com/MarioCarvalhoBr/dalmax-framework-deep-active-lear
 # v4 (ADR 0018, 2026-11-15) = v3 + the `kmh_wide` part of the KMH sweep (39 runs in part_2_gpu), run-affecting
 # code unchanged again: the 177 earlier leaves of part_2_gpu keep the v2 commit (two commits there, explained);
 # v3 stays valid for texhal_q13 on account A (identical trainer code).
-DEFAULT_GIT_REF = "campaign-fixed-v4"
+# v5 (ADR 0019, 2026-11-15) = v4 + the `kmh_norm` part of the KMH sweep (27 runs in part_1_gpu, account A). Unlike
+# v3/v4 it DOES change code a `tools/trainer.py` run executes (the optional `embedding.postprocess` step of
+# `RepresentationStrategy`); with the key absent the behaviour is identical (tested, ADR 0019), so the 309 earlier
+# leaves of part_1_gpu (v2 + v3) and the 39 kmh_wide leaves of account B (v4) stay comparable. Only account A uses
+# v5; account B finishes kmh_wide with v4 (never a third code version inside one part).
+DEFAULT_GIT_REF = "campaign-fixed-v5"
 RUN_EXIT_FILE = "/content/campaign_run_exit_code"  # local runtime disk, not the repo or Drive
 DRIVE_ROOT_PLACEHOLDER = "/content/drive/MyDrive/<FOLDER_THAT_HOLDS_DATA>"
 # The author's Drive folder, the same on both accounts (author instruction 2026-11-12): the second assignment in
@@ -65,10 +70,12 @@ DATASET = "daninhas_full_fixed"
 DATASET_SPLIT_IMAGES: dict[str, int] = {"train": 7230, "test": 1008}
 # Semantic parts the zip cell can ship alone (`ZIP_ONLY_PART`, ADR 0017): part -> (its manifest, the folder under
 # that manifest's results root holding its groups). Every group of the part lives under that folder and no group
-# of another part does, so the folder is exactly the part's leaves. `kmh_wide` (ADR 0018) lives in the sweep.
+# of another part does, so the folder is exactly the part's leaves. `kmh_wide` (ADR 0018) and `kmh_norm` (ADR 0019)
+# live in the sweep.
 ZIP_ONLY_PARTS: dict[str, tuple[str, str]] = {
     "texhal_q13": (MANIFESTS[0], "texhal_q13"),
     "kmh_wide": (MANIFESTS[1], "wide"),
+    "kmh_norm": (MANIFESTS[1], "norm"),
 }
 
 
@@ -131,7 +138,7 @@ ZIP_CELL = '''
     import subprocess
 
     ZIP_PARTIAL = False  # True only to ship an incomplete part on purpose (e.g. no credits left)
-    ZIP_ONLY_PART = ""  # "" = the whole GPU part; "texhal_q13" (A) / "kmh_wide" (B) = that part only (6e / 6f)
+    ZIP_ONLY_PART = ""  # "" = whole GPU part; "texhal_q13"/"kmh_norm" (A), "kmh_wide" (B) = that part (6e/6g/6f)
     ZIP_ONLY_PARTS = __ZIP_ONLY_PARTS__
     if ZIP_ONLY_PART:
         if ZIP_ONLY_PART not in ZIP_ONLY_PARTS:
@@ -446,8 +453,9 @@ def cells() -> list[dict[str, Any]]:
             `{roots[0]}/`, including the 3 runs of the WAAL control `WAALRandomQuery` and, since ADR 0017, the 24 runs
             of the `texhal_q13` part (TexHAL's ablations with its canonical VCTex Q=13); KMH sweep {sweep_runs} /
             {sweep_groups} into `{roots[1]}/`, including since ADR 0018 the 39 runs of the `kmh_wide` part, the KMH
-            wide-top exploration, under `{roots[1]}/wide/`), split into two GPU parts, one per Colab account (of about
-            equal estimated GPU time before the two later parts):
+            wide-top exploration, under `{roots[1]}/wide/`, and since ADR 0019 the 27 runs of the `kmh_norm` part, the
+            KMH feature post-processing round, under `{roots[1]}/norm/`), split into two GPU parts, one per Colab
+            account (of about equal estimated GPU time before the three later parts):
 
             | GPU part | Account | Runs | Run groups |
             |---|---|---|---|
@@ -567,11 +575,14 @@ def cells() -> list[dict[str, Any]]:
             index the same ordered image lists, KI-47). A leaf with an integrity problem (truncated or empty file, wrong
             round count) is `INCOMPLETE (integrity: ...)` and is re-run by the run cell. The code-version audit lists the
             `git_commit` of the OK leaves: it must show ONE commit (the one printed by section 2) and no `WARN:` line.
-            Explained exceptions (ADR 0017, ADR 0018): on account A, after the `texhal_q13` runs, it lists TWO commits
-            (the `campaign-fixed-v2` commit of the 285 earlier leaves and the `campaign-fixed-v3` or `campaign-fixed-v4`
-            commit of the 24 new ones; three if both tags were used); on account B, after the `kmh_wide` runs, TWO
-            commits (`campaign-fixed-v2` for the 177 earlier leaves, `campaign-fixed-v4` for the 39 new ones); each with
-            a `WARN:` line. That is expected (the run-affecting code is identical, `COLAB_RUNBOOK.md` sections 6e/6f).
+            Explained exceptions (ADR 0017, ADR 0018, ADR 0019): on account A, after the `texhal_q13` runs, it lists
+            TWO commits (the `campaign-fixed-v2` commit of the 285 earlier leaves and the `campaign-fixed-v3` or
+            `campaign-fixed-v4` commit of the 24 new ones; three if both tags were used), and after the `kmh_norm` runs
+            one more, `campaign-fixed-v5` for its 27 leaves (so v2, v3 and v5); on account B, after the `kmh_wide` runs,
+            TWO commits (`campaign-fixed-v2` for the 177 earlier leaves, `campaign-fixed-v4` for the 39 new ones); each
+            with a `WARN:` line. That is expected: v3/v4 left the run-affecting code identical, and v5 changes it only
+            behind the new `embedding.postprocess` key, with the default path tested identical (ADR 0019;
+            `COLAB_RUNBOOK.md` sections 6e/6f/6g).
             Exit code 0 = all OK, 1 = an incomplete/missing job or a FAIL audit, 2 = only audit WARNs. Re-run the run
             cell to redo failed or missing jobs.
             """),
@@ -584,14 +595,15 @@ def cells() -> list[dict[str, Any]]:
             zip is about as large as the results (~95 MB per run).
 
             `ZIP_ONLY_PART` (ADR 0017; default `""` = the whole GPU part, as above) ships ONE semantic part whose
-            leaves were added after the rest of the GPU part was downloaded: e.g. `ZIP_ONLY_PART = "texhal_q13"`
-            (account A) or `"kmh_wide"` (account B) zips only that part's results folder plus the `campaign.log` /
+            leaves were added after the rest of the GPU part was downloaded: e.g. `ZIP_ONLY_PART = "texhal_q13"` or
+            `"kmh_norm"` (account A) or `"kmh_wide"` (account B) zips only that part's results folder plus the
+            `campaign.log` /
             `failures.log` of the results root holding it, renamed to
             `campaign_<GPU_PART>__<ZIP_ONLY_PART>.log` / `failures_<GPU_PART>__<ZIP_ONLY_PART>.log` (new names, so a
             local `unzip -n` adds them next to the earlier `campaign_<GPU_PART>.log`) into
             `/content/<GPU_PART>__<ZIP_ONLY_PART>.zip`, and checks its checkpoint count against the part's runs. The
             verify gate still covers the whole GPU part. Parts allowed: {zip_parts_text}. See `COLAB_RUNBOOK.md`
-            sections 6e and 6f.
+            sections 6e, 6f and 6g.
             """),
         code(ZIP_CELL.replace("__ZIP_ONLY_PARTS__", repr(zip_parts))),
         md("""
