@@ -20,6 +20,12 @@ VALID_EXTRACTORS = ("ssrae", "vctex", "resnet_imagenet")
 VALID_EMBEDDING_VARIANTS = ("full", "spatial", "spectral")
 VALID_SELECTION_METHODS = ("flat_closest", "flat_proportional", "hierarchical")
 VALID_DEVICES = ("cuda", "cpu")
+# Feature post-processing of the embeddings before selection (ADR 0019); the keys of
+# `dalmax.embeddings.registry.POSTPROCESS_REGISTRY`. "none" is the identity and the default.
+POSTPROCESS_IDENTITY = "none"
+VALID_POSTPROCESS_METHODS = (POSTPROCESS_IDENTITY, "l2", "zscore", "pca_l2")
+# Methods that project onto principal components and therefore require `pca_dim`.
+POSTPROCESS_METHODS_WITH_PCA_DIM = ("pca_l2",)
 
 # The upper-bound "strategy" (paper 1): train once on the ENTIRE pool, no
 # active learning. Lives here (not in `dalmax.query_strategies`) so the config
@@ -133,17 +139,66 @@ class HierarchyConfig:
 
 
 @dataclass(frozen=True)
+class PostprocessConfig:
+    """Geometry of the embeddings before selection (params JSON ``embedding.postprocess``, ADR 0019).
+
+    Applied by ``RepresentationStrategy`` after the embeddings are loaded from (or
+    written to) the embedding cache and after the SSRAE ``variant`` slice; the cache
+    itself always holds the raw ``"full"`` vectors. The statistics are fitted once
+    per run on the embeddings of the INITIAL unlabeled pool (no labels, no test
+    images, nothing from the classifier) and reused in every round.
+
+    - ``method``: ``"none"`` (identity, the default: the embeddings reach the
+      selection exactly as before this block existed), ``"l2"`` (each vector
+      divided by its Euclidean norm), ``"zscore"`` (each dimension standardised
+      with the mean and standard deviation of the initial pool), ``"pca_l2"``
+      (centred on the pool mean, projected on the first ``pca_dim`` principal
+      components of the pool, then ``"l2"``).
+    - ``pca_dim``: number of principal components kept; required for
+      ``"pca_l2"``, must be ``None`` for every other method (a value that the
+      method would silently ignore is a reproducibility hazard).
+    """
+
+    method: str = POSTPROCESS_IDENTITY
+    pca_dim: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.method not in VALID_POSTPROCESS_METHODS:
+            raise ConfigError(
+                f"PostprocessConfig.method must be one of {list(VALID_POSTPROCESS_METHODS)}, "
+                f"got {self.method!r}"
+            )
+        if self.method in POSTPROCESS_METHODS_WITH_PCA_DIM:
+            if self.pca_dim is None:
+                raise ConfigError(
+                    f"PostprocessConfig.method is {self.method!r} but 'pca_dim' is missing "
+                    "(missing key: 'pca_dim')"
+                )
+            if isinstance(self.pca_dim, bool) or not isinstance(self.pca_dim, int) or self.pca_dim <= 0:
+                raise ConfigError(f"PostprocessConfig.pca_dim must be an int > 0, got {self.pca_dim!r}")
+        elif self.pca_dim is not None:
+            raise ConfigError(
+                f"PostprocessConfig.pca_dim must be None when method={self.method!r}, "
+                "not just unused (avoids silently ignored config)"
+            )
+
+
+@dataclass(frozen=True)
 class EmbeddingConfig:
-    """Which embedding provider to use and how to slice its output.
+    """Which embedding provider to use, how to slice its output and how to
+    post-process it before selection.
 
     ``q`` is the extractor hyperparameter: an ``int`` for SSRAE (``13``), a
     tuple for VCTex (``(5, 17)``), or ``None`` for ResNet-ImageNet (fixed
-    2048-d penultimate layer, no ``Q``).
+    2048-d penultimate layer, no ``Q``). ``postprocess`` (ADR 0019) defaults to
+    the identity, so a params JSON without the key resolves to
+    ``{"method": "none", "pca_dim": None}`` and behaves as before the key existed.
     """
 
     extractor: str = "ssrae"
     q: int | tuple[int, ...] | None = 13
     variant: str = "full"
+    postprocess: PostprocessConfig = field(default_factory=PostprocessConfig)
 
     def __post_init__(self) -> None:
         if self.extractor not in VALID_EXTRACTORS:

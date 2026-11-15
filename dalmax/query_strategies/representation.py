@@ -40,19 +40,38 @@ same initial pool, since ids only ever move from unlabeled to labeled) and
 looks up their already-computed embeddings — equivalent to the legacy
 "extract once, delete selected ids" dance, cheaper, and with no shared
 mutable state.
+
+## Feature post-processing (ADR 0019)
+
+After the `variant` slice and right before the selection, every query passes
+the embeddings through the injected `FeaturePostprocessor`
+(`dalmax/embeddings/postprocess.py`, built from the params JSON's
+`embedding.postprocess` block by `registry.build_strategy`). It is fitted ONCE,
+at the first query, on the embeddings of the initial unlabeled pool (the same
+matrix that query hands the selection), and reused in every later round. The
+cache keeps holding the raw `"full"` vectors (key and files unchanged). The
+default, `IdentityPostprocessor` (`"none"`), returns the array itself, adds no
+log line and no `strategy_diagnostics`, and draws no random number, so a run
+without the key behaves exactly as before the block existed.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from dalmax.data_order import ordered_paths_hash
 from dalmax.embeddings.base import EmbeddingProvider
 from dalmax.embeddings.cache import EmbeddingCache, compute_pool_embeddings, pool_hash
+from dalmax.embeddings.postprocess import (
+    FeaturePostprocessor,
+    IdentityPostprocessor,
+    PostprocessSummary,
+)
 from dalmax.embeddings.variants import slice_embedding
 from dalmax.query_strategies.base import Strategy
+from dalmax.query_strategies.diagnostics import RoundDiagnostics
 from dalmax.selection.base import SelectionStrategy
 
 if TYPE_CHECKING:
@@ -82,6 +101,9 @@ class RepresentationStrategy(Strategy):
         Optional `EmbeddingCache` override (defaults to the standard
         `results/cache/embeddings` root); tests inject a `tmp_path`-scoped
         cache here.
+    postprocessor:
+        Unfitted `FeaturePostprocessor` applied before the selection (ADR
+        0019, see the module docstring); `None` (default) = the identity.
     """
 
     def __init__(
@@ -95,6 +117,7 @@ class RepresentationStrategy(Strategy):
         selection: SelectionStrategy,
         rng: np.random.Generator,
         cache: EmbeddingCache | None = None,
+        postprocessor: FeaturePostprocessor | None = None,
     ) -> None:
         super().__init__(dataset, net, logger)
         self.config = config
@@ -102,13 +125,22 @@ class RepresentationStrategy(Strategy):
         self.selection = selection
         self.rng = rng
         self.cache = cache if cache is not None else EmbeddingCache()
+        self.postprocessor = postprocessor if postprocessor is not None else IdentityPostprocessor()
         # Populated lazily on the first `query()` call (see module docstring).
         self._pool_embeddings: dict[int, np.ndarray] | None = None
+        # Reporting only (never feeds the selection); stays empty for the identity.
+        self._diagnostics = RoundDiagnostics()
+
+    def diagnostics(self) -> dict[str, list[Any]]:
+        """The post-processing summary per query round (ADR 0019); none for the identity,
+        so `results.json` of a run without post-processing has no `strategy_diagnostics`."""
+        return self._diagnostics.as_dict()
 
     def query(self, n: int) -> np.ndarray:
         current_unlabeled_ids = np.where(~self.dataset.labeled_idxs)[0]
 
-        if self._pool_embeddings is None:
+        first_query = self._pool_embeddings is None
+        if first_query:
             self._pool_embeddings = self._compute_initial_pool_embeddings(
                 current_unlabeled_ids
             )
@@ -141,10 +173,39 @@ class RepresentationStrategy(Strategy):
                 f"shape={embeddings.shape}"
             )
 
+        # Feature post-processing (ADR 0019): fitted once, on the initial unlabeled pool
+        # (= this matrix at the first query), then applied to the current pool. The
+        # identity returns `embeddings` itself.
+        if first_query:
+            self._fit_postprocessor(embeddings)
+        embeddings = self.postprocessor.transform(embeddings)
+        if not self.postprocessor.is_identity:
+            self._record_postprocessing(embeddings)
+
         selected_ids = self.selection.select(
             embeddings, current_unlabeled_ids, n, self.rng
         )
         return np.asarray(selected_ids, dtype=np.int64)
+
+    def _fit_postprocessor(self, initial_pool_embeddings: np.ndarray) -> None:
+        summary: PostprocessSummary = self.postprocessor.fit(initial_pool_embeddings)
+        if not self.postprocessor.is_identity and self.logger is not None:
+            self.logger.warning(f"Embedding post-processing (ADR 0019): {summary.describe()}")
+
+    def _record_postprocessing(self, embeddings: np.ndarray) -> None:
+        summary = self.postprocessor.summary
+        self._diagnostics.add(
+            postprocess_method=summary.method,
+            postprocess_fit_pool_size=summary.n_fit,
+            postprocess_input_dim=summary.input_dim,
+            postprocess_output_dim=summary.output_dim,
+            postprocess_guarded=summary.guarded,
+            postprocess_explained_variance=summary.explained_variance,
+        )
+        if self.logger is not None:
+            self.logger.warning(
+                f"Embedding matrix shape after post-processing ({summary.method!r}): {embeddings.shape}"
+            )
 
     def _compute_initial_pool_embeddings(
         self, initial_unlabeled_ids: np.ndarray

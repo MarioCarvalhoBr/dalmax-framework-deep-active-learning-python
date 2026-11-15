@@ -497,6 +497,17 @@ EXECUTED_SWEEP_DIGEST = "402e72cad2e22ce0bb0b60a0410380a070672a8d54ca0e1e268a12c
 # The kmh_wide part (ADR 0018) is appended to the sweep and must not move or change any of them.
 V3_MAIN_DIGEST = "d8ba3dde51c515fe0e163bd5b8e3e79adc3d1bf4e09a92739fb17712f9cba9c2"
 V3_SWEEP_DIGEST = EXECUTED_SWEEP_DIGEST
+# The same digest of the state of tag campaign-fixed-v4 (ADR 0018), computed with the v4 code on a checkout of
+# the tag: the 107 groups of the main manifest and the 68 of the sweep (the 55 executed + the 13 kmh_wide groups,
+# running on account B with v4). ADR 0019 changes `effective_signature` (a non-identity `embedding.postprocess`
+# enters it) and appends the kmh_norm part: neither may move or change any of these 175 groups (525 runs).
+V4_MAIN_DIGEST = V3_MAIN_DIGEST
+V4_MAIN_MICRO_DIGEST = "87f7bfd66c3119d0125b9451d2773c209c8c373548923db56681ac3931a58c28"
+V4_SWEEP_DIGEST = "97faccd71c1847440bc9b8c585d3d805a310c7587c0d728dc865d56c3197ddec"
+V4_SWEEP_MICRO_DIGEST = "1e64885a3fd89d79359fa418a3b638771c85fee911b6060f0e9a465993565fb0"
+# Parts appended to the sweep after each tag (only appended: the earlier groups are its prefix).
+SWEEP_PARTS_AFTER_V3 = ("kmh_wide", "kmh_norm")
+SWEEP_PARTS_AFTER_V4 = ("kmh_norm",)
 
 
 def _identity_digest(manifest: C.Manifest, groups: Sequence[C.RunGroup]) -> tuple[int, int, str]:
@@ -510,8 +521,8 @@ def test_executed_groups_keep_their_identity(both_full) -> None:
     executed = [g for g in main.groups if g.part != "texhal_q13"]
     assert list(main.groups[: len(executed)]) == executed  # the new part is appended, nothing executed moves
     assert _identity_digest(main, executed) == (99, 297, EXECUTED_MAIN_DIGEST)
-    sweep_v3 = [g for g in sweep.groups if g.part != "kmh_wide"]
-    assert list(sweep.groups[: len(sweep_v3)]) == sweep_v3  # kmh_wide is appended, nothing executed moves
+    sweep_v3 = [g for g in sweep.groups if g.part not in SWEEP_PARTS_AFTER_V3]
+    assert list(sweep.groups[: len(sweep_v3)]) == sweep_v3  # kmh_wide/kmh_norm are appended, nothing executed moves
     assert _identity_digest(sweep, sweep_v3) == (55, 165, EXECUTED_SWEEP_DIGEST)
 
 
@@ -520,8 +531,66 @@ def test_v3_groups_keep_their_identity(both_full) -> None:
     budgets, seeds, results dir and effective signature; kmh_wide only appends."""
     main, sweep = both_full
     assert _identity_digest(main, main.groups) == (107, 321, V3_MAIN_DIGEST)
-    sweep_v3 = [g for g in sweep.groups if g.part != "kmh_wide"]
+    sweep_v3 = [g for g in sweep.groups if g.part not in SWEEP_PARTS_AFTER_V3]
     assert _identity_digest(sweep, sweep_v3) == (55, 165, V3_SWEEP_DIGEST)
+
+
+def test_v4_groups_keep_their_identity(both_full) -> None:
+    """ADR 0019: the 107 + 68 groups of tag campaign-fixed-v4 (525 runs: 486 executed + 39 kmh_wide) keep id,
+    parts, stage, params, budgets, seeds, results dir and effective signature under the new signature code
+    (the identity post-processing adds nothing to it); kmh_norm only appends. Micro mirrors too."""
+    main, sweep = both_full
+    assert _identity_digest(main, main.groups) == (107, 321, V4_MAIN_DIGEST)
+    sweep_v4 = [g for g in sweep.groups if g.part not in SWEEP_PARTS_AFTER_V4]
+    assert list(sweep.groups[: len(sweep_v4)]) == sweep_v4
+    assert _identity_digest(sweep, sweep_v4) == (68, 204, V4_SWEEP_DIGEST)
+    micro_main, micro_sweep = C.load_manifest(MICRO), C.load_manifest(SWEEP_MICRO)
+    assert _identity_digest(micro_main, micro_main.groups) == (107, 321, V4_MAIN_MICRO_DIGEST)
+    micro_v4 = [g for g in micro_sweep.groups if g.part not in SWEEP_PARTS_AFTER_V4]
+    assert _identity_digest(micro_sweep, micro_v4) == (68, 204, V4_SWEEP_MICRO_DIGEST)
+
+
+def _with_postprocess(tmp_path: Path, params_json: str, postprocess: dict | None, name: str) -> str:
+    params = json.loads((REPO_ROOT / params_json).read_text())
+    if postprocess is not None:
+        params["DANINHAS"].setdefault("embedding", {})["postprocess"] = postprocess
+    path = tmp_path / f"{name}.json"
+    path.write_text(json.dumps(params))
+    return str(path)
+
+
+@pytest.mark.parametrize(
+    ("strategy", "params_json"),
+    [("RepresentationStrategy", "files_config/ablations/kmh_sweep/nq100/hier_L3_ref.json"),
+     ("SSRAEKmeansHCSampling", "files_config/campaign/params_paper1.json")],
+)
+def test_postprocess_none_keeps_the_signature_and_other_methods_change_it(
+        strategy: str, params_json: str, tmp_path: Path) -> None:
+    """ADR 0019: absent and {"method": "none"} are the pre-ADR signature; every other method is another
+    computation, and the post-processing is the only difference in the signature."""
+    def sig(postprocess: dict | None, name: str) -> str:
+        return C.effective_signature(_with_postprocess(tmp_path, params_json, postprocess, name), "DANINHAS",
+                                     strategy, 100, 100, 8)
+
+    original = C.effective_signature(params_json, "DANINHAS", strategy, 100, 100, 8)
+    assert sig(None, "absent") == sig({"method": "none"}, "none") == original
+    assert "postprocess" not in original
+    others = {m: sig(b, m) for m, b in (("l2", {"method": "l2"}), ("zscore", {"method": "zscore"}),
+                                        ("pca_l2", {"method": "pca_l2", "pca_dim": 64}))}
+    assert len(set(others.values()) | {original}) == 4
+    for method, text in others.items():
+        behavior = json.loads(text)["behavior"]
+        assert behavior.pop("postprocess")["method"] == method
+        assert behavior == json.loads(original)["behavior"]
+    assert sig({"method": "pca_l2", "pca_dim": 32}, "pca32") != others["pca_l2"]
+
+
+def test_postprocess_is_irrelevant_to_a_legacy_strategy_signature(tmp_path: Path) -> None:
+    """A strategy that never reads the embedding block keeps one signature whatever the block says."""
+    params_json = "files_config/campaign/params_paper1.json"
+    original = C.effective_signature(params_json, "DANINHAS", "RandomSampling", 100, 100, 8)
+    l2 = _with_postprocess(tmp_path, params_json, {"method": "l2"}, "l2")
+    assert C.effective_signature(l2, "DANINHAS", "RandomSampling", 100, 100, 8) == original
 
 
 # ADR 0018: the 13 kmh_wide groups -> (n_clusters, sample_sizes), in manifest order.

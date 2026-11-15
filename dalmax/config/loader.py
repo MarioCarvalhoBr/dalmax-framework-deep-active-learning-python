@@ -10,6 +10,9 @@ module. It only adds backward-compatible, optional keys per dataset:
 `{"dropout_p": <float in [0, 1)>}`; absent = the model class's own defaults), and
 `"strategy_args"` (ADR 0015: per-strategy hyperparameters, one optional sub-block per
 strategy name, e.g. `{"VAAL": {"epochs": 30}}`; absent = `StrategyArgs()` defaults).
+Inside `"embedding"`, the optional `"postprocess"` block (ADR 0019:
+`{"method": "none" | "l2" | "zscore" | "pca_l2", "pca_dim": <int, pca_l2 only>}`;
+absent = `{"method": "none"}`, the identity).
 
 Backward-compatibility rule
 ----------------------------
@@ -48,6 +51,7 @@ from dalmax.config.schema import (
     HierarchyConfig,
     ModelArgs,
     OptimizerArgs,
+    PostprocessConfig,
     SelectionConfig,
     StrategyArgs,
     TrainArgs,
@@ -122,7 +126,37 @@ _EXTRACTOR_DEFAULT_Q: dict[str, Any] = {
 }
 
 
-def _build_embedding_config(d: dict[str, Any] | None) -> EmbeddingConfig:
+_POSTPROCESS_KEYS = tuple(field.name for field in dataclasses.fields(PostprocessConfig))
+
+
+def _build_postprocess_config(d: Any, context: str) -> PostprocessConfig:
+    """Parse the optional `embedding.postprocess` block (ADR 0019; absent -> the identity).
+
+    A present block must name its `method`; fails fast on a non-object block, an
+    unknown key (`"_comment"`-style keys excepted), a non-string `method` or a
+    non-integer `pca_dim`. The method/`pca_dim` combination is checked by
+    `PostprocessConfig` (unknown method, `pca_dim` missing for `pca_l2` or set
+    for another method).
+    """
+    if d is None:
+        return PostprocessConfig()
+    if not isinstance(d, dict):
+        raise ConfigError(f"{context} must be a JSON object, got {d!r}")
+    unknown = sorted(k for k in d if k not in _POSTPROCESS_KEYS and not str(k).startswith("_"))
+    if unknown:
+        raise ConfigError(f"{context}: unknown key(s) {unknown}; valid keys: {list(_POSTPROCESS_KEYS)}")
+    _require_keys(d, ("method",), context)
+    method = d["method"]
+    if not isinstance(method, str):
+        raise ConfigError(f"{context}.method must be a string, got {method!r}")
+    pca_dim = d.get("pca_dim")
+    return PostprocessConfig(
+        method=method,
+        pca_dim=None if pca_dim is None else _as_int(pca_dim, f"{context}.pca_dim"),
+    )
+
+
+def _build_embedding_config(d: dict[str, Any] | None, context: str = "embedding") -> EmbeddingConfig:
     d = d or {}
     extractor = d.get("extractor", "ssrae")
     if "q" in d:
@@ -135,6 +169,7 @@ def _build_embedding_config(d: dict[str, Any] | None) -> EmbeddingConfig:
         extractor=extractor,
         q=q,
         variant=d.get("variant", "full"),
+        postprocess=_build_postprocess_config(d.get("postprocess"), f"{context}.postprocess"),
     )
 
 
@@ -319,7 +354,7 @@ def load_experiment_config(
     optimizer_args = _build_optimizer_args(
         dataset_dict["optimizer_args"], f"{context}.optimizer_args"
     )
-    embedding = _build_embedding_config(dataset_dict.get("embedding"))
+    embedding = _build_embedding_config(dataset_dict.get("embedding"), f"{context}.embedding")
     selection = _build_selection_config(dataset_dict, context)
     model_args = _build_model_args(dataset_dict.get("model_args"), f"{context}.model_args")
     strategy_args = _build_strategy_args(

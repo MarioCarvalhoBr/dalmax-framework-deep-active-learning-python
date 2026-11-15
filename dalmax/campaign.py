@@ -90,7 +90,11 @@ from pathlib import Path
 from typing import Any
 
 from dalmax.config.loader import load_experiment_config, to_dict
-from dalmax.config.schema import FULL_SUPERVISED_STRATEGY, STRATEGY_ARGS_READ_BY
+from dalmax.config.schema import (
+    FULL_SUPERVISED_STRATEGY,
+    POSTPROCESS_IDENTITY,
+    STRATEGY_ARGS_READ_BY,
+)
 from dalmax.data_order import relative_image_paths
 from dalmax.experiment.disk_space import (
     DISK_MARGIN,
@@ -348,6 +352,13 @@ def effective_signature(
     strategy's block are the same computation. For the groups executed
     before ADR 0015 this changes no dedup decision: their params have no
     `strategy_args`, so every block was the default anyway.
+
+    The feature post-processing of the representation strategies
+    (`embedding.postprocess`, ADR 0019) enters the behavior as a
+    `"postprocess"` key ONLY when its method is not the identity: a params
+    file without the key and one with `{"method": "none"}` have exactly the
+    signature every group had before the key existed (pinned digests in
+    `tests/test_campaign.py`), and any other method is a different computation.
     """
     config = load_experiment_config(
         _resolve_path(params_json),
@@ -379,6 +390,7 @@ def effective_signature(
             "variant": embedding["variant"],
             "selection_method": method,
             "hierarchy": selection.get("hierarchy") if method == "hierarchical" else None,
+            **_postprocess_behavior(embedding),
         }
     elif strategy_name == GENERIC_REPRESENTATION_NAME:
         method = selection["method"]
@@ -389,6 +401,7 @@ def effective_signature(
             "variant": embedding["variant"],
             "selection_method": method,
             "hierarchy": selection.get("hierarchy") if method == "hierarchical" else None,
+            **_postprocess_behavior(embedding),
         }
     else:
         behavior = {"kind": "legacy", "strategy": strategy_name}
@@ -401,6 +414,13 @@ def effective_signature(
         "n_round": n_round,
     }
     return json.dumps(_normalize(payload), sort_keys=True)
+
+
+def _postprocess_behavior(embedding: dict[str, Any]) -> dict[str, Any]:
+    """`{"postprocess": <resolved block>}` for a non-identity post-processing (ADR 0019), else `{}`,
+    so the identity leaves a representation strategy's behavior (and signature) as it was."""
+    postprocess = embedding["postprocess"]
+    return {} if postprocess["method"] == POSTPROCESS_IDENTITY else {"postprocess": postprocess}
 
 
 def _normalize(obj: Any) -> Any:

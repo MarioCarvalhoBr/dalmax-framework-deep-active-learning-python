@@ -35,6 +35,10 @@ the DeepAL+ ports of ADR 0015, and the fifth, the controls, are listed at the en
   JSON's `"embedding"`/`"selection"` keys (e.g. `resnet_imagenet` +
   `hierarchical`, `ssrae` + `flat_proportional`, an SSRAE `spatial`/`spectral`
   variant).
+- Both representation paths (presets and the generic name) get the feature
+  post-processor of `config.dataset.embedding.postprocess` (ADR 0019; built by
+  `dalmax.embeddings.registry.build_postprocessor`, the identity when the key is
+  absent), exactly as both honour `embedding.variant`.
 
 - The 8 DeepAL+ ports (`VarRatio`, `MeanSTD`, `KCenterGreedyPCA`,
   `BadgeSampling`, `CEALSampling`, `LossPredictionLoss`, `VAAL`, `WAAL`; ADR 0015)
@@ -70,7 +74,7 @@ from dalmax.config.schema import (
     ExperimentConfig,
     TrainArgs,
 )
-from dalmax.embeddings.registry import get_embedding_provider
+from dalmax.embeddings.registry import build_postprocessor, get_embedding_provider
 from dalmax.models.loss_prediction import LOSS_PREDICTION_SEED_TAG, LossPredictionTrainer
 from dalmax.models.vaal import VAAL_SEED_TAG, VAALSampler
 from dalmax.models.waal import WAAL_SEED_TAG, WAALTrainer
@@ -353,6 +357,9 @@ def _build_representation_strategy(
         embedding_provider=provider,
         selection=selection,
         rng=selection_rng,
+        # ADR 0019: the params JSON's `embedding.postprocess` (presets included, like
+        # `embedding.variant`); absent/"none" = the identity. Draws no random number.
+        postprocessor=build_postprocessor(config.dataset.embedding.postprocess),
     )
 
 
