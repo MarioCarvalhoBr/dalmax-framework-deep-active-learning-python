@@ -17,8 +17,10 @@ earlier; those result trees are archived under `local_assets/results_old/` since
   `rnhal`, `texhal`, `texhal_q17`, `hier_transfer`, `texhal_q13` (ADR 0017: TexHAL's 6.2/6.3 ablations with its
   canonical VCTex Q=13, 8 groups / 24 runs in `part_1_gpu`, appended after every executed group). **Generated**: edit `scripts/campaign/build_manifest.py` and run
   `make campaign-manifest` (`tests/test_campaign.py` and `build_manifest.py --check` fail if a committed file drifts).
-- `manifest_kmh_sweep.json` -- the paper-1 KMH sweep (ADR 0012), 165 runs / 55 groups, results under
-  `results/campaign_kmh_fixed/`, same GPU-part fields.
+- `manifest_kmh_sweep.json` -- the paper-1 KMH sweep (ADR 0012), 204 runs / 68 groups (165 / 55 before the
+  `kmh_wide` part of ADR 0018, 2026-11-15: the KMH wide-top exploration, 13 groups / 39 runs in `part_2_gpu`, ids
+  `kmh_wide/nq{N}/<config>`, appended after every executed group, results under `results/campaign_kmh_fixed/wide/`),
+  results under `results/campaign_kmh_fixed/`, same GPU-part fields.
 - `manifest_micro.json` / `manifest_kmh_sweep_micro.json` -- the same structures on `DATA/daninhas_micro/` (n_query
   3/4/5, n_init 10, n_round 1, upper bound n_init 806) for the CPU smoke; results under
   `results/smoke_campaign_fixed/` and `results/smoke_campaign_kmh_fixed/`.
@@ -27,7 +29,8 @@ earlier; those result trees are archived under `local_assets/results_old/` since
 - `gpu_time_estimates.json` -- estimated GPU seconds per run of every group of the two full-scale manifests
   (`measured` on the first campaign, or `estimate` with its rule for the eight DeepAL+ strategies and the WAAL
   control, which is estimated equal to `WAAL`, and for the `texhal_q13` groups, each equal to its measured
-  `texhal_q17` twin, `TWIN_PREFIXES`); built by
+  `texhal_q17` twin, `TWIN_PREFIXES`, and for the `kmh_wide` groups, a least-squares line in the total number of
+  clusters over the measured sweep groups of the same query size and number of levels, `FIT_PREFIXES`); built by
   `scripts/campaign/build_gpu_time_estimates.py` (`make gpu-time-estimates`, read-only on the old trees). Used by
   `campaign list` (hours per part / GPU part) and by the balance test. No GPU model is named.
 
@@ -50,8 +53,8 @@ paper-1 micro files for smoke speed):
 
 GPU parts (ADR 0016): `part_1_gpu` (account A: paper 1 at nq100, the upper bound, every ablation part, KMH sweep nq100
 and nq50, the WAAL control, `texhal_q13`; 309 runs / 103 groups, about 51.3 estimated GPU h; 285 / 95 before ADR 0017) and `part_2_gpu` (account B: paper 1 at nq50 and
-nq10, KMH sweep nq10;
-177 runs, about 48.8 h). `make campaign-run-gpu-part GPU_PART=...` runs both manifests for one part in stage order
+nq10, KMH sweep nq10, `kmh_wide`;
+216 runs / 72 groups, about 58.0 h; 177 / 59 and 48.8 h before ADR 0018). `make campaign-run-gpu-part GPU_PART=...` runs both manifests for one part in stage order
 (cheap groups, ablations, KMH sweep, then `AdversarialBIM`, `VAAL`/`WAAL`/the WAAL control, `AdversarialDeepFool`);
 run `make campaign-pilot GPU_PART=...` first (seed 1 of the part's VAAL/WAAL groups + RandomSampling; not the
 control) and read

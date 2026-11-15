@@ -233,7 +233,7 @@ The first is the winner of the KMH sweep stage 2 at nq100 (same hierarchy as the
 `n_resamples=0`. Executed only through the campaign (`make campaign-run PART=hier_transfer`); validated by
 `tests/test_ablation_configs.py`.
 
-## `kmh_sweep/` (2026-11-07; stage 1 executed 2026-11-07/08, stage 2 executed 2026-11-09/10, 165/165 verified)
+## `kmh_sweep/` (2026-11-07; stage 1 executed 2026-11-07/08, stage 2 executed 2026-11-09/10, 165/165 verified; `kmh_wide` prepared 2026-11-15)
 
 Paper-1 KMH parameter sweep, stage 1 (45 configs per scale) plus stage 2 (nq100 only, 10 more configs, 2026-11-08; 55 per scale in total) in `nq{10,50,100}/` (hierarchy axis
 `hier_*`, knob axis `<hier>__{init_random,leaf_closest,no_resampling,resample_random}`) plus the CPU
@@ -241,3 +241,13 @@ mirror in `micro/nq{N}/`. **Generated** by `scripts/campaign/build_kmh_sweep_con
 (`make kmh-sweep-configs`; do not edit by hand, `tests/test_kmh_sweep_configs.py` fails on drift). Run only
 through `files_config/campaign/manifest_kmh_sweep.json`; grid, `sample_sizes` rule and commands in
 `.specs/experiments/campaign.md` ("KMH parameter sweep").
+
+**`kmh_wide` (2026-11-15, ADR 0018; prepared, not executed).** 13 more configs per scale, generated from
+`build_kmh_sweep_configs.py::WIDE_POINTS` into the same `nq{N}/` folders (every earlier file byte-identical; no name
+collides with a stage-1/2 file of the same budget): nq10 `hier_L3_k600_200_10`, `hier_L2_k600_10`, `hier_L1_k1200`,
+`hier_L1_k2400`, `hier_L3_k1200_400_10`; nq50 `hier_L3_k600_200_50`, `hier_L2_k600_50`, `hier_L1_k1200`,
+`hier_L1_k2400`, `hier_L3_k1200_400_50`; nq100 `hier_L1_k1200`, `hier_L1_k2400`, `hier_L3_k1200_400_100`. Sample sizes
+by the same `max(2, round_half_up(0.05 k))` rule, every knob at its default. Run as the campaign part `kmh_wide`
+(ids `kmh_wide/nq{N}/<config>`, results under `results/campaign_kmh_fixed/wide/`, `part_2_gpu`):
+`make campaign-run-gpu-part GPU_PART=part_2_gpu`, or
+`make campaign-run MANIFEST=files_config/campaign/manifest_kmh_sweep.json PART=kmh_wide` on the sweep alone.

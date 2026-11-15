@@ -70,6 +70,8 @@ make lab-check GPU=0                  # one short real-data GPU run (n_round=1) 
 # main manifest 297 runs / 99 groups (incl. the 3-run WAAL control) -> results/campaign_fixed/, KMH sweep 165 / 55
 # -> results/campaign_kmh_fixed/; those 462 runs were executed and verified (2026-11-15). Since ADR 0017 (2026-11-15)
 # the main manifest also has the part texhal_q13 (24 runs, part_1_gpu, prepared, not executed): 321 / 107, 486 in total;
+# since ADR 0018 (2026-11-15) the KMH sweep also has the part kmh_wide (39 runs, part_2_gpu, prepared, not executed):
+# 204 / 68, part_2_gpu 216 / 72, 525 in total, tag campaign-fixed-v4;
 # two GPU parts, one per Colab account (see .specs/experiments/campaign.md and COLAB_RUNBOOK.md section 6):
 make campaign-list-gpu-part GPU_PART=part_1_gpu     # both manifests in plan order + est. GPU hours (account B: part_2_gpu)
 make campaign-space-gpu-part GPU_PART=part_1_gpu    # free space vs remaining runs x 96 MB x 1.2 (exit 4 when short; read only)
@@ -79,13 +81,13 @@ make campaign-run-gpu-part GPU_PART=part_1_gpu      # cheap groups, ablations, K
                                                     #   (refuses to start / stops with exit 4 when the Drive is short of space)
 make campaign-verify-gpu-part GPU_PART=part_1_gpu   # OK/INCOMPLETE/MISSING (integrity problems = INCOMPLETE) + git_commit audit
                                                     #   (WARN only) + seed audit (image paths) + data-order audit (0/1/2)
-make campaign-verify-all                            # after merging both parts locally: expect OK=486 (OK=462 + MISSING=24 until texhal_q13 runs),
-                                                    #   two commits after texhal_q13 (v2, v3: expected WARN, ADR 0017), both audits PASS, + the
+make campaign-verify-all                            # after merging both parts locally: expect OK=525 (OK=462 + MISSING=63 = 24 texhal_q13 + 39 kmh_wide
+                                                    #   until they run), up to three commits (v2, v3, v4: expected WARN, ADR 0017/0018), both audits PASS, + the
                                                     #   3 intentional KMH duplicate pairs (SAME/DIFFERENT, informational)
 make campaign-report-all                            # docs/results/campaign_fixed/ + docs/results/campaign_kmh_fixed/
 make campaign-list                                  # main manifest alone; PART=paper1|paper1_control|upper_bound|rnhal|texhal|texhal_q17|hier_transfer|texhal_q13
                                                     #   (comma-separated ok) or PART=part_1_gpu|part_2_gpu
-make campaign-list MANIFEST=files_config/campaign/manifest_kmh_sweep.json     # the KMH sweep alone (ADR 0012)
+make campaign-list MANIFEST=files_config/campaign/manifest_kmh_sweep.json     # the KMH sweep alone (ADR 0012); PART=kmh_nq100|kmh_nq50|kmh_nq10|kmh_wide
 make campaign-list MANIFEST=files_config/campaign/manifest_control_ki43.json  # KI-43 control (prepared, not run)
 make campaign-smoke-gpu-part GPU_PART=part_2_gpu    # micro plan of one GPU part on CPU (seed 1), skips AdversarialBIM/DeepFool
 make campaign-smoke / campaign-smoke-kmh            # micro main manifest / micro KMH sweep on CPU (seed 1)
@@ -250,10 +252,24 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   `6_2_q17`/`6_3_q17`; 6.1 rows relabelled `Q=13 (TexHAL)` / `Q=17`; the TexHAL comparison row of papers 2 and 3 is
   "TexHAL (VCTex Q=13 + hierarchical)". Notebook: `GIT_REF` `campaign-fixed-v3`, `EXPECTED` part_1_gpu (309, 103),
   `ZIP_ONLY_PART`; the code-version audit of account A then lists two commits (expected WARN). `COLAB_RUNBOOK.md` 6e.
+- **KMH wide-top exploration (2026-11-15, branch `feat/kmh-wide`, ADR 0018; prepared, not executed)**: on the clean
+  campaign paper 1's KMH is below WAAL at every query size (best KMH sweep configuration vs WAAL: nq100 0.7921 vs
+  0.8077, nq50 0.7146 vs 0.7874, nq10 0.5627 vs 0.5793). New part `kmh_wide` of the KMH sweep manifest: 13 groups / 39
+  runs, ids `kmh_wide/nq{N}/<config>`, results `results/campaign_kmh_fixed/wide/nq{N}/<config>/`, `part_2_gpu` (account
+  B: its Drive holds the ImageNet feature cache, whose key does not depend on `n_query`), stage 3; (a) wide top with
+  the last level = n_query at nq10/nq50 (`[600,200,nq]`, `[600,nq]`), (b) wider top at nq 10/50/100 (L=1 `k=1200`,
+  `k=2400`; L=3 `[1200,400,nq]`); sample sizes by the sweep's 0.05 rule, other knobs default; params
+  `files_config/ablations/kmh_sweep/nq{N}/`. Estimates by a linear fit in the total number of clusters (9.2 GPU h).
+  Report tables `kmh_wide_nq{100,50,10}`. Sweep 204 / 68, `part_2_gpu` 216 / 72, 525 in total; the v3 groups keep their
+  identity (digest test). Engine: only `kmh_wide` in `PARTS`/`PHASE_LABELS`. Notebook: `GIT_REF` `campaign-fixed-v4`,
+  `EXPECTED` part_2_gpu (216, 72), `ZIP_ONLY_PART = "kmh_wide"`; account B's audit lists two commits (v2, v4), the
+  merged one up to three. Paper 1's KMH row (thesis rule) then ranges over `kmh_nq{N}` + `kmh_wide`; a configuration
+  chosen from it is selected on the test set and is confirmed on seeds 4-6 with RandomSampling and WAAL before any claim
+  (planned, not built). `COLAB_RUNBOOK.md` 6f.
 
 Next milestone: execute the clean re-run (`COLAB_RUNBOOK.md` section 6), then rewrite the thesis numbers from its reports; advisor review of the ablation section
 (`paper_drafts/ablation_section.tex`, weighted-primary/macro-secondary framing still pending
-confirmation, see `.specs/experiments/ablation-study.md`), of the TexHAL `Q=17` decision (already executed and tabulated; superseded by `Q=13`, ADR 0017, whose 24-run `texhal_q13` part is to be executed next, `COLAB_RUNBOOK.md` section 6e) and of the RNHAL
+confirmation, see `.specs/experiments/ablation-study.md`), of the TexHAL `Q=17` decision (already executed and tabulated; superseded by `Q=13`, ADR 0017, whose 24-run `texhal_q13` part is to be executed next, `COLAB_RUNBOOK.md` section 6e, like the 39-run `kmh_wide` part of ADR 0018 on account B, section 6f) and of the RNHAL
 `L=4` hierarchy; a lab-machine smoke run confirming the Phase 4 and `tools/` moves is still separately
 outstanding.
 
@@ -343,7 +359,8 @@ outstanding.
   runs / 99 groups (paper1 189 = 20 strategies + KMH x nq {10,50,100}; paper1_control 3 = `WAALRandomQuery` nq100,
   2026-11-12; upper_bound 3 with `n_init_labeled` 7,230; rnhal 42, texhal 30, texhal_q17 18, hier_transfer 12; since ADR
   0017, 2026-11-15, also texhal_q13 24, so 321 / 107) under `results/campaign_fixed/`, and `manifest_kmh_sweep.json`
-  165 / 55 under `results/campaign_kmh_fixed/`. Every group of both carries `gpu_part` (`part_1_gpu` = paper 1 nq100,
+  165 / 55 under `results/campaign_kmh_fixed/` (since ADR 0018, 2026-11-15, also kmh_wide 39 under `wide/`, so 204 / 68,
+  all of kmh_wide in `part_2_gpu`). Every group of both carries `gpu_part` (`part_1_gpu` = paper 1 nq100,
   upper bound, all ablations, sweep nq100+nq50; `part_2_gpu` = paper 1 nq50+nq10, sweep nq10) and `gpu_stage`
   (1 cheap paper-1, 2 ablations, 3 KMH sweep, 4 BIM, 5 VAAL/WAAL/WAAL control, 6 DeepFool); `--part part_N_gpu` selects by it,
   `--manifest A,B` merges manifests into one plan. Params: dropout family (4 MC-dropout + `VarRatio`, `MeanSTD`)

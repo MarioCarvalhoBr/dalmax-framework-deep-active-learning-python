@@ -270,6 +270,11 @@ Only proceed to §6 (the campaign) once all of the above pass.
 > counts below are those of that plan; with the new part `texhal_q13` the notebook (tag `campaign-fixed-v3`) expects
 > `part_1_gpu` = 309 runs / 103 groups (account A) and `part_2_gpu` unchanged (177 / 59), 486 in total. Account A runs
 > the 24 new runs as described in section 6e; account B has nothing left to run.
+>
+> **2026-11-15 (ADR 0018).** With the new part `kmh_wide` of the KMH sweep the notebook (tag `campaign-fixed-v4`)
+> expects `part_2_gpu` = 216 runs / 72 groups (account B) and `part_1_gpu` unchanged (309 / 103), 525 in total.
+> Account B runs the 39 new runs as described in section 6f. Account A may run `texhal_q13` with either tag, v3 or v4
+> (the trainer code is identical); the merged code-version audit then lists up to three commits, all explained.
 
 **Prepared 2026-11-11, not executed.** Everything the three papers need is re-run on the duplicate-free dataset
 (KI-46), no old result reused: the main manifest (`files_config/campaign/manifest.json`, 297 runs / 99 groups: paper 1
@@ -398,8 +403,9 @@ except the long baselines' rows. Add about 15 minutes per session for sections 0
   `!grep -h -A5 '"data_order"' results/campaign_fixed/daninhas_full_fixed/SEED_1/*/*/run_metadata.json`
 - **Before zipping**, `make campaign-verify-gpu-part` must print no integrity problem (`INCOMPLETE ... (integrity:`)
   and no code-version `WARN:` line (more than one `git_commit`, or a leaf without one). The zip cell already refuses
-  an incomplete part; the commit warning is only printed, so read it. One explained exception: account A after the
-  `texhal_q13` runs (section 6e) lists two commits, v2 and v3.
+  an incomplete part; the commit warning is only printed, so read it. Explained exceptions: account A after the
+  `texhal_q13` runs (section 6e) lists two commits, v2 and v3 (or v4); account B after the `kmh_wide` runs (section
+  6f) lists two commits, v2 and v4.
 
 **Optional per-account report**: `!make campaign-report-all` on one account renders the tables of its part only (rows of
 the other part read `TBD`).
@@ -453,6 +459,63 @@ so the features should be loaded rather than recomputed; a recompute would only 
                                          # seed and data-order audits PASS, the 3 KMH duplicate pairs SAME
    make campaign-report-all              # paper 2 tables 6_2 / 6_3 now Q=13; 6_2_q17 / 6_3_q17 supplementary
    ```
+
+   **Either tag works for this part.** `campaign-fixed-v4` (ADR 0018, section 6f) only adds the `kmh_wide` part of the
+   KMH sweep; the code a `tools/trainer.py` run executes is identical to v3's. If account A started `texhal_q13` with
+   the v3 notebook it may finish with it (or switch to v4 between sessions); the code-version audit then lists the v2
+   commit plus the v3 and/or v4 commit, each explained by ADR 0017 / ADR 0018.
+
+## 6f. KMH wide-top exploration (`kmh_wide`, account B)
+
+**Prepared 2026-11-15, not executed.** ADR 0018: paper 1's KMH is below WAAL at every query size on the clean
+campaign, and the 55 executed sweep groups favour wide first levels. The new part `kmh_wide` of the KMH sweep manifest
+explores two directions: 13 groups / **39 runs** (nq 10, 50 and 100; seeds 1-3) into
+`results/campaign_kmh_fixed/wide/nq{N}/<config>/`, in `part_2_gpu` at the sweep's stage (about 9.2 estimated GPU h,
+a linear fit in the number of clusters; the one-level `k=2400` runs are the longest, about 23 minutes each). They run
+on **account B**, whose Drive already holds the 177 complete leaves of `part_2_gpu` and the ImageNet ResNet-50 feature
+cache of seeds 1-3 written by the nq10 sweep (the cache key is dataset, extractor, data order and the INITIAL pool of
+the seed; it does not depend on the query size or the hierarchy, so the features are loaded, not recomputed).
+
+1. **Upload the regenerated notebook** (`notebooks/colab_runbook.ipynb` of tag `campaign-fixed-v4`) to account B's
+   Colab, replacing the earlier copy.
+2. **Parameters cell** (account B): `DRIVE_ROOT` = account B's folder (the one holding `DATA/daninhas_full_fixed/`
+   and `results/`), `GPU_PART = "part_2_gpu"`, `GIT_REF = "campaign-fixed-v4"` (the notebook default), and
+   **`PILOT_REVIEWED = True`** (the pilot was reviewed in the first execution; its leaves are complete). The banner
+   must print `expect 216 runs (72 run groups)`.
+3. **Run all.** Sections 0-5 as usual (section 2 must print the v4 commit). The list cell ends with
+   `TOTAL 216 runs (72 run groups)`; the pre-run gate passes (no leaf of `part_1_gpu` on this Drive; the space check
+   needs only the 39 remaining runs, about 4.5 GB). The pilot cell prints `SKIP` for its 3 jobs (`p1/RandomSampling/nq50`,
+   `p1/VAAL/nq50`, `p1/WAAL/nq50`, seed 1: complete). The run cell prints `SKIP` for every one of the **177** executed
+   leaves and runs only the **39** `kmh_wide/...` jobs. The plan has three segments, each with its own `CAMPAIGN END`
+   line: main manifest stage 1 (102 jobs, all skipped), the KMH sweep (90 jobs: `executed=39 skipped=51 failed=0`) and
+   the main manifest's long baselines (24 jobs, all skipped). Resume after a session drop = re-run, as in section 6.
+4. **Verify** (`make campaign-verify-gpu-part GPU_PART=part_2_gpu`): expect `Totals: OK=216 INCOMPLETE=0 MISSING=0`,
+   seed audit PASS for seeds 1-3, data-order audit PASS (one order). **The code-version audit lists TWO commits**
+   (`464a5cc` = `campaign-fixed-v2` for the 177 earlier leaves, the `campaign-fixed-v4` commit for the 39 new ones) and
+   prints a `WARN:` line: expected and explained (ADR 0018: between the tags only the campaign's part registry,
+   manifests, configs, estimates, notebook, tests and docs changed; nothing a `tools/trainer.py` run executes). Any
+   other commit, or a leaf without one, is not expected: stop and report.
+5. **Zip only the new part**: in the zip cell set `ZIP_ONLY_PART = "kmh_wide"` (leave `ZIP_PARTIAL = False`). It still
+   requires `OK=216` for the whole part, then writes `/content/part_2_gpu__kmh_wide.zip` with only
+   `results/campaign_kmh_fixed/wide/` plus `results/campaign_kmh_fixed/campaign_part_2_gpu__kmh_wide.log` and
+   `failures_part_2_gpu__kmh_wide.log` (the sweep root's full logs under new names, so they never collide with the
+   `campaign_part_2_gpu.log` already merged locally), checks **39** checkpoints, and copies it to `<DRIVE_ROOT>/`.
+   Download it.
+6. **Merge locally and verify**:
+
+   ```bash
+   cd <repo root>
+   unzip -n part_2_gpu__kmh_wide.zip     # -n: never overwrite; only new leaves and the two new log names
+   make campaign-verify-all              # with texhal_q13 also merged: expect OK=525 INCOMPLETE=0 MISSING=0;
+                                         # without it: OK=501 MISSING=24 (the texhal_q13 jobs, listed by name);
+                                         # up to three commits (WARN, expected), seed and data-order audits PASS,
+                                         # the 3 KMH duplicate pairs SAME
+   make campaign-report-all              # KMH sweep report gains the tables kmh_wide_nq100 / _nq50 / _nq10
+   ```
+
+   Reading the result: a `kmh_wide` configuration that beats the executed sweep at some query size was selected on the
+   test set; before any claim against WAAL it is confirmed on new seeds (4, 5, 6) with `RandomSampling` and `WAAL`
+   (ADR 0018, a later part, not prepared yet).
 
 ---
 
