@@ -203,14 +203,17 @@ def test_matches_the_campaign_fixed_v4_class(case: str, tmp_path: Path) -> None:
     assert old.diagnostics() == new.diagnostics() == {}
 
 
+@pytest.mark.parametrize("case", ["ssrae-full", "ssrae-spatial", "vctex-full", "resnet_imagenet-full"])
 @pytest.mark.parametrize(("method", "pca_dim"), [("l2", None), ("zscore", None), ("pca_l2", 3)])
-def test_non_identity_is_fitted_once_on_the_initial_pool(method: str, pca_dim: int | None, tmp_path: Path) -> None:
-    """The fit happens at the first query on the initial pool's matrix; later rounds reuse it. The
-    diagnostics carry one entry per query round."""
+def test_non_identity_is_fitted_once_on_the_initial_pool(method: str, pca_dim: int | None, case: str,
+                                                         tmp_path: Path) -> None:
+    """For every extractor (and after the SSRAE variant slice): the fit happens at the first query on the initial
+    pool's matrix; later rounds reuse it. The diagnostics carry one entry per query round."""
+    variant, factory = CASES[case]
     config = PostprocessConfig(method=method, pca_dim=pca_dim)
-    strategy, spy, _ = _run(RepresentationStrategy, "full", SSRAEProvider(q=2, device="cpu"), tmp_path / "cache",
+    strategy, spy, _ = _run(RepresentationStrategy, variant, factory(), tmp_path / "cache",
                             postprocessor=build_postprocessor(config))
-    raw = _v4_reference_arrays(SSRAEProvider(q=2, device="cpu"), "full", spy.calls)
+    raw = _v4_reference_arrays(factory(), variant, spy.calls)
     reference = build_postprocessor(config)
     reference.fit(raw[0])  # the initial unlabeled pool
     for (got, _), raw_round in zip(spy.calls, raw, strict=True):
