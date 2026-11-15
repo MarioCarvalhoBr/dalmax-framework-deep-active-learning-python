@@ -156,8 +156,16 @@ def _build_postprocess_config(d: Any, context: str) -> PostprocessConfig:
     )
 
 
+_EMBEDDING_KEYS = ("extractor", "q", "variant", "postprocess")
+
+
 def _build_embedding_config(d: dict[str, Any] | None, context: str = "embedding") -> EmbeddingConfig:
     d = d or {}
+    # Fail fast on a misspelled key (e.g. "post_process"): it would otherwise fall back to the
+    # default silently and a post-processing group would rerun the reference (ADR 0019).
+    unknown = sorted(k for k in d if k not in _EMBEDDING_KEYS and not str(k).startswith("_"))
+    if unknown:
+        raise ConfigError(f"{context}: unknown key(s) {unknown}; valid keys: {list(_EMBEDDING_KEYS)}")
     extractor = d.get("extractor", "ssrae")
     if "q" in d:
         q = d["q"]

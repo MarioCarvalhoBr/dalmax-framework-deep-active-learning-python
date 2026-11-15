@@ -584,3 +584,17 @@ def test_to_dict_round_trips_hierarchy_knobs(tmp_path):
     as_dict = json.loads(json.dumps(to_dict(_load(params_path, "DANINHAS"))))
     hierarchy = as_dict["dataset"]["selection"]["hierarchy"]
     assert {k: hierarchy[k] for k in knobs} == knobs
+
+
+def test_embedding_block_rejects_a_misspelled_key():
+    """A misspelled key of the embedding block must fail fast (ADR 0019): a silent fallback to the
+    default would make a post-processing group rerun the reference."""
+    from dalmax.config.loader import _build_embedding_config
+
+    with pytest.raises(ConfigError, match="post_process"):
+        _build_embedding_config({"extractor": "resnet_imagenet", "post_process": {"method": "l2"}})
+    # "_comment"-style keys stay allowed, and the known keys still parse.
+    config = _build_embedding_config(
+        {"_comment": "note", "extractor": "resnet_imagenet", "postprocess": {"method": "l2"}}
+    )
+    assert config.postprocess.method == "l2"
