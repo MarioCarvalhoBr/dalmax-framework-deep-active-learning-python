@@ -50,7 +50,10 @@ REPO_URL = "https://github.com/MarioCarvalhoBr/dalmax-framework-deep-active-lear
 # `WAALRandomQuery` and the `daninhas_full_fixed` metadata layout (logs/); v1 predates both. v3 (ADR 0017,
 # 2026-11-15) = v2 + the `texhal_q13` part (24 runs in part_1_gpu) with the run-affecting code unchanged; the
 # 285 earlier leaves of part_1_gpu keep the v2 commit, so verify lists two commits there (an explained WARN).
-DEFAULT_GIT_REF = "campaign-fixed-v3"
+# v4 (ADR 0018, 2026-11-15) = v3 + the `kmh_wide` part of the KMH sweep (39 runs in part_2_gpu), run-affecting
+# code unchanged again: the 177 earlier leaves of part_2_gpu keep the v2 commit (two commits there, explained);
+# v3 stays valid for texhal_q13 on account A (identical trainer code).
+DEFAULT_GIT_REF = "campaign-fixed-v4"
 RUN_EXIT_FILE = "/content/campaign_run_exit_code"  # local runtime disk, not the repo or Drive
 DRIVE_ROOT_PLACEHOLDER = "/content/drive/MyDrive/<FOLDER_THAT_HOLDS_DATA>"
 # The author's Drive folder, the same on both accounts (author instruction 2026-11-12): the second assignment in
@@ -60,9 +63,13 @@ DATASET = "daninhas_full_fixed"
 # Images per split of daninhas_full_fixed (scripts/colab/setup_colab.sh checks the same counts); the folder also
 # holds README.txt, MANIFEST.csv and logs/ (2 files), which `make dataset-check` verifies against the images.
 DATASET_SPLIT_IMAGES: dict[str, int] = {"train": 7230, "test": 1008}
-# Semantic parts the zip cell can ship alone (`ZIP_ONLY_PART`, ADR 0017): every group of the part lives under
-# `<main results root>/<part>/` and no group of another part does, so that folder is exactly the part's leaves.
-ZIP_ONLY_PARTS: tuple[str, ...] = ("texhal_q13",)
+# Semantic parts the zip cell can ship alone (`ZIP_ONLY_PART`, ADR 0017): part -> (its manifest, the folder under
+# that manifest's results root holding its groups). Every group of the part lives under that folder and no group
+# of another part does, so the folder is exactly the part's leaves. `kmh_wide` (ADR 0018) lives in the sweep.
+ZIP_ONLY_PARTS: dict[str, tuple[str, str]] = {
+    "texhal_q13": (MANIFESTS[0], "texhal_q13"),
+    "kmh_wide": (MANIFESTS[1], "wide"),
+}
 
 
 def expected_counts() -> dict[str, tuple[int, int]]:
@@ -85,11 +92,11 @@ def manifest_totals() -> list[tuple[int, int]]:
 
 
 def zip_only_parts() -> dict[str, dict[str, Any]]:
-    """`{part: {gpu_part, dir, root, runs}}` of `ZIP_ONLY_PARTS`, checked against the main manifest's layout."""
-    manifest = load_manifest(REPO_ROOT / MANIFESTS[0], validate=False)
+    """`{part: {gpu_part, dir, root, runs}}` of `ZIP_ONLY_PARTS`, checked against its manifest's layout."""
     found: dict[str, dict[str, Any]] = {}
-    for part in ZIP_ONLY_PARTS:
-        folder = f"{manifest.results_root}/{part}"
+    for part, (path, subfolder) in ZIP_ONLY_PARTS.items():
+        manifest = load_manifest(REPO_ROOT / path, validate=False)
+        folder = f"{manifest.results_root}/{subfolder}"
         own = [g for g in manifest.groups if g.part == part]
         inside = [g for g in manifest.groups if g.dir_results.startswith(folder + "/")]
         gpu_parts = {g.gpu_part for g in own}
@@ -124,7 +131,7 @@ ZIP_CELL = '''
     import subprocess
 
     ZIP_PARTIAL = False  # True only to ship an incomplete part on purpose (e.g. no credits left)
-    ZIP_ONLY_PART = ""  # "" = the whole GPU part; e.g. "texhal_q13" = only that part's leaves (COLAB_RUNBOOK.md 6e)
+    ZIP_ONLY_PART = ""  # "" = the whole GPU part; "texhal_q13" (A) / "kmh_wide" (B) = that part only (6e / 6f)
     ZIP_ONLY_PARTS = __ZIP_ONLY_PARTS__
     if ZIP_ONLY_PART:
         if ZIP_ONLY_PART not in ZIP_ONLY_PARTS:
@@ -438,8 +445,9 @@ def cells() -> list[dict[str, Any]]:
             {main_groups + sweep_groups} run groups over two manifests (main campaign {main_runs} / {main_groups} into
             `{roots[0]}/`, including the 3 runs of the WAAL control `WAALRandomQuery` and, since ADR 0017, the 24 runs
             of the `texhal_q13` part (TexHAL's ablations with its canonical VCTex Q=13); KMH sweep {sweep_runs} /
-            {sweep_groups} into `{roots[1]}/`), split into two GPU parts of about equal estimated GPU time, one per
-            Colab account:
+            {sweep_groups} into `{roots[1]}/`, including since ADR 0018 the 39 runs of the `kmh_wide` part, the KMH
+            wide-top exploration, under `{roots[1]}/wide/`), split into two GPU parts, one per Colab account (of about
+            equal estimated GPU time before the two later parts):
 
             | GPU part | Account | Runs | Run groups |
             |---|---|---|---|
@@ -559,9 +567,11 @@ def cells() -> list[dict[str, Any]]:
             index the same ordered image lists, KI-47). A leaf with an integrity problem (truncated or empty file, wrong
             round count) is `INCOMPLETE (integrity: ...)` and is re-run by the run cell. The code-version audit lists the
             `git_commit` of the OK leaves: it must show ONE commit (the one printed by section 2) and no `WARN:` line.
-            One explained exception (ADR 0017): on account A, after the `texhal_q13` runs, it lists TWO commits (the
-            `campaign-fixed-v2` commit of the 285 earlier leaves and the `campaign-fixed-v3` commit of the 24 new ones)
-            and a `WARN:` line; that is expected (the run-affecting code is identical, `COLAB_RUNBOOK.md` section 6e).
+            Explained exceptions (ADR 0017, ADR 0018): on account A, after the `texhal_q13` runs, it lists TWO commits
+            (the `campaign-fixed-v2` commit of the 285 earlier leaves and the `campaign-fixed-v3` or `campaign-fixed-v4`
+            commit of the 24 new ones; three if both tags were used); on account B, after the `kmh_wide` runs, TWO
+            commits (`campaign-fixed-v2` for the 177 earlier leaves, `campaign-fixed-v4` for the 39 new ones); each with
+            a `WARN:` line. That is expected (the run-affecting code is identical, `COLAB_RUNBOOK.md` sections 6e/6f).
             Exit code 0 = all OK, 1 = an incomplete/missing job or a FAIL audit, 2 = only audit WARNs. Re-run the run
             cell to redo failed or missing jobs.
             """),
@@ -574,13 +584,14 @@ def cells() -> list[dict[str, Any]]:
             zip is about as large as the results (~95 MB per run).
 
             `ZIP_ONLY_PART` (ADR 0017; default `""` = the whole GPU part, as above) ships ONE semantic part whose
-            leaves were added after the rest of the GPU part was downloaded: e.g. `ZIP_ONLY_PART = "texhal_q13"` zips
-            only that part's results folder plus this account's `campaign.log` / `failures.log` renamed to
+            leaves were added after the rest of the GPU part was downloaded: e.g. `ZIP_ONLY_PART = "texhal_q13"`
+            (account A) or `"kmh_wide"` (account B) zips only that part's results folder plus the `campaign.log` /
+            `failures.log` of the results root holding it, renamed to
             `campaign_<GPU_PART>__<ZIP_ONLY_PART>.log` / `failures_<GPU_PART>__<ZIP_ONLY_PART>.log` (new names, so a
             local `unzip -n` adds them next to the earlier `campaign_<GPU_PART>.log`) into
             `/content/<GPU_PART>__<ZIP_ONLY_PART>.zip`, and checks its checkpoint count against the part's runs. The
             verify gate still covers the whole GPU part. Parts allowed: {zip_parts_text}. See `COLAB_RUNBOOK.md`
-            section 6e.
+            sections 6e and 6f.
             """),
         code(ZIP_CELL.replace("__ZIP_ONLY_PARTS__", repr(zip_parts))),
         md("""
