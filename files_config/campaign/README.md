@@ -8,12 +8,14 @@ earlier; those result trees are archived under `local_assets/results_old/` since
 - `manifest.json` -- the single source of truth for the campaign: run groups (one distinct computation each), aliases
   (same computation, different spelling), per-paper tables, the GPU part of every group (`gpu_part`, `gpu_stage`), the
   per-leaf required files (`required_leaf_files`: `round_predictions.json`, `round_queries.json`) and the GPU-time
-  estimate table it uses (`gpu_time_estimates`). Results under `results/campaign_fixed/`. 297 runs / 99 groups:
+  estimate table it uses (`gpu_time_estimates`). Results under `results/campaign_fixed/`. 321 runs / 107 groups
+  (297 / 99 before the `texhal_q13` part of ADR 0017, 2026-11-15):
   paper 1 = 20 strategies (12 classical + 8 DeepAL+ of ADR 0015) + KMH x nq {10,50,100} + the upper bound; the paper-1
   control part `paper1_control` = `WAALRandomQuery` at nq100 (3 runs, `p1_control/WAALRandomQuery/nq100`, WAAL's
   training with a uniform random query, its own table `paper1_waal_control_nq100` with WAAL and RandomSampling, never a
   row or `best_of` candidate of the benchmark tables; ADR 0015 amendment of 2026-11-12); papers 2/3 =
-  `rnhal`, `texhal`, `texhal_q17`, `hier_transfer`. **Generated**: edit `scripts/campaign/build_manifest.py` and run
+  `rnhal`, `texhal`, `texhal_q17`, `hier_transfer`, `texhal_q13` (ADR 0017: TexHAL's 6.2/6.3 ablations with its
+  canonical VCTex Q=13, 8 groups / 24 runs in `part_1_gpu`, appended after every executed group). **Generated**: edit `scripts/campaign/build_manifest.py` and run
   `make campaign-manifest` (`tests/test_campaign.py` and `build_manifest.py --check` fail if a committed file drifts).
 - `manifest_kmh_sweep.json` -- the paper-1 KMH sweep (ADR 0012), 165 runs / 55 groups, results under
   `results/campaign_kmh_fixed/`, same GPU-part fields.
@@ -24,7 +26,8 @@ earlier; those result trees are archived under `local_assets/results_old/` since
   `results/campaign_control_fixed/`.
 - `gpu_time_estimates.json` -- estimated GPU seconds per run of every group of the two full-scale manifests
   (`measured` on the first campaign, or `estimate` with its rule for the eight DeepAL+ strategies and the WAAL
-  control, which is estimated equal to `WAAL`); built by
+  control, which is estimated equal to `WAAL`, and for the `texhal_q13` groups, each equal to its measured
+  `texhal_q17` twin, `TWIN_PREFIXES`); built by
   `scripts/campaign/build_gpu_time_estimates.py` (`make gpu-time-estimates`, read-only on the old trees). Used by
   `campaign list` (hours per part / GPU part) and by the balance test. No GPU model is named.
 
@@ -46,7 +49,7 @@ paper-1 micro files for smoke speed):
   (paper 1), which are also papers 2/3's "w/o representation module" row.
 
 GPU parts (ADR 0016): `part_1_gpu` (account A: paper 1 at nq100, the upper bound, every ablation part, KMH sweep nq100
-and nq50, the WAAL control; 285 runs, about 49.9 estimated GPU h) and `part_2_gpu` (account B: paper 1 at nq50 and
+and nq50, the WAAL control, `texhal_q13`; 309 runs / 103 groups, about 51.3 estimated GPU h; 285 / 95 before ADR 0017) and `part_2_gpu` (account B: paper 1 at nq50 and
 nq10, KMH sweep nq10;
 177 runs, about 48.8 h). `make campaign-run-gpu-part GPU_PART=...` runs both manifests for one part in stage order
 (cheap groups, ablations, KMH sweep, then `AdversarialBIM`, `VAAL`/`WAAL`/the WAAL control, `AdversarialDeepFool`);
@@ -61,6 +64,8 @@ Run `python -m dalmax.campaign list` for the job table (add `--exclude-strategy 
 runs them (`SMOKE_EXCLUDE=` includes them in the smoke too). KMH at n_query 10/50 lives under `paper1/nq{N}/` like the
 other paper-1 strategies. Each group: `id`, `part`, `gpu_part`, `gpu_stage`, `params_json`, `strategy_name`, `n_query`,
 `n_init_labeled`, `n_round`, `seeds`, `dir_results`, `used_by`, `note`. Groups consumed by more than one paper live
-under `shared/` (one exception kept from the first campaign for stable ids: `texhal/6_1/rep_q17`, TexHAL's canonical
-config since ADR 0011, whose reference/full rows in `texhal_q17` are aliases of it). The Q=[5,17] 6.2/6.3 groups stay
+under `shared/` (one exception, kept for stable ids: `texhal/6_1/rep_q13`, TexHAL's canonical config since ADR 0017,
+consumed by papers 2 and 3, whose reference/full rows in `texhal_q13` are aliases of it; until 2026-11-15 the
+exception was `texhal/6_1/rep_q17`, ADR 0011, now consumed by paper 2 only, with `texhal_q17`'s aliases and the
+supplementary tables `6_2_q17`/`6_3_q17`). The Q=[5,17] 6.2/6.3 groups stay
 in part `texhal` and are tabulated as `6_2_q5_17`/`6_3_q5_17`.

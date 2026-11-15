@@ -2,7 +2,8 @@
 
 Step-by-step notebook guide for running the DalMax **campaign** (everything papers 1-3 need)
 on Google Colab Pro (single GPU, session-limited). **Current job: section 6, the clean re-run on
-`DATA/daninhas_full_fixed` (ADR 0016), split over two Colab accounts (`part_1_gpu`, `part_2_gpu`).**
+`DATA/daninhas_full_fixed` (ADR 0016), split over two Colab accounts (`part_1_gpu`, `part_2_gpu`); its 462 runs
+are executed, and the 24 runs of the `texhal_q13` part (ADR 0017) remain, on account A: section 6e.**
 Sections 6b, 6c and 6d at the end are the historical record of the first campaign (dataset with
 duplicates, KI-46) and no longer apply. This is the Colab companion to
 [`LAB_RUNBOOK.md`](LAB_RUNBOOK.md) (the lab-machine equivalent) and
@@ -120,13 +121,15 @@ disk, not Drive, per the architecture decision above):
 
 Then, on **every** session (fresh clone or a still-alive runtime), check out the campaign's pinned ref
 detached instead of pulling a branch (since 2026-11-12; `GIT_REF` in the notebook's Parameters cell,
-default the tag `campaign-fixed-v2`; `campaign-fixed-v1` predates the WAAL control and the dataset's metadata
-layout and must not be used), so a push during the campaign never reaches a session:
+default the tag `campaign-fixed-v3` since ADR 0017, 2026-11-15, = v2 + the `texhal_q13` part with the
+run-affecting code unchanged; `campaign-fixed-v2` ran the first 462 runs; `campaign-fixed-v1` predates the WAAL
+control and the dataset's metadata layout and must not be used), so a push during the campaign never reaches a
+session:
 ```python
 %cd /content/dalmax
 !git status --porcelain --untracked-files=no   # must print nothing (the notebook raises otherwise)
 !git fetch --tags origin
-!git checkout --detach campaign-fixed-v2
+!git checkout --detach campaign-fixed-v3
 !git rev-parse HEAD                             # the commit every run records as git_commit
 ```
 
@@ -263,6 +266,11 @@ Only proceed to §6 (the campaign) once all of the above pass.
 
 ## 6. The clean campaign on `daninhas_full_fixed` (ADR 0016): two accounts, one GPU part each
 
+> **2026-11-15 (ADR 0017).** The 462 runs of this section were executed (tag `campaign-fixed-v2`) and verified. The
+> counts below are those of that plan; with the new part `texhal_q13` the notebook (tag `campaign-fixed-v3`) expects
+> `part_1_gpu` = 309 runs / 103 groups (account A) and `part_2_gpu` unchanged (177 / 59), 486 in total. Account A runs
+> the 24 new runs as described in section 6e; account B has nothing left to run.
+
 **Prepared 2026-11-11, not executed.** Everything the three papers need is re-run on the duplicate-free dataset
 (KI-46), no old result reused: the main manifest (`files_config/campaign/manifest.json`, 297 runs / 99 groups: paper 1
 = 20 strategies + KMH x n_query {10,50,100} + the upper bound, plus the WAAL control `WAALRandomQuery` at nq100, 3
@@ -390,7 +398,8 @@ except the long baselines' rows. Add about 15 minutes per session for sections 0
   `!grep -h -A5 '"data_order"' results/campaign_fixed/daninhas_full_fixed/SEED_1/*/*/run_metadata.json`
 - **Before zipping**, `make campaign-verify-gpu-part` must print no integrity problem (`INCOMPLETE ... (integrity:`)
   and no code-version `WARN:` line (more than one `git_commit`, or a leaf without one). The zip cell already refuses
-  an incomplete part; the commit warning is only printed, so read it.
+  an incomplete part; the commit warning is only printed, so read it. One explained exception: account A after the
+  `texhal_q13` runs (section 6e) lists two commits, v2 and v3.
 
 **Optional per-account report**: `!make campaign-report-all` on one account renders the tables of its part only (rows of
 the other part read `TBD`).
@@ -401,6 +410,49 @@ manifest alone, `MANIFEST=files_config/campaign/manifest_kmh_sweep.json` for the
 **CPU smoke (not on Colab).** `make campaign-smoke-gpu-part GPU_PART=part_2_gpu` runs the micro plan of a part on CPU
 (seed 1) into `results/smoke_campaign_fixed/` and `results/smoke_campaign_kmh_fixed/`, skipping `AdversarialBIM` and
 `AdversarialDeepFool` (`SMOKE_EXCLUDE`).
+
+## 6e. TexHAL Q=13 ablations (`texhal_q13`, ADR 0017; account A)
+
+**Prepared 2026-11-15, not executed.** After the clean campaign (462 runs, executed and verified), the author made
+VCTex `Q=13` TexHAL's canonical configuration (ADR 0017). Its hierarchy (6.2) and stage (6.3) ablations are the new
+part `texhal_q13` of the main manifest: 8 groups / **24 runs** at nq100, seeds 1-3, into
+`results/campaign_fixed/texhal_q13/`, in `part_1_gpu` at the ablations stage (about 1.4 estimated GPU h). They run on
+**account A**, whose Drive already holds the 285 complete leaves of `part_1_gpu` and the VCTex Q=13 embedding cache
+written by `texhal/6_1/rep_q13` under the same data order (the cache is keyed on dataset, Q, data order and pool,
+so the features should be loaded rather than recomputed; a recompute would only cost time).
+
+1. **Parameters cell** (account A): `DRIVE_ROOT` as before, `GPU_PART = "part_1_gpu"`, `GIT_REF = "campaign-fixed-v3"`
+   (the notebook default), and **`PILOT_REVIEWED = True`** (the pilot was reviewed in the first execution; its leaves
+   are complete). The banner must print `expect 309 runs (103 run groups)`.
+2. **Run all.** Sections 0-5 as usual (section 2 must print the v3 commit). The list cell ends with
+   `TOTAL 309 runs (103 run groups)`; the pre-run gate passes (no leaf of `part_2_gpu` on this Drive; the space check
+   needs only the 24 remaining runs, about 2.8 GB). The pilot cell prints `SKIP` for its 3 jobs (`shared/random_nq100`,
+   `p1/VAAL/nq100`, `p1/WAAL/nq100`, seed 1: complete). The run cell prints `SKIP` for every one of the 285 complete
+   jobs and runs only the 24 `texhal_q13/...` jobs. The plan has three segments, each with its own `CAMPAIGN END`
+   line: main manifest stages 1-2 (180 jobs: `executed=24 skipped=156 failed=0`), the KMH sweep (114 jobs, all
+   skipped) and the main manifest's long baselines (15 jobs, all skipped).
+   Resume after a session drop = re-run, as in section 6.
+3. **Verify** (`make campaign-verify-gpu-part GPU_PART=part_1_gpu`): expect `Totals: OK=309 INCOMPLETE=0 MISSING=0`,
+   seed audit PASS for seeds 1-3, data-order audit PASS (one order). **The code-version audit lists TWO commits**
+   (`464a5cc` = `campaign-fixed-v2` for the 285 earlier leaves, the `campaign-fixed-v3` commit for the 24 new ones) and
+   prints a `WARN:` line: this is expected and explained (ADR 0017: between the two tags only the manifest, configs,
+   notebook, tests and docs changed; nothing a `tools/trainer.py` run executes). Any other commit, or a leaf without
+   one, is not expected: stop and report.
+4. **Zip only the new part**: in the zip cell set `ZIP_ONLY_PART = "texhal_q13"` (leave `ZIP_PARTIAL = False`). It
+   still requires `OK=309` for the whole part, then writes `/content/part_1_gpu__texhal_q13.zip` with only
+   `results/campaign_fixed/texhal_q13/` plus `results/campaign_fixed/campaign_part_1_gpu__texhal_q13.log` and
+   `failures_part_1_gpu__texhal_q13.log` (the account's full logs under new names, so they never collide with the
+   `campaign_part_1_gpu.log` already merged locally), checks **24** checkpoints, and copies it to `<DRIVE_ROOT>/`.
+   Download it.
+5. **Merge locally and verify**:
+
+   ```bash
+   cd <repo root>
+   unzip -n part_1_gpu__texhal_q13.zip   # -n: never overwrite; only new leaves and the two new log names
+   make campaign-verify-all              # expect OK=486 INCOMPLETE=0 MISSING=0, two commits (WARN, expected),
+                                         # seed and data-order audits PASS, the 3 KMH duplicate pairs SAME
+   make campaign-report-all              # paper 2 tables 6_2 / 6_3 now Q=13; 6_2_q17 / 6_3_q17 supplementary
+   ```
 
 ---
 

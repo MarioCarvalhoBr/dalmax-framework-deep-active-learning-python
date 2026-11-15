@@ -23,6 +23,11 @@ files_config/ablations/
     ├── hier_L1.json / hier_L2a.json / hier_L2b.json / hier_L3.json / hier_L4.json   (§6.2)
     ├── stage_no_hierarchy.json                                   (§6.3)
     └── micro/           # CPU smoke mirrors of the 6 files above
+└── texhal_q13/          # paper 2, canonical Q=13 6.2/6.3 (ADR 0017, 2026-11-15; campaign part `texhal_q13`, prepared, not executed)
+    ├── hier_L1.json / hier_L2a.json / hier_L2b.json / hier_L3.json / hier_L4.json   (§6.2)
+    ├── hier_L2_matched__no_resampling.json / hier_L3__no_resampling.json            (§6.2, the ADR 0013 shapes)
+    ├── stage_no_hierarchy.json                                   (§6.3)
+    └── micro/           # CPU smoke mirrors of the 8 files above
 
 Hierarchy-transfer rows (ADR 0013, 2026-11-10, campaign part `hier_transfer`; executed 2026-11-11, verified):
     rnhal/hier_L2_matched__no_resampling.json, rnhal/hier_L3__no_resampling.json,
@@ -199,6 +204,19 @@ TexHAL's canonical configuration is VCTex `Q=17` (single RAE). The six files are
 `texhal_q17/6_2/hier_ref`, `texhal_q17/6_3/stage_full`); "w/o representation" stays the shared KMH run.
 Run with `make campaign-run PART=texhal_q17` (18 runs). Validated by
 `tests/test_ablation_configs.py` (`q == [17]`, selection equal to the `texhal/` twin).
+
+## `texhal_q13/` (2026-11-15, ADR 0017)
+
+TexHAL's canonical configuration since ADR 0017 is VCTex `Q=13` (single RAE; it supersedes the `Q=17` of ADR 0011 on
+the evidence of the clean campaign). The eight files are byte-for-byte the matching `texhal_q17/*.json` with only
+`"embedding": {..., "q": [13], ...}` changed (and the `_comment` of the two hierarchy-transfer files naming this
+folder); selection blocks, `n_resamples` and the training recipe are identical; micro mirrors in `texhal_q13/micro/`.
+Again **no** `rep_*` and no `stage_full`: the reference hierarchy with Q=13 IS `texhal/rep_q13.json` (campaign run
+`texhal/6_1/rep_q13`; its config equals `texhal/stage_full.json` with `q=[13]`), aliased as `texhal_q13/6_2/hier_ref`
+and `texhal_q13/6_3/stage_full`; "w/o representation" stays the shared KMH run. Unlike `texhal_q17`, the two
+hierarchy-transfer shapes belong to the same part here (`texhal_q13`, 8 groups / 24 runs). Run through the campaign
+(`make campaign-run-gpu-part GPU_PART=part_1_gpu`, or `make campaign-run PART=texhal_q13` on the main manifest alone).
+Validated by `tests/test_ablation_configs.py` (each file equals its `texhal_q17` twin except `q == [13]`).
 
 ## Hierarchy-transfer rows (2026-11-10, ADR 0013)
 

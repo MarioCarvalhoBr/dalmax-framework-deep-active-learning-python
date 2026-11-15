@@ -75,10 +75,12 @@ Specifications are the source of truth: [`.specs/00-overview.md`](.specs/00-over
 
   Both are documented in [`.specs/quality/known-issues.md`](.specs/quality/known-issues.md). The first
   campaign's numbers are superseded and are not reported here.
-- A **clean re-run of everything** on the duplicate-free dataset `DATA/daninhas_full_fixed` is **prepared and
-  being executed** ([ADR 0016](.specs/adr/0016-clean-rerun-fixed-dataset.md)). Its code version is pinned at the
-  git tag `campaign-fixed-v2`, which the Colab notebook checks out. No results of the clean campaign are
-  reported yet.
+- A **clean re-run of everything** on the duplicate-free dataset `DATA/daninhas_full_fixed`
+  ([ADR 0016](.specs/adr/0016-clean-rerun-fixed-dataset.md)) has been executed (462 runs, code pinned at the git
+  tag `campaign-fixed-v2`). From it, TexHAL's canonical configuration became VCTex `Q = 13`
+  ([ADR 0017](.specs/adr/0017-texhal-q13.md)); its 24 hierarchy and stage ablation runs (part `texhal_q13`) are
+  prepared under the tag `campaign-fixed-v3`, which the Colab notebook checks out. No results of the clean
+  campaign are reported here yet.
 
 ## Installation
 
@@ -190,8 +192,10 @@ Notes:
   `embedding` / `selection` blocks:
   - **KMH**: hierarchical k-means [[21]](#ref-21) over frozen ImageNet [[23]](#ref-23) ResNet-50
     [[22]](#ref-22) features (`resnet_imagenet`; `files_config/campaign/params_kmh.json`).
-  - **TexHAL**: VCTex descriptors [[24]](#ref-24) (`vctex`; canonical `Q = 17`,
-    [ADR 0011](.specs/adr/0011-texhal-canonical-q17.md); configs in `files_config/ablations/texhal_q17/`).
+  - **TexHAL**: VCTex descriptors [[24]](#ref-24) (`vctex`; canonical `Q = 13` since
+    [ADR 0017](.specs/adr/0017-texhal-q13.md), which superseded the `Q = 17` of
+    [ADR 0011](.specs/adr/0011-texhal-canonical-q17.md); canonical run `files_config/ablations/texhal/rep_q13.json`,
+    ablation configs in `files_config/ablations/texhal_q13/`).
   - **RNHAL**: SSRAE randomized-network descriptors [[25]](#ref-25) (`ssrae`, `Q = 13`; configs in
     `files_config/ablations/rnhal/`).
 
@@ -254,15 +258,15 @@ run seeds 1 to 3 on `daninhas_full_fixed` into new results roots:
 
 | Manifest | Content | Runs / groups | Results root |
 |---|---|---|---|
-| `files_config/campaign/manifest.json` | paper 1 (20 strategies + KMH at `n_query` 10/50/100), the WAAL control, the upper bound, the TexHAL/RNHAL ablations | 297 / 99 | `results/campaign_fixed/` |
+| `files_config/campaign/manifest.json` | paper 1 (20 strategies + KMH at `n_query` 10/50/100), the WAAL control, the upper bound, the TexHAL/RNHAL ablations (incl. `texhal_q13`, ADR 0017) | 321 / 107 | `results/campaign_fixed/` |
 | `files_config/campaign/manifest_kmh_sweep.json` | KMH parameter sweep ([ADR 0012](.specs/adr/0012-kmh-parameter-sweep.md)) | 165 / 55 | `results/campaign_kmh_fixed/` |
 
-The 462 runs are split into two **GPU parts** of similar estimated cost, one per Colab account, run in parallel.
+The 486 runs are split into two **GPU parts** of similar estimated cost, one per Colab account, run in parallel.
 Counts are from `make campaign-list-gpu-part`; estimates from `files_config/campaign/gpu_time_estimates.json`:
 
 | `GPU_PART` | Content | Runs / groups | Est. GPU h |
 |---|---|---|---|
-| `part_1_gpu` | paper 1 at nq100 (with the WAAL control), upper bound, all ablations, KMH sweep nq100 + nq50 | 285 / 95 | 49.9 |
+| `part_1_gpu` | paper 1 at nq100 (with the WAAL control), upper bound, all ablations (incl. `texhal_q13`), KMH sweep nq100 + nq50 | 309 / 103 | 51.3 |
 | `part_2_gpu` | paper 1 at nq50 and nq10, KMH sweep nq10 | 177 / 59 | 48.8 |
 
 Inside a part the plan runs cheap paper-1 groups first, then ablations, the KMH sweep, and the long baselines
