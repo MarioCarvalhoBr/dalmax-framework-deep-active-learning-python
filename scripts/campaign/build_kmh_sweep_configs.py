@@ -4,8 +4,10 @@ Stage 1 of the paper-1 KMH sweep (`.specs/experiments/campaign.md`, "KMH paramet
 budget `n_query` in {10, 50, 100} a hierarchy axis (different `n_clusters`) and a knob axis (one
 non-default hierarchical-k-means knob at a time, applied to the reference and the budget-matched
 3-level hierarchy). The grid is plain data at the top of this file so that a later stage can extend it:
-stage 2 (nq100, 2026-11-08) and the wide-top exploration `kmh_wide` (`WIDE_POINTS`, 2026-11-15, ADR 0018)
-are appended that way, every earlier file byte-identical.
+stage 2 (nq100, 2026-11-08), the wide-top exploration `kmh_wide` (`WIDE_POINTS`, 2026-11-15, ADR 0018) and
+the feature post-processing round `kmh_norm` (`NORM_VARIANTS`, 2026-11-15, ADR 0019: the reference hierarchy
+with an `embedding.postprocess` block, `hier_L3_ref__norm_<variant>.json`) are appended that way, every
+earlier file byte-identical.
 
 Full-scale files go to `kmh_sweep/nq{N}/<config>.json`, the CPU smoke mirror to
 `kmh_sweep/micro/nq{N}/<config>.json`. Committed artifacts; `tests/test_kmh_sweep_configs.py` fails
@@ -116,6 +118,21 @@ WIDE_POINTS: dict[int, tuple[Hierarchy, ...]] = {
     ),
 }
 
+# Feature post-processing round `kmh_norm` (2026-11-15, ADR 0019; appended, every earlier file stays
+# byte-identical): the REFERENCE hierarchy (fixed beforehand, so the round depends on no choice made on the test
+# set), every knob at its default, at every budget, with a non-identity `embedding.postprocess` block. Entries:
+# (variant = suffix of the config name and name of the results folder, the params block, the table label).
+# Order = row order of the `kmh_norm_nq*` tables, after the executed raw-feature reference row.
+NORM_HIERARCHY = "hier_L3_ref"
+NORM_VARIANTS: tuple[tuple[str, dict[str, Any], str], ...] = (
+    ("l2", {"method": "l2"}, "L2-normalised features"),
+    ("zscore", {"method": "zscore"}, "per-dimension z-score (initial-pool mean and std)"),
+    ("pca64_l2", {"method": "pca_l2", "pca_dim": 64}, "PCA to 64 dimensions (initial pool) + L2"),
+)
+# The explicit identity: the params file of each table's alias row, the executed raw-feature reference
+# `kmh/nq{N}/hier_L3_ref` (the manifest checks that its effective signature equals the reference's).
+NORM_IDENTITY: tuple[str, dict[str, Any], str] = ("none", {"method": "none"}, "raw features (executed reference)")
+
 # --- derivation ------------------------------------------------------------------------------------
 
 
@@ -172,9 +189,10 @@ def is_stage2(h: Hierarchy, knob: tuple[str, str, Any] | None, nq: int) -> bool:
 
 
 def build_config(nq: int, h: Hierarchy, knob: tuple[str, str, Any] | None, *, micro: bool,
-                 wide: bool = False) -> dict[str, Any]:
+                 wide: bool = False, postprocess: dict[str, Any] | None = None) -> dict[str, Any]:
     """The params JSON content of one grid point (`knob` None = the hierarchy-axis config; `wide` = a
-    `kmh_wide` point, ADR 0018)."""
+    `kmh_wide` point, ADR 0018; `postprocess` = the `embedding.postprocess` block of a `kmh_norm` point,
+    ADR 0019, None = no such key, as in every earlier file)."""
     full_clusters = clusters_for(h, nq)
     reference = h.kind == "reference"
     full_samples = sample_sizes_for(full_clusters, reference=reference, factor=h.sample_factor)
@@ -207,6 +225,18 @@ def build_config(nq: int, h: Hierarchy, knob: tuple[str, str, Any] | None, *, mi
         comment = (f"KMH wide-top exploration (kmh_wide, 2026-11-15, ADR 0018): ImageNet ResNet-50 features + "
                    f"hierarchical k-means at n_query={nq}, {what}; otherwise identical to params_kmh.json. See "
                    ".specs/experiments/campaign.md, 'KMH wide-top exploration'.")
+    embedding: dict[str, Any] = {"extractor": "resnet_imagenet", "q": None, "variant": "full"}
+    if postprocess is not None:
+        embedding["postprocess"] = postprocess
+        what += ", embedding.postprocess " + ", ".join(f"{key}={value}" for key, value in postprocess.items())
+        if not micro:
+            identity = postprocess == NORM_IDENTITY[1]
+            comment = (f"KMH feature post-processing (kmh_norm, 2026-11-15, ADR 0019): ImageNet ResNet-50 features + "
+                       f"hierarchical k-means at n_query={nq}, {what}; otherwise identical to {NORM_HIERARCHY}.json "
+                       "of the same budget. "
+                       + ("The explicit identity: the same computation as that file (the manifest's alias of the "
+                          "executed reference row). " if identity else "")
+                       + "See .specs/experiments/campaign.md, 'KMH feature post-processing'.")
     if micro:
         comment = (f"Micro (CPU smoke) mirror (clusters / {MICRO_DIVISOR}, min 2) of the full-scale "
                    f"config of the same name: n_query={nq}, {what}.")
@@ -220,7 +250,7 @@ def build_config(nq: int, h: Hierarchy, knob: tuple[str, str, Any] | None, *, mi
             "train_args": {"batch_size": 16 if micro else 256, "num_workers": 0 if micro else 4},
             "test_args": {"batch_size": 16 if micro else 256, "num_workers": 0 if micro else 4},
             "optimizer_args": {"lr": 0.05, "momentum": 0.3},
-            "embedding": {"extractor": "resnet_imagenet", "q": None, "variant": "full"},
+            "embedding": embedding,
             "selection": {"method": "hierarchical", "hierarchy": hierarchy},
         },
     }
@@ -249,9 +279,21 @@ def wide_points(nq: int) -> list[tuple[str, Hierarchy]]:
     return [(config_name(h, nq), h) for h in WIDE_POINTS.get(nq, ())]
 
 
+def norm_config_name(variant: str) -> str:
+    """Config name of a `kmh_norm` point: the reference hierarchy plus the post-processing variant."""
+    return f"{NORM_HIERARCHY}__norm_{variant}"
+
+
+def norm_points() -> list[tuple[str, str, dict[str, Any], str]]:
+    """`(config name, variant, postprocess block, table label)` of the `kmh_norm` params files (ADR 0019), the
+    explicit identity first, then the variants in table-row order; the same at every budget."""
+    return [(norm_config_name(v), v, block, label) for v, block, label in (NORM_IDENTITY, *NORM_VARIANTS)]
+
+
 def expected_files() -> dict[str, str]:
     """`{repo-relative path: file text}` of every generated params file."""
     files: dict[str, str] = {}
+    reference = {h.name: h for h in HIERARCHIES}[NORM_HIERARCHY]
     for micro in (False, True):
         sub = f"{OUT_DIR}/micro" if micro else OUT_DIR
         for nq in BUDGETS:
@@ -262,6 +304,12 @@ def expected_files() -> dict[str, str]:
                 if rel in files:
                     raise ValueError(f"kmh_wide point {rel} collides with a sweep file")
                 files[rel] = json.dumps(build_config(nq, h, None, micro=micro, wide=True), indent=4) + "\n"
+            for name, _, block, _ in norm_points():
+                rel = f"{sub}/nq{nq}/{name}.json"
+                if rel in files:
+                    raise ValueError(f"kmh_norm point {rel} collides with a sweep file")
+                files[rel] = json.dumps(build_config(nq, reference, None, micro=micro, postprocess=block),
+                                        indent=4) + "\n"
     return files
 
 

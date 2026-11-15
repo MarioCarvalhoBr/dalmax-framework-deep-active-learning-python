@@ -1,0 +1,46 @@
+{
+    "_comment": "KMH feature post-processing (kmh_norm, 2026-11-15, ADR 0019): ImageNet ResNet-50 features + hierarchical k-means at n_query=100, hierarchy k=[600,200,100] sample_sizes=[30,15,2], embedding.postprocess method=pca_l2, pca_dim=64; otherwise identical to hier_L3_ref.json of the same budget. See .specs/experiments/campaign.md, 'KMH feature post-processing'.",
+    "DANINHAS": {
+        "data_dir": "DATA/daninhas_full_fixed/",
+        "n_epoch": 10,
+        "n_drop": 10,
+        "n_classes": 5,
+        "train_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "test_args": {
+            "batch_size": 256,
+            "num_workers": 4
+        },
+        "optimizer_args": {
+            "lr": 0.05,
+            "momentum": 0.3
+        },
+        "embedding": {
+            "extractor": "resnet_imagenet",
+            "q": null,
+            "variant": "full",
+            "postprocess": {
+                "method": "pca_l2",
+                "pca_dim": 64
+            }
+        },
+        "selection": {
+            "method": "hierarchical",
+            "hierarchy": {
+                "n_clusters": [
+                    600,
+                    200,
+                    100
+                ],
+                "n_levels": 3,
+                "sample_sizes": [
+                    30,
+                    15,
+                    2
+                ]
+            }
+        }
+    }
+}
