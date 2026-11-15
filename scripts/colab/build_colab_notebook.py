@@ -47,8 +47,10 @@ OUT = "notebooks/colab_runbook.ipynb"
 MANIFESTS = ("files_config/campaign/manifest.json", "files_config/campaign/manifest_kmh_sweep.json")
 REPO_URL = "https://github.com/MarioCarvalhoBr/dalmax-framework-deep-active-learning-python.git"
 # The tag both accounts check out for the whole campaign. v2 (2026-11-12) = v1 + the WAAL control
-# `WAALRandomQuery` and the `daninhas_full_fixed` metadata layout (logs/); v1 predates both.
-DEFAULT_GIT_REF = "campaign-fixed-v2"
+# `WAALRandomQuery` and the `daninhas_full_fixed` metadata layout (logs/); v1 predates both. v3 (ADR 0017,
+# 2026-11-15) = v2 + the `texhal_q13` part (24 runs in part_1_gpu) with the run-affecting code unchanged; the
+# 285 earlier leaves of part_1_gpu keep the v2 commit, so verify lists two commits there (an explained WARN).
+DEFAULT_GIT_REF = "campaign-fixed-v3"
 RUN_EXIT_FILE = "/content/campaign_run_exit_code"  # local runtime disk, not the repo or Drive
 DRIVE_ROOT_PLACEHOLDER = "/content/drive/MyDrive/<FOLDER_THAT_HOLDS_DATA>"
 # The author's Drive folder, the same on both accounts (author instruction 2026-11-12): the second assignment in
@@ -58,6 +60,9 @@ DATASET = "daninhas_full_fixed"
 # Images per split of daninhas_full_fixed (scripts/colab/setup_colab.sh checks the same counts); the folder also
 # holds README.txt, MANIFEST.csv and logs/ (2 files), which `make dataset-check` verifies against the images.
 DATASET_SPLIT_IMAGES: dict[str, int] = {"train": 7230, "test": 1008}
+# Semantic parts the zip cell can ship alone (`ZIP_ONLY_PART`, ADR 0017): every group of the part lives under
+# `<main results root>/<part>/` and no group of another part does, so that folder is exactly the part's leaves.
+ZIP_ONLY_PARTS: tuple[str, ...] = ("texhal_q13",)
 
 
 def expected_counts() -> dict[str, tuple[int, int]]:
@@ -79,6 +84,22 @@ def manifest_totals() -> list[tuple[int, int]]:
     return totals
 
 
+def zip_only_parts() -> dict[str, dict[str, Any]]:
+    """`{part: {gpu_part, dir, root, runs}}` of `ZIP_ONLY_PARTS`, checked against the main manifest's layout."""
+    manifest = load_manifest(REPO_ROOT / MANIFESTS[0], validate=False)
+    found: dict[str, dict[str, Any]] = {}
+    for part in ZIP_ONLY_PARTS:
+        folder = f"{manifest.results_root}/{part}"
+        own = [g for g in manifest.groups if g.part == part]
+        inside = [g for g in manifest.groups if g.dir_results.startswith(folder + "/")]
+        gpu_parts = {g.gpu_part for g in own}
+        if not own or inside != own or len(gpu_parts) != 1:
+            raise SystemExit(f"ZIP_ONLY_PARTS: {part} is not exactly the groups under {folder}/ of one GPU part")
+        found[part] = {"gpu_part": gpu_parts.pop(), "dir": folder, "root": manifest.results_root,
+                       "runs": sum(len(g.seeds) for g in own)}
+    return found
+
+
 def results_roots() -> list[str]:
     return [load_manifest(REPO_ROOT / path, validate=False).results_root for path in MANIFESTS]
 
@@ -96,6 +117,65 @@ def pilot_hours() -> dict[str, float]:
     return hours
 
 
+# The zip cell (section 6). A plain string, not an f-string: `__ZIP_ONLY_PARTS__` is replaced by `zip_only_parts()`.
+ZIP_CELL = '''
+    import re
+    import shutil
+    import subprocess
+
+    ZIP_PARTIAL = False  # True only to ship an incomplete part on purpose (e.g. no credits left)
+    ZIP_ONLY_PART = ""  # "" = the whole GPU part; e.g. "texhal_q13" = only that part's leaves (COLAB_RUNBOOK.md 6e)
+    ZIP_ONLY_PARTS = __ZIP_ONLY_PARTS__
+    if ZIP_ONLY_PART:
+        if ZIP_ONLY_PART not in ZIP_ONLY_PARTS:
+            raise ValueError(f"ZIP_ONLY_PART must be '' or one of {sorted(ZIP_ONLY_PARTS)}, got {repr(ZIP_ONLY_PART)}")
+        only = ZIP_ONLY_PARTS[ZIP_ONLY_PART]
+        if only["gpu_part"] != GPU_PART:
+            raise ValueError(f"{ZIP_ONLY_PART} belongs to {only['gpu_part']}, not to GPU_PART={GPU_PART}")
+        zip_name, zip_dirs, log_roots = f"{GPU_PART}__{ZIP_ONLY_PART}", [only["dir"]], [only["root"]]
+        expected_models = only["runs"]
+    else:
+        zip_name, zip_dirs, log_roots = GPU_PART, RESULTS_ROOTS, RESULTS_ROOTS
+        expected_models = EXPECTED_RUNS
+    verify = subprocess.run(["make", "campaign-verify-gpu-part", f"GPU_PART={GPU_PART}"], cwd=REPO_DIR,
+                            capture_output=True, text=True)
+    totals = re.search(r"Totals: OK=(\\d+) .*", verify.stdout)
+    print(totals.group(0) if totals else verify.stdout[-2000:] + verify.stderr[-2000:])
+    n_ok = int(totals.group(1)) if totals else 0
+    if n_ok != EXPECTED_RUNS and not ZIP_PARTIAL:
+        raise RuntimeError(f"verify reports OK={n_ok}, expected {EXPECTED_RUNS}: re-run the run cell (resumes) first")
+    zip_path = f"/content/{zip_name}.zip"
+    need = sum(os.path.getsize(os.path.join(d, f)) for folder in zip_dirs
+               for d, _, files in os.walk(f"{REPO_DIR}/{folder}") for f in files)
+    free = min(shutil.disk_usage("/content").free, shutil.disk_usage(DRIVE_ROOT).free)
+    print(f"results to zip: {need / 1e9:.1f} GB; free (local disk / Drive, the smaller): {free / 1e9:.1f} GB")
+    if free < 1.1 * need:
+        raise RuntimeError("Not enough free space for the zip: free Drive space, or download the two results "
+                           "folders from Drive directly (COLAB_RUNBOOK.md section 6, step 9).")
+    excluded = " ".join(f"-x '{root}/campaign.log' -x '{root}/failures.log'" for root in log_roots)
+    subprocess.run(f"rm -f {zip_path} && zip -qr {zip_path} {' '.join(zip_dirs)} {excluded}",
+                   shell=True, cwd=REPO_DIR, check=True)
+    stage = f"/content/zip_stage_{zip_name}"
+    shutil.rmtree(stage, ignore_errors=True)
+    for root in log_roots:
+        os.makedirs(f"{stage}/{root}")
+        for name in ("campaign", "failures"):
+            log = f"{REPO_DIR}/{root}/{name}.log"
+            if os.path.exists(log):
+                shutil.copy(log, f"{stage}/{root}/{name}_{zip_name}.log")
+    subprocess.run(f"cd {stage} && zip -qr {zip_path} results", shell=True, check=True)
+    listing = subprocess.run(["unzip", "-l", zip_path], capture_output=True, text=True, check=True).stdout
+    n_models = listing.count("saved_model.pth")
+    print(f"{zip_path}: {n_models} checkpoints")
+    if ZIP_PARTIAL and ZIP_ONLY_PART:
+        print(f"ZIP_PARTIAL: {n_models} of the {expected_models} checkpoints of {ZIP_ONLY_PART} (count not enforced)")
+    elif n_models != (n_ok if ZIP_PARTIAL else expected_models):
+        raise RuntimeError(f"zip holds {n_models} checkpoints, expected {n_ok if ZIP_PARTIAL else expected_models}")
+    subprocess.run(["cp", zip_path, f"{DRIVE_ROOT}/"], check=True)
+    subprocess.run(["ls", "-lh", f"{DRIVE_ROOT}/{zip_name}.zip"], check=True)
+'''
+
+
 def md(text: str) -> dict[str, Any]:
     return {"cell_type": "markdown", "metadata": {}, "source": textwrap.dedent(text).strip("\n")}
 
@@ -110,6 +190,8 @@ def cells() -> list[dict[str, Any]]:
     roots = results_roots()
     (main_runs, main_groups), (sweep_runs, sweep_groups) = manifest_totals()
     pilot = pilot_hours()
+    zip_parts = zip_only_parts()
+    zip_parts_text = ", ".join(f"`{name}` ({info['gpu_part']}, {info['runs']} runs)" for name, info in zip_parts.items())
     part1, part2 = GPU_PARTS
     expected_literal = "{" + ", ".join(f'"{p}": {expected[p]}' for p in GPU_PARTS) + "}"
     return [
@@ -354,7 +436,8 @@ def cells() -> list[dict[str, Any]]:
 
             Everything the three papers need, re-run on the duplicate-free dataset: {main_runs + sweep_runs} runs /
             {main_groups + sweep_groups} run groups over two manifests (main campaign {main_runs} / {main_groups} into
-            `{roots[0]}/`, including the 3 runs of the WAAL control `WAALRandomQuery`; KMH sweep {sweep_runs} /
+            `{roots[0]}/`, including the 3 runs of the WAAL control `WAALRandomQuery` and, since ADR 0017, the 24 runs
+            of the `texhal_q13` part (TexHAL's ablations with its canonical VCTex Q=13); KMH sweep {sweep_runs} /
             {sweep_groups} into `{roots[1]}/`), split into two GPU parts of about equal estimated GPU time, one per
             Colab account:
 
@@ -476,58 +559,30 @@ def cells() -> list[dict[str, Any]]:
             index the same ordered image lists, KI-47). A leaf with an integrity problem (truncated or empty file, wrong
             round count) is `INCOMPLETE (integrity: ...)` and is re-run by the run cell. The code-version audit lists the
             `git_commit` of the OK leaves: it must show ONE commit (the one printed by section 2) and no `WARN:` line.
+            One explained exception (ADR 0017): on account A, after the `texhal_q13` runs, it lists TWO commits (the
+            `campaign-fixed-v2` commit of the 285 earlier leaves and the `campaign-fixed-v3` commit of the 24 new ones)
+            and a `WARN:` line; that is expected (the run-affecting code is identical, `COLAB_RUNBOOK.md` section 6e).
             Exit code 0 = all OK, 1 = an incomplete/missing job or a FAIL audit, 2 = only audit WARNs. Re-run the run
             cell to redo failed or missing jobs.
             """),
         code("!make campaign-verify-gpu-part GPU_PART={GPU_PART}"),
-        md("""
+        md(f"""
             **Zip this GPU part** for download (both results roots, this account's `campaign.log` / `failures.log`
             renamed to `campaign_<GPU_PART>.log` / `failures_<GPU_PART>.log` so the two accounts never collide). The
             cell refuses (raises) unless verify reports every run of the part `OK` (`ZIP_PARTIAL = True` ships an
             incomplete part on purpose) and checks the free space first: the checkpoints do not compress, so the
             zip is about as large as the results (~95 MB per run).
-            """),
-        code('''
-            import re
-            import shutil
-            import subprocess
 
-            ZIP_PARTIAL = False  # True only to ship an incomplete part on purpose (e.g. no credits left)
-            verify = subprocess.run(["make", "campaign-verify-gpu-part", f"GPU_PART={GPU_PART}"], cwd=REPO_DIR,
-                                    capture_output=True, text=True)
-            totals = re.search(r"Totals: OK=(\\d+) .*", verify.stdout)
-            print(totals.group(0) if totals else verify.stdout[-2000:] + verify.stderr[-2000:])
-            n_ok = int(totals.group(1)) if totals else 0
-            if n_ok != EXPECTED_RUNS and not ZIP_PARTIAL:
-                raise RuntimeError(f"verify reports OK={n_ok}, expected {EXPECTED_RUNS}: re-run the run cell (resumes) first")
-            zip_path = f"/content/{GPU_PART}.zip"
-            need = sum(os.path.getsize(os.path.join(d, f)) for root in RESULTS_ROOTS
-                       for d, _, files in os.walk(f"{REPO_DIR}/{root}") for f in files)
-            free = min(shutil.disk_usage("/content").free, shutil.disk_usage(DRIVE_ROOT).free)
-            print(f"results to zip: {need / 1e9:.1f} GB; free (local disk / Drive, the smaller): {free / 1e9:.1f} GB")
-            if free < 1.1 * need:
-                raise RuntimeError("Not enough free space for the zip: free Drive space, or download the two results "
-                                   "folders from Drive directly (COLAB_RUNBOOK.md section 6, step 9).")
-            excluded = " ".join(f"-x '{root}/campaign.log' -x '{root}/failures.log'" for root in RESULTS_ROOTS)
-            subprocess.run(f"rm -f {zip_path} && zip -qr {zip_path} {' '.join(RESULTS_ROOTS)} {excluded}",
-                           shell=True, cwd=REPO_DIR, check=True)
-            stage = f"/content/zip_stage_{GPU_PART}"
-            shutil.rmtree(stage, ignore_errors=True)
-            for root in RESULTS_ROOTS:
-                os.makedirs(f"{stage}/{root}")
-                for name in ("campaign", "failures"):
-                    log = f"{REPO_DIR}/{root}/{name}.log"
-                    if os.path.exists(log):
-                        shutil.copy(log, f"{stage}/{root}/{name}_{GPU_PART}.log")
-            subprocess.run(f"cd {stage} && zip -qr {zip_path} results", shell=True, check=True)
-            listing = subprocess.run(["unzip", "-l", zip_path], capture_output=True, text=True, check=True).stdout
-            n_models = listing.count("saved_model.pth")
-            print(f"{zip_path}: {n_models} checkpoints")
-            if n_models != (n_ok if ZIP_PARTIAL else EXPECTED_RUNS):
-                raise RuntimeError(f"zip holds {n_models} checkpoints, expected {n_ok if ZIP_PARTIAL else EXPECTED_RUNS}")
-            subprocess.run(["cp", zip_path, f"{DRIVE_ROOT}/"], check=True)
-            subprocess.run(["ls", "-lh", f"{DRIVE_ROOT}/{GPU_PART}.zip"], check=True)
-            '''),
+            `ZIP_ONLY_PART` (ADR 0017; default `""` = the whole GPU part, as above) ships ONE semantic part whose
+            leaves were added after the rest of the GPU part was downloaded: e.g. `ZIP_ONLY_PART = "texhal_q13"` zips
+            only that part's results folder plus this account's `campaign.log` / `failures.log` renamed to
+            `campaign_<GPU_PART>__<ZIP_ONLY_PART>.log` / `failures_<GPU_PART>__<ZIP_ONLY_PART>.log` (new names, so a
+            local `unzip -n` adds them next to the earlier `campaign_<GPU_PART>.log`) into
+            `/content/<GPU_PART>__<ZIP_ONLY_PART>.zip`, and checks its checkpoint count against the part's runs. The
+            verify gate still covers the whole GPU part. Parts allowed: {zip_parts_text}. See `COLAB_RUNBOOK.md`
+            section 6e.
+            """),
+        code(ZIP_CELL.replace("__ZIP_ONLY_PARTS__", repr(zip_parts))),
         md("""
             **Optional: partial report** of this account's part (the tables of the full campaign are built locally
             after merging both parts, `COLAB_RUNBOOK.md` section 6, step 10). Rows of the other part show `TBD`.

@@ -14,6 +14,8 @@ import re
 import sys
 from pathlib import Path
 
+import pytest
+
 from dalmax import campaign as C
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -87,6 +89,8 @@ def test_expected_counts_match_the_manifests() -> None:
     for gpu_part in C.GPU_PARTS:
         jobs = [j for seg in C.plan_jobs(manifests, C.parse_selection(gpu_part)) for j in seg.jobs]
         assert f'"{gpu_part}": ({len(jobs)}, {len({j.group.id for j in jobs})})' in params
+    # ADR 0017: part_1_gpu = 285 executed runs + the 24 texhal_q13 runs; part_2_gpu unchanged.
+    assert 'EXPECTED = {"part_1_gpu": (309, 103), "part_2_gpu": (177, 59)}' in params
 
 
 def test_no_personal_path_and_no_old_dataset() -> None:
@@ -138,7 +142,7 @@ def test_zip_cell_refuses_unless_verify_ok_and_ships_part_specific_logs() -> Non
     assert verify < zip_idx
     cell = sources[zip_idx]
     assert "if n_ok != EXPECTED_RUNS and not ZIP_PARTIAL:" in cell
-    assert "{name}_{GPU_PART}.log" in cell and "-x '{root}/campaign.log'" in cell
+    assert "{name}_{zip_name}.log" in cell and "-x '{root}/campaign.log'" in cell
     assert "shutil.disk_usage" in cell and "n_models !=" in cell
     assert "!" not in cell.replace("!=", "")  # every step is a raising subprocess call
 
@@ -187,7 +191,7 @@ def test_every_session_checks_out_the_pinned_git_ref_detached() -> None:
     """2026-11-12: one code version for the whole campaign; a push during it must not reach a session."""
     sources = _code_sources()
     params = sources[0]
-    assert 'GIT_REF = "campaign-fixed-v2"' in params and "BRANCH" not in params
+    assert 'GIT_REF = "campaign-fixed-v3"' in params and "BRANCH" not in params  # ADR 0017
     clone = next(s for s in sources if "git" in s and "clone" in s)
     assert '"clone", REPO_URL, REPO_DIR' in clone and "--branch" not in clone
     assert '"fetch", "--tags", "origin"' in clone and '"checkout", "--detach", GIT_REF' in clone
@@ -210,3 +214,39 @@ def test_run_cell_surfaces_a_non_zero_exit_code() -> None:
     assert f'open("{exit_file}")' in check and 'if run_exit != "0":' in check
     assert '"campaign-space-gpu-part"' in check and "SHORT OF SPACE" in check
     assert "campaign.log" in check and "failures.log" in check and "raise RuntimeError" in check
+
+
+def _zip_selection(zip_only_part: str, gpu_part: str = "part_1_gpu") -> dict:
+    """Execute the zip cell's selection prologue (everything before the verify call) with `ZIP_ONLY_PART` set."""
+    cell = next(s for s in _code_sources() if "ZIP_PARTIAL = False" in s)
+    prologue = cell.split("verify = subprocess.run", 1)[0]
+    assert 'ZIP_ONLY_PART = ""' in prologue  # default: the whole GPU part
+    prologue = prologue.replace('ZIP_ONLY_PART = ""', f"ZIP_ONLY_PART = {zip_only_part!r}", 1)
+    scope = {"GPU_PART": gpu_part, "RESULTS_ROOTS": ["results/campaign_fixed", "results/campaign_kmh_fixed"],
+             "EXPECTED_RUNS": 309}
+    exec(prologue, scope)  # noqa: S102 -- the generated cell, imports only
+    return scope
+
+
+def test_zip_cell_default_zips_the_whole_part() -> None:
+    scope = _zip_selection("")
+    assert scope["zip_name"] == "part_1_gpu" and scope["expected_models"] == 309
+    assert scope["zip_dirs"] == scope["log_roots"] == ["results/campaign_fixed", "results/campaign_kmh_fixed"]
+
+
+def test_zip_cell_zip_only_part_ships_one_part_folder() -> None:
+    """ADR 0017: ZIP_ONLY_PART = "texhal_q13" zips results/campaign_fixed/texhal_q13/ (24 checkpoints) and the
+    main root's logs under new names, into /content/part_1_gpu__texhal_q13.zip."""
+    scope = _zip_selection("texhal_q13")
+    assert scope["zip_name"] == "part_1_gpu__texhal_q13"
+    assert scope["zip_dirs"] == ["results/campaign_fixed/texhal_q13"] and scope["expected_models"] == 24
+    assert scope["log_roots"] == ["results/campaign_fixed"]
+    manifest = C.load_manifest(REPO_ROOT / C.DEFAULT_MANIFEST)
+    own = [g for g in manifest.groups if g.part == "texhal_q13"]
+    assert sum(len(g.seeds) for g in own) == 24
+    assert {g.id for g in manifest.groups if g.dir_results.startswith("results/campaign_fixed/texhal_q13/")} == {
+        g.id for g in own}
+    with pytest.raises(ValueError, match="belongs to part_1_gpu"):
+        _zip_selection("texhal_q13", gpu_part="part_2_gpu")
+    with pytest.raises(ValueError, match="ZIP_ONLY_PART must be"):
+        _zip_selection("rnhal")
