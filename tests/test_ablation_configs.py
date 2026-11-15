@@ -19,6 +19,7 @@ a 4th row, `rep_q13`, added 2026-08-30 per the VCTex method authors — see
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -274,3 +275,38 @@ def test_hierarchy_transfer_configs_disable_resampling(name: str) -> None:
     full = _load(ABLATIONS_DIR / "texhal_q17" / f"{name}.json")
     assert tuple(full.dataset.embedding.q) == (17,)
     assert full.dataset.selection.hierarchy.n_clusters == TEXHAL_Q17_TRANSFER[name]
+
+
+TEXHAL_Q13_NAMES = (*TEXHAL_Q17_NAMES, *TEXHAL_Q17_TRANSFER)
+
+
+def test_texhal_q13_folder_mirrors_texhal_q17() -> None:
+    """ADR 0017: files_config/ablations/texhal_q13/ holds exactly the texhal_q17 configs (6.2/6.3 + the two
+    hierarchy-transfer rows), full scale and micro."""
+    for sub in ("", "micro"):
+        on_disk = {p.stem for p in (ABLATIONS_DIR / "texhal_q13" / sub).glob("*.json")}
+        assert on_disk == set(TEXHAL_Q13_NAMES)
+
+
+@pytest.mark.parametrize("name", TEXHAL_Q13_NAMES)
+def test_texhal_q13_configs_equal_texhal_q17_except_q(name: str) -> None:
+    """ADR 0017: same hierarchy, n_resamples, training recipe and dataset as the texhal_q17 twin; only
+    embedding.q differs ([13] instead of [17])."""
+    for sub in ("", "micro"):
+        q13 = _load(ABLATIONS_DIR / "texhal_q13" / sub / f"{name}.json")
+        q17 = _load(ABLATIONS_DIR / "texhal_q17" / sub / f"{name}.json")
+        assert q13.dataset.embedding.extractor == "vctex"
+        assert q13.dataset.embedding.variant == "full"
+        assert tuple(q13.dataset.embedding.q) == (13,)
+        assert q13.dataset.selection == q17.dataset.selection
+        assert replace(q13.dataset, embedding=q17.dataset.embedding) == q17.dataset
+
+
+def test_texhal_canonical_q13_reference_is_rep_q13() -> None:
+    """ADR 0017: the reference-hierarchy run of TexHAL Q=13 is the executed texhal/6_1/rep_q13: the 6.1 config
+    equals stage_full except embedding.q (the alias texhal_q13/6_2/hier_ref -> texhal/6_1/rep_q13)."""
+    for sub in ("", "micro"):
+        rep = _load(ABLATIONS_DIR / "texhal" / sub / "rep_q13.json")
+        full = _load(ABLATIONS_DIR / "texhal" / sub / "stage_full.json")
+        assert tuple(rep.dataset.embedding.q) == (13,)
+        assert replace(rep.dataset, embedding=full.dataset.embedding) == full.dataset
