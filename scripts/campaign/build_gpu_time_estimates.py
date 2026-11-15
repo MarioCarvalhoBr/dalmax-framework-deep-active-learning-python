@@ -38,9 +38,9 @@ the trees of the first execution (read only, never written):
 - **estimate by reference** groups (ADR 0019, 2026-11-15): the KMH feature post-processing round `kmh_norm`,
   never run in the first execution (`REFERENCE_PREFIXES`), takes the measured value of the reference
   hierarchy at the same query size (`kmh/nq{N}/hier_L3_ref`): the same hierarchy, selection and training,
-  plus a post-processing of the frozen features that costs seconds per run (a full SVD of the 7,230 x 2,048
-  pool for `pca_l2`). `pca_l2` clusters 64-d instead of 2,048-d vectors and may well be faster; no speed-up
-  is assumed.
+  plus a post-processing of the frozen features once per run (negligible for `l2`/`zscore`; for `pca_l2` a full
+  SVD of the 7,130 x 2,048 initial pool, measured 105 s on a loaded local CPU, i.e. a few percent of a run).
+  `pca_l2` clusters 64-d instead of 2,048-d vectors and may well be faster overall; no speed-up is assumed.
 
 Caveats: the first execution ran on the dataset with duplicates (8,086 pool / 2,106 test images; the
 new one has 7,230 / 1,008), on the GPU class of that execution, and `KMeansSampling` /
