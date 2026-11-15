@@ -407,7 +407,7 @@ manifest alone, `MANIFEST=files_config/campaign/manifest_kmh_sweep.json` for the
 # Historical sections (first campaign on `daninhas_full`, superseded by ADR 0016)
 
 The sections 6c, 6d and 6b below describe the first campaign (`results/campaign/`, `results/campaign_kmh/`, dataset
-with duplicates, KI-46) and the ADR 0014 re-run that was prepared but never executed. Their commands refer to
+with duplicates, KI-46; on the local machine those trees were archived under `local_assets/results_old/` on 2026-11-15, without checkpoints) and the ADR 0014 re-run that was prepared but never executed. Their commands refer to
 manifests and Makefile targets that no longer exist in this form (e.g. `campaign-archive-superseded`, parts
 `paper1_rerun_a`/`paper1_rerun_b`, the notebook's `PART`/`MANIFEST` parameters). Kept as the execution record; do not
 follow them.

@@ -3,7 +3,7 @@
 Since 2026-11-11 (ADR 0016) every manifest here describes the **clean re-run on `DATA/daninhas_full_fixed`**
 (the duplicate-free dataset, KI-46) into NEW results roots; the manifests of the first campaign
 (`results/campaign/`, `results/campaign_kmh/`, dataset with duplicates) are in git history (commit d668673 and
-earlier). See `.specs/experiments/campaign.md` and `COLAB_RUNBOOK.md` section 6.
+earlier; those result trees are archived under `local_assets/results_old/` since 2026-11-15). See `.specs/experiments/campaign.md` and `COLAB_RUNBOOK.md` section 6.
 
 - `manifest.json` -- the single source of truth for the campaign: run groups (one distinct computation each), aliases
   (same computation, different spelling), per-paper tables, the GPU part of every group (`gpu_part`, `gpu_stage`), the

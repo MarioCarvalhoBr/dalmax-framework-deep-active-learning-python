@@ -14,7 +14,10 @@ by `scripts/campaign/build_manifest.py`; micro mirror `manifest_micro.json`) plu
 > the "History" heading is the **first campaign** (executed 2026-09-30 to 2026-11-11 into `results/campaign/` and
 > `results/campaign_kmh/`) on `DATA/daninhas_full`, a dataset with byte-identical duplicates inside and across train
 > and test (KI-46): its numbers are kept as the historical record and are **superseded** for the papers by the clean
-> re-run. Its manifests are in git history (commit d668673 and earlier).
+> re-run. Its manifests are in git history (commit d668673 and earlier). Since 2026-11-15 its result trees are archived
+> by the author under `local_assets/results_old/campaign/` and `local_assets/results_old/campaign_kmh/` (gitignored),
+> without the 387 `saved_model.pth` (Drive backup kept): a read-only record, `campaign verify` there would report
+> INCOMPLETE; the paths `results/campaign/` and `results/campaign_kmh/` in the sections below are the original ones.
 
 ## Clean re-run on `daninhas_full_fixed` (ADR 0016; prepared 2026-11-11, not executed)
 

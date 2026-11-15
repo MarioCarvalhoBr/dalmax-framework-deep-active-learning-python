@@ -615,7 +615,9 @@ budget although its session indexed the pool in another order: the same cached f
 indices, which named other images there. The brief that reported the defect also measured cache hits of 0.2 s against
 8.6 s of computation in leaves of later sessions.
 
-**Effect on the first campaign** (`results/campaign/`, `results/campaign_kmh/`, history, append-only):
+**Effect on the first campaign** (`results/campaign/`, `results/campaign_kmh/`, history, append-only; archived by the
+author on 2026-11-15 under `local_assets/results_old/` without checkpoints, so the evidence above is no longer
+reproducible in place from `results/`):
 
 - **Misaligned features** (selection on the features of other images): every leaf of a representation-based strategy
   executed in a session other than the one that wrote its embedding cache: the whole KMH sweep (165 leaves, ADR 0012),

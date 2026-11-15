@@ -242,6 +242,7 @@ campaign-manifest: kmh-sweep-configs
 	poetry run python scripts/campaign/build_manifest.py
 
 # Rebuild files_config/campaign/gpu_time_estimates.json from the first execution's trees
-# (results/campaign/, results/campaign_kmh/; read only). A no-op where those trees are absent.
+# (results/campaign/, results/campaign_kmh/; read only). A no-op where those trees are absent
+# (archived under local_assets/results_old/ since 2026-11-15; the committed estimates file stays as is).
 gpu-time-estimates:
 	poetry run python scripts/campaign/build_gpu_time_estimates.py

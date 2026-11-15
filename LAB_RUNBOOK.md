@@ -58,7 +58,7 @@ overlap between the two commands.
   `FullSupervised` upper bound (all 7,230 pool images of `daninhas_full_fixed`). A job that runs out of memory is logged to
   `failures.log` and the batch continues -- do not lower the batch size silently (it would change
   the protocol); report it (see Troubleshooting).
-- **Disk**: 222 checkpoints (~95 MB each) are about 21 GB under `results/campaign/`.
+- **Disk**: 222 checkpoints (~95 MB each) are about 21 GB under `results/campaign/` (the first campaign; archived locally under `local_assets/results_old/campaign/` since 2026-11-15, without checkpoints).
 - **CPU smoke** (any machine, no GPU): `make campaign-smoke` runs the micro campaign, skipping the
   two adversarial baselines (`AdversarialBIM`, `AdversarialDeepFool`; far too slow on CPU) -- 68 of the
   74 micro jobs; the real campaign runs them.

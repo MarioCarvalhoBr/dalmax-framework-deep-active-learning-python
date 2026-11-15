@@ -172,7 +172,9 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   execution record and every result table in
   [`.specs/experiments/campaign.md`](.specs/experiments/campaign.md); reports in
   `docs/results/campaign/` (local-only since `docs/*` is gitignored; a copy is kept under
-  `thesis_drafts/final_thesis/context/campaign-results/`). TexHAL's canonical config is `Q=17` (ADR 0011
+  `thesis_drafts/final_thesis/context/campaign-results/`; since 2026-11-15 the result trees `results/campaign/` and
+  `results/campaign_kmh/` live under `local_assets/results_old/`, without checkpoints, see the bullet at the end of this
+  list). TexHAL's canonical config is `Q=17` (ADR 0011
   accepted by the author 2026-11-01, advisor review pending; KI-40 resolved): its 6.2/6.3 ablations were
   re-run in `texhal_q17` (best 6.2 row `L=3 [300,100,50]` 0.8842; TexHAL Q=17 0.8745 edges the best
   paper-1 method, below RNHAL 0.8805). Whether RNHAL's canonical hierarchy becomes
@@ -227,6 +229,12 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   gets `logs/build_history.txt` + `logs/source_manifest.csv` (provenance), a top-level `README.txt`/`MANIFEST.csv`
   describing the dataset as it is (`split,class,file,md5`), 8,242 files; `--check` now also compares the files on disk
   with `MANIFEST.csv`; the one-off `--migrate-metadata` converts the existing folder (images untouched).
+- **First-campaign archival (2026-11-15, author, by hand; not a precedent)**: `results/campaign/`,
+  `results/campaign_kmh/`, `results/cache/`, `results/colab_check/` and `results/campaign_tables/` were moved to
+  `local_assets/results_old/` (gitignored) after deleting the 387 `saved_model.pth` (Drive backup `results_old` kept);
+  metrics, predictions, logs and `run_metadata.json` remain, so `campaign verify` there would say INCOMPLETE (read-only
+  record). `results/` holds only `campaign_fixed/`, `campaign_kmh_fixed/`, `logs/`, `original_indices.txt`, `smoke/`.
+  The never-touch-`results/` rule for agents and code is unchanged (`.claude/rules/data-safety.md`).
 
 Next milestone: execute the clean re-run (`COLAB_RUNBOOK.md` section 6), then rewrite the thesis numbers from its reports; advisor review of the ablation section
 (`paper_drafts/ablation_section.tex`, weighted-primary/macro-secondary framing still pending
