@@ -1,6 +1,6 @@
 # ADR 0011: TexHAL canonical configuration Q=17
 
-- **Status:** Accepted (author decision 2026-11-01; executed 2026-11-01, verified 2026-11-02; advisor review pending)
+- **Status:** Superseded by ADR-0017 (2026-11-15: canonical Q=13 on the clean dataset). Was: Accepted (author decision 2026-11-01; executed 2026-11-01, verified 2026-11-02; advisor review pending)
 - **Date:** 2026-11-01
 
 ## Context

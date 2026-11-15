@@ -46,7 +46,8 @@ decisions** (ADRs) about the codebase supporting that research. Hence:
 │   ├── 0008-single-campaign-manifest-dedup.md              # one manifest, aliases, redundancy checker
 │   ├── 0009-shared-no-representation-run.md                # one shared "w/o representation" run (supersedes 2026-09-01)
 │   ├── 0010-cleanup-tools-and-hardware-agnostic.md         # tools/ CLIs, campaign as the only run path, hardware-agnostic repo
-│   ├── 0011-texhal-canonical-q17.md                        # TexHAL canonical config Q=17 (Accepted; advisor review pending)
+│   ├── 0011-texhal-canonical-q17.md                        # TexHAL canonical config Q=17 (superseded by 0017, 2026-11-15)
+│   ├── 0017-texhal-q13.md                                  # TexHAL canonical config Q=13 on the clean dataset; part texhal_q13, tag v3
 │   └── template.md                       # [owned elsewhere]
 ├── experiments/
 │   ├── experimental-protocol.md          # datasets, splits, seeds, budgets, metrics, results layout
