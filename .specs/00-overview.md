@@ -103,6 +103,12 @@ distinct from "hierarchical" and matters for the ablation in
   disclosed). Its 6.2/6.3 ablations are the new part `texhal_q13` (8 groups / 24 runs in `part_1_gpu`, prepared, not
   executed; tag `campaign-fixed-v3`; `COLAB_RUNBOOK.md` section 6e): main manifest 321 runs / 107 groups, 486 in total
   with the sweep.
+- **KMH wide-top exploration (2026-11-15, ADR 0018)**: paper 1's KMH is below WAAL at every query size on the clean
+  campaign (best KMH sweep configuration vs WAAL: nq100 0.7921 vs 0.8077, nq50 0.7146 vs 0.7874, nq10 0.5627 vs
+  0.5793). New part `kmh_wide` of the KMH sweep (13 groups / 39 runs in `part_2_gpu`, prepared, not executed; tag
+  `campaign-fixed-v4`; `COLAB_RUNBOOK.md` section 6f): wide tops ending at the query size and one-level `k=1200`/`2400`
+  hierarchies. Sweep 204 runs / 68 groups, `part_2_gpu` 216 / 72, 525 runs in total. A configuration chosen from it is
+  selected on the test set and must be confirmed on seeds 4-6 with RandomSampling and WAAL before any claim (planned).
 - **Pre-flight fix KI-47 (2026-11-12, ADR 0016 amendment)**: the loaders listed each class folder in file-system order,
   which differed between Colab sessions, so in the first campaign the same seed started from other images in each
   later session and the cached embeddings served later sessions the features of other images (the KMH sweep,

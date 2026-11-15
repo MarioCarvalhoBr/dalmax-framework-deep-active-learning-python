@@ -27,6 +27,10 @@ by `scripts/campaign/build_manifest.py`; micro mirror `manifest_micro.json`) plu
 > configuration (superseding ADR 0011's `Q=17`) and added the part **`texhal_q13`** (8 groups / 24 runs, `part_1_gpu`,
 > prepared, not executed; section "TexHAL canonical Q=13" below). The tables below give the counts with it: main
 > manifest 321 / 107, `part_1_gpu` 309 / 103, both manifests 486.
+>
+> **2026-11-15 (ADR 0018).** From the 55 executed sweep groups the author added the part **`kmh_wide`** to the KMH
+> sweep manifest (13 groups / 39 runs, `part_2_gpu`, prepared, not executed; section "KMH wide-top exploration"
+> below): sweep 204 / 68, `part_2_gpu` 216 / 72, both manifests 525.
 
 **Why**: KI-46 (train/test leakage and duplicated test images in `DATA/daninhas_full`). Author decisions
 (2026-11-11): the new canonical dataset is `DATA/daninhas_full_fixed` (7,230 train / 1,008 test images, plus
@@ -59,8 +63,9 @@ bound's `n_init_labeled` is 7,230.
 | sweep | `kmh_nq100` | 21 x 3 | 63 | KMH sweep stages 1 + 2 (ADR 0012) | 9.9 |
 | sweep | `kmh_nq50` | 17 x 3 | 51 | | 4.9 |
 | sweep | `kmh_nq10` | 17 x 3 | 51 | | 4.0 |
-| sweep | **total** | **55 x 3** | **165** | | **18.9** |
-| both | **total** | **162 x 3** | **486** | | **100.1** |
+| sweep | `kmh_wide` | 13 x 3 | 39 | KMH wide-top exploration, nq 10/50/100 (ADR 0018, added 2026-11-15) | 9.2 |
+| sweep | **total** | **68 x 3** | **204** | | **28.1** |
+| both | **total** | **175 x 3** | **525** | | **109.3** |
 
 Params per paper-1 strategy: the dropout family (`LeastConfidenceDropout`, `MarginSamplingDropout`,
 `EntropySamplingDropout`, `BALDDropout`, `VarRatio`, `MeanSTD`) `params_paper1_mc_dropout.json` (`model_args.dropout_p`
@@ -107,6 +112,28 @@ tables `6_2_q5_17` / `6_3_q5_17`, and `comparison`; the TexHAL row of the compar
 (v2 for the 285 earlier leaves, v3 for the 24 new ones), an expected WARN; the run-affecting code is the same.
 Operator steps: `COLAB_RUNBOOK.md` section 6e.
 
+**KMH wide-top exploration (part `kmh_wide`, ADR 0018, author decision 2026-11-15; prepared, not executed).** On
+this campaign (final-round weighted F1, mean of seeds 1-3) paper 1's KMH is below WAAL at every query size: nq100
+0.7921 vs 0.8077, nq50 0.7146 (best sweep configuration, `hier_L3_ref__init_random`) vs 0.7874, nq10 0.5627
+(`hier_L1_k600`) vs 0.5793. The sweep favours a wide first level with the last level equal to the query size at
+nq100 (`[600,200,100]` 0.7921, `[800,600,100]` 0.7740, `[600,100]` 0.7669) and the widest first levels at nq10
+(`[600]` 0.5627, `[800,600,200,100]` 0.5216; the budget-matched `[60,20,10]` 0.4043 and `[60,10]` 0.4109 among the
+worst); the wide-top shape ending at the query size was never run at nq10/nq50. Part `kmh_wide` explores both
+directions, 13 groups x seeds 1-3 = 39 runs of the sweep manifest, every knob other than the shape at its default:
+(a) nq10 `[600,200,10]`, `[600,10]`; nq50 `[600,200,50]`, `[600,50]`; (b) one level `k=1200` and `k=2400` at nq 10, 50
+and 100, three levels `[1200,400,nq]` at each nq. Ids `kmh_wide/nq{N}/<config>`, params
+`files_config/ablations/kmh_sweep/nq{N}/<config>.json` (sample sizes by the sweep's `max(2, round_half_up(0.05 k))`
+rule; table in ADR 0018), results `results/campaign_kmh_fixed/wide/nq{N}/<config>/`, `part_2_gpu` (account B, whose
+Drive holds the ImageNet feature cache of seeds 1-3: the cache key does not depend on `n_query`), stage 3, estimates by
+a linear fit in the total number of clusters (`build_gpu_time_estimates.py::fit_estimate`, 9.2 GPU h). Report tables
+`kmh_wide_nq100`, `kmh_wide_nq50`, `kmh_wide_nq10` (only the new groups); every other sweep table is unchanged. The
+165 executed sweep groups and the 321 of the main manifest keep their identity
+(`tests/test_campaign.py::test_v3_groups_keep_their_identity`). Paper 1's KMH row (thesis rule: the highest mean
+final-round weighted F1 of the KMH study at that query size) will range over `kmh_nq{N}` and the `kmh_wide` groups of
+that size; because that is selection on the test set, a configuration chosen from this round is confirmed on seeds
+4-6 with `RandomSampling` and `WAAL` before any claim against WAAL (planned, not built). Code version: tag
+`campaign-fixed-v4`; operator steps: `COLAB_RUNBOOK.md` section 6f.
+
 **Unchanged rules.** Protocol (`n_init_labeled` 100, `n_round` 8, `n_epoch` 10, batch 256, lr 0.05, momentum 0.3,
 reference hierarchy `[600,200,100]`/`[30,15,2]`, SSRAE `q=13`, VCTex as in ADR 0017: canonical `q=[13]`, ADR 0011's
 `q=[17]` until 2026-11-15), seeds and determinism and the
@@ -122,7 +149,7 @@ manifests carries `gpu_part` and `gpu_stage`. A group never splits (its three se
 | GPU part | Account | Content | Runs / groups | Est. GPU h |
 |---|---|---|---|---|
 | `part_1_gpu` | A | paper 1 at nq100 (incl. `shared/random_nq100`, `shared/kmh_nq100`), the WAAL control, the upper bound, `rnhal`, `texhal`, `texhal_q17`, `hier_transfer`, `texhal_q13` (ADR 0017), KMH sweep at nq100 and nq50 | 309 / 103 (285 / 95 before ADR 0017) | 51.3 |
-| `part_2_gpu` | B | paper 1 at nq50 and nq10, KMH sweep at nq10 | 177 / 59 | 48.8 |
+| `part_2_gpu` | B | paper 1 at nq50 and nq10, KMH sweep at nq10, `kmh_wide` (ADR 0018) | 216 / 72 (177 / 59 before ADR 0018) | 58.0 |
 
 Execution order inside a part (`gpu_stage`; the main manifest and the sweep are merged into one plan): 1 paper-1
 strategies other than the long ones, KMH and the upper bound; 2 the ablations; 3 the KMH sweep; 4 `AdversarialBIM`;
@@ -171,6 +198,7 @@ results/campaign_fixed/                         # main manifest
 ├── rnhal/<study>/<config>/..., texhal/<study>/<config>/..., texhal_q17/<study>/<config>/...
 ├── texhal_q13/<study>/<config>/...             # ADR 0017
 results/campaign_kmh_fixed/nq{10,50,100}/<config>/...   # KMH sweep
+results/campaign_kmh_fixed/wide/nq{10,50,100}/<config>/...   # KMH wide-top exploration, part kmh_wide (ADR 0018)
 docs/results/campaign_fixed/, docs/results/campaign_kmh_fixed/   # reports (local-only, docs/* is gitignored)
 results/smoke_campaign_fixed/, results/smoke_campaign_kmh_fixed/ # CPU micro smoke
 ```
@@ -196,7 +224,9 @@ line that does not change the exit code (also printed by `pilot-report`). The no
 metadata layout; `campaign-fixed-v3` since ADR 0017, 2026-11-15, = v2 + the `texhal_q13` part with the run-affecting
 code unchanged): every session fetches the tags and checks it out detached, no branch is pulled. With v3 the
 `part_1_gpu` leaves carry two `git_commit` values (285 with v2's, 24 with v3's): the WARN is expected there and
-explained in ADR 0017; it stays a WARN.
+explained in ADR 0017; it stays a WARN. `campaign-fixed-v4` since ADR 0018 (2026-11-15) = v3 + the `kmh_wide` part,
+run-affecting code unchanged again: `part_2_gpu` then carries two commits (177 leaves with v2's, 39 with v4's), and
+account A may run `texhal_q13` under v3 or v4, so the merged verify lists up to three commits, all explained.
 
 **Data order, cache identity and audits (KI-47, ADR 0016 amendment of 2026-11-12).** The first campaign's loaders
 listed each class folder in file-system order, which differed between Colab sessions: the same seed selected the same
@@ -211,7 +241,7 @@ by **image paths** (round 0 of `round_queries.json`; logged indices only for lea
 naming other images FAIL, and (2) the **data-order audit**: per dataset folder, every leaf must record the same
 `data_order` hashes (FAIL otherwise, WARN for a leaf without the record). Exit codes as before: 0 / 1 (a job not OK or
 a FAIL) / 2 (only WARNs). After merging both parts expect one order for `daninhas_full_fixed` over all 462 leaves
-(486 after the `texhal_q13` part, ADR 0017).
+(486 after the `texhal_q13` part, ADR 0017; 525 after `kmh_wide`, ADR 0018).
 
 **Intentional duplicate computations.** Three groups of the main manifest have the effective signature of a KMH-sweep
 group: `shared/kmh_nq100` = `kmh/nq100/hier_L3_ref`, `p1/KMH/nq50` = `kmh/nq50/hier_L3_ref`, `p1/KMH/nq10` =
@@ -249,7 +279,7 @@ make campaign-pilot           GPU_PART=part_1_gpu   # seed 1 of VAAL/WAAL (+ Ran
 make campaign-pilot-report    GPU_PART=part_1_gpu   # wall time vs estimate, strategy_diagnostics, flags (read only)
 make campaign-run-gpu-part    GPU_PART=part_1_gpu   # resumable: re-run the same command
 make campaign-verify-gpu-part GPU_PART=part_1_gpu   # OK/INCOMPLETE/MISSING + commits + seed audit + data-order audit
-make campaign-verify-all                            # after merging: OK=486 (462 + texhal_q13), two commits (v2, v3), audits PASS, duplicate pairs
+make campaign-verify-all                            # after merging: OK=525 (462 + texhal_q13 + kmh_wide), up to three commits (v2, v3, v4), audits PASS, duplicate pairs
 make campaign-report-all                            # docs/results/campaign_fixed/ + docs/results/campaign_kmh_fixed/
 make campaign-list                                  # main manifest alone (PART=paper1|... or part_1_gpu|part_2_gpu)
 make campaign-smoke-gpu-part GPU_PART=part_2_gpu    # CPU micro plan of one GPU part, seed 1
@@ -274,7 +304,10 @@ below.
 
 **Execution record**: the 462 runs were executed, merged locally and verified (recorded by the author with ADR 0017,
 2026-11-15: OK=462, one commit, seed and data-order audits PASS, duplicate pairs SAME). Part `texhal_q13` (24 runs):
-not executed.
+not executed. Part `kmh_wide` (39 runs, ADR 0018): not executed; local check of 2026-11-15 on the merged tree:
+`make campaign-verify-all` OK=462, MISSING=63 (24 `texhal_q13` + 39 `kmh_wide`), one commit, seed and data-order
+audits PASS, duplicate pairs SAME; a dry run of `run --part part_2_gpu` SKIPs the 177 executed leaves and would start
+only the 39 `kmh_wide` jobs.
 
 ---
 

@@ -111,6 +111,18 @@ locally and verified (OK=462, one commit, seed and data-order audits PASS). Auth
   the Q=[5,17] ones as history. The TexHAL row of the comparison tables of papers 2 **and 3** is `texhal/6_1/rep_q13`.
 - `Q=13` is also SSRAE's hidden size (paper 3); the papers should say so explicitly.
 
+## Paper 1 KMH: wide-top exploration (2026-11-15, ADR 0018)
+
+On the clean campaign paper 1's KMH is below WAAL at every query size (final-round weighted F1, best KMH sweep
+configuration vs WAAL: nq100 0.7921 vs 0.8077, nq50 0.7146 vs 0.7874, nq10 0.5627 vs 0.5793). Author decision: an
+exploration round of wider hierarchies, part `kmh_wide` of the KMH sweep (13 groups / 39 runs, `part_2_gpu`, account
+B; prepared, not executed): the wide top with the last level equal to the query size at nq10/nq50, and wider tops
+(one level `k=1200`/`2400`, three levels `[1200,400,nq]`) at every query size. The thesis rule for paper 1's KMH row
+("highest mean final-round weighted F1 of the KMH study at that query size") then ranges over `kmh_nq{N}` and the
+`kmh_wide` groups of that size. That is selection on the test set, with a seed spread of 5 to 10 points: a
+configuration chosen from this round is confirmed on new seeds (4, 5, 6) together with `RandomSampling` and `WAAL`
+before any claim against WAAL (planned, not built).
+
 ## Campaign executed; decisions of 2026-11-01 (first campaign; the Q=17 decision is superseded by ADR 0017)
 
 The campaign's first 192 runs finished on 2026-10-05 and the 18-run `texhal_q17` part on 2026-11-01
