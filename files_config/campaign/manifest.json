@@ -564,6 +564,11 @@
         },
         {
           "paper": "paper2",
+          "table": "6_3_q17",
+          "row": "w/o representation module"
+        },
+        {
+          "paper": "paper2",
           "table": "6_3_q5_17",
           "row": "w/o representation module"
         },
@@ -573,7 +578,7 @@
           "row": "w/o representation module"
         }
       ],
-      "note": "KMH @ n_query=100 = hierarchical k-means on ImageNet ResNet-50 features (reference hierarchy [600,200,100]) = the 'w/o representation module' row of papers 2 and 3. Consumed by several papers (see used_by): ONE run, every table points here. Also serves as: p1/KMH/nq100, rnhal/6_3/stage_no_representation, texhal/6_3/stage_no_representation, texhal_q17/6_3/stage_no_representation."
+      "note": "KMH @ n_query=100 = hierarchical k-means on ImageNet ResNet-50 features (reference hierarchy [600,200,100]) = the 'w/o representation module' row of papers 2 and 3. Consumed by several papers (see used_by): ONE run, every table points here. Also serves as: p1/KMH/nq100, rnhal/6_3/stage_no_representation, texhal/6_3/stage_no_representation, texhal_q17/6_3/stage_no_representation, texhal_q13/6_3/stage_no_representation."
     },
     {
       "id": "p1/RandomSampling/nq50",
@@ -2095,10 +2100,30 @@
         {
           "paper": "paper2",
           "table": "6_1",
-          "row": "Q=13"
+          "row": "Q=13 (TexHAL)"
+        },
+        {
+          "paper": "paper2",
+          "table": "6_2",
+          "row": "L=3, k=[600,200,100] (reference)"
+        },
+        {
+          "paper": "paper2",
+          "table": "6_3",
+          "row": "TexHAL (full)"
+        },
+        {
+          "paper": "paper2",
+          "table": "comparison",
+          "row": "TexHAL (VCTex Q=13 + hierarchical)"
+        },
+        {
+          "paper": "paper3",
+          "table": "comparison",
+          "row": "TexHAL (VCTex Q=13 + hierarchical)"
         }
       ],
-      "note": ""
+      "note": "Also serves as: texhal_q13/6_2/hier_ref, texhal_q13/6_3/stage_full."
     },
     {
       "id": "texhal/6_1/rep_q17",
@@ -2120,27 +2145,17 @@
         {
           "paper": "paper2",
           "table": "6_1",
-          "row": "Q=17 (TexHAL)"
+          "row": "Q=17"
         },
         {
           "paper": "paper2",
-          "table": "6_2",
+          "table": "6_2_q17",
           "row": "L=3, k=[600,200,100] (reference)"
         },
         {
           "paper": "paper2",
-          "table": "6_3",
+          "table": "6_3_q17",
           "row": "TexHAL (full)"
-        },
-        {
-          "paper": "paper2",
-          "table": "comparison",
-          "row": "TexHAL (VCTex Q=17 + hierarchical)"
-        },
-        {
-          "paper": "paper3",
-          "table": "comparison",
-          "row": "TexHAL (VCTex Q=17 + hierarchical)"
         }
       ],
       "note": "Also serves as: texhal_q17/6_2/hier_ref, texhal_q17/6_3/stage_full."
@@ -2314,7 +2329,7 @@
       "used_by": [
         {
           "paper": "paper2",
-          "table": "6_2",
+          "table": "6_2_q17",
           "row": "L=1, k=[50]"
         }
       ],
@@ -2339,7 +2354,7 @@
       "used_by": [
         {
           "paper": "paper2",
-          "table": "6_2",
+          "table": "6_2_q17",
           "row": "L=2, k=[300,100]"
         }
       ],
@@ -2364,7 +2379,7 @@
       "used_by": [
         {
           "paper": "paper2",
-          "table": "6_2",
+          "table": "6_2_q17",
           "row": "L=2, k=[100,50]"
         }
       ],
@@ -2389,7 +2404,7 @@
       "used_by": [
         {
           "paper": "paper2",
-          "table": "6_2",
+          "table": "6_2_q17",
           "row": "L=3, k=[300,100,50]"
         }
       ],
@@ -2414,7 +2429,7 @@
       "used_by": [
         {
           "paper": "paper2",
-          "table": "6_2",
+          "table": "6_2_q17",
           "row": "L=4, k=[300,100,50,25]"
         }
       ],
@@ -2439,7 +2454,7 @@
       "used_by": [
         {
           "paper": "paper2",
-          "table": "6_3",
+          "table": "6_3_q17",
           "row": "w/o hierarchical module"
         }
       ],
@@ -2514,7 +2529,7 @@
       "used_by": [
         {
           "paper": "paper2",
-          "table": "6_2",
+          "table": "6_2_q17",
           "row": "L=2, k=[600,100], no resampling (KMH sweep winner)"
         }
       ],
@@ -2539,7 +2554,7 @@
       "used_by": [
         {
           "paper": "paper2",
-          "table": "6_2",
+          "table": "6_2_q17",
           "row": "L=3, k=[600,200,100] (reference), no resampling"
         }
       ],
@@ -2579,6 +2594,206 @@
         }
       ],
       "note": "TexHAL 'full' (VCTex q=[5,17] + reference hierarchy). Consumed by several papers (see used_by): ONE run, every table points here. Also serves as: texhal/6_3/stage_full, texhal/6_1/rep_full, texhal/6_2/ref."
+    },
+    {
+      "id": "texhal_q13/6_2/hier_L1",
+      "part": "texhal_q13",
+      "gpu_part": "part_1_gpu",
+      "gpu_stage": 2,
+      "params_json": "files_config/ablations/texhal_q13/hier_L1.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 100,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign_fixed/texhal_q13/6_2/hier_L1/",
+      "used_by": [
+        {
+          "paper": "paper2",
+          "table": "6_2",
+          "row": "L=1, k=[50]"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "id": "texhal_q13/6_2/hier_L2a",
+      "part": "texhal_q13",
+      "gpu_part": "part_1_gpu",
+      "gpu_stage": 2,
+      "params_json": "files_config/ablations/texhal_q13/hier_L2a.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 100,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign_fixed/texhal_q13/6_2/hier_L2a/",
+      "used_by": [
+        {
+          "paper": "paper2",
+          "table": "6_2",
+          "row": "L=2, k=[300,100]"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "id": "texhal_q13/6_2/hier_L2b",
+      "part": "texhal_q13",
+      "gpu_part": "part_1_gpu",
+      "gpu_stage": 2,
+      "params_json": "files_config/ablations/texhal_q13/hier_L2b.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 100,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign_fixed/texhal_q13/6_2/hier_L2b/",
+      "used_by": [
+        {
+          "paper": "paper2",
+          "table": "6_2",
+          "row": "L=2, k=[100,50]"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "id": "texhal_q13/6_2/hier_L3",
+      "part": "texhal_q13",
+      "gpu_part": "part_1_gpu",
+      "gpu_stage": 2,
+      "params_json": "files_config/ablations/texhal_q13/hier_L3.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 100,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign_fixed/texhal_q13/6_2/hier_L3/",
+      "used_by": [
+        {
+          "paper": "paper2",
+          "table": "6_2",
+          "row": "L=3, k=[300,100,50]"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "id": "texhal_q13/6_2/hier_L4",
+      "part": "texhal_q13",
+      "gpu_part": "part_1_gpu",
+      "gpu_stage": 2,
+      "params_json": "files_config/ablations/texhal_q13/hier_L4.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 100,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign_fixed/texhal_q13/6_2/hier_L4/",
+      "used_by": [
+        {
+          "paper": "paper2",
+          "table": "6_2",
+          "row": "L=4, k=[300,100,50,25]"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "id": "texhal_q13/6_2/hier_L2_matched__no_resampling",
+      "part": "texhal_q13",
+      "gpu_part": "part_1_gpu",
+      "gpu_stage": 2,
+      "params_json": "files_config/ablations/texhal_q13/hier_L2_matched__no_resampling.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 100,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign_fixed/texhal_q13/6_2/hier_L2_matched__no_resampling/",
+      "used_by": [
+        {
+          "paper": "paper2",
+          "table": "6_2",
+          "row": "L=2, k=[600,100], no resampling (KMH sweep winner)"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "id": "texhal_q13/6_2/hier_L3__no_resampling",
+      "part": "texhal_q13",
+      "gpu_part": "part_1_gpu",
+      "gpu_stage": 2,
+      "params_json": "files_config/ablations/texhal_q13/hier_L3__no_resampling.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 100,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign_fixed/texhal_q13/6_2/hier_L3__no_resampling/",
+      "used_by": [
+        {
+          "paper": "paper2",
+          "table": "6_2",
+          "row": "L=3, k=[600,200,100] (reference), no resampling"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "id": "texhal_q13/6_3/stage_no_hierarchy",
+      "part": "texhal_q13",
+      "gpu_part": "part_1_gpu",
+      "gpu_stage": 2,
+      "params_json": "files_config/ablations/texhal_q13/stage_no_hierarchy.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 100,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign_fixed/texhal_q13/6_3/stage_no_hierarchy/",
+      "used_by": [
+        {
+          "paper": "paper2",
+          "table": "6_3",
+          "row": "w/o hierarchical module"
+        }
+      ],
+      "note": ""
     }
   ],
   "aliases": [
@@ -2661,6 +2876,27 @@
     },
     {
       "id": "texhal_q17/6_3/stage_no_representation",
+      "canonical": "shared/kmh_nq100",
+      "params_json": "files_config/campaign/params_kmh.json",
+      "strategy_name": "RepresentationStrategy",
+      "reason": "w/o representation module = ImageNet ResNet-50 features + reference hierarchy = the shared KMH@100 run (byte-identical config; ADR 0009)."
+    },
+    {
+      "id": "texhal_q13/6_2/hier_ref",
+      "canonical": "texhal/6_1/rep_q13",
+      "params_json": "files_config/ablations/texhal/rep_q13.json",
+      "strategy_name": "RepresentationStrategy",
+      "reason": "TexHAL canonical Q=13 (ADR 0017): the reference hierarchy L=3 k=[600,200,100] with VCTex q=[13] IS the texhal/6_1/rep_q13 run (byte-identical config)."
+    },
+    {
+      "id": "texhal_q13/6_3/stage_full",
+      "canonical": "texhal/6_1/rep_q13",
+      "params_json": "files_config/ablations/texhal/rep_q13.json",
+      "strategy_name": "RepresentationStrategy",
+      "reason": "TexHAL canonical Q=13 (ADR 0017): the reference hierarchy L=3 k=[600,200,100] with VCTex q=[13] IS the texhal/6_1/rep_q13 run (byte-identical config)."
+    },
+    {
+      "id": "texhal_q13/6_3/stage_no_representation",
       "canonical": "shared/kmh_nq100",
       "params_json": "files_config/campaign/params_kmh.json",
       "strategy_name": "RepresentationStrategy",
@@ -2988,11 +3224,11 @@
               "run": "texhal/6_1/rep_q5"
             },
             {
-              "label": "Q=13",
+              "label": "Q=13 (TexHAL)",
               "run": "texhal/6_1/rep_q13"
             },
             {
-              "label": "Q=17 (TexHAL)",
+              "label": "Q=17",
               "run": "texhal/6_1/rep_q17"
             },
             {
@@ -3005,6 +3241,64 @@
           "id": "6_2",
           "kind": "ablation",
           "title": "6.2 Hierarchy ablation",
+          "rows": [
+            {
+              "label": "L=1, k=[50]",
+              "run": "texhal_q13/6_2/hier_L1"
+            },
+            {
+              "label": "L=2, k=[300,100]",
+              "run": "texhal_q13/6_2/hier_L2a"
+            },
+            {
+              "label": "L=2, k=[100,50]",
+              "run": "texhal_q13/6_2/hier_L2b"
+            },
+            {
+              "label": "L=3, k=[300,100,50]",
+              "run": "texhal_q13/6_2/hier_L3"
+            },
+            {
+              "label": "L=3, k=[600,200,100] (reference)",
+              "run": "texhal_q13/6_2/hier_ref"
+            },
+            {
+              "label": "L=4, k=[300,100,50,25]",
+              "run": "texhal_q13/6_2/hier_L4"
+            },
+            {
+              "label": "L=2, k=[600,100], no resampling (KMH sweep winner)",
+              "run": "texhal_q13/6_2/hier_L2_matched__no_resampling"
+            },
+            {
+              "label": "L=3, k=[600,200,100] (reference), no resampling",
+              "run": "texhal_q13/6_2/hier_L3__no_resampling"
+            }
+          ]
+        },
+        {
+          "id": "6_3",
+          "kind": "ablation",
+          "title": "6.3 Contribution of the two stages",
+          "rows": [
+            {
+              "label": "TexHAL (full)",
+              "run": "texhal_q13/6_3/stage_full"
+            },
+            {
+              "label": "w/o representation module",
+              "run": "texhal_q13/6_3/stage_no_representation"
+            },
+            {
+              "label": "w/o hierarchical module",
+              "run": "texhal_q13/6_3/stage_no_hierarchy"
+            }
+          ]
+        },
+        {
+          "id": "6_2_q17",
+          "kind": "ablation",
+          "title": "6.2 Hierarchy ablation (supplementary, VCTex Q=17, ADR 0011)",
           "rows": [
             {
               "label": "L=1, k=[50]",
@@ -3041,9 +3335,9 @@
           ]
         },
         {
-          "id": "6_3",
+          "id": "6_3_q17",
           "kind": "ablation",
-          "title": "6.3 Contribution of the two stages",
+          "title": "6.3 Contribution of the two stages (supplementary, VCTex Q=17, ADR 0011)",
           "rows": [
             {
               "label": "TexHAL (full)",
@@ -3115,8 +3409,8 @@
           "title": "Paper 2 -- TexHAL vs. paper-1 methods, n_query=100",
           "rows": [
             {
-              "label": "TexHAL (VCTex Q=17 + hierarchical)",
-              "run": "texhal/6_1/rep_q17"
+              "label": "TexHAL (VCTex Q=13 + hierarchical)",
+              "run": "texhal/6_1/rep_q13"
             },
             {
               "label": "Best paper-1 method @ n_query=100 (computed)",
@@ -3327,8 +3621,8 @@
               "run": "rnhal/6_3/stage_full"
             },
             {
-              "label": "TexHAL (VCTex Q=17 + hierarchical)",
-              "run": "texhal/6_1/rep_q17"
+              "label": "TexHAL (VCTex Q=13 + hierarchical)",
+              "run": "texhal/6_1/rep_q13"
             },
             {
               "label": "RandomSampling @ n_query=100",

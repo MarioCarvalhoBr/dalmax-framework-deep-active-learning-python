@@ -11,9 +11,11 @@ files), and the seed-consistency audit.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import sys
+from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
 
@@ -112,9 +114,9 @@ def test_run_counts_per_part(which: str, request: pytest.FixtureRequest) -> None
     manifest: C.Manifest = request.getfixturevalue(which)
     counts = C.count_by_part(C.expand_jobs(manifest))
     assert counts == {"paper1": 189, "paper1_control": 3, "upper_bound": 3, "rnhal": 42, "texhal": 30,
-                      "texhal_q17": 18, "hier_transfer": 12, "control": 0, "kmh_nq10": 0, "kmh_nq50": 0,
-                      "kmh_nq100": 0}
-    assert sum(counts.values()) == 297 and len(manifest.groups) == 99
+                      "texhal_q17": 18, "hier_transfer": 12, "texhal_q13": 24, "control": 0, "kmh_nq10": 0,
+                      "kmh_nq50": 0, "kmh_nq100": 0}
+    assert sum(counts.values()) == 321 and len(manifest.groups) == 107
 
 
 @pytest.mark.parametrize("which", ["full_manifest", "micro_manifest"])
@@ -182,16 +184,20 @@ def test_dedup_aliases_point_at_single_canonical_runs(full_manifest: C.Manifest)
     assert {("paper1", "paper1_nq100"), ("paper2", "6_3"), ("paper3", "6_3")} <= kmh
     rnd = {u["paper"] for u in groups["shared/random_nq100"].used_by}
     assert rnd == {"paper1", "paper2", "paper3"}
-    # ADR 0011: TexHAL canonical Q=17; the reference-hierarchy run is the executed texhal/6_1/rep_q17
+    # ADR 0011 (supplementary since ADR 0017): the Q=17 reference-hierarchy run is texhal/6_1/rep_q17
     for row in ("6_2/hier_ref", "6_3/stage_full"):
         assert aliases[f"texhal_q17/{row}"].canonical == "texhal/6_1/rep_q17"
     assert aliases["texhal_q17/6_3/stage_no_representation"].canonical == "shared/kmh_nq100"
-    q17 = {u["paper"] for u in groups["texhal/6_1/rep_q17"].used_by}
-    assert q17 == {"paper2", "paper3"}
+    assert {u["paper"] for u in groups["texhal/6_1/rep_q17"].used_by} == {"paper2"}
+    # ADR 0017: TexHAL canonical Q=13; the reference-hierarchy run is the executed texhal/6_1/rep_q13
+    for row in ("6_2/hier_ref", "6_3/stage_full"):
+        assert aliases[f"texhal_q13/{row}"].canonical == "texhal/6_1/rep_q13"
+    assert aliases["texhal_q13/6_3/stage_no_representation"].canonical == "shared/kmh_nq100"
+    assert {u["paper"] for u in groups["texhal/6_1/rep_q13"].used_by} == {"paper2", "paper3"}
     # every group consumed by more than one paper lives under shared/ (except the already-executed
-    # texhal/6_1/rep_q17, left in place so the finished runs stay resumable)
+    # texhal/6_1/rep_q13, TexHAL's canonical run since ADR 0017, left in place so the executed leaves stay put)
     for gid, g in groups.items():
-        if len({u["paper"] for u in g.used_by}) > 1 and gid != "texhal/6_1/rep_q17":
+        if len({u["paper"] for u in g.used_by}) > 1 and gid != "texhal/6_1/rep_q13":
             assert gid.startswith("shared/") and "/shared/" in g.dir_results
 
 
@@ -273,8 +279,8 @@ def test_execution_order_paper1_nq100_first_upper_bound_last(full_manifest: C.Ma
     assert [j.group.part for j in jobs[63:66]] == ["paper1_control"] * 3
     assert jobs[-1].group.part == "upper_bound"
     assert [C.PHASE_LABELS[p] for p in dict.fromkeys(phases)] == [
-        "paper1_nq100", "paper1_control", "rnhal", "texhal", "texhal_q17", "hier_transfer", "paper1_other_nq",
-        "upper_bound"]
+        "paper1_nq100", "paper1_control", "rnhal", "texhal", "texhal_q17", "hier_transfer", "texhal_q13",
+        "paper1_other_nq", "upper_bound"]
 
 
 @pytest.mark.parametrize("which", ["full_manifest", "micro_manifest"])
@@ -421,6 +427,91 @@ def test_cli_run_gpu_part_dry_run_logs_nothing(tmp_path: Path, capsys: pytest.Ca
     assert code == 0
     out = capsys.readouterr().out
     assert out.count("CAMPAIGN START") == 3 and "DRY-RUN" in out
+
+
+def test_cli_list_gpu_part_1_counts_include_texhal_q13(capsys: pytest.CaptureFixture[str]) -> None:
+    """ADR 0017: part_1_gpu grows by the 24 texhal_q13 runs (285 -> 309 runs, 95 -> 103 groups)."""
+    assert C.main(["list", "--manifest", f"{FULL},{SWEEP}", "--part", "part_1_gpu"]) == 0
+    combined = capsys.readouterr().out.split("Combined:")[1]
+    assert "part_1_gpu      309 runs (103 run groups)  est" in combined
+    assert "texhal_q13       24 runs (8 run groups)  est" in combined
+
+
+TEXHAL_Q13_GROUPS = (
+    "texhal_q13/6_2/hier_L1", "texhal_q13/6_2/hier_L2a", "texhal_q13/6_2/hier_L2b", "texhal_q13/6_2/hier_L3",
+    "texhal_q13/6_2/hier_L4", "texhal_q13/6_2/hier_L2_matched__no_resampling",
+    "texhal_q13/6_2/hier_L3__no_resampling", "texhal_q13/6_3/stage_no_hierarchy",
+)
+
+
+@pytest.mark.parametrize("which", ["full_manifest", "micro_manifest"])
+def test_texhal_q13_part_mirrors_texhal_q17_with_q13(which: str, request: pytest.FixtureRequest) -> None:
+    """ADR 0017: 8 groups, the texhal_q17 6.2/6.3 shapes (incl. its hier_transfer rows) with VCTex q=[13]
+    and nothing else changed, in part_1_gpu at the ablations stage, results under <root>/texhal_q13/."""
+    manifest: C.Manifest = request.getfixturevalue(which)
+    groups = manifest.group_by_id()
+    q13 = [g for g in manifest.groups if g.part == "texhal_q13"]
+    assert tuple(g.id for g in q13) == TEXHAL_Q13_GROUPS
+    sub = "micro/" if which == "micro_manifest" else ""
+    for g in q13:
+        name = g.id.rsplit("/", 1)[1]
+        assert g.params_json == f"files_config/ablations/texhal_q13/{sub}{name}.json"
+        assert g.dir_results == f"{manifest.results_root}/{g.id}/"
+        assert (g.gpu_part, g.gpu_stage, tuple(g.seeds)) == ("part_1_gpu", 2, (1, 2, 3))
+        assert g.used_by and {u["paper"] for u in g.used_by} == {"paper2"}
+        twin = groups[g.id.replace("texhal_q13/", "texhal_q17/")]
+        sig = json.loads(C.group_signature(manifest, g))
+        twin_sig = json.loads(C.group_signature(manifest, twin))
+        assert sig["behavior"]["q"] == [13] and twin_sig["behavior"]["q"] == [17]
+        sig["behavior"]["q"] = twin_sig["behavior"]["q"]
+        assert sig == twin_sig, g.id  # only Q differs from the executed texhal_q17 twin
+    aliases = manifest.alias_by_id()
+    canonical = groups["texhal/6_1/rep_q13"]
+    for aid in ("texhal_q13/6_2/hier_ref", "texhal_q13/6_3/stage_full"):
+        alias = aliases[aid]
+        assert alias.canonical == "texhal/6_1/rep_q13"
+        assert C.effective_signature(alias.params_json, manifest.dataset_name, alias.strategy_name,
+                                     canonical.n_query, canonical.n_init_labeled, canonical.n_round) == \
+            C.group_signature(manifest, canonical)
+    assert aliases["texhal_q13/6_3/stage_no_representation"].canonical == "shared/kmh_nq100"
+
+
+# Digest of the identity of every group executed by the clean campaign (tag campaign-fixed-v2, 297 + 165
+# runs): id, parts, stage, params file, strategy, budgets, seeds, results dir and effective signature. A
+# change of any of them means an executed leaf no longer matches its manifest entry (ADR 0017).
+EXECUTED_MAIN_DIGEST = "e72b50c1a7df09584dafb8827978151e1e45e13a8804f25984f52720a837b5a1"
+EXECUTED_SWEEP_DIGEST = "402e72cad2e22ce0bb0b60a0410380a070672a8d54ca0e1e268a12cc03cae06a"
+
+
+def _identity_digest(manifest: C.Manifest, groups: Sequence[C.RunGroup]) -> tuple[int, int, str]:
+    rows = [[g.id, g.part, g.gpu_part, g.gpu_stage, g.params_json, g.strategy_name, g.n_query, g.n_init_labeled,
+             g.n_round, list(g.seeds), g.dir_results, C.group_signature(manifest, g)] for g in groups]
+    return len(rows), sum(len(r[9]) for r in rows), hashlib.sha256(json.dumps(rows).encode()).hexdigest()
+
+
+def test_executed_groups_keep_their_identity(both_full) -> None:
+    main, sweep = both_full
+    executed = [g for g in main.groups if g.part != "texhal_q13"]
+    assert list(main.groups[: len(executed)]) == executed  # the new part is appended, nothing executed moves
+    assert _identity_digest(main, executed) == (99, 297, EXECUTED_MAIN_DIGEST)
+    assert _identity_digest(sweep, sweep.groups) == (55, 165, EXECUTED_SWEEP_DIGEST)
+
+
+def test_paper2_tables_use_texhal_q13_and_keep_the_executed_q17_and_q5_17_tables(full_manifest: C.Manifest) -> None:
+    aliases = full_manifest.alias_by_id()
+    tables = {p: {t["id"]: t for t in full_manifest.tables[p]["tables"]} for p in ("paper2", "paper3")}
+    assert list(tables["paper2"]) == ["6_1", "6_2", "6_3", "6_2_q17", "6_3_q17", "6_2_q5_17", "6_3_q5_17",
+                                      "comparison"]
+    assert {r["run"].split("/")[0] for r in tables["paper2"]["6_2"]["rows"]} == {"texhal_q13"}
+    assert aliases["texhal_q13/6_2/hier_ref"].canonical == "texhal/6_1/rep_q13"
+    assert {r["run"].split("/")[0] for r in tables["paper2"]["6_2_q17"]["rows"]} == {"texhal_q17"}
+    assert {r["run"].split("/")[0] for r in tables["paper2"]["6_3"]["rows"]} == {"texhal_q13"}
+    assert {r["run"].split("/")[0] for r in tables["paper2"]["6_3_q17"]["rows"]} == {"texhal_q17"}
+    rep = {r["label"]: r["run"] for r in tables["paper2"]["6_1"]["rows"]}
+    assert rep["Q=13 (TexHAL)"] == "texhal/6_1/rep_q13" and rep["Q=17"] == "texhal/6_1/rep_q17"
+    for paper in ("paper2", "paper3"):
+        texhal = [r for r in tables[paper]["comparison"]["rows"] if r.get("label", "").startswith("TexHAL")]
+        assert texhal == [{"label": "TexHAL (VCTex Q=13 + hierarchical)", "run": "texhal/6_1/rep_q13"}]
 
 
 def test_hier_transfer_part_is_four_no_resampling_groups(full_manifest: C.Manifest) -> None:
@@ -679,7 +770,7 @@ def test_exclude_strategy_filter_drops_only_those_groups(full_manifest: C.Manife
     dropped = [j for j in jobs if j not in kept]
     assert dropped and {j.group.strategy_name for j in dropped} == set(ADVERSARIAL)
     assert len(dropped) == 2 * 3 * 3  # 2 strategies x 3 n_query x 3 seeds
-    assert len(kept) == len(jobs) - len(dropped) == 297 - 18
+    assert len(kept) == len(jobs) - len(dropped) == 321 - 18
     assert all(j.group.strategy_name not in ADVERSARIAL for j in kept)
     assert [j for j in jobs if j in kept] == kept  # order preserved
 
@@ -696,7 +787,7 @@ def test_cli_exclude_strategy_applies_to_list(capsys: pytest.CaptureFixture[str]
     out = capsys.readouterr().out
     assert "excluded strategies: AdversarialBIM, AdversarialDeepFool" in out
     assert "Adversarial" not in out.split("excluded strategies:")[1].split("\n", 1)[1]
-    assert "TOTAL" in out and "93 runs" in out  # 99 micro seed-1 jobs - 2 strategies x 3 n_query
+    assert "TOTAL" in out and "101 runs" in out  # 107 micro seed-1 jobs - 2 strategies x 3 n_query
     assert C.main(["list", "--micro", "--exclude-strategy", "Nope"]) == 2
 
 

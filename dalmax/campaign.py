@@ -19,7 +19,8 @@ manifests reports whether each such pair selected the same images
 Two orthogonal partitions select groups (`--part`):
 
 - the *semantic parts* `PARTS` (`paper1`, `paper1_control`, `upper_bound`, `rnhal`,
-  `texhal`, `texhal_q17`, `hier_transfer`, `control`, `kmh_nq100`, `kmh_nq50`, `kmh_nq10`;
+  `texhal`, `texhal_q17`, `hier_transfer`, `texhal_q13`, `control`, `kmh_nq100`, `kmh_nq50`,
+  `kmh_nq10`;
   comma-separated, or `all`), executed in the fixed `PHASE_LABELS` order;
 - the *GPU parts* `GPU_PARTS` (`part_1_gpu`, `part_2_gpu`, ADR 0016): every group of
   the two full-scale manifests carries a `gpu_part` and a `gpu_stage`; selecting a
@@ -69,7 +70,7 @@ plan: by GPU stage for a GPU part, manifest by manifest otherwise):
 Semantic execution order (fixed, independent of `--part`): paper 1 at
 n_query=100 first (the shared canonical runs -- KMH and RandomSampling, which
 papers 2/3 reuse -- land early), then the paper-1 controls (`paper1_control`),
-then rnhal, texhal, texhal_q17, hier_transfer,
+then rnhal, texhal, texhal_q17, hier_transfer, texhal_q13 (ADR 0017),
 then paper 1 at n_query=50 and 10, then the upper bound.
 """
 
@@ -120,8 +121,9 @@ TRAINER_SCRIPT = "tools/trainer.py"
 # `paper1_control` (ADR 0015 amendment of 2026-11-12): paper-1 CONTROLS, not benchmark strategies (today
 # `WAALRandomQuery` at nq100: WAAL's training with a random query); a table of their own, never a benchmark row.
 # `control` is the separate KI-43 control manifest.
+# `texhal_q13` (ADR 0017): TexHAL's 6.2/6.3 ablations with its canonical VCTex Q=13.
 PARTS: tuple[str, ...] = ("paper1", "paper1_control", "upper_bound", "rnhal", "texhal", "texhal_q17",
-                          "hier_transfer", "control", "kmh_nq100", "kmh_nq50", "kmh_nq10")
+                          "hier_transfer", "texhal_q13", "control", "kmh_nq100", "kmh_nq50", "kmh_nq10")
 
 # The two GPU parts (ADR 0016): one per Colab account, balanced by estimated GPU time.
 GPU_PARTS: tuple[str, ...] = ("part_1_gpu", "part_2_gpu")
@@ -134,6 +136,7 @@ PHASE_LABELS: tuple[str, ...] = (
     "texhal",
     "texhal_q17",
     "hier_transfer",
+    "texhal_q13",
     "paper1_other_nq",
     "upper_bound",
     "control",

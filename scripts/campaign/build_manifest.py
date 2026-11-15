@@ -87,7 +87,7 @@ UPPER_BOUND_GPU_PART = PART_1_GPU
 # orders by it): cheap table-critical groups first, the very long ones last, so that an exhausted credit
 # budget leaves complete tables.
 STAGE_PAPER1 = 1  # paper-1 strategies other than the long ones, KMH, the upper bound
-STAGE_ABLATIONS = 2  # rnhal, texhal, texhal_q17, hier_transfer
+STAGE_ABLATIONS = 2  # rnhal, texhal, texhal_q17, hier_transfer, texhal_q13
 STAGE_KMH_SWEEP = 3  # the KMH sweep manifest
 LONG_STRATEGY_STAGE: dict[str, int] = {
     "AdversarialBIM": 4, "VAAL": 5, "WAAL": 5, WAAL_CONTROL: 5, "AdversarialDeepFool": 6,
@@ -151,7 +151,10 @@ def manifest_header(scale: Scale) -> dict[str, Any]:
 
 # (id suffix, params basename, table label) -- ablation rows per study, per method.
 RNHAL_61 = [("rep_spatial", "Spatial-only"), ("rep_spectral", "Spectral-only")]
-TEXHAL_61 = [("rep_q5", "Q=5"), ("rep_q13", "Q=13"), ("rep_q17", "Q=17 (TexHAL)")]
+# TexHAL's canonical Q is 13 since ADR 0017 (it was 17 under ADR 0011): the "(TexHAL)" tag follows it.
+TEXHAL_61 = [("rep_q5", "Q=5"), ("rep_q13", "Q=13 (TexHAL)"), ("rep_q17", "Q=17")]
+# The executed 6.1 run that IS TexHAL's canonical configuration (reference hierarchy, single RAE, Q=13).
+TEXHAL_CANONICAL_RUN = "texhal/6_1/rep_q13"
 HIER_COMMON = [
     ("hier_L1", "L=1, k=[50]"),
     ("hier_L2a", "L=2, k=[300,100]"),
@@ -174,7 +177,8 @@ HIER_ORDER_RNHAL = [
     "hier_L4", "hier_L4_k800_600_200_100",
 ]
 HIER_ORDER_TEXHAL = ["hier_L1", "hier_L2a", "hier_L2b", "hier_L3", "ref", "hier_L4"]
-# Rows appended to the 6.2 tables of the canonical methods (RNHAL, TexHAL Q=17) by the hier_transfer part.
+# Rows appended to the 6.2 tables of RNHAL and of TexHAL Q=17 by the hier_transfer part (ADR 0013), and to the
+# 6.2 table of TexHAL Q=13 by the texhal_q13 part (ADR 0017).
 HIER_TRANSFER_ORDER = ["hier_L2_matched__no_resampling", "hier_L3__no_resampling"]
 HIER_TRANSFER_LABELS = {
     "hier_L2_matched__no_resampling": "L=2, k=[600,100], no resampling (KMH sweep winner)",
@@ -287,6 +291,14 @@ def build(scale: Scale) -> dict[str, Any]:
               f"{root}/shared/texhal_full/",
               "TexHAL 'full' (VCTex q=[5,17] + reference hierarchy). " + shared_note,
               gpu_part=ABLATION_GPU_PART, stage=STAGE_ABLATIONS)
+    # TexHAL canonical Q=13 (ADR 0017, supersedes ADR 0011's Q=17): the same 6.2 hierarchy rows (the five common
+    # shapes + the two hierarchy-transfer shapes) and the 6.3 no-hierarchy row as texhal_q17, with VCTex q=[13]
+    # and every other knob unchanged. Appended after every executed group, so nothing executed moves. The
+    # reference hierarchy with Q=13 IS texhal/6_1/rep_q13 (aliases below).
+    ablation_groups("texhal_q13", {
+        "6_2": [c for c, _ in HIER_COMMON] + HIER_TRANSFER,
+        "6_3": ["stage_no_hierarchy"],
+    })
 
     # --- aliases -------------------------------------------------------------
     add_alias("p1/RandomSampling/nq100", "shared/random_nq100", scale.paper1_params,
@@ -311,6 +323,14 @@ def build(scale: Scale) -> dict[str, Any]:
     add_alias("texhal_q17/6_2/hier_ref", q17_ref, (abl % "texhal") + "rep_q17.json", q17_why)
     add_alias("texhal_q17/6_3/stage_full", q17_ref, (abl % "texhal") + "rep_q17.json", q17_why)
     add_alias("texhal_q17/6_3/stage_no_representation", "shared/kmh_nq100", kmh_params,
+              "w/o representation module = ImageNet ResNet-50 features + reference hierarchy = "
+              "the shared KMH@100 run (byte-identical config; ADR 0009).")
+
+    q13_why = ("TexHAL canonical Q=13 (ADR 0017): the reference hierarchy L=3 k=[600,200,100] with VCTex "
+               "q=[13] IS the texhal/6_1/rep_q13 run (byte-identical config).")
+    add_alias("texhal_q13/6_2/hier_ref", TEXHAL_CANONICAL_RUN, (abl % "texhal") + "rep_q13.json", q13_why)
+    add_alias("texhal_q13/6_3/stage_full", TEXHAL_CANONICAL_RUN, (abl % "texhal") + "rep_q13.json", q13_why)
+    add_alias("texhal_q13/6_3/stage_no_representation", "shared/kmh_nq100", kmh_params,
               "w/o representation module = ImageNet ResNet-50 features + reference hierarchy = "
               "the shared KMH@100 run (byte-identical config; ADR 0009).")
 
@@ -366,7 +386,8 @@ def build(scale: Scale) -> dict[str, Any]:
         ]
 
     def suffix_title(suffix: str) -> str:
-        return " (history, VCTex Q=[5,17])" if suffix == "_q5_17" else ""
+        return {"_q5_17": " (history, VCTex Q=[5,17])",
+                "_q17": " (supplementary, VCTex Q=17, ADR 0011)"}.get(suffix, "")
 
     def method_tables(method: str, tag: str, rep_rows: list[dict[str, str]], order: list[str],
                       suffix: str = "") -> list[dict]:
@@ -379,7 +400,7 @@ def build(scale: Scale) -> dict[str, Any]:
             "best_of": {"candidates": [{"run": f"p1/{m}/nq100", "name": m} for m in PAPER1_METHODS],
                        "metric": "f1_score"}}
     random_row = row("RandomSampling @ n_query=100", "p1/RandomSampling/nq100")
-    texhal_full = row("TexHAL (VCTex Q=17 + hierarchical)", "texhal/6_1/rep_q17")
+    texhal_full = row("TexHAL (VCTex Q=13 + hierarchical)", TEXHAL_CANONICAL_RUN)
     rnhal_full = row("RNHAL (SSRAE + hierarchical)", "rnhal/6_3/stage_full")
 
     rnhal_rep = [row("Full", "rnhal/6_1/rep_full")] + [
@@ -387,18 +408,18 @@ def build(scale: Scale) -> dict[str, Any]:
     texhal_rep = [row(label, f"texhal/6_1/{cfg}") for cfg, label in TEXHAL_61] + [
         row("Q=[5,17]", "texhal/6_1/rep_full")]
 
-    # Paper 2 (ADR 0011): 6.1 unchanged; 6.2/6.3 from the texhal_q17 groups; the executed Q=[5,17]
-    # 6.2/6.3 stay reachable as `6_2_q5_17` / `6_3_q5_17`.
-    q17_6_2 = {"id": "6_2", "kind": "ablation", "title": "6.2 Hierarchy ablation",
-               "rows": hier_rows("texhal_q17", HIER_ORDER_TEXHAL + HIER_TRANSFER_ORDER,
-                                 "texhal_q17/6_2/hier_ref")}
-    q17_6_3 = {"id": "6_3", "kind": "ablation", "title": "6.3 Contribution of the two stages", "rows": [
-        row("TexHAL (full)", "texhal_q17/6_3/stage_full"),
-        row("w/o representation module", "texhal_q17/6_3/stage_no_representation"),
-        row("w/o hierarchical module", "texhal_q17/6_3/stage_no_hierarchy"),
-    ]}
+    # Paper 2 (ADR 0017): 6.1 unchanged (rows relabelled: Q=13 is TexHAL); the canonical 6.2/6.3 (ids `6_2`,
+    # `6_3`, stable) come from the texhal_q13 groups; the executed Q=17 6.2/6.3 of ADR 0011 stay as the
+    # supplementary `6_2_q17` / `6_3_q17` and the executed Q=[5,17] ones as `6_2_q5_17` / `6_3_q5_17`.
+    def single_q_tables(method: str, suffix: str) -> list[dict]:
+        t62, t63 = stage_tables(method, "TexHAL", suffix)
+        t62["rows"] = hier_rows(method, HIER_ORDER_TEXHAL + HIER_TRANSFER_ORDER, f"{method}/6_2/hier_ref")
+        return [t62, t63]
+
+    q13_tables = single_q_tables("texhal_q13", "")
+    q17_tables = single_q_tables("texhal_q17", "_q17")
     legacy = method_tables("texhal", "TexHAL", texhal_rep, HIER_ORDER_TEXHAL, "_q5_17")
-    paper2 = [legacy[0], q17_6_2, q17_6_3, legacy[1], legacy[2]] + [{
+    paper2 = [legacy[0], *q13_tables, *q17_tables, legacy[1], legacy[2]] + [{
         "id": "comparison", "kind": "comparison",
         "title": "Paper 2 -- TexHAL vs. paper-1 methods, n_query=100",
         "rows": [texhal_full, best, random_row],
