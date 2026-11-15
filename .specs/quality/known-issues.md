@@ -714,3 +714,29 @@ build and a migrated old-layout build are byte-identical in all four metadata fi
 without writing and fail `--check`). The data order and cache keys are unaffected (they read only `train/` and `test/`).
 
 **Status**: fixed in code; the migration of the real folder is the author's step before the campaign.
+
+### KI-50 — the ImageNet feature provider consumes the global torch RNG at construction, so KMH runs start from another classifier initialisation (OPEN, disclosed; found 2026-11-15 on the clean campaign)
+
+`dalmax/embeddings/resnet_imagenet_provider.py::ResNetImageNetProvider.__init__` builds `torchvision.models.resnet50(weights=...)`
+when the strategy is built (`ExperimentRunner.run`, `build_strategy`, before the first `strategy.train()`). torchvision
+initialises the network randomly before loading the pretrained weights, which draws from the global torch stream that
+`seed_everything` seeded. The task classifier is created afterwards, so every run with the `resnet_imagenet` extractor (KMH:
+`shared/kmh_nq100`, `p1/KMH/nq*`, the whole KMH sweep) trains its round-0 classifier from a different point of the stream than
+the other strategies of the same seed. The initial labeled images are the same (seed audit PASS by image paths); the
+initial weights of the classification layer and the mini-batch order differ.
+
+**Evidence** (clean campaign, round-0 weighted F1, seeds 1/2/3): every standard-recipe strategy and every SSRAE/VCTex
+group (their providers use LCG weights and draw nothing from torch) 0.2406 / 0.5309 / 0.2634; every `resnet_imagenet`
+group 0.3839 / 0.4783 / 0.2469 (identical across the 21 KMH sweep groups of nq100).
+
+**Effect**: none on validity or reproducibility (the run is still determined by params + CLI + seed + commit). It weakens
+one comparison: KMH against the other strategies, and KMH against RNHAL/TexHAL under the same hierarchy, is not made from
+the same round-0 model per seed, so with three seeds part of a difference can come from the initialisation. Papers state
+it. The 24 `texhal_q13` runs (tag `campaign-fixed-v3`) are unaffected (VCTex).
+
+**Fix (not applied; would change executed behaviour, so only for a future campaign)**: build the provider's network
+inside `dalmax.seeding.isolated_torch_seed(derive_seed(seed, "embedding_provider"))`, the pattern ADR 0015 already
+requires for auxiliary networks, and add a test that the round-0 model of `RepresentationStrategy` with every extractor
+equals that of `RandomSampling` for the same seed.
+
+**Status**: open, disclosed in the thesis (paper 1 setup and limitations).
