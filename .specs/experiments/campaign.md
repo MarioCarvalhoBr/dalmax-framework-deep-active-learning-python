@@ -134,6 +134,19 @@ that size; because that is selection on the test set, a configuration chosen fro
 4-6 with `RandomSampling` and `WAAL` before any claim against WAAL (planned, not built). Code version: tag
 `campaign-fixed-v4`; operator steps: `COLAB_RUNBOOK.md` section 6f.
 
+*Pre-flight checks of `kmh_wide` (2026-11-15, CPU, local).* Micro run
+`make campaign-run MANIFEST=files_config/campaign/manifest_kmh_sweep_micro.json PART=kmh_wide SEEDS=1 DEVICE=cpu`
+into the new smoke tree `results/smoke_campaign_kmh_fixed/wide/`: 13/13 DONE, 0 failed (32 to 139 s per run); its
+`make campaign-verify` OK=13, seed audit PASS, data-order audit PASS (the code-version audit listed 4 commits because
+the branch was being committed while the smoke ran; irrelevant for a local smoke). Full-size feasibility of the 13
+shapes on the vendored pipeline (`hierarchical_kmeans_with_resampling` + `hierarchical_sampling`, default knobs, CPU,
+a synthetic non-negative 7,130 x 128 pool standing in for the round-1 ImageNet features): every shape produced
+non-empty clusters at every level (e.g. `[2400]`: 2,400 non-empty; `[1200,400,10]`: 1,200 / 400 / 10), the sampling
+returned exactly `n_query` unique images before the wrapper's defensive top-up, each from a different top-level
+cluster (nq10 `[2400]`: 10 images from 10 of the 2,400 clusters; nq10 `[600,10]` and `[1200,400,10]`: one image in each
+of the 10 top clusters), and the wrapper returned `n_query` unique ids; repeated at 6,430 points (round 8) for the
+direction-(a) shapes, nq10 `[2400]` and nq10 `[1200,400,10]`, with the same outcome.
+
 **Unchanged rules.** Protocol (`n_init_labeled` 100, `n_round` 8, `n_epoch` 10, batch 256, lr 0.05, momentum 0.3,
 reference hierarchy `[600,200,100]`/`[30,15,2]`, SSRAE `q=13`, VCTex as in ADR 0017: canonical `q=[13]`, ADR 0011's
 `q=[17]` until 2026-11-15), seeds and determinism and the
