@@ -363,7 +363,7 @@ def test_gpu_parts_are_balanced_by_the_estimates(both_full: tuple[C.Manifest, C.
         hours[gpu_part], unknown = C.estimated_hours([j for seg in plan for j in seg.jobs], estimates)
         assert unknown == 0
     total = sum(hours.values())
-    assert 110 < total < 118  # 113.5 GPU hours with the committed estimates (ADR 0019)
+    assert 110 < total < 118  # 113.6 GPU hours with the committed estimates (ADR 0019)
     # The ADR 0016 split is balanced; the later add-on parts go to the account they were assigned to
     # (texhal_q13 -> part_1_gpu, ADR 0017; kmh_wide -> part_2_gpu, ADR 0018; kmh_norm -> part_1_gpu, ADR 0019)
     # and are left out of the balance.
