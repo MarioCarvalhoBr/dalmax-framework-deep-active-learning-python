@@ -90,13 +90,16 @@ WIDE_GPU_PART = PART_2_GPU
 # The KMH feature post-processing round (ADR 0019, 2026-11-15): one semantic part, every budget, all on account A.
 NORM_PART = "kmh_norm"
 NORM_GPU_PART = PART_1_GPU
+# RNHAL and TexHAL at the two smaller query sizes (ADR 0020, 2026-11-16): one semantic part, all on account B.
+DESCRIPTORS_PART = "descriptors_nq"
+DESCRIPTORS_GPU_PART = PART_2_GPU
 ABLATION_GPU_PART = PART_1_GPU
 UPPER_BOUND_GPU_PART = PART_1_GPU
 # Execution stage inside a GPU part (both manifests share the numbering; `campaign run --part part_N_gpu`
 # orders by it): cheap table-critical groups first, the very long ones last, so that an exhausted credit
 # budget leaves complete tables.
 STAGE_PAPER1 = 1  # paper-1 strategies other than the long ones, KMH, the upper bound
-STAGE_ABLATIONS = 2  # rnhal, texhal, texhal_q17, hier_transfer, texhal_q13
+STAGE_ABLATIONS = 2  # rnhal, texhal, texhal_q17, hier_transfer, texhal_q13, descriptors_nq
 STAGE_KMH_SWEEP = 3  # the KMH sweep manifest (incl. kmh_wide, ADR 0018, and kmh_norm, ADR 0019)
 LONG_STRATEGY_STAGE: dict[str, int] = {
     "AdversarialBIM": 4, "VAAL": 5, "WAAL": 5, WAAL_CONTROL: 5, "AdversarialDeepFool": 6,
@@ -195,6 +198,22 @@ HIER_TRANSFER_LABELS = {
 }
 HIER_TRANSFER = list(HIER_TRANSFER_LABELS)
 REF_LABEL = "L=3, k=[600,200,100] (reference)"
+
+# Descriptor methods at the smaller query sizes (ADR 0020): (id/results folder, executed nq100 run, params
+# (ablation folder, basename), table label). Each group reuses the params file of its executed nq100 run (the
+# query size is a manifest/CLI value, not in the params), the way p1/KMH/nq{50,10} reuse params_kmh.json.
+DESCRIPTOR_METHODS: list[tuple[str, str, tuple[str, str], str]] = [
+    ("rnhal", "rnhal/6_3/stage_full", ("rnhal", "stage_full"), "RNHAL (SSRAE Q=13 + hierarchical)"),
+    ("texhal_q13", TEXHAL_CANONICAL_RUN, ("texhal", "rep_q13"), "TexHAL (VCTex Q=13 + hierarchical)"),
+]
+DESCRIPTORS_BUDGETS = (50, 10)
+# Paper-1 rows of the descriptors_nq{N} tables (run p1/<strategy>/nq{N} of the same query size).
+DESCRIPTORS_CONTEXT = ["WAAL", "BALDDropout", "BadgeSampling", KMH, "RandomSampling"]
+
+
+def descriptors_group_id(method: str, paper_nq: int) -> str:
+    return f"{DESCRIPTORS_PART}/{method}/nq{paper_nq}"
+
 
 
 def build(scale: Scale) -> dict[str, Any]:
@@ -308,6 +327,19 @@ def build(scale: Scale) -> dict[str, Any]:
         "6_2": [c for c, _ in HIER_COMMON] + HIER_TRANSFER,
         "6_3": ["stage_no_hierarchy"],
     })
+    # RNHAL and TexHAL at n_query 50 and 10 (ADR 0020): the executed nq100 configuration of each method (same
+    # params file, NIL, NR, seeds), only the query size differs. Appended after every v5 group, so nothing
+    # executed or in progress moves; results under <root>/descriptors_nq/ so the part can be zipped alone; all on
+    # account B (part_2_gpu, which ran paper 1 at nq50/nq10) at the ablations stage. Method-major order: the
+    # nq50 run of a seed computes the embedding cache (its key ignores n_query), the nq10 run of the seed loads it.
+    for method, canonical, (folder, cfg), _ in DESCRIPTOR_METHODS:
+        for paper_nq in DESCRIPTORS_BUDGETS:
+            add_group(descriptors_group_id(method, paper_nq), DESCRIPTORS_PART, (abl % folder) + f"{cfg}.json",
+                      "RepresentationStrategy", scale.nq_by_paper_nq[paper_nq], scale.n_init, scale.n_round,
+                      f"{root}/{DESCRIPTORS_PART}/{method}/nq{paper_nq}/",
+                      f"Descriptors at the smaller query sizes (ADR 0020): the executed {canonical} configuration "
+                      f"at n_query={paper_nq}.",
+                      gpu_part=DESCRIPTORS_GPU_PART, stage=STAGE_ABLATIONS)
 
     # --- aliases -------------------------------------------------------------
     add_alias("p1/RandomSampling/nq100", "shared/random_nq100", scale.paper1_params,
@@ -373,6 +405,16 @@ def build(scale: Scale) -> dict[str, Any]:
                 row("WAAL training + random query (control)", f"p1_control/{WAAL_CONTROL}/nq{paper_nq}"),
                 row("RandomSampling", f"p1/RandomSampling/nq{paper_nq}"),
             ],
+        })
+
+    # ADR 0020: the two descriptor methods against paper-1 methods of the same query size (rows of the executed
+    # paper-1 runs). In paper 1's report so that every paper-1 group stays consumed by one paper only.
+    for paper_nq in DESCRIPTORS_BUDGETS:
+        paper1_tables.append({
+            "id": f"descriptors_nq{paper_nq}", "kind": "benchmark",
+            "title": f"Descriptor methods vs. paper-1 methods, n_query={paper_nq} (ADR 0020)",
+            "rows": [row(label, descriptors_group_id(method, paper_nq)) for method, _, _, label in DESCRIPTOR_METHODS]
+                    + [row(label_of(m), f"p1/{m}/nq{paper_nq}") for m in DESCRIPTORS_CONTEXT],
         })
 
     hier_labels = dict(HIER_COMMON + HIER_NEW_RNHAL) | HIER_TRANSFER_LABELS

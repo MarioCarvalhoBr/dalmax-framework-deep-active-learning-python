@@ -41,6 +41,15 @@ the trees of the first execution (read only, never written):
   plus a post-processing of the frozen features once per run (negligible for `l2`/`zscore`; for `pca_l2` a full
   SVD of the 7,130 x 2,048 initial pool, measured 105 s on a loaded local CPU, i.e. a few percent of a run).
   `pca_l2` clusters 64-d instead of 2,048-d vectors and may well be faster overall; no speed-up is assumed.
+- **estimate by budget scaling** groups (ADR 0020, 2026-11-16): the part `descriptors_nq` (RNHAL and TexHAL at
+  n_query 50 and 10), never run in the first execution (`SCALED_PREFIXES`), takes the measured value of the
+  method's executed n_query=100 run times the ratio of the measured paper-1 KMH runs at the two query sizes
+  (`p1/KMH/nq{N}` / `shared/kmh_nq100`, `KMH_BY_BUDGET`): KMH is the same reference hierarchy and training on
+  other features, so the ratio carries the cost of the query size (fewer images labeled, smaller training sets
+  in the later rounds) and nothing else. The ratios are close to one (0.97 at nq50, 0.94 at nq10): the run is
+  dominated by the selection over the whole pool and the training, not by the batch size. The first-execution
+  runs this scales may or may not have computed the descriptor cache themselves (about 1.5 minutes per seed
+  for SSRAE, under a minute for VCTex); either way a few percent of a run.
 
 Caveats: the first execution ran on the dataset with duplicates (8,086 pool / 2,106 test images; the
 new one has 7,230 / 1,008), on the GPU class of that execution, and `KMeansSampling` /
@@ -131,6 +140,28 @@ REFERENCE_PREFIXES: dict[str, tuple[str, str]] = {
 }
 
 
+# Id prefix of a never-run part -> (id of the measured n_query=100 run of the same configuration, rule text).
+SCALED_PREFIXES: dict[str, tuple[str, str]] = {
+    "descriptors_nq/rnhal/": ("rnhal/6_3/stage_full", "the measured rnhal/6_3/stage_full (n_query=100) x the "
+                                                      "measured KMH ratio {kmh} / shared/kmh_nq100"),
+    "descriptors_nq/texhal_q13/": ("texhal/6_1/rep_q13", "the measured texhal/6_1/rep_q13 (n_query=100) x the "
+                                                         "measured KMH ratio {kmh} / shared/kmh_nq100"),
+}
+# Budget folder -> measured paper-1 KMH run of that query size (same reference hierarchy, ImageNet features).
+KMH_BY_BUDGET: dict[str, str] = {"nq100": "shared/kmh_nq100", "nq50": "p1/KMH/nq50", "nq10": "p1/KMH/nq10"}
+
+
+def scaled_estimate(group: RunGroup, measured: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    """Entry of a never-run group estimated by budget scaling (`SCALED_PREFIXES`), or None."""
+    for prefix, (reference, rule) in SCALED_PREFIXES.items():
+        if group.id.startswith(prefix):
+            kmh = KMH_BY_BUDGET[group.id[len(prefix):]]
+            ratio = measured[kmh]["seconds_per_run"] / measured[KMH_BY_BUDGET["nq100"]]["seconds_per_run"]
+            return {"seconds_per_run": round(measured[reference]["seconds_per_run"] * ratio), "basis": "estimate",
+                    "rule": rule.format(kmh=kmh)}
+    return None
+
+
 def reference_estimate(group: RunGroup, measured: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
     """Entry of a never-run group estimated from its measured reference (`REFERENCE_PREFIXES`), or None."""
     for prefix, (reference, rule) in REFERENCE_PREFIXES.items():
@@ -198,7 +229,8 @@ def measure(groups: list[RunGroup]) -> tuple[dict[str, dict[str, Any]], float]:
     raw: dict[str, list[tuple[float | None, float | None]]] = {}
     for group in groups:
         if group.strategy_name in ESTIMATE_RULES or any(
-                group.id.startswith(p) for p in (*TWIN_PREFIXES, *FIT_PREFIXES, *REFERENCE_PREFIXES)):
+                group.id.startswith(p) for p in (*TWIN_PREFIXES, *FIT_PREFIXES, *REFERENCE_PREFIXES,
+                                                 *SCALED_PREFIXES)):
             continue
         raw[group.id] = [(done.get((group.id, s)), _total_time(group, s)) for s in group.seeds]
     overheads = [d - t for runs in raw.values() for d, t in runs if d is not None and t is not None]
@@ -239,12 +271,15 @@ def build() -> dict[str, Any]:
         twin = twin_estimate(group, measured)
         fit = fit_estimate(group, groups, measured)
         reference = reference_estimate(group, measured)
+        scaled = scaled_estimate(group, measured)
         if twin is not None:
             entries[group.id] = twin
         elif fit is not None:
             entries[group.id] = fit
         elif reference is not None:
             entries[group.id] = reference
+        elif scaled is not None:
+            entries[group.id] = scaled
         elif group.strategy_name in ESTIMATE_RULES:
             entries[group.id] = estimate(group, measured)
         elif group.id in measured:

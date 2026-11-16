@@ -612,6 +612,26 @@
    "basis": "estimate",
    "rule": "equal to the measured texhal_q17 twin (same hierarchy and selection, single VCTex RAE with Q=13 instead of Q=17)"
   },
+  "descriptors_nq/rnhal/nq50": {
+   "seconds_per_run": 556,
+   "basis": "estimate",
+   "rule": "the measured rnhal/6_3/stage_full (n_query=100) x the measured KMH ratio p1/KMH/nq50 / shared/kmh_nq100"
+  },
+  "descriptors_nq/rnhal/nq10": {
+   "seconds_per_run": 541,
+   "basis": "estimate",
+   "rule": "the measured rnhal/6_3/stage_full (n_query=100) x the measured KMH ratio p1/KMH/nq10 / shared/kmh_nq100"
+  },
+  "descriptors_nq/texhal_q13/nq50": {
+   "seconds_per_run": 599,
+   "basis": "estimate",
+   "rule": "the measured texhal/6_1/rep_q13 (n_query=100) x the measured KMH ratio p1/KMH/nq50 / shared/kmh_nq100"
+  },
+  "descriptors_nq/texhal_q13/nq10": {
+   "seconds_per_run": 582,
+   "basis": "estimate",
+   "rule": "the measured texhal/6_1/rep_q13 (n_query=100) x the measured KMH ratio p1/KMH/nq10 / shared/kmh_nq100"
+  },
   "kmh/nq100/hier_L1_k100": {
    "seconds_per_run": 134,
    "basis": "measured",

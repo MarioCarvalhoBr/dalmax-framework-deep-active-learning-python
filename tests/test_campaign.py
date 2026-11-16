@@ -34,8 +34,8 @@ DROPOUT_FAMILY = (*MC_DROPOUT, "VarRatio", "MeanSTD")
 DEEPALPLUS = ("VarRatio", "MeanSTD", "KCenterGreedyPCA", "BadgeSampling", "CEALSampling", "LossPredictionLoss",
               "VAAL", "WAAL")
 LONG = ("AdversarialBIM", "VAAL", "WAAL", "WAALRandomQuery", "AdversarialDeepFool")
-# Parts added after the ADR 0016 split, each assigned to one account (ADR 0017, 0018, 0019).
-ADD_ON_PARTS = ("texhal_q13", "kmh_wide", "kmh_norm")
+# Parts added after the ADR 0016 split, each assigned to one account (ADR 0017, 0018, 0019, 0020).
+ADD_ON_PARTS = ("texhal_q13", "kmh_wide", "kmh_norm", "descriptors_nq")
 WAAL_CONTROL_ID = "p1_control/WAALRandomQuery/nq100"
 
 
@@ -125,9 +125,9 @@ def test_run_counts_per_part(which: str, request: pytest.FixtureRequest) -> None
     manifest: C.Manifest = request.getfixturevalue(which)
     counts = C.count_by_part(C.expand_jobs(manifest))
     assert counts == {"paper1": 189, "paper1_control": 3, "upper_bound": 3, "rnhal": 42, "texhal": 30,
-                      "texhal_q17": 18, "hier_transfer": 12, "texhal_q13": 24, "control": 0, "kmh_nq10": 0,
-                      "kmh_nq50": 0, "kmh_nq100": 0, "kmh_wide": 0, "kmh_norm": 0}
-    assert sum(counts.values()) == 321 and len(manifest.groups) == 107
+                      "texhal_q17": 18, "hier_transfer": 12, "texhal_q13": 24, "descriptors_nq": 12, "control": 0,
+                      "kmh_nq10": 0, "kmh_nq50": 0, "kmh_nq100": 0, "kmh_wide": 0, "kmh_norm": 0}
+    assert sum(counts.values()) == 333 and len(manifest.groups) == 111
 
 
 @pytest.mark.parametrize("which", ["full_manifest", "micro_manifest"])
@@ -291,7 +291,7 @@ def test_execution_order_paper1_nq100_first_upper_bound_last(full_manifest: C.Ma
     assert jobs[-1].group.part == "upper_bound"
     assert [C.PHASE_LABELS[p] for p in dict.fromkeys(phases)] == [
         "paper1_nq100", "paper1_control", "rnhal", "texhal", "texhal_q17", "hier_transfer", "texhal_q13",
-        "paper1_other_nq", "upper_bound"]
+        "descriptors_nq", "paper1_other_nq", "upper_bound"]
 
 
 @pytest.mark.parametrize("which", ["full_manifest", "micro_manifest"])
@@ -363,10 +363,10 @@ def test_gpu_parts_are_balanced_by_the_estimates(both_full: tuple[C.Manifest, C.
         hours[gpu_part], unknown = C.estimated_hours([j for seg in plan for j in seg.jobs], estimates)
         assert unknown == 0
     total = sum(hours.values())
-    assert 110 < total < 118  # 113.6 GPU hours with the committed estimates (ADR 0019)
+    assert 112 < total < 119  # 115.5 GPU hours with the committed estimates (ADR 0020)
     # The ADR 0016 split is balanced; the later add-on parts go to the account they were assigned to
-    # (texhal_q13 -> part_1_gpu, ADR 0017; kmh_wide -> part_2_gpu, ADR 0018; kmh_norm -> part_1_gpu, ADR 0019)
-    # and are left out of the balance.
+    # (texhal_q13 -> part_1_gpu, ADR 0017; kmh_wide -> part_2_gpu, ADR 0018; kmh_norm -> part_1_gpu, ADR 0019;
+    # descriptors_nq -> part_2_gpu, ADR 0020) and are left out of the balance.
     base = {}
     for gpu_part in C.GPU_PARTS:
         plan = C.plan_jobs(both_full, C.parse_selection(gpu_part))
@@ -442,7 +442,9 @@ def test_cli_list_gpu_part_prints_estimates(capsys: pytest.CaptureFixture[str]) 
     out = capsys.readouterr().out
     assert "Execution plan (3 segments)" in out and "GPU parts (ADR 0016):" in out
     combined = out.split("Combined:")[1]
-    assert "part_2_gpu      216 runs (72 run groups)  est" in combined  # 177 / 59 + kmh_wide (ADR 0018)
+    # 177 / 59 + kmh_wide (ADR 0018) + descriptors_nq (ADR 0020)
+    assert "part_2_gpu      228 runs (76 run groups)  est" in combined
+    assert "descriptors_nq   12 runs (4 run groups)  est" in combined
     assert "kmh_wide         39 runs (13 run groups)  est" in combined
     assert "part_1_gpu        0 runs" in combined
 
@@ -525,6 +527,22 @@ V4_SWEEP_MICRO_DIGEST = "1e64885a3fd89d79359fa418a3b638771c85fee911b6060f0e9a465
 # Parts appended to the sweep after each tag (only appended: the earlier groups are its prefix).
 SWEEP_PARTS_AFTER_V3 = ("kmh_wide", "kmh_norm")
 SWEEP_PARTS_AFTER_V4 = ("kmh_norm",)
+# The same digest of the state of tag campaign-fixed-v5 (ADR 0019), computed with the v5 code on a checkout of the
+# tag (2026-11-16): the 107 groups of the main manifest and the 77 of the sweep (the 68 of v4 + the 9 kmh_norm
+# groups, running on account A with v5). ADR 0020 appends the descriptors_nq part to the main manifest and must not
+# move or change any of these 184 groups (552 runs); the sweep manifests stay byte-identical.
+V5_MAIN_DIGEST = V4_MAIN_DIGEST
+V5_MAIN_MICRO_DIGEST = V4_MAIN_MICRO_DIGEST
+V5_SWEEP_DIGEST = "9e4e31c2d37a2d172799090dd0777a2df2ee7966bc67ab72b088f9cd0b5c9c04"
+V5_SWEEP_MICRO_DIGEST = "8563d90663ea0d448fa6afdec59d3295b6c2bf77e442f8c97dd21c08562b2383"
+# Parts appended to the main manifest after each tag (only appended: the earlier groups are its prefix).
+MAIN_PARTS_AFTER_V2 = ("texhal_q13", "descriptors_nq")
+MAIN_PARTS_AFTER_V5 = ("descriptors_nq",)
+# sha256 of the two KMH sweep manifest files at tag campaign-fixed-v5 (`git show campaign-fixed-v5:<path> | sha256sum`).
+V5_SWEEP_FILE_SHA256 = {
+    "SWEEP": "a9646504dde025304045d4bd1aec0cb9306fcb2e1b5dc11d796f79544d530b8b",
+    "SWEEP_MICRO": "5fb858e768db32bf498bfb43e754d9b6f64ef3f0e60987e06e18c285f6ec6cb6",
+}
 
 
 def _identity_digest(manifest: C.Manifest, groups: Sequence[C.RunGroup]) -> tuple[int, int, str]:
@@ -535,7 +553,7 @@ def _identity_digest(manifest: C.Manifest, groups: Sequence[C.RunGroup]) -> tupl
 
 def test_executed_groups_keep_their_identity(both_full) -> None:
     main, sweep = both_full
-    executed = [g for g in main.groups if g.part != "texhal_q13"]
+    executed = [g for g in main.groups if g.part not in MAIN_PARTS_AFTER_V2]
     assert list(main.groups[: len(executed)]) == executed  # the new part is appended, nothing executed moves
     assert _identity_digest(main, executed) == (99, 297, EXECUTED_MAIN_DIGEST)
     sweep_v3 = [g for g in sweep.groups if g.part not in SWEEP_PARTS_AFTER_V3]
@@ -547,7 +565,8 @@ def test_v3_groups_keep_their_identity(both_full) -> None:
     """ADR 0018: the 107 + 55 groups of tag campaign-fixed-v3 (486 runs) keep id, parts, stage, params,
     budgets, seeds, results dir and effective signature; kmh_wide only appends."""
     main, sweep = both_full
-    assert _identity_digest(main, main.groups) == (107, 321, V3_MAIN_DIGEST)
+    main_v3 = [g for g in main.groups if g.part not in MAIN_PARTS_AFTER_V5]
+    assert _identity_digest(main, main_v3) == (107, 321, V3_MAIN_DIGEST)
     sweep_v3 = [g for g in sweep.groups if g.part not in SWEEP_PARTS_AFTER_V3]
     assert _identity_digest(sweep, sweep_v3) == (55, 165, V3_SWEEP_DIGEST)
 
@@ -557,14 +576,126 @@ def test_v4_groups_keep_their_identity(both_full) -> None:
     parts, stage, params, budgets, seeds, results dir and effective signature under the new signature code
     (the identity post-processing adds nothing to it); kmh_norm only appends. Micro mirrors too."""
     main, sweep = both_full
-    assert _identity_digest(main, main.groups) == (107, 321, V4_MAIN_DIGEST)
+    main_v4 = [g for g in main.groups if g.part not in MAIN_PARTS_AFTER_V5]
+    assert _identity_digest(main, main_v4) == (107, 321, V4_MAIN_DIGEST)
     sweep_v4 = [g for g in sweep.groups if g.part not in SWEEP_PARTS_AFTER_V4]
     assert list(sweep.groups[: len(sweep_v4)]) == sweep_v4
     assert _identity_digest(sweep, sweep_v4) == (68, 204, V4_SWEEP_DIGEST)
     micro_main, micro_sweep = C.load_manifest(MICRO), C.load_manifest(SWEEP_MICRO)
-    assert _identity_digest(micro_main, micro_main.groups) == (107, 321, V4_MAIN_MICRO_DIGEST)
+    micro_main_v4 = [g for g in micro_main.groups if g.part not in MAIN_PARTS_AFTER_V5]
+    assert _identity_digest(micro_main, micro_main_v4) == (107, 321, V4_MAIN_MICRO_DIGEST)
     micro_v4 = [g for g in micro_sweep.groups if g.part not in SWEEP_PARTS_AFTER_V4]
     assert _identity_digest(micro_sweep, micro_v4) == (68, 204, V4_SWEEP_MICRO_DIGEST)
+
+
+def test_v5_groups_keep_their_identity(both_full) -> None:
+    """ADR 0020: the 107 + 77 groups of tag campaign-fixed-v5 (552 runs: 525 executed + 27 kmh_norm) keep id,
+    parts, stage, params, budgets, seeds, results dir and effective signature; descriptors_nq only appends to the
+    main manifest. Micro mirrors too."""
+    main, sweep = both_full
+    main_v5 = [g for g in main.groups if g.part not in MAIN_PARTS_AFTER_V5]
+    assert list(main.groups[: len(main_v5)]) == main_v5  # descriptors_nq is appended, nothing moves
+    assert _identity_digest(main, main_v5) == (107, 321, V5_MAIN_DIGEST)
+    assert _identity_digest(sweep, sweep.groups) == (77, 231, V5_SWEEP_DIGEST)
+    micro_main, micro_sweep = C.load_manifest(MICRO), C.load_manifest(SWEEP_MICRO)
+    micro_v5 = [g for g in micro_main.groups if g.part not in MAIN_PARTS_AFTER_V5]
+    assert list(micro_main.groups[: len(micro_v5)]) == micro_v5
+    assert _identity_digest(micro_main, micro_v5) == (107, 321, V5_MAIN_MICRO_DIGEST)
+    assert _identity_digest(micro_sweep, micro_sweep.groups) == (77, 231, V5_SWEEP_MICRO_DIGEST)
+
+
+def test_kmh_sweep_manifests_are_byte_identical_to_v5() -> None:
+    """ADR 0020 is config-only in the main manifest: the two KMH sweep manifests are those of campaign-fixed-v5."""
+    for path, sha in ((SWEEP, "SWEEP"), (SWEEP_MICRO, "SWEEP_MICRO")):
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        assert digest == V5_SWEEP_FILE_SHA256[sha], path.name
+
+
+# ADR 0020: the 4 descriptors_nq groups -> (executed nq100 run, params of the full-scale and of the micro manifest).
+DESCRIPTORS_GROUPS: dict[str, tuple[str, str]] = {
+    "descriptors_nq/rnhal/nq50": ("rnhal/6_3/stage_full", "rnhal/{sub}stage_full.json"),
+    "descriptors_nq/rnhal/nq10": ("rnhal/6_3/stage_full", "rnhal/{sub}stage_full.json"),
+    "descriptors_nq/texhal_q13/nq50": ("texhal/6_1/rep_q13", "texhal/{sub}rep_q13.json"),
+    "descriptors_nq/texhal_q13/nq10": ("texhal/6_1/rep_q13", "texhal/{sub}rep_q13.json"),
+}
+
+
+@pytest.mark.parametrize("which", ["full_manifest", "micro_manifest"])
+def test_descriptors_nq_part_is_the_executed_nq100_configuration_at_nq50_and_nq10(
+        which: str, request: pytest.FixtureRequest) -> None:
+    """ADR 0020: 4 groups x 3 seeds, part_2_gpu at the ablations stage, appended last, results under
+    <root>/descriptors_nq/<method>/nq{N}/; each reuses the params file of the executed nq100 run of its method
+    (RNHAL rnhal/6_3/stage_full, TexHAL texhal/6_1/rep_q13), and its resolved config equals that run's except
+    n_query. Own tables descriptors_nq{50,10} with rows of the executed paper-1 runs of the same query size."""
+    manifest: C.Manifest = request.getfixturevalue(which)
+    micro = which == "micro_manifest"
+    groups = manifest.group_by_id()
+    new = [g for g in manifest.groups if g.part == "descriptors_nq"]
+    assert [g.id for g in new] == list(DESCRIPTORS_GROUPS)
+    assert list(manifest.groups[-4:]) == new  # appended after every v5 group
+    for g in new:
+        canonical_id, params = DESCRIPTORS_GROUPS[g.id]
+        canonical = groups[canonical_id]
+        method, nq_dir = g.id.split("/")[1:]
+        assert g.params_json == canonical.params_json == "files_config/ablations/" + params.format(
+            sub="micro/" if micro else "")
+        assert g.dir_results == f"{manifest.results_root}/descriptors_nq/{method}/{nq_dir}/"
+        assert (g.gpu_part, g.gpu_stage, g.seeds) == ("part_2_gpu", 2, canonical.seeds) == ("part_2_gpu", 2, (1, 2, 3))
+        assert (g.strategy_name, g.n_init_labeled, g.n_round) == (
+            canonical.strategy_name, canonical.n_init_labeled, canonical.n_round)
+        assert g.n_query == groups[f"p1/KMH/{nq_dir}"].n_query != canonical.n_query
+        if not micro:
+            assert g.n_query == int(nq_dir[2:]) and (g.n_init_labeled, g.n_round) == (100, 8)
+        sig = json.loads(C.group_signature(manifest, g))
+        canonical_sig = json.loads(C.group_signature(manifest, canonical))
+        assert sig.pop("n_query") == g.n_query and canonical_sig.pop("n_query") == canonical.n_query
+        assert sig == canonical_sig, g.id  # only the query size differs
+        assert {(u["paper"], u["table"]) for u in g.used_by} == {("paper1", f"descriptors_{nq_dir}")}
+    tables = {t["id"]: t for t in manifest.tables["paper1"]["tables"]}
+    assert list(tables)[-2:] == ["descriptors_nq50", "descriptors_nq10"]
+    assert all(r["run"].startswith("p1/") or r["run"].startswith("descriptors_nq/")
+               for t in ("descriptors_nq50", "descriptors_nq10") for r in tables[t]["rows"])
+    for nq in (50, 10):
+        rows = tables[f"descriptors_nq{nq}"]["rows"]
+        assert [r["run"] for r in rows] == [
+            f"descriptors_nq/rnhal/nq{nq}", f"descriptors_nq/texhal_q13/nq{nq}",
+            *(f"p1/{s}/nq{nq}" for s in ("WAAL", "BALDDropout", "BadgeSampling", "KMH", "RandomSampling"))]
+        assert all(groups[r["run"]].gpu_part == "part_2_gpu" for r in rows)
+    # Every table that existed at v5 keeps its id and position.
+    assert [t["id"] for t in manifest.tables["paper1"]["tables"][:-2]] == [
+        "paper1_nq10", "paper1_nq50", "paper1_nq100", "paper1_waal_control_nq100"]
+
+
+def test_descriptors_nq_signatures_differ_from_every_v5_group(both_full) -> None:
+    """ADR 0020: no descriptors_nq group repeats a computation of either manifest."""
+    old = {C.group_signature(m, g) for m in both_full for g in m.groups if g.part not in MAIN_PARTS_AFTER_V5}
+    main = both_full[0]
+    new = [C.group_signature(main, g) for g in main.groups if g.part == "descriptors_nq"]
+    assert len(set(new)) == len(new) == 4
+    assert not set(new) & old
+
+
+def test_descriptors_nq_estimates_follow_the_scaling_rule(both_full) -> None:
+    """ADR 0020: each estimate is the measured nq100 run of the method x the measured paper-1 KMH ratio
+    nq{N}/nq100; the four entries follow the last v5 group of the main manifest; about 1.9 GPU h."""
+    spec = importlib.util.spec_from_file_location(
+        "build_gpu_time_estimates", REPO_ROOT / "scripts/campaign/build_gpu_time_estimates.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    table = json.loads((REPO_ROOT / "files_config/campaign/gpu_time_estimates.json").read_text())["groups"]
+    measured = {k: v for k, v in table.items() if v["basis"] == "measured"}
+    for g in (g for m in both_full for g in m.groups):
+        entry = module.scaled_estimate(g, measured)
+        if g.part == "descriptors_nq":
+            assert table[g.id] == entry and entry["basis"] == "estimate", g.id
+        else:
+            assert entry is None, g.id
+    ids = list(table)
+    start = ids.index("texhal_q13/6_3/stage_no_hierarchy") + 1
+    assert ids[start:start + 4] == list(DESCRIPTORS_GROUPS)
+    assert {g: table[g]["seconds_per_run"] for g in DESCRIPTORS_GROUPS} == {
+        "descriptors_nq/rnhal/nq50": 556, "descriptors_nq/rnhal/nq10": 541,
+        "descriptors_nq/texhal_q13/nq50": 599, "descriptors_nq/texhal_q13/nq10": 582}
 
 
 def _with_postprocess(tmp_path: Path, params_json: str, postprocess: dict | None, name: str) -> str:
@@ -1051,7 +1182,7 @@ def test_exclude_strategy_filter_drops_only_those_groups(full_manifest: C.Manife
     dropped = [j for j in jobs if j not in kept]
     assert dropped and {j.group.strategy_name for j in dropped} == set(ADVERSARIAL)
     assert len(dropped) == 2 * 3 * 3  # 2 strategies x 3 n_query x 3 seeds
-    assert len(kept) == len(jobs) - len(dropped) == 321 - 18
+    assert len(kept) == len(jobs) - len(dropped) == 333 - 18
     assert all(j.group.strategy_name not in ADVERSARIAL for j in kept)
     assert [j for j in jobs if j in kept] == kept  # order preserved
 
@@ -1068,7 +1199,7 @@ def test_cli_exclude_strategy_applies_to_list(capsys: pytest.CaptureFixture[str]
     out = capsys.readouterr().out
     assert "excluded strategies: AdversarialBIM, AdversarialDeepFool" in out
     assert "Adversarial" not in out.split("excluded strategies:")[1].split("\n", 1)[1]
-    assert "TOTAL" in out and "101 runs" in out  # 107 micro seed-1 jobs - 2 strategies x 3 n_query
+    assert "TOTAL" in out and "105 runs" in out  # 111 micro seed-1 jobs - 2 strategies x 3 n_query
     assert C.main(["list", "--micro", "--exclude-strategy", "Nope"]) == 2
 
 

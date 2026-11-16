@@ -601,6 +601,11 @@
           "paper": "paper1",
           "table": "paper1_nq50",
           "row": "RandomSampling"
+        },
+        {
+          "paper": "paper1",
+          "table": "descriptors_nq50",
+          "row": "RandomSampling"
         }
       ],
       "note": ""
@@ -826,6 +831,11 @@
           "paper": "paper1",
           "table": "paper1_nq50",
           "row": "BALDDropout"
+        },
+        {
+          "paper": "paper1",
+          "table": "descriptors_nq50",
+          "row": "BALDDropout"
         }
       ],
       "note": ""
@@ -976,6 +986,11 @@
           "paper": "paper1",
           "table": "paper1_nq50",
           "row": "BadgeSampling"
+        },
+        {
+          "paper": "paper1",
+          "table": "descriptors_nq50",
+          "row": "BadgeSampling"
         }
       ],
       "note": ""
@@ -1076,6 +1091,11 @@
           "paper": "paper1",
           "table": "paper1_nq50",
           "row": "WAAL"
+        },
+        {
+          "paper": "paper1",
+          "table": "descriptors_nq50",
+          "row": "WAAL"
         }
       ],
       "note": ""
@@ -1101,6 +1121,11 @@
           "paper": "paper1",
           "table": "paper1_nq50",
           "row": "KMH (hierarchical k-means, ImageNet ResNet-50 features)"
+        },
+        {
+          "paper": "paper1",
+          "table": "descriptors_nq50",
+          "row": "KMH (hierarchical k-means, ImageNet ResNet-50 features)"
         }
       ],
       "note": "KMH: hierarchical k-means selection on ImageNet ResNet-50 features (reference hierarchy [600,200,100]), no SSRAE/VCTex."
@@ -1125,6 +1150,11 @@
         {
           "paper": "paper1",
           "table": "paper1_nq10",
+          "row": "RandomSampling"
+        },
+        {
+          "paper": "paper1",
+          "table": "descriptors_nq10",
           "row": "RandomSampling"
         }
       ],
@@ -1351,6 +1381,11 @@
           "paper": "paper1",
           "table": "paper1_nq10",
           "row": "BALDDropout"
+        },
+        {
+          "paper": "paper1",
+          "table": "descriptors_nq10",
+          "row": "BALDDropout"
         }
       ],
       "note": ""
@@ -1501,6 +1536,11 @@
           "paper": "paper1",
           "table": "paper1_nq10",
           "row": "BadgeSampling"
+        },
+        {
+          "paper": "paper1",
+          "table": "descriptors_nq10",
+          "row": "BadgeSampling"
         }
       ],
       "note": ""
@@ -1601,6 +1641,11 @@
           "paper": "paper1",
           "table": "paper1_nq10",
           "row": "WAAL"
+        },
+        {
+          "paper": "paper1",
+          "table": "descriptors_nq10",
+          "row": "WAAL"
         }
       ],
       "note": ""
@@ -1625,6 +1670,11 @@
         {
           "paper": "paper1",
           "table": "paper1_nq10",
+          "row": "KMH (hierarchical k-means, ImageNet ResNet-50 features)"
+        },
+        {
+          "paper": "paper1",
+          "table": "descriptors_nq10",
           "row": "KMH (hierarchical k-means, ImageNet ResNet-50 features)"
         }
       ],
@@ -2794,6 +2844,106 @@
         }
       ],
       "note": ""
+    },
+    {
+      "id": "descriptors_nq/rnhal/nq50",
+      "part": "descriptors_nq",
+      "gpu_part": "part_2_gpu",
+      "gpu_stage": 2,
+      "params_json": "files_config/ablations/rnhal/stage_full.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 50,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign_fixed/descriptors_nq/rnhal/nq50/",
+      "used_by": [
+        {
+          "paper": "paper1",
+          "table": "descriptors_nq50",
+          "row": "RNHAL (SSRAE Q=13 + hierarchical)"
+        }
+      ],
+      "note": "Descriptors at the smaller query sizes (ADR 0020): the executed rnhal/6_3/stage_full configuration at n_query=50."
+    },
+    {
+      "id": "descriptors_nq/rnhal/nq10",
+      "part": "descriptors_nq",
+      "gpu_part": "part_2_gpu",
+      "gpu_stage": 2,
+      "params_json": "files_config/ablations/rnhal/stage_full.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 10,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign_fixed/descriptors_nq/rnhal/nq10/",
+      "used_by": [
+        {
+          "paper": "paper1",
+          "table": "descriptors_nq10",
+          "row": "RNHAL (SSRAE Q=13 + hierarchical)"
+        }
+      ],
+      "note": "Descriptors at the smaller query sizes (ADR 0020): the executed rnhal/6_3/stage_full configuration at n_query=10."
+    },
+    {
+      "id": "descriptors_nq/texhal_q13/nq50",
+      "part": "descriptors_nq",
+      "gpu_part": "part_2_gpu",
+      "gpu_stage": 2,
+      "params_json": "files_config/ablations/texhal/rep_q13.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 50,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign_fixed/descriptors_nq/texhal_q13/nq50/",
+      "used_by": [
+        {
+          "paper": "paper1",
+          "table": "descriptors_nq50",
+          "row": "TexHAL (VCTex Q=13 + hierarchical)"
+        }
+      ],
+      "note": "Descriptors at the smaller query sizes (ADR 0020): the executed texhal/6_1/rep_q13 configuration at n_query=50."
+    },
+    {
+      "id": "descriptors_nq/texhal_q13/nq10",
+      "part": "descriptors_nq",
+      "gpu_part": "part_2_gpu",
+      "gpu_stage": 2,
+      "params_json": "files_config/ablations/texhal/rep_q13.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 10,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        1,
+        2,
+        3
+      ],
+      "dir_results": "results/campaign_fixed/descriptors_nq/texhal_q13/nq10/",
+      "used_by": [
+        {
+          "paper": "paper1",
+          "table": "descriptors_nq10",
+          "row": "TexHAL (VCTex Q=13 + hierarchical)"
+        }
+      ],
+      "note": "Descriptors at the smaller query sizes (ADR 0020): the executed texhal/6_1/rep_q13 configuration at n_query=10."
     }
   ],
   "aliases": [
@@ -3207,6 +3357,76 @@
             {
               "label": "RandomSampling",
               "run": "p1/RandomSampling/nq100"
+            }
+          ]
+        },
+        {
+          "id": "descriptors_nq50",
+          "kind": "benchmark",
+          "title": "Descriptor methods vs. paper-1 methods, n_query=50 (ADR 0020)",
+          "rows": [
+            {
+              "label": "RNHAL (SSRAE Q=13 + hierarchical)",
+              "run": "descriptors_nq/rnhal/nq50"
+            },
+            {
+              "label": "TexHAL (VCTex Q=13 + hierarchical)",
+              "run": "descriptors_nq/texhal_q13/nq50"
+            },
+            {
+              "label": "WAAL",
+              "run": "p1/WAAL/nq50"
+            },
+            {
+              "label": "BALDDropout",
+              "run": "p1/BALDDropout/nq50"
+            },
+            {
+              "label": "BadgeSampling",
+              "run": "p1/BadgeSampling/nq50"
+            },
+            {
+              "label": "KMH (hierarchical k-means, ImageNet ResNet-50 features)",
+              "run": "p1/KMH/nq50"
+            },
+            {
+              "label": "RandomSampling",
+              "run": "p1/RandomSampling/nq50"
+            }
+          ]
+        },
+        {
+          "id": "descriptors_nq10",
+          "kind": "benchmark",
+          "title": "Descriptor methods vs. paper-1 methods, n_query=10 (ADR 0020)",
+          "rows": [
+            {
+              "label": "RNHAL (SSRAE Q=13 + hierarchical)",
+              "run": "descriptors_nq/rnhal/nq10"
+            },
+            {
+              "label": "TexHAL (VCTex Q=13 + hierarchical)",
+              "run": "descriptors_nq/texhal_q13/nq10"
+            },
+            {
+              "label": "WAAL",
+              "run": "p1/WAAL/nq10"
+            },
+            {
+              "label": "BALDDropout",
+              "run": "p1/BALDDropout/nq10"
+            },
+            {
+              "label": "BadgeSampling",
+              "run": "p1/BadgeSampling/nq10"
+            },
+            {
+              "label": "KMH (hierarchical k-means, ImageNet ResNet-50 features)",
+              "run": "p1/KMH/nq10"
+            },
+            {
+              "label": "RandomSampling",
+              "run": "p1/RandomSampling/nq10"
             }
           ]
         }
