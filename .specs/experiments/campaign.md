@@ -289,6 +289,30 @@ after `seeds_ext`, tag `campaign-fixed-v7`, operator steps `COLAB_RUNBOOK.md` se
 - The 196 groups of tag v6 keep their identity (pinned v6 digests, `test_v6_groups_keep_their_identity`); the KMH
   sweep manifests are byte-identical to v5/v6.
 
+*Pre-flight checks of `kmh_confirm` (2026-11-16, CPU, local, branch `feat/kmh-confirm`).* Engine scope:
+`git diff --stat campaign-fixed-v6 -- dalmax/ tools/ pyproject.toml poetry.lock` lists `dalmax/campaign.py` only (7
+insertions, 5 deletions: `PARTS`, `PHASE_LABELS`, docstring); `tools/trainer.py` does not import `dalmax.campaign`.
+Identity: the identity digests of the 119 + 77 groups of tag `campaign-fixed-v6`, computed with the v6 code on a
+checkout of the tag, equal those of this branch (full and micro); the two KMH sweep manifests and the KI-43 control
+manifest are byte-identical to v6; the main report rendered from the executed tree with the v6 manifest and with this
+one gives byte-identical `.md`/`.tex` tables, `summary.csv` rows and `seed_audit.md` (only the three `kmh_confirm`
+tables and their 12 summary rows are added). Micro run (`python -m dalmax.campaign run --micro --part kmh_confirm`,
+CPU, seeds 4-6) into the smoke tree `results/smoke_campaign_fixed/kmh_confirm/`: 27/27 DONE, 0 failed (KMH `l2` 20 to
+22 s, reference 20 to 21 s, RandomSampling 16 to 18 s, WAAL 325 to 375 s per run; 40 minutes); each `kmh_l2` leaf has
+the `Embedding post-processing (ADR 0019)` line, no leaf a `cache not usable` line. `verify --micro --part
+seeds_ext,kmh_confirm --seeds 4,5,6` (with the micro `seeds_ext` leaves of the ADR 0020 pre-flight): OK=51, seed audit
+PASS for seeds 4, 5, 6 (16 runs each: the 7 `seeds_ext` and the 9 `kmh_confirm` runs of the seed, by image paths,
+reference `seeds_ext/RandomSampling`), data-order audit PASS (the code-version audit listed 7 commits because the
+branches were committed during the smokes; irrelevant locally). Micro round 0: one weighted-F1 value per (family, seed)
+across `kmh_confirm` and `seeds_ext` (KMH raw/`l2`, RandomSampling, WAAL). Local merged tree: `make campaign-verify-all`
+OK=552, MISSING=63 (12 `descriptors_nq` + 24 `seeds_ext` + 27 `kmh_confirm`), four commits (`464a5cc` v2 for 462,
+`f950b30` v4 for 39, `39de20f` v5 for 27, `49c9ffe` v3 for 24), seed audit PASS for seeds 1-3 (183 runs each) and
+NO_DATA for seeds 4-6, data-order audit PASS, the 9 duplicate checks SAME (the three `kmh_confirm`/`kmh_norm` l2 pairs
+share no seed: no line); a dry run of `run --part part_1_gpu` SKIPs the 336 executed leaves and would start only the
+27 new jobs (segments `skipped=180 dry_run=21`, sweep `skipped=141`, long baselines `skipped=15 dry_run=6`); the
+pilot dry run SKIPs its 3 executed leaves (`shared/random_nq100`, `p1/VAAL/nq100`, `p1/WAAL/nq100`, seed 1); a dry run
+of `part_2_gpu` gives the v6 plan unchanged (`skipped=102 dry_run=33`, `skipped=90`, `skipped=24 dry_run=3`).
+
 *Pre-flight checks of `kmh_norm` (2026-11-15, CPU, local, branch `feat/kmh-feature-norm`).* Identity guarantee: the
 golden runs pass unchanged (2/2); `tests/test_postprocess_identity.py` passes, including the end-to-end micro run (key
 absent vs `{"method": "none"}`: identical queries, `round_queries.json`, `round_predictions.json`, every metric of
