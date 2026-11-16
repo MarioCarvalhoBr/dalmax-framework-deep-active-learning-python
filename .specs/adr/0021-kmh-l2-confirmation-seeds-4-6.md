@@ -156,6 +156,15 @@ them). The paper-1 counterparts ran on account B's GPU; account A's may be anoth
   four rows, and the per-seed paired difference `l2` minus reference is readable from the leaves (same seed = same
   initial images and same round-0 model). The claim wording is the author's decision (pendencia P42) and must name
   the seeds-4-6 tables.
+- **Reading rule, written before any seed 4-6 result exists (pre-flight audit, 2026-11-16)**: per query size, `l2`
+  counts as confirmed over the reference only when the seeds-4-6 mean of `l2` is above the reference's AND the paired
+  difference `l2` minus reference is positive in each of the three seeds; a statement that KMH with `l2` matches or
+  exceeds WAAL needs the seeds-4-6 mean of `l2` at or above WAAL's at that query size. Anything else is reported as
+  not confirmed. The author may make the wording more cautious than this rule, never less.
+- **Cross-account rows at nq100**: in `kmh_confirm_nq100` the reference, RandomSampling and WAAL rows are the
+  `seeds_ext` runs of account B (tag v6) and the `l2` row is account A's (tag v7); the trainer code is the same and
+  the initial images of a seed are the same (seed audit after the merge), but GPU determinism is best-effort, so the
+  text that cites the table says so.
 
 ## Consequences
 
