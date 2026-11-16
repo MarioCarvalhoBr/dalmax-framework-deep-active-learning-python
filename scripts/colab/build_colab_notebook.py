@@ -58,7 +58,11 @@ REPO_URL = "https://github.com/MarioCarvalhoBr/dalmax-framework-deep-active-lear
 # `RepresentationStrategy`); with the key absent the behaviour is identical (tested, ADR 0019), so the 309 earlier
 # leaves of part_1_gpu (v2 + v3) and the 39 kmh_wide leaves of account B (v4) stay comparable. Only account A uses
 # v5; account B finishes kmh_wide with v4 (never a third code version inside one part).
-DEFAULT_GIT_REF = "campaign-fixed-v5"
+# v6 (ADR 0020, 2026-11-16) = v5 + the `descriptors_nq` (12 runs) and `seeds_ext` (24 runs) parts of the main
+# manifest, both in part_2_gpu (account B), config-only relative to v5: nothing a `tools/trainer.py` run executes
+# changed (`dalmax/campaign.py` only: part list, seed-aware redundancy check and pilot candidates). Account B's
+# verify then lists v2, v4 and v6 (explained). Account A stays on v5 until kmh_norm is merged.
+DEFAULT_GIT_REF = "campaign-fixed-v6"
 RUN_EXIT_FILE = "/content/campaign_run_exit_code"  # local runtime disk, not the repo or Drive
 DRIVE_ROOT_PLACEHOLDER = "/content/drive/MyDrive/<FOLDER_THAT_HOLDS_DATA>"
 # The author's Drive folder, the same on both accounts (author instruction 2026-11-12): the second assignment in
@@ -71,11 +75,15 @@ DATASET_SPLIT_IMAGES: dict[str, int] = {"train": 7230, "test": 1008}
 # Semantic parts the zip cell can ship alone (`ZIP_ONLY_PART`, ADR 0017): part -> (its manifest, the folder under
 # that manifest's results root holding its groups). Every group of the part lives under that folder and no group
 # of another part does, so the folder is exactly the part's leaves. `kmh_wide` (ADR 0018) and `kmh_norm` (ADR 0019)
-# live in the sweep.
+# live in the sweep; `descriptors_nq` and `seeds_ext` (ADR 0020) in the main manifest. The cell accepts several
+# parts of its GPU part joined by "+" (e.g. "descriptors_nq+seeds_ext"): one zip, whose name joins them with "__"
+# (`ZIP_JOIN`) so that no "+" reaches a file name, the shell or the Drive.
 ZIP_ONLY_PARTS: dict[str, tuple[str, str]] = {
     "texhal_q13": (MANIFESTS[0], "texhal_q13"),
     "kmh_wide": (MANIFESTS[1], "wide"),
     "kmh_norm": (MANIFESTS[1], "norm"),
+    "descriptors_nq": (MANIFESTS[0], "descriptors_nq"),
+    "seeds_ext": (MANIFESTS[0], "seeds_ext"),
 }
 
 
@@ -138,16 +146,23 @@ ZIP_CELL = '''
     import subprocess
 
     ZIP_PARTIAL = False  # True only to ship an incomplete part on purpose (e.g. no credits left)
-    ZIP_ONLY_PART = ""  # "" = whole GPU part; "texhal_q13"/"kmh_norm" (A), "kmh_wide" (B) = that part (6e/6g/6f)
+    # "" = whole GPU part; one part = "texhal_q13"/"kmh_norm" (A), "kmh_wide" (B) (6e/6g/6f); several parts of
+    # this GPU part joined by "+", e.g. "descriptors_nq+seeds_ext" (B, 6h): one zip with all of them
+    ZIP_ONLY_PART = ""
     ZIP_ONLY_PARTS = __ZIP_ONLY_PARTS__
     if ZIP_ONLY_PART:
-        if ZIP_ONLY_PART not in ZIP_ONLY_PARTS:
-            raise ValueError(f"ZIP_ONLY_PART must be '' or one of {sorted(ZIP_ONLY_PARTS)}, got {repr(ZIP_ONLY_PART)}")
-        only = ZIP_ONLY_PARTS[ZIP_ONLY_PART]
-        if only["gpu_part"] != GPU_PART:
-            raise ValueError(f"{ZIP_ONLY_PART} belongs to {only['gpu_part']}, not to GPU_PART={GPU_PART}")
-        zip_name, zip_dirs, log_roots = f"{GPU_PART}__{ZIP_ONLY_PART}", [only["dir"]], [only["root"]]
-        expected_models = only["runs"]
+        names = ZIP_ONLY_PART.split("+")
+        bad = [n for n in names if n not in ZIP_ONLY_PARTS]
+        if bad or len(set(names)) != len(names):
+            raise ValueError(f"ZIP_ONLY_PART must be '' or one or more of {sorted(ZIP_ONLY_PARTS)} joined by '+' "
+                             f"(each once), got {repr(ZIP_ONLY_PART)}")
+        for name in names:
+            if ZIP_ONLY_PARTS[name]["gpu_part"] != GPU_PART:
+                raise ValueError(f"{name} belongs to {ZIP_ONLY_PARTS[name]['gpu_part']}, not to GPU_PART={GPU_PART}")
+        zip_name = GPU_PART + "__" + "__".join(names)
+        zip_dirs = [ZIP_ONLY_PARTS[n]["dir"] for n in names]
+        log_roots = list(dict.fromkeys(ZIP_ONLY_PARTS[n]["root"] for n in names))
+        expected_models = sum(ZIP_ONLY_PARTS[n]["runs"] for n in names)
     else:
         zip_name, zip_dirs, log_roots = GPU_PART, RESULTS_ROOTS, RESULTS_ROOTS
         expected_models = EXPECTED_RUNS
@@ -451,11 +466,14 @@ def cells() -> list[dict[str, Any]]:
             Everything the three papers need, re-run on the duplicate-free dataset: {main_runs + sweep_runs} runs /
             {main_groups + sweep_groups} run groups over two manifests (main campaign {main_runs} / {main_groups} into
             `{roots[0]}/`, including the 3 runs of the WAAL control `WAALRandomQuery` and, since ADR 0017, the 24 runs
-            of the `texhal_q13` part (TexHAL's ablations with its canonical VCTex Q=13); KMH sweep {sweep_runs} /
+            of the `texhal_q13` part (TexHAL's ablations with its canonical VCTex Q=13) and, since ADR 0020, the 12 runs
+            of the `descriptors_nq` part (RNHAL and TexHAL at n_query 50 and 10) under `{roots[0]}/descriptors_nq/` and
+            the 24 runs of the `seeds_ext` part (the headline methods on the new seeds 4-6) under
+            `{roots[0]}/seeds_ext/`; KMH sweep {sweep_runs} /
             {sweep_groups} into `{roots[1]}/`, including since ADR 0018 the 39 runs of the `kmh_wide` part, the KMH
             wide-top exploration, under `{roots[1]}/wide/`, and since ADR 0019 the 27 runs of the `kmh_norm` part, the
             KMH feature post-processing round, under `{roots[1]}/norm/`), split into two GPU parts, one per Colab
-            account (of about equal estimated GPU time before the three later parts):
+            account (of about equal estimated GPU time before the five later parts):
 
             | GPU part | Account | Runs | Run groups |
             |---|---|---|---|
@@ -579,10 +597,12 @@ def cells() -> list[dict[str, Any]]:
             TWO commits (the `campaign-fixed-v2` commit of the 285 earlier leaves and the `campaign-fixed-v3` or
             `campaign-fixed-v4` commit of the 24 new ones; three if both tags were used), and after the `kmh_norm` runs
             one more, `campaign-fixed-v5` for its 27 leaves (so v2, v3 and v5); on account B, after the `kmh_wide` runs,
-            TWO commits (`campaign-fixed-v2` for the 177 earlier leaves, `campaign-fixed-v4` for the 39 new ones); each
-            with a `WARN:` line. That is expected: v3/v4 left the run-affecting code identical, and v5 changes it only
-            behind the new `embedding.postprocess` key, with the default path tested identical (ADR 0019;
-            `COLAB_RUNBOOK.md` sections 6e/6f/6g).
+            TWO commits (`campaign-fixed-v2` for the 177 earlier leaves, `campaign-fixed-v4` for the 39 new ones), and
+            after the `descriptors_nq` and `seeds_ext` runs one more, `campaign-fixed-v6` for their 36 leaves (so v2,
+            v4 and v6); each with a `WARN:` line. That is expected: v3/v4/v6 left the run-affecting code identical, and
+            v5 changes it only behind the new `embedding.postprocess` key, with the default path tested identical (ADR
+            0019, ADR 0020; `COLAB_RUNBOOK.md` sections 6e/6f/6g/6h). The seed audit also lists seeds 4, 5 and 6 (the
+            `seeds_ext` runs, compared among themselves, `FullSupervised` excluded as for every seed).
             Exit code 0 = all OK, 1 = an incomplete/missing job or a FAIL audit, 2 = only audit WARNs. Re-run the run
             cell to redo failed or missing jobs.
             """),
@@ -594,16 +614,19 @@ def cells() -> list[dict[str, Any]]:
             incomplete part on purpose) and checks the free space first: the checkpoints do not compress, so the
             zip is about as large as the results (~95 MB per run).
 
-            `ZIP_ONLY_PART` (ADR 0017; default `""` = the whole GPU part, as above) ships ONE semantic part whose
+            `ZIP_ONLY_PART` (ADR 0017; default `""` = the whole GPU part, as above) ships semantic parts whose
             leaves were added after the rest of the GPU part was downloaded: e.g. `ZIP_ONLY_PART = "texhal_q13"` or
             `"kmh_norm"` (account A) or `"kmh_wide"` (account B) zips only that part's results folder plus the
             `campaign.log` /
             `failures.log` of the results root holding it, renamed to
             `campaign_<GPU_PART>__<ZIP_ONLY_PART>.log` / `failures_<GPU_PART>__<ZIP_ONLY_PART>.log` (new names, so a
             local `unzip -n` adds them next to the earlier `campaign_<GPU_PART>.log`) into
-            `/content/<GPU_PART>__<ZIP_ONLY_PART>.zip`, and checks its checkpoint count against the part's runs. The
-            verify gate still covers the whole GPU part. Parts allowed: {zip_parts_text}. See `COLAB_RUNBOOK.md`
-            sections 6e, 6f and 6g.
+            `/content/<GPU_PART>__<ZIP_ONLY_PART>.zip`, and checks its checkpoint count against the part's runs.
+            Several parts of this GPU part go into ONE zip when joined by `+` (ADR 0020): `ZIP_ONLY_PART =
+            "descriptors_nq+seeds_ext"` (account B) zips both folders (36 checkpoints) into
+            `/content/part_2_gpu__descriptors_nq__seeds_ext.zip` (the names joined by `__`, never `+`, in every file
+            name). The verify gate still covers the whole GPU part. Parts allowed: {zip_parts_text}. See
+            `COLAB_RUNBOOK.md` sections 6e, 6f, 6g and 6h.
             """),
         code(ZIP_CELL.replace("__ZIP_ONLY_PARTS__", repr(zip_parts))),
         md("""
