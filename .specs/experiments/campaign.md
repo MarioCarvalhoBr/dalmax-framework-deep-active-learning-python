@@ -225,6 +225,27 @@ of tag `campaign-fixed-v5`, tag `campaign-fixed-v6`, operator steps `COLAB_RUNBO
 - The 184 groups of tag v5 keep their identity (pinned v5 digests computed with the v5 code on a checkout of the tag,
   `tests/test_campaign.py::test_v5_groups_keep_their_identity`); the KMH sweep manifests are byte-identical to v5.
 
+*Pre-flight checks of `descriptors_nq` and `seeds_ext` (2026-11-16, CPU, local, branch `feat/descriptors-small-nq`).*
+Engine scope: `git diff --stat campaign-fixed-v5 -- dalmax/ tools/ pyproject.toml poetry.lock` lists
+`dalmax/campaign.py` only (part names, `find_redundant_groups` on a common seed, `pilot_group_ids` among groups with the
+pilot seed). Identity: the identity digests of the 107 + 77 groups of tag `campaign-fixed-v5`, computed with the v5 code
+on a checkout of the tag, equal those of this branch (full and micro); both KMH sweep manifests are byte-identical to
+v5; the main report rendered from the executed tree with the v5 manifest and with this one gives byte-identical
+`.md`/`.tex` tables and `summary.csv` rows (only the three new tables and the seeds 4-6 audit lines are added). Micro
+run (`python -m dalmax.campaign run --micro --part descriptors_nq --seeds 1`, then `--part seeds_ext`, CPU) into the
+smoke tree `results/smoke_campaign_fixed/{descriptors_nq,seeds_ext}/`: 4/4 and 24/24 DONE, 0 failed (descriptors 23 to
+26 s per run; seeds_ext 20 to 84 s, WAAL 406 to 425 s); one new micro cache file per extractor and seed for seeds 4-6
+(three pool hashes); `verify --micro --part descriptors_nq,seeds_ext --seeds 1,4,5,6`: OK=28, seed audit PASS for seed 1
+(4 runs) and seeds 4, 5, 6 (7 runs each, by image paths, reference `seeds_ext/RandomSampling`, the upper bound
+excluded), data-order audit PASS (the code-version audit listed 3 commits because the branch was committed during the
+smoke; irrelevant for a local smoke); the micro report renders `seeds_ext_nq100` from seeds 4-6. Local merged tree:
+`make campaign-verify-all` OK=525, MISSING=63 (27 `kmh_norm` + 12 `descriptors_nq` + 24 `seeds_ext`), three commits
+(`464a5cc` v2 for 462 leaves, `49c9ffe` v3 for 24, `f950b30` v4 for 39), seed audit PASS for seeds 1-3 (174 runs each)
+and NO_DATA for seeds 4-6 (no leaf yet), data-order audit PASS, the 9 duplicate checks SAME; a dry run of
+`run --part part_2_gpu` SKIPs the 216 executed leaves and would start only the 36 new jobs (segments
+`skipped=102 dry_run=33`, sweep `skipped=90`, long baselines `skipped=24 dry_run=3`); the pilot dry run SKIPs its 3
+executed leaves (`p1/RandomSampling/nq50`, `p1/VAAL/nq50`, `p1/WAAL/nq50`, seed 1).
+
 *Pre-flight checks of `kmh_norm` (2026-11-15, CPU, local, branch `feat/kmh-feature-norm`).* Identity guarantee: the
 golden runs pass unchanged (2/2); `tests/test_postprocess_identity.py` passes, including the end-to-end micro run (key
 absent vs `{"method": "none"}`: identical queries, `round_queries.json`, `round_predictions.json`, every metric of
