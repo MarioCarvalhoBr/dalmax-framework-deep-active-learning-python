@@ -156,6 +156,20 @@ executed; `COLAB_RUNBOOK.md` section 6h):
   for the reference configuration (a KMH configuration chosen from `kmh_wide`/`kmh_norm` would still need its own
   seeds-4-6 run).
 
+## KMH l2 confirmed on seeds 4-6 (2026-11-16, ADR 0021)
+
+`kmh_norm` (ADR 0019) was executed (seeds 1-3, test-set reading): `l2` 0.8128 at nq100 and 0.7086 at nq50 against the
+raw-feature reference 0.7921 / 0.5860 and WAAL 0.8077 / 0.7874; at nq10 `l2` 0.4493 lost to the reference 0.4909.
+The variant to confirm was fixed before any seed 4-6 result: **`l2` only**, at nq 100, 50 and 10 (`pca64_l2`
+unstable, one nq50 seed collapsed; not confirmed). Part **`kmh_confirm`** of the main manifest (9 groups / 27 runs,
+`part_1_gpu`, account A, tag `campaign-fixed-v7`; prepared, not executed; `COLAB_RUNBOOK.md` section 6i): KMH `l2` at
+the three query sizes and the KMH reference, RandomSampling and WAAL at nq50/nq10 on seeds 4, 5, 6; at nq100 the
+comparison rows are the `seeds_ext` runs (aliases). Tables `kmh_confirm_nq{100,50,10}` (paper 3's report, beside
+`seeds_ext_nq100`; the KMH question itself is paper 1's). It confirms or not, on seeds that played no part in the
+choice, the gain of `l2` over raw features and its place against WAAL; it says nothing about `zscore`, `pca64_l2` or
+other hierarchies, and three seeds settle no small difference. The claim wording (pendencia P42) is the author's,
+naming the seeds 4-6 tables.
+
 ## Campaign executed; decisions of 2026-11-01 (first campaign; the Q=17 decision is superseded by ADR 0017)
 
 The campaign's first 192 runs finished on 2026-10-05 and the 18-run `texhal_q17` part on 2026-11-01

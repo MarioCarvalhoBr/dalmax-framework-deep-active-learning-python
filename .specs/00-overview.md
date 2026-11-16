@@ -123,6 +123,12 @@ distinct from "hierarchical" and matters for the ablation in
   10, 4 groups / 12 runs) and `seeds_ext` (the 8 headline methods at nq100 on the new seeds 4, 5, 6, 8 groups / 24
   runs). Main manifest 357 runs / 119 groups, `part_2_gpu` 252 / 84, 588 runs in total. The campaign engine now
   treats two groups as redundant only on a common seed, and picks the pilot only among groups that run seed 1.
+- **KMH l2 confirmation on seeds 4-6 (2026-11-16, ADR 0021)**: `kmh_norm` executed and verified (552 OK); its `l2`
+  variant (fixed before any seed 4-6 result) is confirmed by the config-only part `kmh_confirm` of the main manifest,
+  `part_1_gpu` (account A, tag `campaign-fixed-v7`, config-only relative to v6; `COLAB_RUNBOOK.md` section 6i; prepared,
+  not executed): KMH `l2` at nq 100/50/10, the KMH reference, RandomSampling and WAAL at nq 50/10, on seeds 4, 5, 6
+  (9 groups / 27 runs; the nq100 comparison rows are the `seeds_ext` runs). Main manifest 384 runs / 128 groups,
+  `part_1_gpu` 363 / 121, 615 runs in total.
 - **Pre-flight fix KI-47 (2026-11-12, ADR 0016 amendment)**: the loaders listed each class folder in file-system order,
   which differed between Colab sessions, so in the first campaign the same seed started from other images in each
   later session and the cached embeddings served later sessions the features of other images (the KMH sweep,

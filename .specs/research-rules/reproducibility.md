@@ -190,7 +190,7 @@ also more complete now: it gained `all_precision_macro`/`all_recall_macro`/`all_
 see `research-rules/metrics.md`), though it still does not duplicate the full params JSON —
 `run_metadata.json` is the file to consult for that, not `results.json`.
 
-**Code version of a campaign (KI-48, 2026-11-12; convention extended by ADR 0017, ADR 0018 and ADR 0019, 2026-11-15, and ADR 0020, 2026-11-16).** Every Colab session
+**Code version of a campaign (KI-48, 2026-11-12; convention extended by ADR 0017, ADR 0018 and ADR 0019, 2026-11-15, and ADR 0020 and ADR 0021, 2026-11-16).** Every Colab session
 checks out the campaign's tag detached; `campaign verify` lists the distinct `git_commit` values of the OK leaves and
 more than one is a WARN. A later part of the same campaign may run under a new tag only when nothing a
 `tools/trainer.py` run executes changed between the tags (checked with `git diff --stat <old tag> -- dalmax/ tools/`
@@ -213,7 +213,17 @@ pilot candidates, none of which a trainer run executes); only account B uses it,
 `[1, 2, 3]` (the `seeds_ext` groups run `[4, 5, 6]`); the same computation on disjoint seeds is not a duplicate, and
 the seed audit compares each seed's runs among themselves, so every run of seed 4 must start from the same initial
 labeled images exactly as for seeds 1-3. Seeds 4-6 results are reported in their own table, never merged into a
-seeds-1-3 row.
+seeds-1-3 row. `campaign-fixed-v7` (ADR 0021) is config-only relative to v6 (`git diff --stat campaign-fixed-v6 --
+dalmax/ tools/ pyproject.toml poetry.lock` lists the part list of `dalmax/campaign.py` only; `tools/trainer.py` does
+not import `dalmax.campaign`); only account A uses it, for the 27 `kmh_confirm` leaves, so account A's `part_1_gpu`
+lists four commits (v2, v3, v5, v7) and the merged verify up to six (v2-v7), each explained. Account B stays on v6
+until its 36 runs are merged: a config-only tag changes no computation, but a second tag inside one part is still a
+commit the audit must explain. **Confirmation on new seeds (ADR 0021):** a configuration chosen on seeds 1-3 by
+reading the test set (here the `l2` post-processing of KMH, ADR 0019) is confirmed on seeds 4-6 only when the choice
+is fixed in writing before any seed 4-6 result exists, and reported at every pre-declared query size whatever the
+outcome; the comparison rows (the KMH reference, RandomSampling, WAAL) run on the same seeds, and the seed audit,
+which groups runs by seed whatever their part, manifest or account, checks after the local merge that the
+`kmh_confirm` runs (account A) and the `seeds_ext` runs (account B) of a seed started from the same initial images.
 
 Original text (pre-Phase-2): **Not currently implemented.** `demo.py` (historical) logs the full `args` and the
 selected dataset's `params` block to `log-dalmax.log` via

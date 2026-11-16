@@ -5,7 +5,8 @@ run inside a manifest**: every distinct configuration of a manifest runs exactly
 single run. Across the main manifest and the KMH sweep, three groups repeat the reference KMH configuration on
 purpose (section "Intentional duplicate computations" below). Since ADR 0020 (2026-11-16) the part `seeds_ext` runs
 the headline methods' configurations again on the NEW seeds 4-6: a computation is redundant only when it repeats on a
-common seed (`find_redundant_groups`), so these are new runs, not repetitions.
+common seed (`find_redundant_groups`), so these are new runs, not repetitions. Likewise the part `kmh_confirm` (ADR
+0021) re-runs executed configurations (KMH `l2`, the KMH reference, RandomSampling, WAAL) on seeds 4-6.
 Decision records: ADR 0008 (manifest + dedup), ADR 0009 (shared "w/o representation" run), ADR 0016 (clean re-run on
 the duplicate-free dataset, two GPU parts). Single source of truth: `files_config/campaign/manifest.json` (generated
 by `scripts/campaign/build_manifest.py`; micro mirror `manifest_micro.json`) plus the KMH sweep
@@ -43,6 +44,11 @@ by `scripts/campaign/build_manifest.py`; micro mirror `manifest_micro.json`) plu
 > seeds 4-6" below): **`descriptors_nq`** (4 groups / 12 runs: RNHAL and TexHAL at n_query 50 and 10) and
 > **`seeds_ext`** (8 groups / 24 runs: the 8 headline methods at n_query 100 on the new seeds 4, 5, 6): main
 > 357 / 119, `part_2_gpu` 252 / 84, both manifests 588.
+>
+> **2026-11-16 (ADR 0021).** `kmh_norm` was executed and verified (552 OK). To confirm its `l2` variant on seeds that
+> played no part in choosing it, a config-only part **`kmh_confirm`** was added to the MAIN manifest, `part_1_gpu`
+> (account A), prepared, not executed (section "KMH l2 confirmed on seeds 4-6" below): 9 groups / 27 runs on seeds 4,
+> 5, 6: main 384 / 128, `part_1_gpu` 363 / 121, both manifests 615.
 
 **Why**: KI-46 (train/test leakage and duplicated test images in `DATA/daninhas_full`). Author decisions
 (2026-11-11): the new canonical dataset is `DATA/daninhas_full_fixed` (7,230 train / 1,008 test images, plus
@@ -73,14 +79,15 @@ bound's `n_init_labeled` is 7,230.
 | main | `texhal_q13` | 8 x 3 | 24 | paper 2, TexHAL canonical Q=13 6.2 (incl. the two ADR 0013 shapes) / 6.3 (ADR 0017, added 2026-11-15) | 1.4 |
 | main | `descriptors_nq` | 4 x 3 | 12 | RNHAL and TexHAL (executed nq100 configurations) at nq 50 and 10 (ADR 0020, added 2026-11-16) | 1.9 |
 | main | `seeds_ext` | 8 x 3 | 24 | the 8 headline methods at nq100 on seeds 4, 5, 6 (ADR 0020, added 2026-11-16) | 4.1 |
-| main | **total** | **119 x 3** | **357** | | **87.3** |
+| main | `kmh_confirm` | 9 x 3 | 27 | KMH `l2` at nq 100/50/10, KMH reference, RandomSampling and WAAL at nq 50/10, on seeds 4, 5, 6 (ADR 0021, added 2026-11-16) | 8.5 |
+| main | **total** | **128 x 3** | **384** | | **95.8** |
 | sweep | `kmh_nq100` | 21 x 3 | 63 | KMH sweep stages 1 + 2 (ADR 0012) | 9.9 |
 | sweep | `kmh_nq50` | 17 x 3 | 51 | | 4.9 |
 | sweep | `kmh_nq10` | 17 x 3 | 51 | | 4.0 |
 | sweep | `kmh_wide` | 13 x 3 | 39 | KMH wide-top exploration, nq 10/50/100 (ADR 0018, added 2026-11-15) | 9.2 |
 | sweep | `kmh_norm` | 9 x 3 | 27 | KMH feature post-processing, reference hierarchy, nq 10/50/100 (ADR 0019, added 2026-11-15) | 4.2 |
 | sweep | **total** | **77 x 3** | **231** | | **32.3** |
-| both | **total** | **196 x 3** | **588** | | **119.6** |
+| both | **total** | **205 x 3** | **615** | | **128.1** |
 
 Params per paper-1 strategy: the dropout family (`LeastConfidenceDropout`, `MarginSamplingDropout`,
 `EntropySamplingDropout`, `BALDDropout`, `VarRatio`, `MeanSTD`) `params_paper1_mc_dropout.json` (`model_args.dropout_p`
@@ -246,6 +253,42 @@ and NO_DATA for seeds 4-6 (no leaf yet), data-order audit PASS, the 9 duplicate 
 `skipped=102 dry_run=33`, sweep `skipped=90`, long baselines `skipped=24 dry_run=3`); the pilot dry run SKIPs its 3
 executed leaves (`p1/RandomSampling/nq50`, `p1/VAAL/nq50`, `p1/WAAL/nq50`, seed 1).
 
+**KMH l2 confirmed on seeds 4-6 (part `kmh_confirm`, ADR 0021, 2026-11-16; prepared, not executed).** Config-only (no
+params file is new, nothing a trainer run executes changed), in the main manifest, `part_1_gpu` (account A), appended
+after `seeds_ext`, tag `campaign-fixed-v7`, operator steps `COLAB_RUNBOOK.md` section 6i.
+
+- Why: `kmh_norm` (ADR 0019) was read on the test set (seeds 1-3, final weighted F1): nq100 `l2` 0.8128 +- 0.0171,
+  `pca64_l2` 0.8155 +- 0.0346, reference 0.7921, WAAL 0.8077, RandomSampling 0.7397; nq50 `l2` 0.7086, reference
+  0.5860, WAAL 0.7874, RandomSampling 0.6455, `pca64_l2` 0.5589 +- 0.3422 (one seed collapsed); nq10 `pca64_l2`
+  0.5575, `l2` 0.4493, reference 0.4909, WAAL 0.5793, RandomSampling 0.4756. ADR 0019 requires a confirmation on seeds
+  4-6 with RandomSampling and WAAL before any claim. The variant was fixed before any seed 4-6 result existed: **`l2`
+  only**, at all three query sizes (nq10 included although it lost there; `pca64_l2` unstable, not confirmed).
+- Groups (seeds `[4, 5, 6]`, exact copies of executed seeds-1-3 groups, resolved config and signature equal, tested):
+  `kmh_confirm/nq{100,50,10}/kmh_l2` (= `kmh_norm/nq{N}/l2`, params `files_config/ablations/kmh_sweep/nq{N}/
+  hier_L3_ref__norm_l2.json`, stage 3), `kmh_confirm/nq{50,10}/kmh_reference` (= `p1/KMH/nq{N}`, `params_kmh.json`,
+  stage 1), `kmh_confirm/nq{50,10}/RandomSampling` (= `p1/RandomSampling/nq{N}`, stage 1), `kmh_confirm/nq{50,10}/WAAL`
+  (= `p1/WAAL/nq{N}`, stage 5). Results `results/campaign_fixed/kmh_confirm/nq{N}/<method>/`. The nq100 reference,
+  RandomSampling and WAAL on seeds 4-6 are the `seeds_ext` runs (account B): no second run, the aliases
+  `kmh_confirm/nq100/{kmh_reference,RandomSampling,WAAL}` -> `seeds_ext/{KMH,RandomSampling,WAAL}`.
+- Why the main manifest: a table row names a group or alias of its own manifest only (the nq100 table needs the
+  `seeds_ext` rows), RandomSampling and WAAL are main-manifest groups (the sweep holds `RepresentationStrategy` only),
+  and one zip folder per part. Tables `kmh_confirm_nq{100,50,10}` (kind `benchmark`; rows KMH `l2`, KMH reference,
+  RandomSampling, WAAL; seeds 4-6 only) in paper 3's report next to `seeds_ext_nq100`, so every seeds 4-6 group keeps
+  one consumer (the `shared/` rule holds without exemption); no seeds-1-3 table, row or `best_of` changes.
+- Estimates: the counterpart's mean wall time measured on the clean campaign (`confirm_estimate`; 592 / 559 / 537 s
+  `l2`, 574 / 543 s reference, 82 / 56 s RandomSampling, 3,589 / 3,650 s WAAL at nq100 / 50 / 10): 8.5 GPU h, WAAL
+  6.0 h of it. ImageNet cache: none for seeds 4-6 on account A; the first job of the plan
+  (`kmh_confirm/nq50/kmh_reference`, stage 1) computes it once per seed, the other KMH groups of the seed load it (the
+  key ignores `n_query`; the post-processing is never cached).
+- Engine: the part name only (`PARTS`, `PHASE_LABELS`). Pilot of `part_1_gpu` unchanged (seed 1 of
+  `shared/random_nq100`, `p1/VAAL/nq100`, `p1/WAAL/nq100`, all executed). Seed audit unchanged: on account A it compares
+  the `kmh_confirm` runs of each seed 4-6 among themselves; after the merge, `make campaign-verify-all` compares them
+  with account B's `seeds_ext` runs of the same seed (the initial set depends only on the seed, the pool and
+  `n_init_labeled`). Post-run check: equal round-0 weighted F1 per seed within each family (KMH raw and `l2`, all query
+  sizes and `seeds_ext/KMH`; RandomSampling likewise), as on seeds 1-3.
+- The 196 groups of tag v6 keep their identity (pinned v6 digests, `test_v6_groups_keep_their_identity`); the KMH
+  sweep manifests are byte-identical to v5/v6.
+
 *Pre-flight checks of `kmh_norm` (2026-11-15, CPU, local, branch `feat/kmh-feature-norm`).* Identity guarantee: the
 golden runs pass unchanged (2/2); `tests/test_postprocess_identity.py` passes, including the end-to-end micro run (key
 absent vs `{"method": "none"}`: identical queries, `round_queries.json`, `round_predictions.json`, every metric of
@@ -287,7 +330,7 @@ manifests carries `gpu_part` and `gpu_stage`. A group never splits (its three se
 
 | GPU part | Account | Content | Runs / groups | Est. GPU h |
 |---|---|---|---|---|
-| `part_1_gpu` | A | paper 1 at nq100 (incl. `shared/random_nq100`, `shared/kmh_nq100`), the WAAL control, the upper bound, `rnhal`, `texhal`, `texhal_q17`, `hier_transfer`, `texhal_q13` (ADR 0017), KMH sweep at nq100 and nq50, `kmh_norm` (ADR 0019) | 336 / 112 (285 / 95 before ADR 0017, 309 / 103 before ADR 0019) | 55.5 |
+| `part_1_gpu` | A | paper 1 at nq100 (incl. `shared/random_nq100`, `shared/kmh_nq100`), the WAAL control, the upper bound, `rnhal`, `texhal`, `texhal_q17`, `hier_transfer`, `texhal_q13` (ADR 0017), KMH sweep at nq100 and nq50, `kmh_norm` (ADR 0019), `kmh_confirm` (ADR 0021) | 363 / 121 (285 / 95 before ADR 0017, 309 / 103 before ADR 0019, 336 / 112 before ADR 0021) | 64.0 |
 | `part_2_gpu` | B | paper 1 at nq50 and nq10, KMH sweep at nq10, `kmh_wide` (ADR 0018), `descriptors_nq` and `seeds_ext` (ADR 0020) | 252 / 84 (177 / 59 before ADR 0018, 216 / 72 before ADR 0020) | 64.0 |
 
 Execution order inside a part (`gpu_stage`; the main manifest and the sweep are merged into one plan): 1 paper-1
@@ -304,11 +347,14 @@ treat gaps within the session-to-session variation as ties):
   is the balancing item, in `part_1_gpu`);
 - any cross-budget reading of paper 1 (nq100 in `part_1_gpu`, nq50/nq10 in `part_2_gpu`);
 - the `kmh_norm_nq10` table (ADR 0019): its three variants in `part_1_gpu`, its raw-feature reference row
-  (`kmh/nq10/hier_L3_ref`) executed in `part_2_gpu`; equal round-0 models per seed on both accounts are the check.
+  (`kmh/nq10/hier_L3_ref`) executed in `part_2_gpu`; equal round-0 models per seed on both accounts are the check;
+- the `kmh_confirm_nq100` table (ADR 0021): its `l2` row in `part_1_gpu`, its reference, RandomSampling and WAAL rows
+  the `seeds_ext` runs of `part_2_gpu` (aliases); same check (equal round 0 per seed and family on both accounts).
 
 Inside one part: every paper-1 table of one budget (20 strategies + KMH reference), every 6.1/6.2/6.3 table and
 comparison table of papers 2 and 3 (all at nq100, with `shared/random_nq100`, `shared/kmh_nq100` and the best paper-1
-method at nq100), and every KMH-sweep table except `kmh_norm_nq10`. `tests/test_campaign.py::test_gpu_parts_cover_every_group_once_and_keep_tables_together`
+method at nq100), every KMH-sweep table except `kmh_norm_nq10`, and the `kmh_confirm` tables except
+`kmh_confirm_nq100`. `tests/test_campaign.py::test_gpu_parts_cover_every_group_once_and_keep_tables_together`
 asserts this.
 
 **GPU-time estimates** (`files_config/campaign/gpu_time_estimates.json`, referenced by both full-scale manifests as
@@ -340,6 +386,7 @@ results/campaign_fixed/                         # main manifest
 ├── texhal_q13/<study>/<config>/...             # ADR 0017
 ├── descriptors_nq/{rnhal,texhal_q13}/nq{50,10}/...   # ADR 0020
 ├── seeds_ext/<method>/daninhas_full_fixed/SEED_{4,5,6}/...   # ADR 0020
+├── kmh_confirm/nq{100,50,10}/{kmh_l2,kmh_reference,RandomSampling,WAAL}/daninhas_full_fixed/SEED_{4,5,6}/...   # ADR 0021
 results/campaign_kmh_fixed/nq{10,50,100}/<config>/...   # KMH sweep
 results/campaign_kmh_fixed/wide/nq{10,50,100}/<config>/...   # KMH wide-top exploration, part kmh_wide (ADR 0018)
 results/campaign_kmh_fixed/norm/nq{10,50,100}/{l2,zscore,pca64_l2}/...   # KMH feature post-processing, part kmh_norm (ADR 0019)
@@ -380,6 +427,10 @@ v5's) and the merged verify up to four (v2, v3, v4, v5), all explained. `campaig
 changed: part names, seed-aware redundancy check and pilot candidates; nothing a trainer run executes). Only account B
 uses it (account A stays on v5 until `kmh_norm` is merged): `part_2_gpu` then carries three commits (177 leaves with
 v2's, 39 with v4's, 36 with v6's) and the merged verify up to five (v2, v3, v4, v5, v6), all explained.
+`campaign-fixed-v7` since ADR 0021 (2026-11-16) = v6 + the `kmh_confirm` part, config-only relative to v6 (only the part
+list of `dalmax/campaign.py` changed), so its trainer code is that of v5/v6. Only account A uses it (account B stays on
+v6 until `descriptors_nq` + `seeds_ext` are merged): `part_1_gpu` then carries four commits (285 leaves with v2's, 24
+with v3's, 27 with v5's, 27 with v7's) and the merged verify up to six (v2 to v7), all explained.
 
 **Data order, cache identity and audits (KI-47, ADR 0016 amendment of 2026-11-12).** The first campaign's loaders
 listed each class folder in file-system order, which differed between Colab sessions: the same seed selected the same
@@ -395,8 +446,9 @@ naming other images FAIL, and (2) the **data-order audit**: per dataset folder, 
 `data_order` hashes (FAIL otherwise, WARN for a leaf without the record). Exit codes as before: 0 / 1 (a job not OK or
 a FAIL) / 2 (only WARNs). After merging both parts expect one order for `daninhas_full_fixed` over all 462 leaves
 (486 after the `texhal_q13` part, ADR 0017; 525 after `kmh_wide`, ADR 0018; 552 after `kmh_norm`, ADR 0019; 588
-after `descriptors_nq` and `seeds_ext`, ADR 0020). The seed audit then also lists seeds 4, 5 and 6 (the `seeds_ext`
-runs only).
+after `descriptors_nq` and `seeds_ext`, ADR 0020; 615 after `kmh_confirm`, ADR 0021). The seed audit then also lists
+seeds 4, 5 and 6: on one account the runs of that account (`seeds_ext` on B, `kmh_confirm` on A), after the merge
+both together, so the two accounts must have started every run of a seed from the same images.
 
 **Intentional duplicate computations.** Three groups of the main manifest have the effective signature of a KMH-sweep
 group: `shared/kmh_nq100` = `kmh/nq100/hier_L3_ref`, `p1/KMH/nq50` = `kmh/nq50/hier_L3_ref`, `p1/KMH/nq10` =
@@ -404,7 +456,8 @@ group: `shared/kmh_nq100` = `kmh/nq100/hier_L3_ref`, `p1/KMH/nq50` = `kmh/nq50/h
 deduplicated internally (`validate_manifest`), the sweep's reference rows are measured with the sweep, and after the
 KI-47 fix each pair is a free determinism check (same seed and config should select the same images).
 `campaign verify` over several manifests (`make campaign-verify-all`) prints them (`cross_manifest_duplicates`,
-`tests/test_campaign.py` pins exactly these three) with `SAME` / `DIFFERENT` (first differing round) / `N/A` per seed,
+`tests/test_campaign.py` pins these three, plus the three `kmh_confirm/nq{N}/kmh_l2` = `kmh_norm/nq{N}/l2` pairs of
+ADR 0021, which share no seed and so produce no check line) with `SAME` / `DIFFERENT` (first differing round) / `N/A` per seed,
 comparing the per-round image paths of `round_queries.json`; informational, no effect on the exit code. The nq50 pair
 crosses the GPU parts (`p1/KMH/nq50` in `part_2_gpu`, the sweep's nq50 in `part_1_gpu`), so a `DIFFERENT` there may
 also reflect best-effort GPU determinism across two runtimes.
@@ -434,7 +487,7 @@ make campaign-pilot           GPU_PART=part_1_gpu   # seed 1 of VAAL/WAAL (+ Ran
 make campaign-pilot-report    GPU_PART=part_1_gpu   # wall time vs estimate, strategy_diagnostics, flags (read only)
 make campaign-run-gpu-part    GPU_PART=part_1_gpu   # resumable: re-run the same command
 make campaign-verify-gpu-part GPU_PART=part_1_gpu   # OK/INCOMPLETE/MISSING + commits + seed audit + data-order audit
-make campaign-verify-all                            # after merging: OK=588 (462 + texhal_q13 + kmh_wide + kmh_norm + descriptors_nq + seeds_ext), up to five commits (v2..v6), audits PASS (seeds 1-6), duplicate pairs
+make campaign-verify-all                            # after merging: OK=615 (462 + texhal_q13 + kmh_wide + kmh_norm + descriptors_nq + seeds_ext + kmh_confirm), up to six commits (v2..v7), audits PASS (seeds 1-6), duplicate pairs
 make campaign-report-all                            # docs/results/campaign_fixed/ + docs/results/campaign_kmh_fixed/
 make campaign-list                                  # main manifest alone (PART=paper1|... or part_1_gpu|part_2_gpu)
 make campaign-smoke-gpu-part GPU_PART=part_2_gpu    # CPU micro plan of one GPU part, seed 1
@@ -466,7 +519,10 @@ audits PASS, duplicate pairs SAME; a dry run of `run --part part_2_gpu` SKIPs th
 only the 39 `kmh_wide` jobs. Part `kmh_norm` (27 runs, ADR 0019): not executed; local check of 2026-11-15 in the
 pre-flight paragraph of section "KMH feature post-processing" above (OK=486, MISSING=66). Parts `descriptors_nq`
 (12 runs) and `seeds_ext` (24 runs, ADR 0020): not executed; local check of 2026-11-16 in the pre-flight paragraph of
-section "Descriptors at query sizes 50 and 10, and the headline comparison on seeds 4-6" above.
+section "Descriptors at query sizes 50 and 10, and the headline comparison on seeds 4-6" above. Part `kmh_norm`:
+executed on account A with tag `campaign-fixed-v5` and verified (552 OK over both manifests, recorded with ADR 0021).
+Part `kmh_confirm` (27 runs, ADR 0021): not executed; local check of 2026-11-16 in the pre-flight paragraph of section
+"KMH l2 confirmed on seeds 4-6" above.
 
 ---
 
