@@ -36,6 +36,10 @@ Hierarchy-transfer rows (ADR 0013, 2026-11-10, campaign part `hier_transfer`; ex
 files_config/campaign/   # the campaign (manifest + params_paper1/params_kmh); see its README
 ```
 
+**2026-11-16 (ADR 0020)**: no new file here. The campaign parts `descriptors_nq` (RNHAL and TexHAL at n_query 50
+and 10) and `seeds_ext` (the headline methods on seeds 4-6) reuse `rnhal/stage_full.json` and `texhal/rep_q13.json`
+(and their `micro/` mirrors) unchanged; the query size and the seeds are manifest values, not params.
+
 **2026-09-29 (ADR 0009)**: `stage_no_representation.json` no longer exists in `rnhal/` or `texhal/`. The
 ResNet-ImageNet + hierarchical configuration is **one run shared by papers 1 (KMH@100), 2 and 3**; its
 only config is `files_config/campaign/params_kmh.json` (run as the campaign's `shared/kmh_nq100`). The

@@ -281,6 +281,11 @@ Only proceed to §6 (the campaign) once all of the above pass.
 > expects `part_1_gpu` = 336 runs / 112 groups (account A) and `part_2_gpu` unchanged (216 / 72), 552 in total. Account
 > A runs the 27 new runs as described in section 6g. **Only account A uses v5**: account B keeps the v4 notebook until
 > `kmh_wide` is finished (never a third code version inside one part).
+>
+> **2026-11-16 (ADR 0020).** With the two new parts `descriptors_nq` and `seeds_ext` of the main manifest the notebook
+> (tag `campaign-fixed-v6`) expects `part_2_gpu` = 252 runs / 84 groups (account B) and `part_1_gpu` unchanged
+> (336 / 112), 588 in total. Account B runs the 36 new runs as described in section 6h. **Only account B uses v6**:
+> account A stays on the v5 notebook until `kmh_norm` is finished and merged.
 
 **Prepared 2026-11-11, not executed.** Everything the three papers need is re-run on the duplicate-free dataset
 (KI-46), no old result reused: the main manifest (`files_config/campaign/manifest.json`, 297 runs / 99 groups: paper 1
@@ -411,7 +416,8 @@ except the long baselines' rows. Add about 15 minutes per session for sections 0
   and no code-version `WARN:` line (more than one `git_commit`, or a leaf without one). The zip cell already refuses
   an incomplete part; the commit warning is only printed, so read it. Explained exceptions: account A after the
   `texhal_q13` runs (section 6e) lists two commits, v2 and v3 (or v4), and after the `kmh_norm` runs (section 6g)
-  three, v2, v3 and v5; account B after the `kmh_wide` runs (section 6f) lists two commits, v2 and v4.
+  three, v2, v3 and v5; account B after the `kmh_wide` runs (section 6f) lists two commits, v2 and v4, and after the
+  `descriptors_nq` / `seeds_ext` runs (section 6h) three, v2, v4 and v6.
 
 **Optional per-account report**: `!make campaign-report-all` on one account renders the tables of its part only (rows of
 the other part read `TBD`).
@@ -600,6 +606,80 @@ executes (the new step, behind the new key; with the key absent the behaviour is
    (the nq10 reference ran on account B). A variant that beats the reference was selected on the test set; before any
    claim against WAAL it is confirmed on new seeds (4, 5, 6) with `RandomSampling` and `WAAL` (ADR 0018/0019, a later
    part, not prepared yet).
+
+## 6h. Descriptors at query sizes 50 and 10 (`descriptors_nq`, account B), and the headline comparison on seeds 4-6 (`seeds_ext`, account B)
+
+**Prepared 2026-11-16, not executed.** ADR 0020, two config-only parts of the main manifest, both in `part_2_gpu`, run
+in ONE session and shipped in ONE zip:
+
+- `descriptors_nq`: RNHAL (SSRAE `Q=13`) and TexHAL (VCTex `Q=13`), each in its executed nq100 configuration
+  (reference hierarchy), at n_query 50 and 10, seeds 1-3: 4 groups / **12 runs** into
+  `results/campaign_fixed/descriptors_nq/<method>/nq{50,10}/`, stage 2 (about 1.9 estimated GPU h, 9 to 10 minutes per
+  run).
+- `seeds_ext`: the 8 headline methods at nq100 (RandomSampling, BALDDropout, BadgeSampling, KMH, the upper bound
+  FullSupervised, RNHAL, TexHAL, WAAL), each an exact copy of its executed seeds-1-3 group, on the NEW seeds 4, 5, 6:
+  8 groups / **24 runs** into `results/campaign_fixed/seeds_ext/<method>/` (leaves `.../SEED_{4,5,6}/...`), each at
+  its strategy's usual stage (WAAL with the long baselines, last; about 4.1 estimated GPU h, of which WAAL 2.25 h).
+
+Together **36 runs, about 6.0 estimated GPU h**, plus the embedding caches account B does not have: SSRAE and VCTex
+`Q=13` for seeds 1-3 (written on account A; the nq50 run of a seed computes them, about 83 s for SSRAE and 43 s for
+VCTex per seed, and the nq10 run loads them, the key ignores the query size), and SSRAE, VCTex `Q=13` and ImageNet
+ResNet-50 for seeds 4-6 (exist nowhere; computed once per extractor and seed by its first run). Expect about 15
+minutes more in total. Tag `campaign-fixed-v6` = v5 + these two parts, config-only relative to v5 (only the campaign
+engine changed: part names, a seed-aware redundancy check and pilot selection; nothing a `tools/trainer.py` run
+executes).
+
+**Account A is not touched.** It is running `kmh_norm` with the v5 notebook (section 6g) and stays on v5 until
+`kmh_norm` is finished and merged; only account B uses v6.
+
+1. **Upload the regenerated notebook** (`notebooks/colab_runbook.ipynb` of tag `campaign-fixed-v6`) to account B's
+   Colab, replacing the v4 copy (`kmh_wide` is finished and merged on account B).
+2. **Parameters cell** (account B): **`DRIVE_ROOT` = account B's folder**: the notebook's default value
+   (`DRIVE_ROOT = "..."`, the second assignment) points at account A's folder; change its LAST path component to the
+   folder of account B that holds `DATA/daninhas_full_fixed/` and `results/`. Then `GPU_PART = "part_2_gpu"`,
+   `GIT_REF = "campaign-fixed-v6"` (the notebook default), and **`PILOT_REVIEWED = True`** (the pilot was reviewed in
+   the first execution; its leaves are complete). The banner must print `expect 252 runs (84 run groups)`.
+3. **Run all.** Sections 0-5 as usual (section 2 must print the v6 commit). The list cell ends with
+   `TOTAL 252 runs (84 run groups)`; the pre-run gate passes (no leaf of `part_1_gpu` on this Drive; the space check
+   needs only the 36 remaining runs, about 4.1 GB). The pilot cell prints `SKIP` for its 3 jobs
+   (`p1/RandomSampling/nq50`, `p1/VAAL/nq50`, `p1/WAAL/nq50`, seed 1: complete; the `seeds_ext` groups have no seed 1
+   and are never a pilot). The run cell prints `SKIP` for every one of the **216** executed leaves and runs only the
+   **36** new jobs. The plan has three segments, each with its own `CAMPAIGN END` line: main manifest stages 1-2 (135
+   jobs: `executed=33 skipped=102 failed=0`: the `seeds_ext` stage-1 groups, then `descriptors_nq` and the `seeds_ext`
+   RNHAL/TexHAL groups), the KMH sweep (90 jobs, all skipped) and the main manifest's long baselines (27 jobs:
+   `executed=3 skipped=24 failed=0`, the three `seeds_ext/WAAL` runs). Resume after a session drop = re-run, as in
+   section 6.
+4. **Verify** (`make campaign-verify-gpu-part GPU_PART=part_2_gpu`): expect `Totals: OK=252 INCOMPLETE=0 MISSING=0`,
+   the seed audit PASS for seeds 1, 2, 3 **and 4, 5, 6** (seeds 4-6: the 7 `seeds_ext` runs of each seed compared by
+   image paths with `seeds_ext/RandomSampling`, the upper bound excluded as always), data-order audit PASS (one
+   order). **The code-version audit lists THREE commits** (`464a5cc` = `campaign-fixed-v2` for the 177 earlier leaves,
+   the `campaign-fixed-v4` commit for the 39 `kmh_wide` leaves, the `campaign-fixed-v6` commit for the 36 new ones) and
+   prints a `WARN:` line: expected and explained (ADR 0018, ADR 0020). Any other commit, or a leaf without one, is not
+   expected: stop and report.
+5. **Zip both new parts in one go**: in the zip cell set `ZIP_ONLY_PART = "descriptors_nq+seeds_ext"` (leave
+   `ZIP_PARTIAL = False`). It still requires `OK=252` for the whole part, then writes
+   `/content/part_2_gpu__descriptors_nq__seeds_ext.zip` with only `results/campaign_fixed/descriptors_nq/` and
+   `results/campaign_fixed/seeds_ext/` plus `results/campaign_fixed/campaign_part_2_gpu__descriptors_nq__seeds_ext.log`
+   and `failures_part_2_gpu__descriptors_nq__seeds_ext.log` (the main root's full logs under new names; the `+` of the
+   parameter never reaches a file name), checks **36** checkpoints, and copies it to `<DRIVE_ROOT>/`. Download it.
+   (Each part alone also works: `"descriptors_nq"` 12 checkpoints, `"seeds_ext"` 24.)
+6. **Merge locally and verify**:
+
+   ```bash
+   cd <repo root>
+   unzip -n part_2_gpu__descriptors_nq__seeds_ext.zip   # -n: never overwrite; only new leaves and two new log names
+   make campaign-verify-all       # expect OK=561 MISSING=27 while kmh_norm (section 6g) is not merged, OK=588
+                                  # INCOMPLETE=0 MISSING=0 after it; up to five commits (v2, v3, v4, v5, v6: WARN,
+                                  # expected); seed audit PASS for seeds 1-6, data-order audit PASS; the 3 KMH
+                                  # duplicate pairs SAME
+   make campaign-report-all       # main report gains descriptors_nq50 / descriptors_nq10 (paper 1) and
+                                  # seeds_ext_nq100 (paper 3); every existing table is unchanged
+   ```
+
+   Reading the result: `descriptors_nq` used configurations fixed beforehand (nothing selected on the test set), but
+   the reference hierarchy was designed for nq100, so a weak nq10 result speaks about that hierarchy, not about the
+   descriptors. `seeds_ext_nq100` aggregates seeds 4-6 only; how the papers combine it with seeds 1-3 (planned: six
+   seeds for the headline comparison, three for the ablations) is the author's decision (ADR 0020).
 
 ---
 

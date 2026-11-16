@@ -8,14 +8,21 @@ earlier; those result trees are archived under `local_assets/results_old/` since
 - `manifest.json` -- the single source of truth for the campaign: run groups (one distinct computation each), aliases
   (same computation, different spelling), per-paper tables, the GPU part of every group (`gpu_part`, `gpu_stage`), the
   per-leaf required files (`required_leaf_files`: `round_predictions.json`, `round_queries.json`) and the GPU-time
-  estimate table it uses (`gpu_time_estimates`). Results under `results/campaign_fixed/`. 321 runs / 107 groups
-  (297 / 99 before the `texhal_q13` part of ADR 0017, 2026-11-15):
+  estimate table it uses (`gpu_time_estimates`). Results under `results/campaign_fixed/`. 357 runs / 119 groups
+  (297 / 99 before the `texhal_q13` part of ADR 0017, 2026-11-15; 321 / 107 before the `descriptors_nq` and
+  `seeds_ext` parts of ADR 0020, 2026-11-16):
   paper 1 = 20 strategies (12 classical + 8 DeepAL+ of ADR 0015) + KMH x nq {10,50,100} + the upper bound; the paper-1
   control part `paper1_control` = `WAALRandomQuery` at nq100 (3 runs, `p1_control/WAALRandomQuery/nq100`, WAAL's
   training with a uniform random query, its own table `paper1_waal_control_nq100` with WAAL and RandomSampling, never a
   row or `best_of` candidate of the benchmark tables; ADR 0015 amendment of 2026-11-12); papers 2/3 =
   `rnhal`, `texhal`, `texhal_q17`, `hier_transfer`, `texhal_q13` (ADR 0017: TexHAL's 6.2/6.3 ablations with its
-  canonical VCTex Q=13, 8 groups / 24 runs in `part_1_gpu`, appended after every executed group). **Generated**: edit `scripts/campaign/build_manifest.py` and run
+  canonical VCTex Q=13, 8 groups / 24 runs in `part_1_gpu`, appended after every executed group); then (ADR 0020,
+  both in `part_2_gpu`, appended after every group of tag v5) `descriptors_nq` (RNHAL and TexHAL with the params
+  files of their executed nq100 runs at n_query 50 and 10, 4 groups / 12 runs, ids `descriptors_nq/<method>/nq{N}`,
+  results under `results/campaign_fixed/descriptors_nq/`, tables `descriptors_nq{50,10}` in paper 1) and `seeds_ext`
+  (the 8 headline methods at nq100 on seeds 4, 5, 6, exact copies of their seeds-1-3 groups, 8 groups / 24 runs, ids
+  `seeds_ext/<method>`, results under `results/campaign_fixed/seeds_ext/`, table `seeds_ext_nq100` in paper 3; a
+  group's `seeds` may differ from the manifest's default `[1, 2, 3]`). **Generated**: edit `scripts/campaign/build_manifest.py` and run
   `make campaign-manifest` (`tests/test_campaign.py` and `build_manifest.py --check` fail if a committed file drifts).
 - `manifest_kmh_sweep.json` -- the paper-1 KMH sweep (ADR 0012), 231 runs / 77 groups (165 / 55 before the
   `kmh_wide` part of ADR 0018, 2026-11-15: the KMH wide-top exploration, 13 groups / 39 runs in `part_2_gpu`, ids
@@ -34,7 +41,9 @@ earlier; those result trees are archived under `local_assets/results_old/` since
   control, which is estimated equal to `WAAL`, and for the `texhal_q13` groups, each equal to its measured
   `texhal_q17` twin, `TWIN_PREFIXES`, and for the `kmh_wide` groups, a least-squares line in the total number of
   clusters over the measured sweep groups of the same query size and number of levels, `FIT_PREFIXES`, and for the
-  `kmh_norm` groups, the measured reference `kmh/nq{N}/hier_L3_ref` of the same budget, `REFERENCE_PREFIXES`); built by
+  `kmh_norm` groups, the measured reference `kmh/nq{N}/hier_L3_ref` of the same budget, `REFERENCE_PREFIXES`, and
+  for the `descriptors_nq` groups, the measured nq100 run x the measured KMH ratio nq{N}/nq100, `SCALED_PREFIXES`, and
+  for the `seeds_ext` groups, the entry of the seeds-1-3 counterpart, `SEEDS_EXT_COUNTERPARTS`); built by
   `scripts/campaign/build_gpu_time_estimates.py` (`make gpu-time-estimates`, read-only on the old trees). Used by
   `campaign list` (hours per part / GPU part) and by the balance test. No GPU model is named.
 
@@ -57,8 +66,8 @@ paper-1 micro files for smoke speed):
 
 GPU parts (ADR 0016): `part_1_gpu` (account A: paper 1 at nq100, the upper bound, every ablation part, KMH sweep nq100
 and nq50, the WAAL control, `texhal_q13`, `kmh_norm`; 336 runs / 112 groups, about 55.5 estimated GPU h; 285 / 95 before ADR 0017, 309 / 103 before ADR 0019) and `part_2_gpu` (account B: paper 1 at nq50 and
-nq10, KMH sweep nq10, `kmh_wide`;
-216 runs / 72 groups, about 58.0 h; 177 / 59 and 48.8 h before ADR 0018). `make campaign-run-gpu-part GPU_PART=...` runs both manifests for one part in stage order
+nq10, KMH sweep nq10, `kmh_wide`, `descriptors_nq`, `seeds_ext`;
+252 runs / 84 groups, about 64.0 h; 177 / 59 and 48.8 h before ADR 0018, 216 / 72 and 58.0 h before ADR 0020). `make campaign-run-gpu-part GPU_PART=...` runs both manifests for one part in stage order
 (cheap groups, ablations, KMH sweep, then `AdversarialBIM`, `VAAL`/`WAAL`/the WAAL control, `AdversarialDeepFool`);
 run `make campaign-pilot GPU_PART=...` first (seed 1 of the part's VAAL/WAAL groups + RandomSampling; not the
 control) and read
