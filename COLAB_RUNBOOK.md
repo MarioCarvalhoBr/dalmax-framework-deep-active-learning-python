@@ -286,6 +286,11 @@ Only proceed to §6 (the campaign) once all of the above pass.
 > (tag `campaign-fixed-v6`) expects `part_2_gpu` = 252 runs / 84 groups (account B) and `part_1_gpu` unchanged
 > (336 / 112), 588 in total. Account B runs the 36 new runs as described in section 6h. **Only account B uses v6**:
 > account A stays on the v5 notebook until `kmh_norm` is finished and merged.
+>
+> **2026-11-16 (ADR 0021).** With the new part `kmh_confirm` of the main manifest the notebook (tag
+> `campaign-fixed-v7`) expects `part_1_gpu` = 363 runs / 121 groups (account A) and `part_2_gpu` unchanged (252 / 84),
+> 615 in total. Account A runs the 27 new runs as described in section 6i. **Only account A uses v7**: account B stays
+> on the v6 notebook until `descriptors_nq` + `seeds_ext` are finished and merged.
 
 **Prepared 2026-11-11, not executed.** Everything the three papers need is re-run on the duplicate-free dataset
 (KI-46), no old result reused: the main manifest (`files_config/campaign/manifest.json`, 297 runs / 99 groups: paper 1
@@ -417,7 +422,8 @@ except the long baselines' rows. Add about 15 minutes per session for sections 0
   an incomplete part; the commit warning is only printed, so read it. Explained exceptions: account A after the
   `texhal_q13` runs (section 6e) lists two commits, v2 and v3 (or v4), and after the `kmh_norm` runs (section 6g)
   three, v2, v3 and v5; account B after the `kmh_wide` runs (section 6f) lists two commits, v2 and v4, and after the
-  `descriptors_nq` / `seeds_ext` runs (section 6h) three, v2, v4 and v6.
+  `descriptors_nq` / `seeds_ext` runs (section 6h) three, v2, v4 and v6; account A after the `kmh_confirm` runs
+  (section 6i) four, v2, v3, v5 and v7.
 
 **Optional per-account report**: `!make campaign-report-all` on one account renders the tables of its part only (rows of
 the other part read `TBD`).
@@ -604,8 +610,8 @@ executes (the new step, behind the new key; with the key absent the behaviour is
 
    Reading the result: each `kmh_norm_nq{N}` table puts the three variants next to the executed raw-feature reference
    (the nq10 reference ran on account B). A variant that beats the reference was selected on the test set; before any
-   claim against WAAL it is confirmed on new seeds (4, 5, 6) with `RandomSampling` and `WAAL` (ADR 0018/0019, a later
-   part, not prepared yet).
+   claim against WAAL it is confirmed on new seeds (4, 5, 6) with `RandomSampling` and `WAAL` (ADR 0018/0019; for `l2`
+   prepared as the part `kmh_confirm`, ADR 0021, section 6i).
 
 ## 6h. Descriptors at query sizes 50 and 10 (`descriptors_nq`, account B), and the headline comparison on seeds 4-6 (`seeds_ext`, account B)
 
@@ -680,6 +686,107 @@ executes).
    the reference hierarchy was designed for nq100, so a weak nq10 result speaks about that hierarchy, not about the
    descriptors. `seeds_ext_nq100` aggregates seeds 4-6 only; how the papers combine it with seeds 1-3 (planned: six
    seeds for the headline comparison, three for the ablations) is the author's decision (ADR 0020).
+
+## 6i. KMH l2 confirmed on seeds 4-6 (`kmh_confirm`, account A)
+
+**Prepared 2026-11-16, not executed.** ADR 0021: `kmh_norm` (section 6g) was executed and verified; its `l2` variant
+(chosen on the test set of seeds 1-3, fixed before any seed 4-6 result) is confirmed on the NEW seeds 4, 5, 6 against
+the KMH reference, RandomSampling and WAAL. One config-only part of the main manifest, in `part_1_gpu`:
+
+| group | runs | stage | est. s/run |
+|---|---|---|---|
+| `kmh_confirm/nq50/kmh_reference`, `kmh_confirm/nq10/kmh_reference` (KMH, raw features) | 6 | 1 | 574 / 543 |
+| `kmh_confirm/nq50/RandomSampling`, `kmh_confirm/nq10/RandomSampling` | 6 | 1 | 82 / 56 |
+| `kmh_confirm/nq100/kmh_l2`, `kmh_confirm/nq50/kmh_l2`, `kmh_confirm/nq10/kmh_l2` | 9 | 3 | 592 / 559 / 537 |
+| `kmh_confirm/nq50/WAAL`, `kmh_confirm/nq10/WAAL` | 6 | 5 | 3,589 / 3,650 |
+
+9 groups / **27 runs** into `results/campaign_fixed/kmh_confirm/nq{N}/<method>/` (leaves `.../SEED_{4,5,6}/...`),
+**about 8.5 estimated GPU h** (the counterparts' wall times measured on the clean campaign; WAAL alone about 6.0 h,
+last). The nq100 reference, RandomSampling and WAAL on seeds 4-6 are NOT run here: they are the `seeds_ext` runs of
+account B (section 6h), read through aliases. Account A's Drive has no ImageNet feature cache for seeds 4-6: the first
+job of the plan, `kmh_confirm/nq50/kmh_reference` seed 4 (then 5, 6), computes it once per seed (a few minutes), and
+the other four KMH groups of each seed load it (the key ignores the query size; `l2` is applied after the load and
+never cached). Tag `campaign-fixed-v7` = v6 + this part, config-only relative to v6 (only the part list of the campaign
+engine changed; the trainer code is that of v5 and v6).
+
+**Account B is not touched.** It runs `descriptors_nq` + `seeds_ext` with the v6 notebook (section 6h) and stays on v6
+until those 36 runs are merged. Opening the v7 notebook there by mistake would change no computation (account B's
+plan is the same under v7, and the banner would print the same `expect 252 runs (84 run groups)`, so nothing would
+stop it), but every leaf it writes would record the v7 commit: a fourth commit in account B's code-version audit, which
+the one-tag-per-part rule forbids. Check section 2's printed commit on account B: it must be the v6 one.
+
+1. **Upload the regenerated notebook** (`notebooks/colab_runbook.ipynb` of tag `campaign-fixed-v7`) to account A's
+   Colab, replacing the v5 copy (`kmh_norm` is finished and merged).
+2. **Parameters cell** (account A): `DRIVE_ROOT` = the notebook's default (account A's folder, holding
+   `DATA/daninhas_full_fixed/` and `results/`), `GPU_PART = "part_1_gpu"`, `GIT_REF = "campaign-fixed-v7"` (the
+   notebook default), and **`PILOT_REVIEWED = True`** (the pilot was reviewed in the first execution; its leaves are
+   complete). The banner must print `expect 363 runs (121 run groups)`.
+3. **Run all.** Sections 0-5 as usual (section 2 must print the v7 commit). The list cell ends with
+   `TOTAL 363 runs (121 run groups)`; the pre-run gate passes (no leaf of `part_2_gpu` on this Drive; the space check
+   needs only the 27 remaining runs, about 3.1 GB). The pilot cell prints `SKIP` for its 3 jobs (`shared/random_nq100`,
+   `p1/VAAL/nq100`, `p1/WAAL/nq100`, seed 1: complete; the `kmh_confirm` groups have no seed 1 and are never a
+   pilot). The run cell prints `SKIP` for every one of the **336** executed leaves and runs only the **27** new jobs.
+   The plan has three segments, each with its own `CAMPAIGN END` line: main manifest stages 1-3 (201 jobs:
+   `executed=21 skipped=180 failed=0`: the KMH reference and RandomSampling at nq50/nq10, then the three `l2`
+   groups), the KMH sweep (141 jobs, all skipped) and the main manifest's long baselines (21 jobs: `executed=6
+   skipped=15 failed=0`, the `kmh_confirm` WAAL runs). Resume after a session drop = re-run, as in section 6.
+4. **Verify** (`make campaign-verify-gpu-part GPU_PART=part_1_gpu`): expect `Totals: OK=363 INCOMPLETE=0 MISSING=0`,
+   the seed audit PASS for seeds 1, 2, 3 **and 4, 5, 6** (seeds 4-6: the 9 `kmh_confirm` runs of each seed compared by
+   image paths among themselves; account B's `seeds_ext` runs are compared with them after the local merge, step 7),
+   data-order audit PASS (one order). **The code-version audit lists FOUR commits** (`464a5cc` = `campaign-fixed-v2`
+   for the 285 earlier leaves, `49c9ffe` = `campaign-fixed-v3` for the 24 `texhal_q13` leaves, `39de20f` =
+   `campaign-fixed-v5` for the 27 `kmh_norm` leaves, the `campaign-fixed-v7` commit for the 27 new ones) and prints a
+   `WARN:` line: expected and explained (ADR 0017, ADR 0019, ADR 0021). Any other commit, or a leaf without one, is
+   not expected: stop and report.
+5. **Post-run check of the new leaves** (a notebook cell, read only): the round-0 model of a seed does not depend on
+   the query size (the initial set depends on the seed only; round 0 is trained before the first query, so `l2`
+   cannot change it), so within each family the round-0 weighted F1 of a seed must be one value:
+
+   ```python
+   import glob, json
+   from collections import defaultdict
+   family = {"kmh_l2": "KMH", "kmh_reference": "KMH", "RandomSampling": "RandomSampling", "WAAL": "WAAL"}
+   seen = defaultdict(set)
+   for f in sorted(glob.glob("results/campaign_fixed/kmh_confirm/nq*/*/daninhas_full_fixed/SEED_*/*/*/results.json")):
+       nq, method = f.split("/")[3:5]
+       r = json.load(open(f))
+       seen[(family[method], r["seed"])].add(round(r["all_f1_score"][0], 4))
+       print(nq, method, "seed", r["seed"], "round-0 F1 %.4f" % r["all_f1_score"][0],
+             "final %.4f" % r["all_f1_score"][-1], r.get("strategy_diagnostics", {}).get("postprocess_method", ["-"])[0])
+   print({k: sorted(v) for k, v in sorted(seen.items())})  # one value per (family, seed)
+   ```
+
+   Expect one round-0 value per (family, seed); `postprocess_method` `l2` for the `kmh_l2` leaves only, and in each
+   `kmh_l2` leaf's `log-dalmax.log` one `Embedding post-processing (ADR 0019): ...` line. A family with two round-0
+   values for one seed: stop and report.
+6. **Zip only the new part**: in the zip cell set `ZIP_ONLY_PART = "kmh_confirm"` (leave `ZIP_PARTIAL = False`). It
+   still requires `OK=363` for the whole part, then writes `/content/part_1_gpu__kmh_confirm.zip` with only
+   `results/campaign_fixed/kmh_confirm/` plus `results/campaign_fixed/campaign_part_1_gpu__kmh_confirm.log` and
+   `failures_part_1_gpu__kmh_confirm.log` (the main root's full logs under new names, never colliding with the
+   `campaign_part_1_gpu.log` already merged locally), checks **27** checkpoints, and copies it to `<DRIVE_ROOT>/`.
+   Download it.
+7. **Merge locally and verify**:
+
+   ```bash
+   cd <repo root>
+   unzip -n part_1_gpu__kmh_confirm.zip   # -n: never overwrite; only new leaves and the two new log names
+   make campaign-verify-all       # with account B's 36 runs (section 6h) also merged: expect OK=615 INCOMPLETE=0
+                                  # MISSING=0; without them OK=579 MISSING=36; up to six commits (v2 to v7: WARN,
+                                  # expected); seed audit PASS for seeds 1-6 (seeds 4-6: account A's kmh_confirm AND
+                                  # account B's seeds_ext runs of each seed in one comparison: the two accounts must
+                                  # have started from the same images), data-order audit PASS, the 3 KMH duplicate
+                                  # pairs SAME (the kmh_confirm l2 groups repeat kmh_norm l2 on other seeds: no line)
+   make campaign-report-all       # main report gains kmh_confirm_nq100 / _nq50 / _nq10 (paper 3's folder, next to
+                                  # seeds_ext_nq100); every existing table is unchanged
+   ```
+
+   After both merges, repeat the round-0 check of step 5 including account B's `seeds_ext/{KMH,RandomSampling,WAAL}`
+   leaves of seeds 4-6: same value per family and seed on both accounts (as on seeds 1-3).
+
+   Reading the result: each `kmh_confirm_nq{N}` table gives KMH `l2`, the KMH reference, RandomSampling and WAAL on
+   seeds 4-6 only (the nq100 comparison rows are account B's `seeds_ext` runs). `l2` was fixed before these seeds
+   existed and is reported at every query size, nq10 included. Three seeds settle no small difference; the claim
+   wording is the author's (ADR 0021).
 
 ---
 

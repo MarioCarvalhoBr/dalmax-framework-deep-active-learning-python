@@ -77,6 +77,9 @@ make lab-check GPU=0                  # one short real-data GPU run (n_round=1) 
 # main manifest also has the parts descriptors_nq (12 runs) and seeds_ext (24 runs, seeds 4-6), both part_2_gpu,
 # prepared, not executed: 357 / 119, part_2_gpu 252 / 84, 588 in total, tag campaign-fixed-v6 (account B only;
 # config-only relative to v5);
+# since ADR 0021 (2026-11-16) the main manifest also has the part kmh_confirm (27 runs, seeds 4-6, part_1_gpu, prepared,
+# not executed; kmh_norm executed and verified, 552 OK): 384 / 128, part_1_gpu 363 / 121, 615 in total, tag
+# campaign-fixed-v7 (account A only; config-only relative to v6; account B stays on v6);
 # two GPU parts, one per Colab account (see .specs/experiments/campaign.md and COLAB_RUNBOOK.md section 6):
 make campaign-list-gpu-part GPU_PART=part_1_gpu     # both manifests in plan order + est. GPU hours (account B: part_2_gpu)
 make campaign-space-gpu-part GPU_PART=part_1_gpu    # free space vs remaining runs x 96 MB x 1.2 (exit 4 when short; read only)
@@ -90,10 +93,14 @@ make campaign-verify-all                            # after merging both parts l
                                                     #   until they run), up to four commits (v2, v3, v4, v5: expected WARN, ADR 0017/0018/0019), both audits
                                                     #   PASS, + the 3 intentional KMH duplicate pairs (SAME/DIFFERENT, informational);
                                                     #   since ADR 0020: OK=588 (local tree 2026-11-16: OK=525, MISSING=63 = 27 kmh_norm + 12
-                                                    #   descriptors_nq + 24 seeds_ext), up to five commits (v2..v6), seed audit over seeds 1-6
+                                                    #   descriptors_nq + 24 seeds_ext), up to five commits (v2..v6), seed audit over seeds 1-6;
+                                                    #   since ADR 0021: OK=615 (local tree 2026-11-16: OK=552, MISSING=63 = 36 descriptors_nq
+                                                    #   + seeds_ext + 27 kmh_confirm), up to six commits (v2..v7); seeds 4-6 compared across
+                                                    #   both accounts (kmh_confirm on A, seeds_ext on B)
 make campaign-report-all                            # docs/results/campaign_fixed/ + docs/results/campaign_kmh_fixed/
 make campaign-list                                  # main manifest alone; PART=paper1|paper1_control|upper_bound|rnhal|texhal|texhal_q17|hier_transfer|texhal_q13
                                                     #   |descriptors_nq|seeds_ext (comma-separated ok) or PART=part_1_gpu|part_2_gpu
+                                                    #   (since ADR 0021 also PART=kmh_confirm)
 make campaign-list MANIFEST=files_config/campaign/manifest_kmh_sweep.json     # the KMH sweep alone (ADR 0012); PART=kmh_nq100|kmh_nq50|kmh_nq10|kmh_wide|kmh_norm
 make campaign-list MANIFEST=files_config/campaign/manifest_control_ki43.json  # KI-43 control (prepared, not run)
 make campaign-smoke-gpu-part GPU_PART=part_2_gpu    # micro plan of one GPU part on CPU (seed 1), skips AdversarialBIM/DeepFool
@@ -304,11 +311,29 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   byte-identical. Notebook: `GIT_REF` `campaign-fixed-v6` (account B only; A stays on v5 until `kmh_norm` is merged),
   `EXPECTED` part_2_gpu (252, 84), `ZIP_ONLY_PART = "descriptors_nq+seeds_ext"` (several parts joined by `+`, one zip
   `part_2_gpu__descriptors_nq__seeds_ext.zip`, 36 checkpoints); account B's audit lists v2, v4, v6. `COLAB_RUNBOOK.md` 6h.
+- **KMH l2 confirmed on seeds 4-6 (2026-11-16, branch `feat/kmh-confirm`, ADR 0021; prepared, not executed)**: `kmh_norm`
+  executed and verified (552 OK; seeds 1-3, test set: nq100 `l2` 0.8128, `pca64_l2` 0.8155, reference 0.7921, WAAL
+  0.8077; nq50 `l2` 0.7086, reference 0.5860, WAAL 0.7874, `pca64_l2` 0.5589 with one seed collapsed; nq10 `l2` 0.4493,
+  reference 0.4909, WAAL 0.5793). The variant to confirm was fixed before any seed 4-6 result: `l2` only, at nq 100/50/10
+  (nq10 included although it lost; `pca64_l2` unstable, not confirmed). Config-only part `kmh_confirm` of the MAIN
+  manifest (table rows cannot cross manifests and the nq100 rows are `seeds_ext` runs; Random/WAAL are main-manifest
+  groups; one zip folder), `part_1_gpu` (account A, idle): 9 groups / 27 runs on seeds 4, 5, 6, exact copies of
+  `kmh_norm/nq{100,50,10}/l2` (stage 3), `p1/KMH/nq{50,10}` and `p1/RandomSampling/nq{50,10}` (stage 1), `p1/WAAL/nq{50,10}`
+  (stage 5); ids `kmh_confirm/nq{N}/{kmh_l2,kmh_reference,RandomSampling,WAAL}`, results
+  `results/campaign_fixed/kmh_confirm/`; the nq100 reference/Random/WAAL are aliases of `seeds_ext/{KMH,RandomSampling,WAAL}`
+  (no second run). Tables `kmh_confirm_nq{100,50,10}` in paper 3's report next to `seeds_ext_nq100` (single-consumer rule
+  kept). Estimates from the counterparts' clean-campaign wall times: 8.5 GPU h (WAAL 6.0 h). Account A computes the
+  ImageNet cache of seeds 4-6 once per seed (first KMH run, key independent of n_query). Engine: part list only; pilot
+  unchanged (all SKIP); the seed audit pools a seed's runs across parts and accounts. Main 384 / 128, `part_1_gpu`
+  363 / 121, `part_2_gpu` 252 / 84 unchanged, 615 in total; the 196 v6 groups keep their identity (pinned v6 digests).
+  Notebook: `GIT_REF` `campaign-fixed-v7` (account A only; B stays on v6 until its 36 runs are merged), `EXPECTED`
+  part_1_gpu (363, 121), `ZIP_ONLY_PART = "kmh_confirm"` (27 checkpoints); account A's audit lists v2, v3, v5, v7.
+  `COLAB_RUNBOOK.md` 6i.
 
 Next milestone: execute the clean re-run (`COLAB_RUNBOOK.md` section 6), then rewrite the thesis numbers from its reports; advisor review of the ablation section
 (`paper_drafts/ablation_section.tex`, weighted-primary/macro-secondary framing still pending
 confirmation, see `.specs/experiments/ablation-study.md`), of the TexHAL `Q=17` decision (already executed and tabulated; superseded by `Q=13`, ADR 0017, whose 24-run `texhal_q13` part was executed with v3, `COLAB_RUNBOOK.md` section 6e; next to execute: the 39-run `kmh_wide` part of ADR 0018 on account B, section 6f, and the 27-run `kmh_norm` part of ADR 0019 on account A, section 6g; then the 36 runs of `descriptors_nq` + `seeds_ext` of
-ADR 0020 on account B, section 6h) and of the RNHAL
+ADR 0020 on account B, section 6h; then the 27 runs of `kmh_confirm` of ADR 0021 on account A, section 6i) and of the RNHAL
 `L=4` hierarchy; a lab-machine smoke run confirming the Phase 4 and `tools/` moves is still separately
 outstanding.
 
@@ -401,7 +426,8 @@ outstanding.
   165 / 55 under `results/campaign_kmh_fixed/` (since ADR 0018, 2026-11-15, also kmh_wide 39 under `wide/`, so 204 / 68,
   all of kmh_wide in `part_2_gpu`; since ADR 0019, 2026-11-15, also kmh_norm 27 under `norm/`, so 231 / 77, all of
   kmh_norm in `part_1_gpu`; since ADR 0020, 2026-11-16, the main manifest also has descriptors_nq 12 and seeds_ext 24
-  (seeds 4-6), both `part_2_gpu`, so 357 / 119). Every group of both carries `gpu_part` (`part_1_gpu` = paper 1 nq100,
+  (seeds 4-6), both `part_2_gpu`, so 357 / 119; since ADR 0021, 2026-11-16, also kmh_confirm 27 (seeds 4-6),
+  `part_1_gpu`, so 384 / 128). Every group of both carries `gpu_part` (`part_1_gpu` = paper 1 nq100,
   upper bound, all ablations, sweep nq100+nq50; `part_2_gpu` = paper 1 nq50+nq10, sweep nq10) and `gpu_stage`
   (1 cheap paper-1, 2 ablations, 3 KMH sweep, 4 BIM, 5 VAAL/WAAL/WAAL control, 6 DeepFool); `--part part_N_gpu` selects by it,
   `--manifest A,B` merges manifests into one plan. Params: dropout family (4 MC-dropout + `VarRatio`, `MeanSTD`)

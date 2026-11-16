@@ -40,6 +40,10 @@ files_config/campaign/   # the campaign (manifest + params_paper1/params_kmh); s
 and 10) and `seeds_ext` (the headline methods on seeds 4-6) reuse `rnhal/stage_full.json` and `texhal/rep_q13.json`
 (and their `micro/` mirrors) unchanged; the query size and the seeds are manifest values, not params.
 
+**2026-11-16 (ADR 0021)**: no new file here either. The campaign part `kmh_confirm` (KMH l2 confirmed on seeds 4-6)
+reuses `kmh_sweep/nq{100,50,10}/hier_L3_ref__norm_l2.json` (and the `micro/` mirrors) of the executed `kmh_norm`
+part unchanged.
+
 **2026-09-29 (ADR 0009)**: `stage_no_representation.json` no longer exists in `rnhal/` or `texhal/`. The
 ResNet-ImageNet + hierarchical configuration is **one run shared by papers 1 (KMH@100), 2 and 3**; its
 only config is `files_config/campaign/params_kmh.json` (run as the campaign's `shared/kmh_nq100`). The

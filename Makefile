@@ -120,7 +120,7 @@ colab-check:
 # `campaign-run*` refuse to start (exit 4) without free space for the remaining runs
 # (96 MB per run + 20%) and stop the batch (exit 4) on a no-space failure.
 # Variables (all optional):
-#   PART=all|paper1|paper1_control|upper_bound|rnhal|texhal|texhal_q17|hier_transfer|texhal_q13|descriptors_nq|seeds_ext|control|kmh_nq10|kmh_nq50|kmh_nq100|kmh_wide|kmh_norm
+#   PART=all|paper1|paper1_control|upper_bound|rnhal|texhal|texhal_q17|hier_transfer|texhal_q13|descriptors_nq|seeds_ext|kmh_confirm|control|kmh_nq10|kmh_nq50|kmh_nq100|kmh_wide|kmh_norm
 #               (comma-separated allowed; default all), or a GPU part: part_1_gpu|part_2_gpu (ADR 0016).
 #   MICRO=1     -> files_config/campaign/manifest_micro.json (CPU smoke, results/smoke_campaign_fixed/)
 #   MANIFEST=path -> any other manifest (overrides MICRO), e.g. the KMH sweep or the KI-43 control:
@@ -199,11 +199,12 @@ campaign-pilot-report:
 	$(require_gpu_part)
 	poetry run python -m dalmax.campaign pilot-report $(GPU_PART_FLAGS)
 
-# Both manifests, every group (after merging the two GPU parts locally): expect OK=588 (462 + the 24 texhal_q13
+# Both manifests, every group (after merging the two GPU parts locally): expect OK=615 (462 + the 24 texhal_q13
 # runs, ADR 0017, + the 39 kmh_wide runs, ADR 0018, + the 27 kmh_norm runs, ADR 0019, + the 12 descriptors_nq and
-# 24 seeds_ext runs, ADR 0020; the code-version audit then lists up to five commits, v2 to v6, an expected WARN),
-# the seed audit PASS for seeds 1-6 (compared by round-0 image paths; seeds 4-6 = the seeds_ext runs), the
-# data-order audit PASS, and the duplicate-pair report.
+# 24 seeds_ext runs, ADR 0020, + the 27 kmh_confirm runs, ADR 0021; the code-version audit then lists up to six
+# commits, v2 to v7, an expected WARN), the seed audit PASS for seeds 1-6 (compared by round-0 image paths; seeds
+# 4-6 = the seeds_ext runs of account B and the kmh_confirm runs of account A, in one comparison), the data-order
+# audit PASS, and the duplicate-pair report.
 campaign-verify-all:
 	poetry run python -m dalmax.campaign verify --part all --manifest $(GPU_MANIFESTS) $(if $(SEEDS),--seeds $(SEEDS)) $(if $(EXCLUDE),--exclude-strategy $(EXCLUDE))
 
@@ -221,8 +222,9 @@ campaign-report-all:
 		--root results/campaign_kmh_fixed --out docs/results/campaign_kmh_fixed
 
 # Micro campaign on CPU, seed 1 only, into results/smoke_campaign_fixed/ (every run
-# group once; the baselines in SMOKE_EXCLUDE are skipped by default). The seeds_ext groups (ADR 0020) run seeds 4-6
-# only, so they have no seed-1 job here: `make campaign-run MICRO=1 PART=seeds_ext SEEDS=4 DEVICE=cpu`.
+# group once; the baselines in SMOKE_EXCLUDE are skipped by default). The seeds_ext (ADR 0020) and kmh_confirm
+# (ADR 0021) groups run seeds 4-6 only, so they have no seed-1 job here:
+# `make campaign-run MICRO=1 PART=seeds_ext,kmh_confirm SEEDS=4 DEVICE=cpu`.
 # Verify afterwards with `make campaign-verify MICRO=1 SEEDS=1`.
 campaign-smoke:
 	poetry run python -m dalmax.campaign run --part all --micro --seeds 1 $(if $(SMOKE_EXCLUDE),--exclude-strategy $(SMOKE_EXCLUDE))
