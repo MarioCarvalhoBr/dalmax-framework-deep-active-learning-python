@@ -50,6 +50,13 @@ the trees of the first execution (read only, never written):
   dominated by the selection over the whole pool and the training, not by the batch size. The first-execution
   runs this scales may or may not have computed the descriptor cache themselves (about 1.5 minutes per seed
   for SSRAE, under a minute for VCTex); either way a few percent of a run.
+- **estimate by counterpart** groups (ADR 0020, 2026-11-16): the part `seeds_ext` (the eight headline methods at
+  n_query 100 on the new seeds 4-6), never run in the first execution (`SEEDS_EXT_COUNTERPARTS`), takes the entry
+  of its seeds-1-3 counterpart, which is the same computation on other seeds: the measured value where the
+  counterpart is measured, the counterpart's own estimate otherwise (`p1/WAAL/nq100`, 45 minutes;
+  `p1/BadgeSampling/nq100`, a plain uncertainty strategy). The descriptor
+  caches of seeds 4-6 exist nowhere, so the first run of each extractor and seed computes them (SSRAE, VCTex Q=13,
+  ImageNet ResNet-50; a few minutes per seed in all), not added to the estimate.
 
 Caveats: the first execution ran on the dataset with duplicates (8,086 pool / 2,106 test images; the
 new one has 7,230 / 1,008), on the GPU class of that execution, and `KMeansSampling` /
@@ -147,6 +154,29 @@ SCALED_PREFIXES: dict[str, tuple[str, str]] = {
     "descriptors_nq/texhal_q13/": ("texhal/6_1/rep_q13", "the measured texhal/6_1/rep_q13 (n_query=100) x the "
                                                          "measured KMH ratio {kmh} / shared/kmh_nq100"),
 }
+# Group of the seeds_ext part (seeds 4-6) -> its seeds-1-3 counterpart (the same computation).
+SEEDS_EXT_COUNTERPARTS: dict[str, str] = {
+    "seeds_ext/RandomSampling": "shared/random_nq100",
+    "seeds_ext/BALDDropout": "p1/BALDDropout/nq100",
+    "seeds_ext/BadgeSampling": "p1/BadgeSampling/nq100",
+    "seeds_ext/KMH": "shared/kmh_nq100",
+    "seeds_ext/upper_bound": "p1/upper_bound",
+    "seeds_ext/rnhal": "rnhal/6_3/stage_full",
+    "seeds_ext/texhal_q13": "texhal/6_1/rep_q13",
+    "seeds_ext/WAAL": "p1/WAAL/nq100",
+}
+
+
+def counterpart_estimate(group: RunGroup, entries: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    """Entry of a seeds_ext group: its counterpart's seconds (`SEEDS_EXT_COUNTERPARTS`, already in `entries`)."""
+    counterpart = SEEDS_EXT_COUNTERPARTS.get(group.id)
+    if counterpart is None:
+        return None
+    entry = entries[counterpart]
+    return {"seconds_per_run": entry["seconds_per_run"], "basis": "estimate",
+            "rule": f"equal to {counterpart} (the same computation on seeds 1-3, {entry['basis']})"}
+
+
 # Budget folder -> measured paper-1 KMH run of that query size (same reference hierarchy, ImageNet features).
 KMH_BY_BUDGET: dict[str, str] = {"nq100": "shared/kmh_nq100", "nq50": "p1/KMH/nq50", "nq10": "p1/KMH/nq10"}
 
@@ -230,7 +260,7 @@ def measure(groups: list[RunGroup]) -> tuple[dict[str, dict[str, Any]], float]:
     for group in groups:
         if group.strategy_name in ESTIMATE_RULES or any(
                 group.id.startswith(p) for p in (*TWIN_PREFIXES, *FIT_PREFIXES, *REFERENCE_PREFIXES,
-                                                 *SCALED_PREFIXES)):
+                                                 *SCALED_PREFIXES)) or group.id in SEEDS_EXT_COUNTERPARTS:
             continue
         raw[group.id] = [(done.get((group.id, s)), _total_time(group, s)) for s in group.seeds]
     overheads = [d - t for runs in raw.values() for d, t in runs if d is not None and t is not None]
@@ -272,6 +302,7 @@ def build() -> dict[str, Any]:
         fit = fit_estimate(group, groups, measured)
         reference = reference_estimate(group, measured)
         scaled = scaled_estimate(group, measured)
+        counterpart = counterpart_estimate(group, entries)
         if twin is not None:
             entries[group.id] = twin
         elif fit is not None:
@@ -280,6 +311,8 @@ def build() -> dict[str, Any]:
             entries[group.id] = reference
         elif scaled is not None:
             entries[group.id] = scaled
+        elif counterpart is not None:
+            entries[group.id] = counterpart
         elif group.strategy_name in ESTIMATE_RULES:
             entries[group.id] = estimate(group, measured)
         elif group.id in measured:

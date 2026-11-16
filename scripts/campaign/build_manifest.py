@@ -93,13 +93,18 @@ NORM_GPU_PART = PART_1_GPU
 # RNHAL and TexHAL at the two smaller query sizes (ADR 0020, 2026-11-16): one semantic part, all on account B.
 DESCRIPTORS_PART = "descriptors_nq"
 DESCRIPTORS_GPU_PART = PART_2_GPU
+# The headline comparison of papers 2/3 at n_query 100 on three new seeds (ADR 0020, 2026-11-16): one semantic part,
+# all on account B; every group keeps the gpu_stage of its executed seeds-1-3 counterpart (WAAL among the long ones).
+SEEDS_EXT_PART = "seeds_ext"
+SEEDS_EXT_GPU_PART = PART_2_GPU
+SEEDS_EXT = [4, 5, 6]
 ABLATION_GPU_PART = PART_1_GPU
 UPPER_BOUND_GPU_PART = PART_1_GPU
 # Execution stage inside a GPU part (both manifests share the numbering; `campaign run --part part_N_gpu`
 # orders by it): cheap table-critical groups first, the very long ones last, so that an exhausted credit
 # budget leaves complete tables.
 STAGE_PAPER1 = 1  # paper-1 strategies other than the long ones, KMH, the upper bound
-STAGE_ABLATIONS = 2  # rnhal, texhal, texhal_q17, hier_transfer, texhal_q13, descriptors_nq
+STAGE_ABLATIONS = 2  # rnhal, texhal, texhal_q17, hier_transfer, texhal_q13, descriptors_nq (+ seeds_ext RNHAL/TexHAL)
 STAGE_KMH_SWEEP = 3  # the KMH sweep manifest (incl. kmh_wide, ADR 0018, and kmh_norm, ADR 0019)
 LONG_STRATEGY_STAGE: dict[str, int] = {
     "AdversarialBIM": 4, "VAAL": 5, "WAAL": 5, WAAL_CONTROL: 5, "AdversarialDeepFool": 6,
@@ -214,6 +219,28 @@ DESCRIPTORS_CONTEXT = ["WAAL", "BALDDropout", "BadgeSampling", KMH, "RandomSampl
 def descriptors_group_id(method: str, paper_nq: int) -> str:
     return f"{DESCRIPTORS_PART}/{method}/nq{paper_nq}"
 
+
+# The eight headline methods re-run on SEEDS_EXT (ADR 0020): (id/results folder, executed seeds-1-3 counterpart,
+# table label). Each group copies its counterpart's params file, strategy, n_query, NIL, NR and gpu_stage; only
+# the seeds (and the results folder) differ.
+SEEDS_EXT_METHODS: list[tuple[str, str, str]] = [
+    ("RandomSampling", "shared/random_nq100", "RandomSampling"),
+    ("BALDDropout", "p1/BALDDropout/nq100", "BALDDropout"),
+    ("BadgeSampling", "p1/BadgeSampling/nq100", "BadgeSampling"),
+    ("KMH", "shared/kmh_nq100", KMH_LABEL),
+    ("upper_bound", "p1/upper_bound", "Upper bound (full pool)"),
+    ("rnhal", "rnhal/6_3/stage_full", "RNHAL (SSRAE Q=13 + hierarchical)"),
+    ("texhal_q13", TEXHAL_CANONICAL_RUN, "TexHAL (VCTex Q=13 + hierarchical)"),
+    ("WAAL", "p1/WAAL/nq100", "WAAL"),
+]
+
+# Row order of the seeds_ext_nq100 table: the two methods, then the paper-1 references, the upper bound last.
+SEEDS_EXT_TABLE_ORDER = ["rnhal", "texhal_q13", "KMH", "WAAL", "BALDDropout", "BadgeSampling", "RandomSampling",
+                         "upper_bound"]
+
+
+def seeds_ext_group_id(method: str) -> str:
+    return f"{SEEDS_EXT_PART}/{method}"
 
 
 def build(scale: Scale) -> dict[str, Any]:
@@ -340,6 +367,18 @@ def build(scale: Scale) -> dict[str, Any]:
                       f"Descriptors at the smaller query sizes (ADR 0020): the executed {canonical} configuration "
                       f"at n_query={paper_nq}.",
                       gpu_part=DESCRIPTORS_GPU_PART, stage=STAGE_ABLATIONS)
+    # The headline methods on the new seeds 4-6 (ADR 0020): appended after descriptors_nq. A copy of the executed
+    # counterpart (params, strategy, budgets, stage) with seeds SEEDS_EXT, results under <root>/seeds_ext/<method>/
+    # (leaves .../SEED_{4,5,6}/...); never merged into the seeds-1-3 groups or tables.
+    by_id = {g["id"]: g for g in groups}
+    for method, counterpart, _ in SEEDS_EXT_METHODS:
+        twin = by_id[counterpart]
+        groups.append({
+            **twin, "id": seeds_ext_group_id(method), "part": SEEDS_EXT_PART, "gpu_part": SEEDS_EXT_GPU_PART,
+            "seeds": list(SEEDS_EXT), "dir_results": f"{root}/{SEEDS_EXT_PART}/{method}/", "used_by": [],
+            "note": f"Headline comparison on the new seeds {SEEDS_EXT} (ADR 0020): the executed {counterpart} "
+                    "configuration (same params, strategy and budgets), other seeds only.",
+        })
 
     # --- aliases -------------------------------------------------------------
     add_alias("p1/RandomSampling/nq100", "shared/random_nq100", scale.paper1_params,
@@ -475,10 +514,17 @@ def build(scale: Scale) -> dict[str, Any]:
         "title": "Paper 2 -- TexHAL vs. paper-1 methods, n_query=100",
         "rows": [texhal_full, best, random_row],
     }]
+    seeds_ext_labels = {method: label for method, _, label in SEEDS_EXT_METHODS}
     paper3 = method_tables("rnhal", "RNHAL", rnhal_rep, HIER_ORDER_RNHAL + HIER_TRANSFER_ORDER) + [{
         "id": "comparison", "kind": "comparison",
         "title": "Paper 3 -- RNHAL vs. TexHAL vs. RandomSampling, n_query=100",
         "rows": [rnhal_full, texhal_full, random_row, best],
+    }, {
+        # ADR 0020: the headline methods on seeds 4-6 only (each row aggregates its own group's seeds); the
+        # seeds-1-3 tables above are untouched. In paper 3 only, so every seeds_ext group has one consumer.
+        "id": "seeds_ext_nq100", "kind": "benchmark",
+        "title": f"Headline comparison on the new seeds {SEEDS_EXT}, n_query=100 (ADR 0020)",
+        "rows": [row(seeds_ext_labels[method], seeds_ext_group_id(method)) for method in SEEDS_EXT_TABLE_ORDER],
     }]
     tables = {
         "paper1": {"tables": paper1_tables},

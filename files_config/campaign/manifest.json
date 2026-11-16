@@ -2944,6 +2944,206 @@
         }
       ],
       "note": "Descriptors at the smaller query sizes (ADR 0020): the executed texhal/6_1/rep_q13 configuration at n_query=10."
+    },
+    {
+      "id": "seeds_ext/RandomSampling",
+      "part": "seeds_ext",
+      "gpu_part": "part_2_gpu",
+      "gpu_stage": 1,
+      "params_json": "files_config/campaign/params_paper1.json",
+      "strategy_name": "RandomSampling",
+      "n_query": 100,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        4,
+        5,
+        6
+      ],
+      "dir_results": "results/campaign_fixed/seeds_ext/RandomSampling/",
+      "used_by": [
+        {
+          "paper": "paper3",
+          "table": "seeds_ext_nq100",
+          "row": "RandomSampling"
+        }
+      ],
+      "note": "Headline comparison on the new seeds [4, 5, 6] (ADR 0020): the executed shared/random_nq100 configuration (same params, strategy and budgets), other seeds only."
+    },
+    {
+      "id": "seeds_ext/BALDDropout",
+      "part": "seeds_ext",
+      "gpu_part": "part_2_gpu",
+      "gpu_stage": 1,
+      "params_json": "files_config/campaign/params_paper1_mc_dropout.json",
+      "strategy_name": "BALDDropout",
+      "n_query": 100,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        4,
+        5,
+        6
+      ],
+      "dir_results": "results/campaign_fixed/seeds_ext/BALDDropout/",
+      "used_by": [
+        {
+          "paper": "paper3",
+          "table": "seeds_ext_nq100",
+          "row": "BALDDropout"
+        }
+      ],
+      "note": "Headline comparison on the new seeds [4, 5, 6] (ADR 0020): the executed p1/BALDDropout/nq100 configuration (same params, strategy and budgets), other seeds only."
+    },
+    {
+      "id": "seeds_ext/BadgeSampling",
+      "part": "seeds_ext",
+      "gpu_part": "part_2_gpu",
+      "gpu_stage": 1,
+      "params_json": "files_config/campaign/params_paper1.json",
+      "strategy_name": "BadgeSampling",
+      "n_query": 100,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        4,
+        5,
+        6
+      ],
+      "dir_results": "results/campaign_fixed/seeds_ext/BadgeSampling/",
+      "used_by": [
+        {
+          "paper": "paper3",
+          "table": "seeds_ext_nq100",
+          "row": "BadgeSampling"
+        }
+      ],
+      "note": "Headline comparison on the new seeds [4, 5, 6] (ADR 0020): the executed p1/BadgeSampling/nq100 configuration (same params, strategy and budgets), other seeds only."
+    },
+    {
+      "id": "seeds_ext/KMH",
+      "part": "seeds_ext",
+      "gpu_part": "part_2_gpu",
+      "gpu_stage": 1,
+      "params_json": "files_config/campaign/params_kmh.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 100,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        4,
+        5,
+        6
+      ],
+      "dir_results": "results/campaign_fixed/seeds_ext/KMH/",
+      "used_by": [
+        {
+          "paper": "paper3",
+          "table": "seeds_ext_nq100",
+          "row": "KMH (hierarchical k-means, ImageNet ResNet-50 features)"
+        }
+      ],
+      "note": "Headline comparison on the new seeds [4, 5, 6] (ADR 0020): the executed shared/kmh_nq100 configuration (same params, strategy and budgets), other seeds only."
+    },
+    {
+      "id": "seeds_ext/upper_bound",
+      "part": "seeds_ext",
+      "gpu_part": "part_2_gpu",
+      "gpu_stage": 1,
+      "params_json": "files_config/campaign/params_paper1.json",
+      "strategy_name": "FullSupervised",
+      "n_query": 100,
+      "n_init_labeled": 7230,
+      "n_round": 0,
+      "seeds": [
+        4,
+        5,
+        6
+      ],
+      "dir_results": "results/campaign_fixed/seeds_ext/upper_bound/",
+      "used_by": [
+        {
+          "paper": "paper3",
+          "table": "seeds_ext_nq100",
+          "row": "Upper bound (full pool)"
+        }
+      ],
+      "note": "Headline comparison on the new seeds [4, 5, 6] (ADR 0020): the executed p1/upper_bound configuration (same params, strategy and budgets), other seeds only."
+    },
+    {
+      "id": "seeds_ext/rnhal",
+      "part": "seeds_ext",
+      "gpu_part": "part_2_gpu",
+      "gpu_stage": 2,
+      "params_json": "files_config/ablations/rnhal/stage_full.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 100,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        4,
+        5,
+        6
+      ],
+      "dir_results": "results/campaign_fixed/seeds_ext/rnhal/",
+      "used_by": [
+        {
+          "paper": "paper3",
+          "table": "seeds_ext_nq100",
+          "row": "RNHAL (SSRAE Q=13 + hierarchical)"
+        }
+      ],
+      "note": "Headline comparison on the new seeds [4, 5, 6] (ADR 0020): the executed rnhal/6_3/stage_full configuration (same params, strategy and budgets), other seeds only."
+    },
+    {
+      "id": "seeds_ext/texhal_q13",
+      "part": "seeds_ext",
+      "gpu_part": "part_2_gpu",
+      "gpu_stage": 2,
+      "params_json": "files_config/ablations/texhal/rep_q13.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 100,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        4,
+        5,
+        6
+      ],
+      "dir_results": "results/campaign_fixed/seeds_ext/texhal_q13/",
+      "used_by": [
+        {
+          "paper": "paper3",
+          "table": "seeds_ext_nq100",
+          "row": "TexHAL (VCTex Q=13 + hierarchical)"
+        }
+      ],
+      "note": "Headline comparison on the new seeds [4, 5, 6] (ADR 0020): the executed texhal/6_1/rep_q13 configuration (same params, strategy and budgets), other seeds only."
+    },
+    {
+      "id": "seeds_ext/WAAL",
+      "part": "seeds_ext",
+      "gpu_part": "part_2_gpu",
+      "gpu_stage": 5,
+      "params_json": "files_config/campaign/params_paper1.json",
+      "strategy_name": "WAAL",
+      "n_query": 100,
+      "n_init_labeled": 100,
+      "n_round": 8,
+      "seeds": [
+        4,
+        5,
+        6
+      ],
+      "dir_results": "results/campaign_fixed/seeds_ext/WAAL/",
+      "used_by": [
+        {
+          "paper": "paper3",
+          "table": "seeds_ext_nq100",
+          "row": "WAAL"
+        }
+      ],
+      "note": "Headline comparison on the new seeds [4, 5, 6] (ADR 0020): the executed p1/WAAL/nq100 configuration (same params, strategy and budgets), other seeds only."
     }
   ],
   "aliases": [
@@ -3939,6 +4139,45 @@
                 ],
                 "metric": "f1_score"
               }
+            }
+          ]
+        },
+        {
+          "id": "seeds_ext_nq100",
+          "kind": "benchmark",
+          "title": "Headline comparison on the new seeds [4, 5, 6], n_query=100 (ADR 0020)",
+          "rows": [
+            {
+              "label": "RNHAL (SSRAE Q=13 + hierarchical)",
+              "run": "seeds_ext/rnhal"
+            },
+            {
+              "label": "TexHAL (VCTex Q=13 + hierarchical)",
+              "run": "seeds_ext/texhal_q13"
+            },
+            {
+              "label": "KMH (hierarchical k-means, ImageNet ResNet-50 features)",
+              "run": "seeds_ext/KMH"
+            },
+            {
+              "label": "WAAL",
+              "run": "seeds_ext/WAAL"
+            },
+            {
+              "label": "BALDDropout",
+              "run": "seeds_ext/BALDDropout"
+            },
+            {
+              "label": "BadgeSampling",
+              "run": "seeds_ext/BadgeSampling"
+            },
+            {
+              "label": "RandomSampling",
+              "run": "seeds_ext/RandomSampling"
+            },
+            {
+              "label": "Upper bound (full pool)",
+              "run": "seeds_ext/upper_bound"
             }
           ]
         }
