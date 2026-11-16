@@ -19,8 +19,8 @@ manifests reports whether each such pair selected the same images
 Two orthogonal partitions select groups (`--part`):
 
 - the *semantic parts* `PARTS` (`paper1`, `paper1_control`, `upper_bound`, `rnhal`,
-  `texhal`, `texhal_q17`, `hier_transfer`, `texhal_q13`, `descriptors_nq`, `seeds_ext`, `control`,
-  `kmh_nq100`, `kmh_nq50`, `kmh_nq10`, `kmh_wide`, `kmh_norm`;
+  `texhal`, `texhal_q17`, `hier_transfer`, `texhal_q13`, `descriptors_nq`, `seeds_ext`, `kmh_confirm`,
+  `control`, `kmh_nq100`, `kmh_nq50`, `kmh_nq10`, `kmh_wide`, `kmh_norm`;
   comma-separated, or `all`), executed in the fixed `PHASE_LABELS` order;
 - the *GPU parts* `GPU_PARTS` (`part_1_gpu`, `part_2_gpu`, ADR 0016): every group of
   the two full-scale manifests carries a `gpu_part` and a `gpu_stage`; selecting a
@@ -71,7 +71,7 @@ Semantic execution order (fixed, independent of `--part`): paper 1 at
 n_query=100 first (the shared canonical runs -- KMH and RandomSampling, which
 papers 2/3 reuse -- land early), then the paper-1 controls (`paper1_control`),
 then rnhal, texhal, texhal_q17, hier_transfer, texhal_q13 (ADR 0017), descriptors_nq and seeds_ext (ADR 0020),
-then paper 1 at n_query=50 and 10, then the upper bound.
+kmh_confirm (ADR 0021), then paper 1 at n_query=50 and 10, then the upper bound.
 """
 
 from __future__ import annotations
@@ -130,9 +130,10 @@ TRAINER_SCRIPT = "tools/trainer.py"
 # `kmh_norm` (ADR 0019): the KMH feature post-processing round of the sweep manifest.
 # `descriptors_nq` (ADR 0020): RNHAL and TexHAL (canonical configurations) at n_query 50 and 10.
 # `seeds_ext` (ADR 0020): the headline comparison of papers 2/3 at n_query 100 on the new seeds 4-6.
+# `kmh_confirm` (ADR 0021): KMH with l2-normalised features, the KMH reference, RandomSampling and WAAL on seeds 4-6.
 PARTS: tuple[str, ...] = ("paper1", "paper1_control", "upper_bound", "rnhal", "texhal", "texhal_q17",
-                          "hier_transfer", "texhal_q13", "descriptors_nq", "seeds_ext", "control", "kmh_nq100",
-                          "kmh_nq50", "kmh_nq10", "kmh_wide", "kmh_norm")
+                          "hier_transfer", "texhal_q13", "descriptors_nq", "seeds_ext", "kmh_confirm", "control",
+                          "kmh_nq100", "kmh_nq50", "kmh_nq10", "kmh_wide", "kmh_norm")
 
 # The two GPU parts (ADR 0016): one per Colab account, balanced by estimated GPU time.
 GPU_PARTS: tuple[str, ...] = ("part_1_gpu", "part_2_gpu")
@@ -148,6 +149,7 @@ PHASE_LABELS: tuple[str, ...] = (
     "texhal_q13",
     "descriptors_nq",
     "seeds_ext",
+    "kmh_confirm",
     "paper1_other_nq",
     "upper_bound",
     "control",

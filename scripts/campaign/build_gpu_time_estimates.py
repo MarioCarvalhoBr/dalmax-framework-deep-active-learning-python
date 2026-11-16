@@ -57,6 +57,15 @@ the trees of the first execution (read only, never written):
   `p1/BadgeSampling/nq100`, a plain uncertainty strategy). The descriptor
   caches of seeds 4-6 exist nowhere, so the first run of each extractor and seed computes them (SSRAE, VCTex Q=13,
   ImageNet ResNet-50; a few minutes per seed in all), not added to the estimate.
+- **estimate by clean-campaign counterpart** groups (ADR 0021, 2026-11-16): the part `kmh_confirm` (KMH with
+  l2-normalised features, the KMH reference, RandomSampling and WAAL on the new seeds 4-6), never run anywhere
+  (`KMH_CONFIRM_COUNTERPARTS`), takes the wall time of its seeds-1-3 counterpart MEASURED ON THE CLEAN CAMPAIGN (the
+  mean of the three `DONE elapsed=<s>` lines of the counterpart in the clean campaign's logs, written as constants
+  because those logs live under `results/` on the author's machine only): the same computation on other seeds. The
+  first-execution values of this table are not used for it on purpose: the clean campaign measured WAAL at about
+  3,480 s (nq100) to 3,650 s (nq10) per run, against the 2,700 s FLOP estimate. The ImageNet feature cache of seeds
+  4-6 does not exist on account A's Drive, so the first KMH run of each seed computes it (a few minutes, shared by
+  the three query sizes because its key ignores n_query), not added to the estimate.
 
 Caveats: the first execution ran on the dataset with duplicates (8,086 pool / 2,106 test images; the
 new one has 7,230 / 1,008), on the GPU class of that execution, and `KMeansSampling` /
@@ -177,6 +186,34 @@ def counterpart_estimate(group: RunGroup, entries: dict[str, dict[str, Any]]) ->
             "rule": f"equal to {counterpart} (the same computation on seeds 1-3, {entry['basis']})"}
 
 
+# ADR 0021: group of the kmh_confirm part (seeds 4-6) -> (its seeds-1-3 counterpart, mean wall time per run of the
+# counterpart measured on the clean campaign, the log of the clean campaign holding its three `DONE elapsed` lines).
+_CLEAN_MAIN_B = "results/campaign_fixed/campaign_part_2_gpu.log"
+_CLEAN_NORM_A = "results/campaign_kmh_fixed/campaign_part_1_gpu__kmh_norm.log"
+KMH_CONFIRM_COUNTERPARTS: dict[str, tuple[str, int, str]] = {
+    "kmh_confirm/nq100/kmh_l2": ("kmh_norm/nq100/l2", 592, _CLEAN_NORM_A),  # 598, 590, 587 s
+    "kmh_confirm/nq50/kmh_l2": ("kmh_norm/nq50/l2", 559, _CLEAN_NORM_A),  # 561, 557, 559 s
+    "kmh_confirm/nq10/kmh_l2": ("kmh_norm/nq10/l2", 537, _CLEAN_NORM_A),  # 540, 535, 535 s
+    "kmh_confirm/nq50/kmh_reference": ("p1/KMH/nq50", 574, _CLEAN_MAIN_B),  # 578, 570, 574 s
+    "kmh_confirm/nq10/kmh_reference": ("p1/KMH/nq10", 543, _CLEAN_MAIN_B),  # 544, 548, 538 s
+    "kmh_confirm/nq50/RandomSampling": ("p1/RandomSampling/nq50", 82, _CLEAN_MAIN_B),  # 81, 82, 83 s
+    "kmh_confirm/nq10/RandomSampling": ("p1/RandomSampling/nq10", 56, _CLEAN_MAIN_B),  # 57, 56, 56 s
+    "kmh_confirm/nq50/WAAL": ("p1/WAAL/nq50", 3589, _CLEAN_MAIN_B),  # 3571, 3597, 3598 s
+    "kmh_confirm/nq10/WAAL": ("p1/WAAL/nq10", 3650, _CLEAN_MAIN_B),  # 3647, 3651, 3651 s
+}
+
+
+def confirm_estimate(group: RunGroup) -> dict[str, Any] | None:
+    """Entry of a kmh_confirm group: its counterpart's clean-campaign wall time (`KMH_CONFIRM_COUNTERPARTS`)."""
+    found = KMH_CONFIRM_COUNTERPARTS.get(group.id)
+    if found is None:
+        return None
+    counterpart, seconds, log = found
+    return {"seconds_per_run": seconds, "basis": "estimate",
+            "rule": f"equal to {counterpart} (the same computation on seeds 1-3), mean wall time of its three runs "
+                    f"measured on the clean campaign ({log})"}
+
+
 # Budget folder -> measured paper-1 KMH run of that query size (same reference hierarchy, ImageNet features).
 KMH_BY_BUDGET: dict[str, str] = {"nq100": "shared/kmh_nq100", "nq50": "p1/KMH/nq50", "nq10": "p1/KMH/nq10"}
 
@@ -260,7 +297,8 @@ def measure(groups: list[RunGroup]) -> tuple[dict[str, dict[str, Any]], float]:
     for group in groups:
         if group.strategy_name in ESTIMATE_RULES or any(
                 group.id.startswith(p) for p in (*TWIN_PREFIXES, *FIT_PREFIXES, *REFERENCE_PREFIXES,
-                                                 *SCALED_PREFIXES)) or group.id in SEEDS_EXT_COUNTERPARTS:
+                                                 *SCALED_PREFIXES)) or group.id in SEEDS_EXT_COUNTERPARTS \
+                or group.id in KMH_CONFIRM_COUNTERPARTS:
             continue
         raw[group.id] = [(done.get((group.id, s)), _total_time(group, s)) for s in group.seeds]
     overheads = [d - t for runs in raw.values() for d, t in runs if d is not None and t is not None]
@@ -303,6 +341,7 @@ def build() -> dict[str, Any]:
         reference = reference_estimate(group, measured)
         scaled = scaled_estimate(group, measured)
         counterpart = counterpart_estimate(group, entries)
+        confirm = confirm_estimate(group)
         if twin is not None:
             entries[group.id] = twin
         elif fit is not None:
@@ -313,6 +352,8 @@ def build() -> dict[str, Any]:
             entries[group.id] = scaled
         elif counterpart is not None:
             entries[group.id] = counterpart
+        elif confirm is not None:
+            entries[group.id] = confirm
         elif group.strategy_name in ESTIMATE_RULES:
             entries[group.id] = estimate(group, measured)
         elif group.id in measured:

@@ -34,8 +34,8 @@ DROPOUT_FAMILY = (*MC_DROPOUT, "VarRatio", "MeanSTD")
 DEEPALPLUS = ("VarRatio", "MeanSTD", "KCenterGreedyPCA", "BadgeSampling", "CEALSampling", "LossPredictionLoss",
               "VAAL", "WAAL")
 LONG = ("AdversarialBIM", "VAAL", "WAAL", "WAALRandomQuery", "AdversarialDeepFool")
-# Parts added after the ADR 0016 split, each assigned to one account (ADR 0017, 0018, 0019, 0020).
-ADD_ON_PARTS = ("texhal_q13", "kmh_wide", "kmh_norm", "descriptors_nq", "seeds_ext")
+# Parts added after the ADR 0016 split, each assigned to one account (ADR 0017, 0018, 0019, 0020, 0021).
+ADD_ON_PARTS = ("texhal_q13", "kmh_wide", "kmh_norm", "descriptors_nq", "seeds_ext", "kmh_confirm")
 WAAL_CONTROL_ID = "p1_control/WAALRandomQuery/nq100"
 
 
@@ -126,8 +126,9 @@ def test_run_counts_per_part(which: str, request: pytest.FixtureRequest) -> None
     counts = C.count_by_part(C.expand_jobs(manifest))
     assert counts == {"paper1": 189, "paper1_control": 3, "upper_bound": 3, "rnhal": 42, "texhal": 30,
                       "texhal_q17": 18, "hier_transfer": 12, "texhal_q13": 24, "descriptors_nq": 12, "seeds_ext": 24,
-                      "control": 0, "kmh_nq10": 0, "kmh_nq50": 0, "kmh_nq100": 0, "kmh_wide": 0, "kmh_norm": 0}
-    assert sum(counts.values()) == 357 and len(manifest.groups) == 119
+                      "kmh_confirm": 27, "control": 0, "kmh_nq10": 0, "kmh_nq50": 0, "kmh_nq100": 0, "kmh_wide": 0,
+                      "kmh_norm": 0}
+    assert sum(counts.values()) == 384 and len(manifest.groups) == 128
 
 
 @pytest.mark.parametrize("which", ["full_manifest", "micro_manifest"])
@@ -291,7 +292,7 @@ def test_execution_order_paper1_nq100_first_upper_bound_last(full_manifest: C.Ma
     assert jobs[-1].group.part == "upper_bound"
     assert [C.PHASE_LABELS[p] for p in dict.fromkeys(phases)] == [
         "paper1_nq100", "paper1_control", "rnhal", "texhal", "texhal_q17", "hier_transfer", "texhal_q13",
-        "descriptors_nq", "seeds_ext", "paper1_other_nq", "upper_bound"]
+        "descriptors_nq", "seeds_ext", "kmh_confirm", "paper1_other_nq", "upper_bound"]
 
 
 @pytest.mark.parametrize("which", ["full_manifest", "micro_manifest"])
@@ -363,10 +364,11 @@ def test_gpu_parts_are_balanced_by_the_estimates(both_full: tuple[C.Manifest, C.
         hours[gpu_part], unknown = C.estimated_hours([j for seg in plan for j in seg.jobs], estimates)
         assert unknown == 0
     total = sum(hours.values())
-    assert 117 < total < 122  # 119.6 GPU hours with the committed estimates (ADR 0020)
+    assert 126 < total < 130  # 128.1 GPU hours with the committed estimates (ADR 0021)
     # The ADR 0016 split is balanced; the later add-on parts go to the account they were assigned to
     # (texhal_q13 -> part_1_gpu, ADR 0017; kmh_wide -> part_2_gpu, ADR 0018; kmh_norm -> part_1_gpu, ADR 0019;
-    # descriptors_nq and seeds_ext -> part_2_gpu, ADR 0020) and are left out of the balance.
+    # descriptors_nq and seeds_ext -> part_2_gpu, ADR 0020; kmh_confirm -> part_1_gpu, ADR 0021) and are left out of
+    # the balance.
     base = {}
     for gpu_part in C.GPU_PARTS:
         plan = C.plan_jobs(both_full, C.parse_selection(gpu_part))
@@ -398,6 +400,12 @@ def test_gpu_parts_cover_every_group_once_and_keep_tables_together(both_full) ->
                     # row is the executed raw-feature reference of the nq10 sweep (part_2_gpu, account B).
                     assert {groups[r].gpu_part for r in runs - {"kmh/nq10/hier_L3_ref"}} == {"part_1_gpu"}
                     assert groups["kmh/nq10/hier_L3_ref"].gpu_part == "part_2_gpu"
+                elif table["id"] == "kmh_confirm_nq100":
+                    # ADR 0021: the kmh_confirm part runs on account A (part_1_gpu); at nq100 its reference,
+                    # RandomSampling and WAAL rows are the seeds_ext runs of account B (part_2_gpu), through aliases.
+                    seeds_ext = {"seeds_ext/KMH", "seeds_ext/RandomSampling", "seeds_ext/WAAL"}
+                    assert {groups[r].gpu_part for r in runs - seeds_ext} == {"part_1_gpu"}
+                    assert seeds_ext <= runs and {groups[r].gpu_part for r in seeds_ext} == {"part_2_gpu"}
                 else:
                     assert len(parts) == 1, (table["id"], parts)
     # Papers 2/3 comparisons and 6.3 tables reuse the shared nq100 runs, all in part_1_gpu.
@@ -460,12 +468,15 @@ def test_cli_run_gpu_part_dry_run_logs_nothing(tmp_path: Path, capsys: pytest.Ca
 
 def test_cli_list_gpu_part_1_counts_include_texhal_q13(capsys: pytest.CaptureFixture[str]) -> None:
     """ADR 0017: part_1_gpu grows by the 24 texhal_q13 runs (285 -> 309 runs, 95 -> 103 groups); ADR 0019: by
-    the 27 kmh_norm runs (309 -> 336 runs, 103 -> 112 groups)."""
+    the 27 kmh_norm runs (309 -> 336 runs, 103 -> 112 groups); ADR 0021: by the 27 kmh_confirm runs (336 -> 363 runs,
+    112 -> 121 groups)."""
     assert C.main(["list", "--manifest", f"{FULL},{SWEEP}", "--part", "part_1_gpu"]) == 0
     combined = capsys.readouterr().out.split("Combined:")[1]
-    assert "part_1_gpu      336 runs (112 run groups)  est" in combined
+    assert "part_1_gpu      363 runs (121 run groups)  est" in combined
     assert "texhal_q13       24 runs (8 run groups)  est" in combined
     assert "kmh_norm         27 runs (9 run groups)  est" in combined
+    assert "kmh_confirm      27 runs (9 run groups)  est" in combined
+    assert "part_2_gpu        0 runs" in combined
 
 
 TEXHAL_Q13_GROUPS = (
@@ -537,13 +548,22 @@ V5_MAIN_MICRO_DIGEST = V4_MAIN_MICRO_DIGEST
 V5_SWEEP_DIGEST = "9e4e31c2d37a2d172799090dd0777a2df2ee7966bc67ab72b088f9cd0b5c9c04"
 V5_SWEEP_MICRO_DIGEST = "8563d90663ea0d448fa6afdec59d3295b6c2bf77e442f8c97dd21c08562b2383"
 # Parts appended to the main manifest after each tag (only appended: the earlier groups are its prefix).
-MAIN_PARTS_AFTER_V2 = ("texhal_q13", "descriptors_nq", "seeds_ext")
-MAIN_PARTS_AFTER_V5 = ("descriptors_nq", "seeds_ext")
+MAIN_PARTS_AFTER_V2 = ("texhal_q13", "descriptors_nq", "seeds_ext", "kmh_confirm")
+MAIN_PARTS_AFTER_V5 = ("descriptors_nq", "seeds_ext", "kmh_confirm")
+MAIN_PARTS_AFTER_V6 = ("kmh_confirm",)
 # sha256 of the two KMH sweep manifest files at tag campaign-fixed-v5 (`git show campaign-fixed-v5:<path> | sha256sum`).
 V5_SWEEP_FILE_SHA256 = {
     "SWEEP": "a9646504dde025304045d4bd1aec0cb9306fcb2e1b5dc11d796f79544d530b8b",
     "SWEEP_MICRO": "5fb858e768db32bf498bfb43e754d9b6f64ef3f0e60987e06e18c285f6ec6cb6",
 }
+# The same digest of the state of tag campaign-fixed-v6 (ADR 0020), computed with the v6 code on a checkout of the
+# tag (2026-11-16): the 119 groups of the main manifest (the 107 of v5 + descriptors_nq + seeds_ext, the last two
+# running on account B with v6) and the 77 of the sweep (unchanged since v5, file byte-identical). ADR 0021 appends
+# the kmh_confirm part to the main manifest and must not move or change any of these 196 groups (588 runs).
+V6_MAIN_DIGEST = "c06c473dea611aa08a74e018493711c2df9b54e6672c5848ca577f4664e05ada"
+V6_MAIN_MICRO_DIGEST = "47335f20f08ef1a96593b2f8a10d244be4964ddf6b8b7a43a350cd52c9dc0c17"
+V6_SWEEP_DIGEST = V5_SWEEP_DIGEST
+V6_SWEEP_MICRO_DIGEST = V5_SWEEP_MICRO_DIGEST
 
 
 def _identity_digest(manifest: C.Manifest, groups: Sequence[C.RunGroup]) -> tuple[int, int, str]:
@@ -605,8 +625,25 @@ def test_v5_groups_keep_their_identity(both_full) -> None:
     assert _identity_digest(micro_sweep, micro_sweep.groups) == (77, 231, V5_SWEEP_MICRO_DIGEST)
 
 
+def test_v6_groups_keep_their_identity(both_full) -> None:
+    """ADR 0021: the 119 + 77 groups of tag campaign-fixed-v6 (588 runs: 552 executed + the 36 descriptors_nq /
+    seeds_ext runs in progress on account B) keep id, parts, stage, params, budgets, seeds, results dir and effective
+    signature; kmh_confirm only appends to the main manifest. Micro mirrors too."""
+    main, sweep = both_full
+    main_v6 = [g for g in main.groups if g.part not in MAIN_PARTS_AFTER_V6]
+    assert list(main.groups[: len(main_v6)]) == main_v6  # kmh_confirm is appended, nothing moves
+    assert _identity_digest(main, main_v6) == (119, 357, V6_MAIN_DIGEST)
+    assert _identity_digest(sweep, sweep.groups) == (77, 231, V6_SWEEP_DIGEST)
+    micro_main, micro_sweep = C.load_manifest(MICRO), C.load_manifest(SWEEP_MICRO)
+    micro_v6 = [g for g in micro_main.groups if g.part not in MAIN_PARTS_AFTER_V6]
+    assert list(micro_main.groups[: len(micro_v6)]) == micro_v6
+    assert _identity_digest(micro_main, micro_v6) == (119, 357, V6_MAIN_MICRO_DIGEST)
+    assert _identity_digest(micro_sweep, micro_sweep.groups) == (77, 231, V6_SWEEP_MICRO_DIGEST)
+
+
 def test_kmh_sweep_manifests_are_byte_identical_to_v5() -> None:
-    """ADR 0020 is config-only in the main manifest: the two KMH sweep manifests are those of campaign-fixed-v5."""
+    """ADR 0020 and ADR 0021 are config-only in the main manifest: the two KMH sweep manifests are those of
+    campaign-fixed-v5 (and v6)."""
     for path, sha in ((SWEEP, "SWEEP"), (SWEEP_MICRO, "SWEEP_MICRO")):
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         assert digest == V5_SWEEP_FILE_SHA256[sha], path.name
@@ -633,7 +670,7 @@ def test_descriptors_nq_part_is_the_executed_nq100_configuration_at_nq50_and_nq1
     groups = manifest.group_by_id()
     new = [g for g in manifest.groups if g.part == "descriptors_nq"]
     assert [g.id for g in new] == list(DESCRIPTORS_GROUPS)
-    assert list(manifest.groups[-12:-8]) == new  # appended after every v5 group, seeds_ext follows
+    assert list(manifest.groups[-21:-17]) == new  # appended after every v5 group, seeds_ext and kmh_confirm follow
     for g in new:
         canonical_id, params = DESCRIPTORS_GROUPS[g.id]
         canonical = groups[canonical_id]
@@ -723,7 +760,7 @@ def test_seeds_ext_part_is_the_executed_configuration_on_seeds_4_to_6(
     groups = manifest.group_by_id()
     new = [g for g in manifest.groups if g.part == "seeds_ext"]
     assert [g.id for g in new] == list(SEEDS_EXT_GROUPS)
-    assert list(manifest.groups[-8:]) == new
+    assert list(manifest.groups[-17:-9]) == new  # kmh_confirm (ADR 0021) follows
     for g in new:
         twin = groups[SEEDS_EXT_GROUPS[g.id]]
         assert twin.seeds == (1, 2, 3) and g.seeds == (4, 5, 6)
@@ -732,12 +769,15 @@ def test_seeds_ext_part_is_the_executed_configuration_on_seeds_4_to_6(
         assert C.group_signature(manifest, g) == C.group_signature(manifest, twin)  # only the seeds differ
         assert g.gpu_part == "part_2_gpu" and g.dir_results == f"{manifest.results_root}/seeds_ext/{g.id[10:]}/"
         assert g.dataset_folder == twin.dataset_folder
-        assert [(u["paper"], u["table"]) for u in g.used_by] == [("paper3", "seeds_ext_nq100")]
+        # ADR 0021: the nq100 reference, RandomSampling and WAAL are also the alias rows of kmh_confirm_nq100 (paper 3).
+        also = [("paper3", "kmh_confirm_nq100")] if g.id in KMH_CONFIRM_ALIASES.values() else []
+        assert [(u["paper"], u["table"]) for u in g.used_by] == [("paper3", "seeds_ext_nq100"), *also]
     assert groups["seeds_ext/WAAL"].gpu_stage == 5 and groups["seeds_ext/rnhal"].gpu_stage == 2
     if which == "full_manifest":
         assert groups["seeds_ext/upper_bound"].n_init_labeled == 7230 and groups["seeds_ext/upper_bound"].n_round == 0
     tables = {t["id"]: t for t in manifest.tables["paper3"]["tables"]}
-    assert list(tables) == ["6_1", "6_2", "6_3", "comparison", "seeds_ext_nq100"]  # the v5 tables keep their ids
+    assert list(tables) == ["6_1", "6_2", "6_3", "comparison", "seeds_ext_nq100",  # the v5 tables keep their ids
+                            "kmh_confirm_nq100", "kmh_confirm_nq50", "kmh_confirm_nq10"]  # ADR 0021
     assert sorted(r["run"] for r in tables["seeds_ext_nq100"]["rows"]) == sorted(SEEDS_EXT_GROUPS)
     # No existing table row points at a seeds_ext group: seeds 4-6 never enter the seeds-1-3 numbers.
     for paper_tables in manifest.tables.values():
@@ -787,6 +827,175 @@ def test_seeds_ext_estimates_follow_the_counterpart_rule(both_full) -> None:
     assert ids[start:start + 8] == list(SEEDS_EXT_GROUPS)
     new = [*DESCRIPTORS_GROUPS, *SEEDS_EXT_GROUPS]
     assert sum(table[g]["seconds_per_run"] for g in new) * 3 == 21648  # 6.0 GPU h for the 36 runs
+
+
+# ADR 0021: the 9 kmh_confirm groups -> (executed seeds-1-3 counterpart, which manifest holds it, gpu_stage).
+KMH_CONFIRM_GROUPS: dict[str, tuple[str, str, int]] = {
+    "kmh_confirm/nq100/kmh_l2": ("kmh_norm/nq100/l2", "sweep", 3),
+    "kmh_confirm/nq50/kmh_l2": ("kmh_norm/nq50/l2", "sweep", 3),
+    "kmh_confirm/nq10/kmh_l2": ("kmh_norm/nq10/l2", "sweep", 3),
+    "kmh_confirm/nq50/kmh_reference": ("p1/KMH/nq50", "main", 1),
+    "kmh_confirm/nq10/kmh_reference": ("p1/KMH/nq10", "main", 1),
+    "kmh_confirm/nq50/RandomSampling": ("p1/RandomSampling/nq50", "main", 1),
+    "kmh_confirm/nq10/RandomSampling": ("p1/RandomSampling/nq10", "main", 1),
+    "kmh_confirm/nq50/WAAL": ("p1/WAAL/nq50", "main", 5),
+    "kmh_confirm/nq10/WAAL": ("p1/WAAL/nq10", "main", 5),
+}
+# ADR 0021: at nq100 the reference, RandomSampling and WAAL rows are aliases of the seeds_ext runs (no second run).
+KMH_CONFIRM_ALIASES: dict[str, str] = {
+    "kmh_confirm/nq100/kmh_reference": "seeds_ext/KMH",
+    "kmh_confirm/nq100/RandomSampling": "seeds_ext/RandomSampling",
+    "kmh_confirm/nq100/WAAL": "seeds_ext/WAAL",
+}
+
+
+@pytest.mark.parametrize(("which", "sweep_path"), [("full_manifest", SWEEP), ("micro_manifest", SWEEP_MICRO)])
+def test_kmh_confirm_part_is_the_executed_configuration_on_seeds_4_to_6(
+        which: str, sweep_path: Path, request: pytest.FixtureRequest) -> None:
+    """ADR 0021: 9 groups x seeds (4, 5, 6), appended last to the main manifest, all in part_1_gpu (account A), each
+    the EXACT params file, strategy, budgets and gpu_stage of its executed seeds-1-3 counterpart (kmh_norm l2 of the
+    sweep; p1/KMH, p1/RandomSampling, p1/WAAL of the main manifest): equal resolved config and effective signature.
+    Results under <root>/kmh_confirm/nq{N}/<method>/; one consumer each (paper 3, table kmh_confirm_nq{N})."""
+    from dalmax.config.loader import load_experiment_config, to_dict
+
+    manifest: C.Manifest = request.getfixturevalue(which)
+    sweep = C.load_manifest(sweep_path)
+    holders = {"main": manifest.group_by_id(), "sweep": sweep.group_by_id()}
+    new = [g for g in manifest.groups if g.part == "kmh_confirm"]
+    assert [g.id for g in new] == list(KMH_CONFIRM_GROUPS)
+    assert list(manifest.groups[-9:]) == new
+    for g in new:
+        counterpart_id, holder, stage = KMH_CONFIRM_GROUPS[g.id]
+        twin = holders[holder][counterpart_id]
+        assert twin.seeds == (1, 2, 3) and g.seeds == (4, 5, 6)
+        assert (g.params_json, g.strategy_name, g.n_query, g.n_init_labeled, g.n_round, g.gpu_stage) == (
+            twin.params_json, twin.strategy_name, twin.n_query, twin.n_init_labeled, twin.n_round, stage)
+        assert C.group_signature(manifest, g) == C.group_signature(sweep, twin)  # only the seeds differ
+        for seed in g.seeds:  # the resolved config of every new run equals the counterpart's at that seed
+            def resolved(group: C.RunGroup, seed: int = seed) -> dict:
+                return to_dict(load_experiment_config(
+                    REPO_ROOT / group.params_json, "DANINHAS", strategy_name=group.strategy_name, seed=seed,
+                    n_init_labeled=group.n_init_labeled, n_query=group.n_query, n_round=group.n_round,
+                    dir_results="x/", device="cpu"))
+            assert resolved(g) == resolved(twin), (g.id, seed)
+        method = g.id.rsplit("/", 1)[1]
+        nq_dir = g.id.split("/")[1]
+        assert g.gpu_part == "part_1_gpu" and g.dataset_folder == twin.dataset_folder
+        assert g.dir_results == f"{manifest.results_root}/kmh_confirm/{nq_dir}/{method}/"
+        assert [(u["paper"], u["table"]) for u in g.used_by] == [("paper3", f"kmh_confirm_{nq_dir}")]
+    if which == "full_manifest":
+        assert {g.n_query for g in new} == {100, 50, 10} and {(g.n_init_labeled, g.n_round) for g in new} == {(100, 8)}
+        params = json.loads((REPO_ROOT / new[0].params_json).read_text())["DANINHAS"]
+        assert params["embedding"]["postprocess"] == {"method": "l2"}  # the pre-declared variant, nothing else
+
+
+@pytest.mark.parametrize("which", ["full_manifest", "micro_manifest"])
+def test_kmh_confirm_tables_and_aliases(which: str, request: pytest.FixtureRequest) -> None:
+    """ADR 0021: tables kmh_confirm_nq{100,50,10} in paper 3 (next to seeds_ext_nq100), rows KMH l2, KMH reference,
+    RandomSampling, WAAL; at nq100 the last three are aliases of the seeds_ext runs (same computation, same seeds),
+    never a second run. No other table, row or best_of candidate reads a kmh_confirm run."""
+    manifest: C.Manifest = request.getfixturevalue(which)
+    groups, aliases = manifest.group_by_id(), manifest.alias_by_id()
+    for aid, canonical in KMH_CONFIRM_ALIASES.items():
+        assert aid not in groups and aliases[aid].canonical == canonical
+        assert C.effective_signature(aliases[aid].params_json, manifest.dataset_name, aliases[aid].strategy_name,
+                                     groups[canonical].n_query, groups[canonical].n_init_labeled,
+                                     groups[canonical].n_round) == C.group_signature(manifest, groups[canonical])
+    tables = {t["id"]: t for t in manifest.tables["paper3"]["tables"]}
+    for nq in (100, 50, 10):
+        runs = [r["run"] for r in tables[f"kmh_confirm_nq{nq}"]["rows"]]
+        assert runs == [f"kmh_confirm/nq{nq}/{m}" for m in ("kmh_l2", "kmh_reference", "RandomSampling", "WAAL")]
+        assert tables[f"kmh_confirm_nq{nq}"]["kind"] == "benchmark"
+    for paper_tables in manifest.tables.values():
+        for table in paper_tables["tables"]:
+            if not table["id"].startswith("kmh_confirm_"):
+                assert not any(r.get("run", "").startswith("kmh_confirm/") for r in table["rows"]), table["id"]
+            assert not any(c["run"].startswith("kmh_confirm/") for r in table["rows"] if "best_of" in r
+                           for c in r["best_of"]["candidates"])
+    # Every group consumed by one paper only (seeds_ext included): the single-consumer rule holds without exemption.
+    for g in manifest.groups:
+        if g.part in ("seeds_ext", "kmh_confirm"):
+            assert {u["paper"] for u in g.used_by} == {"paper3"}, g.id
+
+
+def test_kmh_confirm_repeats_no_computation_on_a_common_seed(both_full) -> None:
+    """ADR 0021: the nq100 reference / RandomSampling / WAAL on seeds 4-6 are NOT duplicated (seeds_ext has them);
+    every kmh_confirm group shares its signature only with seeds-1-3 groups (disjoint seeds)."""
+    main, sweep = both_full
+    assert C.find_redundant_groups(main) == [] and C.find_redundant_groups(sweep) == []
+    by_sig: dict[str, list[C.RunGroup]] = {}
+    for manifest in both_full:
+        for g in manifest.groups:
+            by_sig.setdefault(C.group_signature(manifest, g), []).append(g)
+    for g in (g for g in main.groups if g.part == "kmh_confirm"):
+        same = [h for h in by_sig[C.group_signature(main, g)] if h.id != g.id]
+        assert same and all(not set(h.seeds) & set(g.seeds) for h in same), g.id
+    seeds_ext_sigs = {C.group_signature(main, g) for g in main.groups if g.part == "seeds_ext"}
+    assert not seeds_ext_sigs & {C.group_signature(main, g) for g in main.groups if g.part == "kmh_confirm"}
+
+
+def test_kmh_confirm_keeps_the_part_1_pilot_and_part_2_plan(both_full) -> None:
+    """ADR 0021: part_1_gpu's pilot stays seed 1 of the executed nq100 RandomSampling/VAAL/WAAL (kmh_confirm has no
+    seed-1 job); part_2_gpu (account B, v6) has exactly the jobs of tag campaign-fixed-v6."""
+    groups = C.selected_groups(both_full, C.parse_selection("part_1_gpu"))
+    assert {"kmh_confirm/nq50/WAAL", "kmh_confirm/nq10/WAAL"} <= {g.id for g in groups}
+    assert C.pilot_group_ids(groups) == ("shared/random_nq100", "p1/VAAL/nq100", "p1/WAAL/nq100")
+    part2 = [j for seg in C.plan_jobs(both_full, C.parse_selection("part_2_gpu")) for j in seg.jobs]
+    assert len(part2) == 252 and not any(j.group.part == "kmh_confirm" for j in part2)
+    plan = [j for seg in C.plan_jobs(both_full, C.parse_selection("part_1_gpu")) for j in seg.jobs]
+    confirm = [(j.group.id, j.seed) for j in plan if j.group.part == "kmh_confirm"]
+    assert len(plan) == 363 and len(confirm) == 27
+    # Stage order: the KMH reference runs (stage 1) come first, so each seed's ImageNet cache is computed once, by
+    # kmh_confirm/nq50/kmh_reference, before the l2 runs (stage 3) load it; WAAL (stage 5) last.
+    assert confirm[:3] == [("kmh_confirm/nq50/kmh_reference", s) for s in (4, 5, 6)]
+    assert [gid for gid, _ in confirm[-6:]] == ["kmh_confirm/nq50/WAAL"] * 3 + ["kmh_confirm/nq10/WAAL"] * 3
+
+
+def test_kmh_confirm_estimates_follow_the_clean_campaign_counterparts(both_full) -> None:
+    """ADR 0021: each kmh_confirm estimate is its counterpart's mean wall time measured on the clean campaign; the 9
+    entries follow seeds_ext's; 27 runs about 8.5 GPU h."""
+    spec = importlib.util.spec_from_file_location(
+        "build_gpu_time_estimates", REPO_ROOT / "scripts/campaign/build_gpu_time_estimates.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert {gid: v[0] for gid, v in module.KMH_CONFIRM_COUNTERPARTS.items()} == {
+        gid: v[0] for gid, v in KMH_CONFIRM_GROUPS.items()}
+    table = json.loads((REPO_ROOT / "files_config/campaign/gpu_time_estimates.json").read_text())["groups"]
+    for g in (g for m in both_full for g in m.groups):
+        entry = module.confirm_estimate(g)
+        if g.part == "kmh_confirm":
+            assert table[g.id] == entry and entry["basis"] == "estimate", g.id
+        else:
+            assert entry is None, g.id
+    ids = list(table)
+    start = ids.index("seeds_ext/WAAL") + 1
+    assert ids[start:start + 9] == list(KMH_CONFIRM_GROUPS)
+    assert table["kmh_confirm/nq50/WAAL"]["seconds_per_run"] == 3589  # clean campaign, not the 2,700 s FLOP estimate
+    assert sum(table[g]["seconds_per_run"] for g in KMH_CONFIRM_GROUPS) * 3 == 30546  # 8.5 GPU h for the 27 runs
+
+
+def test_seed_audit_pools_kmh_confirm_and_seeds_ext_by_seed(tmp_path: Path, both_full) -> None:
+    """ADR 0021: on account A alone the seeds 4-6 of kmh_confirm are compared among themselves; after the local merge
+    with account B's seeds_ext the audit compares every run of a seed across both parts (same initial images or
+    FAIL), because it groups the selected jobs by seed only, whatever their part or manifest."""
+    main = both_full[0]
+    groups = main.group_by_id()
+
+    def rebased(gid: str) -> C.RunGroup:
+        return replace(groups[gid], dir_results=str(tmp_path / gid) + "/")
+
+    a_l2, a_ref, b_kmh = (rebased(g) for g in ("kmh_confirm/nq50/kmh_l2", "kmh_confirm/nq10/kmh_reference",
+                                               "seeds_ext/KMH"))
+    for group in (a_l2, a_ref, b_kmh):
+        _write_leaf(_leaf_of(group, 4), round_files=True, initial_paths=IMAGES)
+    account_a = [C.Job(a_l2, 4), C.Job(a_ref, 4)]
+    assert [(a.seed, a.status, a.n_runs) for a in C.audit_seed_consistency(account_a)] == [(4, "PASS", 2)]
+    merged = [*account_a, C.Job(b_kmh, 4)]
+    assert [(a.seed, a.status, a.n_runs) for a in C.audit_seed_consistency(merged)] == [(4, "PASS", 3)]
+    other = ["DATA/d/train/c0/x.png", *IMAGES[1:]]
+    _write_leaf(_leaf_of(b_kmh, 4), round_files=True, initial_paths=other)
+    audit = C.audit_seed_consistency(merged)[0]
+    assert audit.status == "FAIL" and audit.offenders == ("seeds_ext/KMH",)
 
 
 def _with_postprocess(tmp_path: Path, params_json: str, postprocess: dict | None, name: str) -> str:
@@ -972,9 +1181,11 @@ def test_kmh_norm_part_layout(path: Path) -> None:
 
 
 def test_kmh_norm_signatures_differ_from_every_v4_group(both_full) -> None:
-    """ADR 0019: no kmh_norm group repeats a computation of either manifest (executed, texhal_q13, kmh_wide)."""
+    """ADR 0019: no kmh_norm group repeats a computation of either manifest (executed, texhal_q13, kmh_wide). The
+    kmh_confirm l2 groups (ADR 0021) repeat the kmh_norm l2 computations on seeds 4-6 on purpose: excluded here, see
+    their own test."""
     main, sweep = both_full
-    old = {C.group_signature(m, g) for m in both_full for g in m.groups if g.part != "kmh_norm"}
+    old = {C.group_signature(m, g) for m in both_full for g in m.groups if g.part not in ("kmh_norm", "kmh_confirm")}
     new = [C.group_signature(sweep, g) for g in sweep.groups if g.part == "kmh_norm"]
     assert len(set(new)) == len(new) == 9
     assert not set(new) & old
@@ -1273,7 +1484,7 @@ def test_exclude_strategy_filter_drops_only_those_groups(full_manifest: C.Manife
     dropped = [j for j in jobs if j not in kept]
     assert dropped and {j.group.strategy_name for j in dropped} == set(ADVERSARIAL)
     assert len(dropped) == 2 * 3 * 3  # 2 strategies x 3 n_query x 3 seeds
-    assert len(kept) == len(jobs) - len(dropped) == 357 - 18
+    assert len(kept) == len(jobs) - len(dropped) == 384 - 18
     assert all(j.group.strategy_name not in ADVERSARIAL for j in kept)
     assert [j for j in jobs if j in kept] == kept  # order preserved
 
@@ -1609,12 +1820,20 @@ def test_data_order_audit_pass_fail_warn_and_exit_codes(tmp_path: Path) -> None:
 
 
 def test_the_only_duplicates_across_manifests_are_the_three_reference_kmh_pairs(both_full) -> None:
-    pairs = {(a.id, b.id) for a, b in C.cross_manifest_duplicates(both_full)}
-    assert pairs == {
+    """The three reference KMH pairs share seeds 1-3 and are checked; the three kmh_confirm l2 groups (ADR 0021,
+    seeds 4-6) repeat the kmh_norm l2 computations (seeds 1-3) of the sweep on disjoint seeds: listed as pairs by the
+    signature, but no seed is common, so the duplicate-pair report holds no line for them."""
+    found = C.cross_manifest_duplicates(both_full)
+    pairs = {(a.id, b.id) for a, b in found}
+    reference_pairs = {
         ("shared/kmh_nq100", "kmh/nq100/hier_L3_ref"),
         ("p1/KMH/nq50", "kmh/nq50/hier_L3_ref"),
         ("p1/KMH/nq10", "kmh/nq10/hier_L3_ref"),
     }
+    confirm_pairs = {(f"kmh_confirm/nq{nq}/kmh_l2", f"kmh_norm/nq{nq}/l2") for nq in (100, 50, 10)}
+    assert pairs == reference_pairs | confirm_pairs
+    checks = C.check_duplicate_pairs(found, {1, 2, 3, 4, 5, 6}, base=Path("/nonexistent"))
+    assert {(c.first, c.second) for c in checks} == reference_pairs and len(checks) == 9
 
 
 def test_duplicate_pair_check_same_different_and_missing(tmp_path: Path) -> None:

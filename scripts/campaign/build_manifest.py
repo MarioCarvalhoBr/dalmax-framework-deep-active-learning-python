@@ -98,6 +98,11 @@ DESCRIPTORS_GPU_PART = PART_2_GPU
 SEEDS_EXT_PART = "seeds_ext"
 SEEDS_EXT_GPU_PART = PART_2_GPU
 SEEDS_EXT = [4, 5, 6]
+# The confirmation of the KMH feature post-processing on the new seeds (ADR 0021, 2026-11-16): one semantic part of the
+# main manifest, all on account A (idle; account B runs descriptors_nq + seeds_ext at v6), same seeds as seeds_ext.
+CONFIRM_PART = "kmh_confirm"
+CONFIRM_GPU_PART = PART_1_GPU
+CONFIRM_SEEDS = SEEDS_EXT
 ABLATION_GPU_PART = PART_1_GPU
 UPPER_BOUND_GPU_PART = PART_1_GPU
 # Execution stage inside a GPU part (both manifests share the numbering; `campaign run --part part_N_gpu`
@@ -243,6 +248,26 @@ def seeds_ext_group_id(method: str) -> str:
     return f"{SEEDS_EXT_PART}/{method}"
 
 
+# KMH confirmation on CONFIRM_SEEDS (ADR 0021): (method = id leaf and results folder, executed seeds-1-3 counterpart
+# with `{nq}` = the paper query size, table label). The variant (`l2`) was fixed before any seed 4-6 result existed.
+# Each group copies its counterpart's params file, strategy, n_query, NIL, NR and gpu_stage (kmh_norm/.../l2 is a
+# group of the KMH sweep manifest, the others of this one); only the seeds, the GPU part and the results folder differ.
+CONFIRM_METHODS: list[tuple[str, str, str]] = [
+    ("kmh_l2", "kmh_norm/nq{nq}/l2", "KMH, l2-normalised features (ADR 0019)"),
+    ("kmh_reference", "p1/KMH/nq{nq}", "KMH, raw features (reference)"),
+    ("RandomSampling", "p1/RandomSampling/nq{nq}", "RandomSampling"),
+    ("WAAL", "p1/WAAL/nq{nq}", "WAAL"),
+]
+CONFIRM_BUDGETS = (100, 50, 10)
+# At n_query=100 these methods already run on seeds 4-6 in seeds_ext (account B): alias rows, never a second run.
+CONFIRM_SEEDS_EXT_ALIASES: dict[str, str] = {"kmh_reference": "KMH", "RandomSampling": "RandomSampling",
+                                             "WAAL": "WAAL"}
+
+
+def confirm_group_id(paper_nq: int, method: str) -> str:
+    return f"{CONFIRM_PART}/nq{paper_nq}/{method}"
+
+
 def build(scale: Scale) -> dict[str, Any]:
     abl = f"files_config/ablations/%s/{scale.abl_subdir}"
     root = scale.results_root
@@ -379,6 +404,24 @@ def build(scale: Scale) -> dict[str, Any]:
             "note": f"Headline comparison on the new seeds {SEEDS_EXT} (ADR 0020): the executed {counterpart} "
                     "configuration (same params, strategy and budgets), other seeds only.",
         })
+    # The KMH confirmation on seeds 4-6 (ADR 0021): appended after seeds_ext. A copy of each executed counterpart
+    # (params, strategy, budgets, stage) on CONFIRM_SEEDS, all in part_1_gpu, results under <root>/kmh_confirm/nq{N}/
+    # <method>/ so the part can be zipped alone; never merged into the seeds-1-3 groups or tables. At n_query=100
+    # the reference, RandomSampling and WAAL are the seeds_ext groups (aliases below), so only the l2 group runs there.
+    sweep_by_id = {g["id"]: g for g in build_kmh_sweep(scale)["groups"]}
+    for method, template, _ in CONFIRM_METHODS:
+        for paper_nq in CONFIRM_BUDGETS:
+            if paper_nq == 100 and method in CONFIRM_SEEDS_EXT_ALIASES:
+                continue
+            counterpart = template.format(nq=paper_nq)
+            twin = by_id[counterpart] if counterpart in by_id else sweep_by_id[counterpart]
+            groups.append({
+                **twin, "id": confirm_group_id(paper_nq, method), "part": CONFIRM_PART, "gpu_part": CONFIRM_GPU_PART,
+                "seeds": list(CONFIRM_SEEDS), "dir_results": f"{root}/{CONFIRM_PART}/nq{paper_nq}/{method}/",
+                "used_by": [],
+                "note": f"KMH confirmation on the new seeds {CONFIRM_SEEDS} (ADR 0021): the executed {counterpart} "
+                        "configuration (same params, strategy and budgets), other seeds only.",
+            })
 
     # --- aliases -------------------------------------------------------------
     add_alias("p1/RandomSampling/nq100", "shared/random_nq100", scale.paper1_params,
@@ -413,6 +456,14 @@ def build(scale: Scale) -> dict[str, Any]:
     add_alias("texhal_q13/6_3/stage_no_representation", "shared/kmh_nq100", kmh_params,
               "w/o representation module = ImageNet ResNet-50 features + reference hierarchy = "
               "the shared KMH@100 run (byte-identical config; ADR 0009).")
+
+    # ADR 0021: at n_query=100 the confirmation table reads the seeds_ext runs (same computation, same seeds 4-6).
+    by_id_all = {g["id"]: g for g in groups}
+    for method, seeds_ext_method in CONFIRM_SEEDS_EXT_ALIASES.items():
+        canonical = by_id_all[seeds_ext_group_id(seeds_ext_method)]
+        add_alias(confirm_group_id(100, method), canonical["id"], canonical["params_json"],
+                  f"KMH confirmation (ADR 0021) at n_query=100: the {seeds_ext_method} run on seeds {CONFIRM_SEEDS} "
+                  "IS the seeds_ext group (same configuration, same seeds): one run.", canonical["strategy_name"])
 
     for g in groups:
         if g["id"] in alias_notes:
@@ -525,7 +576,15 @@ def build(scale: Scale) -> dict[str, Any]:
         "id": "seeds_ext_nq100", "kind": "benchmark",
         "title": f"Headline comparison on the new seeds {SEEDS_EXT}, n_query=100 (ADR 0020)",
         "rows": [row(seeds_ext_labels[method], seeds_ext_group_id(method)) for method in SEEDS_EXT_TABLE_ORDER],
-    }]
+    }] + [{
+        # ADR 0021: KMH with l2-normalised features against the KMH reference, RandomSampling and WAAL on seeds 4-6
+        # only (nq100: the seeds_ext runs through aliases). In paper 3, next to seeds_ext_nq100, so that every seeds
+        # 4-6 group, seeds_ext included, keeps one consumer; the seeds-1-3 tables and best_of rows are untouched.
+        "id": f"kmh_confirm_nq{paper_nq}", "kind": "benchmark",
+        "title": f"KMH feature post-processing confirmed on the new seeds {CONFIRM_SEEDS}, n_query={paper_nq} "
+                 "(ADR 0021)",
+        "rows": [row(label, confirm_group_id(paper_nq, method)) for method, _, label in CONFIRM_METHODS],
+    } for paper_nq in CONFIRM_BUDGETS]
     tables = {
         "paper1": {"tables": paper1_tables},
         "paper2": {"tables": paper2},

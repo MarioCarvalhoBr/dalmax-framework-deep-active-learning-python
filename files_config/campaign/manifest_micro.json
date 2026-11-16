@@ -2965,9 +2965,14 @@
           "paper": "paper3",
           "table": "seeds_ext_nq100",
           "row": "RandomSampling"
+        },
+        {
+          "paper": "paper3",
+          "table": "kmh_confirm_nq100",
+          "row": "RandomSampling"
         }
       ],
-      "note": "Headline comparison on the new seeds [4, 5, 6] (ADR 0020): the executed shared/random_nq100 configuration (same params, strategy and budgets), other seeds only."
+      "note": "Headline comparison on the new seeds [4, 5, 6] (ADR 0020): the executed shared/random_nq100 configuration (same params, strategy and budgets), other seeds only. Also serves as: kmh_confirm/nq100/RandomSampling."
     },
     {
       "id": "seeds_ext/BALDDropout",
@@ -3040,9 +3045,14 @@
           "paper": "paper3",
           "table": "seeds_ext_nq100",
           "row": "KMH (hierarchical k-means, ImageNet ResNet-50 features)"
+        },
+        {
+          "paper": "paper3",
+          "table": "kmh_confirm_nq100",
+          "row": "KMH, raw features (reference)"
         }
       ],
-      "note": "Headline comparison on the new seeds [4, 5, 6] (ADR 0020): the executed shared/kmh_nq100 configuration (same params, strategy and budgets), other seeds only."
+      "note": "Headline comparison on the new seeds [4, 5, 6] (ADR 0020): the executed shared/kmh_nq100 configuration (same params, strategy and budgets), other seeds only. Also serves as: kmh_confirm/nq100/kmh_reference."
     },
     {
       "id": "seeds_ext/upper_bound",
@@ -3140,9 +3150,239 @@
           "paper": "paper3",
           "table": "seeds_ext_nq100",
           "row": "WAAL"
+        },
+        {
+          "paper": "paper3",
+          "table": "kmh_confirm_nq100",
+          "row": "WAAL"
         }
       ],
-      "note": "Headline comparison on the new seeds [4, 5, 6] (ADR 0020): the executed p1/WAAL/nq100 configuration (same params, strategy and budgets), other seeds only."
+      "note": "Headline comparison on the new seeds [4, 5, 6] (ADR 0020): the executed p1/WAAL/nq100 configuration (same params, strategy and budgets), other seeds only. Also serves as: kmh_confirm/nq100/WAAL."
+    },
+    {
+      "id": "kmh_confirm/nq100/kmh_l2",
+      "part": "kmh_confirm",
+      "gpu_part": "part_1_gpu",
+      "gpu_stage": 3,
+      "params_json": "files_config/ablations/kmh_sweep/micro/nq100/hier_L3_ref__norm_l2.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 5,
+      "n_init_labeled": 10,
+      "n_round": 1,
+      "seeds": [
+        4,
+        5,
+        6
+      ],
+      "dir_results": "results/smoke_campaign_fixed/kmh_confirm/nq100/kmh_l2/",
+      "used_by": [
+        {
+          "paper": "paper3",
+          "table": "kmh_confirm_nq100",
+          "row": "KMH, l2-normalised features (ADR 0019)"
+        }
+      ],
+      "note": "KMH confirmation on the new seeds [4, 5, 6] (ADR 0021): the executed kmh_norm/nq100/l2 configuration (same params, strategy and budgets), other seeds only."
+    },
+    {
+      "id": "kmh_confirm/nq50/kmh_l2",
+      "part": "kmh_confirm",
+      "gpu_part": "part_1_gpu",
+      "gpu_stage": 3,
+      "params_json": "files_config/ablations/kmh_sweep/micro/nq50/hier_L3_ref__norm_l2.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 4,
+      "n_init_labeled": 10,
+      "n_round": 1,
+      "seeds": [
+        4,
+        5,
+        6
+      ],
+      "dir_results": "results/smoke_campaign_fixed/kmh_confirm/nq50/kmh_l2/",
+      "used_by": [
+        {
+          "paper": "paper3",
+          "table": "kmh_confirm_nq50",
+          "row": "KMH, l2-normalised features (ADR 0019)"
+        }
+      ],
+      "note": "KMH confirmation on the new seeds [4, 5, 6] (ADR 0021): the executed kmh_norm/nq50/l2 configuration (same params, strategy and budgets), other seeds only."
+    },
+    {
+      "id": "kmh_confirm/nq10/kmh_l2",
+      "part": "kmh_confirm",
+      "gpu_part": "part_1_gpu",
+      "gpu_stage": 3,
+      "params_json": "files_config/ablations/kmh_sweep/micro/nq10/hier_L3_ref__norm_l2.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 3,
+      "n_init_labeled": 10,
+      "n_round": 1,
+      "seeds": [
+        4,
+        5,
+        6
+      ],
+      "dir_results": "results/smoke_campaign_fixed/kmh_confirm/nq10/kmh_l2/",
+      "used_by": [
+        {
+          "paper": "paper3",
+          "table": "kmh_confirm_nq10",
+          "row": "KMH, l2-normalised features (ADR 0019)"
+        }
+      ],
+      "note": "KMH confirmation on the new seeds [4, 5, 6] (ADR 0021): the executed kmh_norm/nq10/l2 configuration (same params, strategy and budgets), other seeds only."
+    },
+    {
+      "id": "kmh_confirm/nq50/kmh_reference",
+      "part": "kmh_confirm",
+      "gpu_part": "part_1_gpu",
+      "gpu_stage": 1,
+      "params_json": "files_config/campaign/params_kmh_micro.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 4,
+      "n_init_labeled": 10,
+      "n_round": 1,
+      "seeds": [
+        4,
+        5,
+        6
+      ],
+      "dir_results": "results/smoke_campaign_fixed/kmh_confirm/nq50/kmh_reference/",
+      "used_by": [
+        {
+          "paper": "paper3",
+          "table": "kmh_confirm_nq50",
+          "row": "KMH, raw features (reference)"
+        }
+      ],
+      "note": "KMH confirmation on the new seeds [4, 5, 6] (ADR 0021): the executed p1/KMH/nq50 configuration (same params, strategy and budgets), other seeds only."
+    },
+    {
+      "id": "kmh_confirm/nq10/kmh_reference",
+      "part": "kmh_confirm",
+      "gpu_part": "part_1_gpu",
+      "gpu_stage": 1,
+      "params_json": "files_config/campaign/params_kmh_micro.json",
+      "strategy_name": "RepresentationStrategy",
+      "n_query": 3,
+      "n_init_labeled": 10,
+      "n_round": 1,
+      "seeds": [
+        4,
+        5,
+        6
+      ],
+      "dir_results": "results/smoke_campaign_fixed/kmh_confirm/nq10/kmh_reference/",
+      "used_by": [
+        {
+          "paper": "paper3",
+          "table": "kmh_confirm_nq10",
+          "row": "KMH, raw features (reference)"
+        }
+      ],
+      "note": "KMH confirmation on the new seeds [4, 5, 6] (ADR 0021): the executed p1/KMH/nq10 configuration (same params, strategy and budgets), other seeds only."
+    },
+    {
+      "id": "kmh_confirm/nq50/RandomSampling",
+      "part": "kmh_confirm",
+      "gpu_part": "part_1_gpu",
+      "gpu_stage": 1,
+      "params_json": "files_config/campaign/params_paper1_micro.json",
+      "strategy_name": "RandomSampling",
+      "n_query": 4,
+      "n_init_labeled": 10,
+      "n_round": 1,
+      "seeds": [
+        4,
+        5,
+        6
+      ],
+      "dir_results": "results/smoke_campaign_fixed/kmh_confirm/nq50/RandomSampling/",
+      "used_by": [
+        {
+          "paper": "paper3",
+          "table": "kmh_confirm_nq50",
+          "row": "RandomSampling"
+        }
+      ],
+      "note": "KMH confirmation on the new seeds [4, 5, 6] (ADR 0021): the executed p1/RandomSampling/nq50 configuration (same params, strategy and budgets), other seeds only."
+    },
+    {
+      "id": "kmh_confirm/nq10/RandomSampling",
+      "part": "kmh_confirm",
+      "gpu_part": "part_1_gpu",
+      "gpu_stage": 1,
+      "params_json": "files_config/campaign/params_paper1_micro.json",
+      "strategy_name": "RandomSampling",
+      "n_query": 3,
+      "n_init_labeled": 10,
+      "n_round": 1,
+      "seeds": [
+        4,
+        5,
+        6
+      ],
+      "dir_results": "results/smoke_campaign_fixed/kmh_confirm/nq10/RandomSampling/",
+      "used_by": [
+        {
+          "paper": "paper3",
+          "table": "kmh_confirm_nq10",
+          "row": "RandomSampling"
+        }
+      ],
+      "note": "KMH confirmation on the new seeds [4, 5, 6] (ADR 0021): the executed p1/RandomSampling/nq10 configuration (same params, strategy and budgets), other seeds only."
+    },
+    {
+      "id": "kmh_confirm/nq50/WAAL",
+      "part": "kmh_confirm",
+      "gpu_part": "part_1_gpu",
+      "gpu_stage": 5,
+      "params_json": "files_config/campaign/params_paper1_micro.json",
+      "strategy_name": "WAAL",
+      "n_query": 4,
+      "n_init_labeled": 10,
+      "n_round": 1,
+      "seeds": [
+        4,
+        5,
+        6
+      ],
+      "dir_results": "results/smoke_campaign_fixed/kmh_confirm/nq50/WAAL/",
+      "used_by": [
+        {
+          "paper": "paper3",
+          "table": "kmh_confirm_nq50",
+          "row": "WAAL"
+        }
+      ],
+      "note": "KMH confirmation on the new seeds [4, 5, 6] (ADR 0021): the executed p1/WAAL/nq50 configuration (same params, strategy and budgets), other seeds only."
+    },
+    {
+      "id": "kmh_confirm/nq10/WAAL",
+      "part": "kmh_confirm",
+      "gpu_part": "part_1_gpu",
+      "gpu_stage": 5,
+      "params_json": "files_config/campaign/params_paper1_micro.json",
+      "strategy_name": "WAAL",
+      "n_query": 3,
+      "n_init_labeled": 10,
+      "n_round": 1,
+      "seeds": [
+        4,
+        5,
+        6
+      ],
+      "dir_results": "results/smoke_campaign_fixed/kmh_confirm/nq10/WAAL/",
+      "used_by": [
+        {
+          "paper": "paper3",
+          "table": "kmh_confirm_nq10",
+          "row": "WAAL"
+        }
+      ],
+      "note": "KMH confirmation on the new seeds [4, 5, 6] (ADR 0021): the executed p1/WAAL/nq10 configuration (same params, strategy and budgets), other seeds only."
     }
   ],
   "aliases": [
@@ -3250,6 +3490,27 @@
       "params_json": "files_config/campaign/params_kmh_micro.json",
       "strategy_name": "RepresentationStrategy",
       "reason": "w/o representation module = ImageNet ResNet-50 features + reference hierarchy = the shared KMH@100 run (byte-identical config; ADR 0009)."
+    },
+    {
+      "id": "kmh_confirm/nq100/kmh_reference",
+      "canonical": "seeds_ext/KMH",
+      "params_json": "files_config/campaign/params_kmh_micro.json",
+      "strategy_name": "RepresentationStrategy",
+      "reason": "KMH confirmation (ADR 0021) at n_query=100: the KMH run on seeds [4, 5, 6] IS the seeds_ext group (same configuration, same seeds): one run."
+    },
+    {
+      "id": "kmh_confirm/nq100/RandomSampling",
+      "canonical": "seeds_ext/RandomSampling",
+      "params_json": "files_config/campaign/params_paper1_micro.json",
+      "strategy_name": "RandomSampling",
+      "reason": "KMH confirmation (ADR 0021) at n_query=100: the RandomSampling run on seeds [4, 5, 6] IS the seeds_ext group (same configuration, same seeds): one run."
+    },
+    {
+      "id": "kmh_confirm/nq100/WAAL",
+      "canonical": "seeds_ext/WAAL",
+      "params_json": "files_config/campaign/params_paper1_micro.json",
+      "strategy_name": "WAAL",
+      "reason": "KMH confirmation (ADR 0021) at n_query=100: the WAAL run on seeds [4, 5, 6] IS the seeds_ext group (same configuration, same seeds): one run."
     }
   ],
   "tables": {
@@ -4177,6 +4438,75 @@
             {
               "label": "Upper bound (full pool)",
               "run": "seeds_ext/upper_bound"
+            }
+          ]
+        },
+        {
+          "id": "kmh_confirm_nq100",
+          "kind": "benchmark",
+          "title": "KMH feature post-processing confirmed on the new seeds [4, 5, 6], n_query=100 (ADR 0021)",
+          "rows": [
+            {
+              "label": "KMH, l2-normalised features (ADR 0019)",
+              "run": "kmh_confirm/nq100/kmh_l2"
+            },
+            {
+              "label": "KMH, raw features (reference)",
+              "run": "kmh_confirm/nq100/kmh_reference"
+            },
+            {
+              "label": "RandomSampling",
+              "run": "kmh_confirm/nq100/RandomSampling"
+            },
+            {
+              "label": "WAAL",
+              "run": "kmh_confirm/nq100/WAAL"
+            }
+          ]
+        },
+        {
+          "id": "kmh_confirm_nq50",
+          "kind": "benchmark",
+          "title": "KMH feature post-processing confirmed on the new seeds [4, 5, 6], n_query=50 (ADR 0021)",
+          "rows": [
+            {
+              "label": "KMH, l2-normalised features (ADR 0019)",
+              "run": "kmh_confirm/nq50/kmh_l2"
+            },
+            {
+              "label": "KMH, raw features (reference)",
+              "run": "kmh_confirm/nq50/kmh_reference"
+            },
+            {
+              "label": "RandomSampling",
+              "run": "kmh_confirm/nq50/RandomSampling"
+            },
+            {
+              "label": "WAAL",
+              "run": "kmh_confirm/nq50/WAAL"
+            }
+          ]
+        },
+        {
+          "id": "kmh_confirm_nq10",
+          "kind": "benchmark",
+          "title": "KMH feature post-processing confirmed on the new seeds [4, 5, 6], n_query=10 (ADR 0021)",
+          "rows": [
+            {
+              "label": "KMH, l2-normalised features (ADR 0019)",
+              "run": "kmh_confirm/nq10/kmh_l2"
+            },
+            {
+              "label": "KMH, raw features (reference)",
+              "run": "kmh_confirm/nq10/kmh_reference"
+            },
+            {
+              "label": "RandomSampling",
+              "run": "kmh_confirm/nq10/RandomSampling"
+            },
+            {
+              "label": "WAAL",
+              "run": "kmh_confirm/nq10/WAAL"
             }
           ]
         }
