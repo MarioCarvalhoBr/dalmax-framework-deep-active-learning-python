@@ -136,6 +136,26 @@ thesis rule for paper 1's KMH row then ranges over `kmh_nq{N}`, `kmh_wide` and `
 taken from it is selected on the test set and is confirmed on seeds 4-6 with `RandomSampling` and `WAAL` before any
 claim (as ADR 0018). Round 0 of every new run equals that of the executed KMH runs (KI-50 deliberately kept).
 
+## Descriptors at query sizes 50 and 10; headline comparison on seeds 4-6 (2026-11-16, ADR 0020)
+
+Two config-only parts of the main manifest, both on account B (`part_2_gpu`, tag `campaign-fixed-v6`; prepared, not
+executed; `COLAB_RUNBOOK.md` section 6h):
+
+- **`descriptors_nq`** (pendencia P36; 4 groups / 12 runs): RNHAL (SSRAE `Q=13`) and TexHAL (VCTex `Q=13`), each with
+  its executed nq100 configuration (reference hierarchy), at n_query 50 and 10. Papers 2 and 3 can then say whether the
+  gain over WAAL and RandomSampling at nq100 holds at the smaller query sizes. Tables `descriptors_nq50` /
+  `descriptors_nq10` (paper 1's report; rows of the executed paper-1 WAAL, BALDDropout, BadgeSampling, KMH and
+  RandomSampling of the same size). Nothing is selected on the test set (configuration fixed beforehand); the reference
+  hierarchy was designed for nq100, so a weak nq10 result speaks about that hierarchy, not about the descriptors.
+- **`seeds_ext`** (8 groups / 24 runs): the headline comparison at nq100 (RNHAL, TexHAL, KMH, WAAL, BALDDropout,
+  BadgeSampling, RandomSampling, the upper bound) on three new seeds, 4, 5 and 6, each group an exact copy of its
+  seeds-1-3 run. Answers the three-seed criticism of two reviews; the seeds were never looked at (no selection).
+  Table `seeds_ext_nq100` (paper 3's report), separate from every seeds-1-3 table. Planned reporting (author decides
+  when the results arrive): six seeds for the headline comparison of papers 2 and 3, three for the ablations. The
+  seeds-4-6 runs of RandomSampling, WAAL and the reference KMH are also the confirmation runs planned by ADR 0018/0019
+  for the reference configuration (a KMH configuration chosen from `kmh_wide`/`kmh_norm` would still need its own
+  seeds-4-6 run).
+
 ## Campaign executed; decisions of 2026-11-01 (first campaign; the Q=17 decision is superseded by ADR 0017)
 
 The campaign's first 192 runs finished on 2026-10-05 and the 18-run `texhal_q17` part on 2026-11-01

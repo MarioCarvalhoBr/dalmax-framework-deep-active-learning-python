@@ -117,6 +117,12 @@ distinct from "hierarchical" and matters for the ablation in
   `COLAB_RUNBOOK.md` section 6g): the reference hierarchy with the ImageNet features post-processed by `l2`, `zscore`
   and `pca_l2` (64) at nq 10/50/100. Sweep 231 runs / 77 groups, `part_1_gpu` 336 / 112, 552 runs in total. Same
   confirmation rule on seeds 4-6 before any claim.
+- **Descriptors at small query sizes and seeds 4-6 (2026-11-16, ADR 0020)**: two config-only parts of the main manifest,
+  both in `part_2_gpu` (account B, tag `campaign-fixed-v6`, config-only relative to v5; `COLAB_RUNBOOK.md` section 6h;
+  prepared, not executed): `descriptors_nq` (RNHAL and TexHAL in their executed nq100 configurations at n_query 50 and
+  10, 4 groups / 12 runs) and `seeds_ext` (the 8 headline methods at nq100 on the new seeds 4, 5, 6, 8 groups / 24
+  runs). Main manifest 357 runs / 119 groups, `part_2_gpu` 252 / 84, 588 runs in total. The campaign engine now
+  treats two groups as redundant only on a common seed, and picks the pilot only among groups that run seed 1.
 - **Pre-flight fix KI-47 (2026-11-12, ADR 0016 amendment)**: the loaders listed each class folder in file-system order,
   which differed between Colab sessions, so in the first campaign the same seed started from other images in each
   later session and the cached embeddings served later sessions the features of other images (the KMH sweep,

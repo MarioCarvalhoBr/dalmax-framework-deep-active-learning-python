@@ -62,8 +62,8 @@ locations.
   Compare runs by `dalmax.data_order.relative_image_path` (`<class>/<file>`), never by index alone.
 - **One code version per campaign (2026-11-12, KI-48)**: every Colab session checks out the campaign's tag (`GIT_REF`,
   default `campaign-fixed-v2` since 2026-11-12, `campaign-fixed-v3` since 2026-11-15, ADR 0017, `campaign-fixed-v4`
-  since 2026-11-15, ADR 0018, `campaign-fixed-v5` since 2026-11-15, ADR 0019, account A only) detached, never pulls a
-  branch; `campaign verify` lists the distinct `run_metadata.json`
+  since 2026-11-15, ADR 0018, `campaign-fixed-v5` since 2026-11-15, ADR 0019, account A only, `campaign-fixed-v6`
+  since 2026-11-16, ADR 0020, account B only) detached, never pulls a branch; `campaign verify` lists the distinct `run_metadata.json`
   `git_commit` values of the OK leaves and a second value (or a missing one) is a WARN that must be explained before
   the results are used. A new tag for a later part of the same campaign is allowed only when nothing a
   `tools/trainer.py` run executes changed between the tags (`git diff --stat <old tag> -- dalmax/ tools/` limited to
@@ -74,7 +74,16 @@ locations.
   (absent) path is tested behaviour-identical to the previous tag (same arrays, ids, RNG consumption and cache key:
   `tests/test_postprocess_identity.py`, the pinned v4 digest in `tests/test_campaign.py`, the golden runs); only the new
   part's runs use the key and the new tag, and an account in the middle of a part never switches tags (no third code
-  version inside one part). After v5 the merged verify lists up to four commits (v2, v3, v4, v5), all explained. A leaf counts as complete only when its JSON artifacts parse with the expected round count
+  version inside one part). After v5 the merged verify lists up to four commits (v2, v3, v4, v5), all explained. v6
+  (ADR 0020) is config-only relative to v5 again (only `dalmax/campaign.py` changed: part names, seed-aware redundancy
+  check and pilot candidates); account B's part then lists v2, v4, v6 and the merged verify up to five commits, all
+  explained.
+- **Seeds beyond 1-3 (2026-11-16, ADR 0020)**: a manifest group may run other seeds than `[1, 2, 3]` (`seeds_ext`
+  runs `[4, 5, 6]`, exact copies of executed seeds-1-3 groups). `validate_manifest` treats two groups as the same
+  computation only when their signature is equal AND they share a seed; the pilot is picked only among groups that run
+  seed 1; the seed audit compares each seed's runs among themselves. New seeds get their own result tables: never
+  merge them into a seeds-1-3 group, row or `best_of`, and never choose a configuration on them before they are
+  reported. A leaf counts as complete only when its JSON artifacts parse with the expected round count
   and its checkpoint is non-empty (`dalmax/reporting/leaf_check.py::LeafCheck`), and a job's leaf is looked up only
   under the dataset folder of its own params (`RunGroup.dataset_folder`).
 - `torch.backends.cudnn.enabled = False` was used as a determinism

@@ -190,7 +190,7 @@ also more complete now: it gained `all_precision_macro`/`all_recall_macro`/`all_
 see `research-rules/metrics.md`), though it still does not duplicate the full params JSON —
 `run_metadata.json` is the file to consult for that, not `results.json`.
 
-**Code version of a campaign (KI-48, 2026-11-12; convention extended by ADR 0017, ADR 0018 and ADR 0019, 2026-11-15).** Every Colab session
+**Code version of a campaign (KI-48, 2026-11-12; convention extended by ADR 0017, ADR 0018 and ADR 0019, 2026-11-15, and ADR 0020, 2026-11-16).** Every Colab session
 checks out the campaign's tag detached; `campaign verify` lists the distinct `git_commit` values of the OK leaves and
 more than one is a WARN. A later part of the same campaign may run under a new tag only when nothing a
 `tools/trainer.py` run executes changed between the tags (checked with `git diff --stat <old tag> -- dalmax/ tools/`
@@ -205,6 +205,15 @@ an end-to-end micro run with and without the explicit `"none"`; the pinned ident
 Only the 27 `kmh_norm` runs use the key and the tag (account A); account B finishes `kmh_wide` with v4 and never
 switches tags in the middle of a part. Account A's `part_1_gpu` then lists three commits (v2, v3, v5) and the merged
 verify up to four (v2, v3, v4, v5), each explained. Any further exception needs the same evidence and its own ADR.
+`campaign-fixed-v6` (ADR 0020) is again config-only relative to v5 (`git diff --stat campaign-fixed-v5 -- dalmax/
+tools/ pyproject.toml poetry.lock` lists `dalmax/campaign.py` only: part names, the seed-aware redundancy check and
+pilot candidates, none of which a trainer run executes); only account B uses it, for the 36 `descriptors_nq` /
+`seeds_ext` leaves, so account B's `part_2_gpu` lists three commits (v2, v4, v6) and the merged verify up to five
+(v2-v6), each explained. **Seeds beyond 1-3 (ADR 0020):** a group may run seeds other than the manifest's default
+`[1, 2, 3]` (the `seeds_ext` groups run `[4, 5, 6]`); the same computation on disjoint seeds is not a duplicate, and
+the seed audit compares each seed's runs among themselves, so every run of seed 4 must start from the same initial
+labeled images exactly as for seeds 1-3. Seeds 4-6 results are reported in their own table, never merged into a
+seeds-1-3 row.
 
 Original text (pre-Phase-2): **Not currently implemented.** `demo.py` (historical) logs the full `args` and the
 selected dataset's `params` block to `log-dalmax.log` via
