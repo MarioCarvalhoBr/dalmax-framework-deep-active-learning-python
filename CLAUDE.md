@@ -125,7 +125,7 @@ This is a **standing instruction** — it counts as the user having asked for
 subagent use every time, no need to re-confirm. Full policy:
 [`.claude/rules/model-delegation.md`](.claude/rules/model-delegation.md).
 Agent roles: [`.claude/agents/`](.claude/agents/) (`code-reviewer`, `implementer`,
-`mechanic`, `experiment-auditor`, `spec-keeper`, `paper-liaison`, `visual-analyst`).
+`mechanic`, `experiment-auditor`, `spec-keeper`, `paper-liaison`, `visual-analyst`, `math-verifier`).
 
 **Spec-sync obligation**: any change to behavior, CLI, params schema, strategy
 registry, or experiment protocol MUST update the corresponding `.specs/` file in

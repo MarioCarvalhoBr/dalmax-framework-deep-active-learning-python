@@ -91,6 +91,7 @@ mechanical work at `low`.
 | `spec-keeper` | `sonnet` | documentation sync from established facts |
 | `mechanic` | `haiku` | mechanical, checkable work |
 | `visual-analyst` | `opus` | owns figures: selection of example images, captions that match the picture, visual audits (2026-11-15) |
+| `math-verifier` | `opus` | checks every formula against its source, the code and itself before a version leaves (2026-11-18) |
 
 A call may override the tier upward with the Agent tool's `model` argument; never downward for
 the first four agents.
