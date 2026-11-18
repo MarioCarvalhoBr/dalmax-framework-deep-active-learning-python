@@ -88,7 +88,16 @@ distinct from "hierarchical" and matters for the ablation in
 - The paper under revision is `phd_files/Artigo_melhorias_Active_Learning_Mario.pdf`
   (LaTeX sources: `phd_files/Active_Learning_Mario/`).
 - **Implementation findings, accepted as-is (2026-11-02, author decision)**: the ResNet-50 model has no dropout (the 4 MC-dropout/BALD strategies are degenerate, KI-41) and `KMeansSampling`/`KCenterGreedy` use an untrained random embedding (KI-42); paper-1 numbers are reported as executed with disclosure, see `quality/known-issues.md`. **Reversed 2026-11-11 (ADR 0014)**: KI-41, KI-42 and KI-45 (AdversarialBIM ties) are fixed in code and the 63 affected runs are prepared as campaign parts `paper1_rerun_a`/`paper1_rerun_b` (not executed).
-- **Clean re-run prepared (2026-11-11, ADR 0016, not executed)**: the first campaign's dataset `DATA/daninhas_full` has
+- **Campaign closed (2026-11-17)**: all 615 runs of the clean re-run (ADR 0016 to 0021) are executed, merged and
+  verified (`make campaign-verify-all`: OK=615, INCOMPLETE=0, MISSING=0; six expected commits v2 to v7; seed audit PASS
+  for seeds 1-6; data-order audit PASS). Author decisions 2026-11-17/18: no further runs; the papers' headline
+  comparison at nq100 uses six seeds (RNHAL 0.8660, TexHAL 0.8311, WAAL 0.7679, KMH 0.7379, full supervision 0.8611),
+  ablations and the 20-strategy benchmark three; paper 1's KMH stays the reference-hierarchy baseline with `l2` as a
+  documented variant (confirmed on seeds 4-6 at nq50 only, ADR 0021); descriptors at nq 50/10 are a robustness
+  analysis. Per-part outcomes: ADR 0018-0021 "Outcome" sections and `.specs/experiments/campaign.md` ("Campaign
+  closed"). The "prepared, not executed" bullets below are preparation-time history; kmh_wide, kmh_norm,
+  descriptors_nq + seeds_ext and kmh_confirm are all executed.
+- **Clean re-run prepared (2026-11-11, ADR 0016; executed, see the bullet above)**: the first campaign's dataset `DATA/daninhas_full` has
   byte-identical duplicates inside and across train and test (KI-46: 171 distinct images in both splits). Author
   decision: EVERYTHING is re-run on the duplicate-free `DATA/daninhas_full_fixed` (7,230 train / 1,008 test), with the
   eight DeepAL+ strategies of ADR 0015 added to paper 1 (20 strategies + KMH x 3 budgets) and, since 2026-11-12, the

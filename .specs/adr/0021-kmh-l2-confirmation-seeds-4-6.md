@@ -1,7 +1,7 @@
 # ADR 0021: Confirm KMH with l2-normalised features on seeds 4-6, against the KMH reference, RandomSampling and WAAL (part `kmh_confirm`, account A)
 
 - **Status:** Accepted (orchestrator brief of 2026-11-16, the confirmation ADR 0019 requires; thesis pendencia P42
-  stage 3); prepared, not executed
+  stage 3); executed on account A with v7, merged and verified 2026-11-17 (Outcome section at the end)
 - **Date:** 2026-11-16
 
 ## Context
@@ -193,3 +193,19 @@ them). The paper-1 counterparts ran on account B's GPU; account A's may be anoth
   section 6i.
 - Local verify: today (account B's 36 runs and this part not merged) `make campaign-verify-all` expects OK=552,
   MISSING=63 (36 + 27); OK=615 after both merges.
+
+## Outcome (executed 2026-11-17; recorded 2026-11-18)
+
+Executed on account A with tag `campaign-fixed-v7` (27 runs), merged and verified 2026-11-17. Round 0 of `l2` is
+identical to the reference per seed. Reading by the rule fixed before any seed 4-6 result existed (final weighted F1,
+seeds 4-6, paired `l2` minus reference per seed 4 / 5 / 6):
+
+| n_query | `l2` | reference | paired differences | WAAL | Random | rule outcome |
+|---|---|---|---|---|---|---|
+| 100 | 0.8029 +- 0.0148 | 0.6837 | +0.152 / -0.038 / +0.244 | `seeds_ext` row | `seeds_ext` row | NOT confirmed |
+| 50 | 0.7394 +- 0.0179 | 0.5468 | +0.192 / +0.205 / +0.181 | 0.7859 | 0.6013 | CONFIRMED |
+| 10 | 0.4703 | 0.4302 | +0.152 / -0.041 / +0.010 | 0.6045 | 0.3919 | NOT confirmed |
+
+`l2` is therefore a documented variant, not paper 1's KMH: paper 1's KMH stays the reference-hierarchy baseline
+(author decision 2026-11-17/18). At the one size where it is confirmed it still stays below WAAL. The campaign is
+closed with this part: 615 runs, no further runs.

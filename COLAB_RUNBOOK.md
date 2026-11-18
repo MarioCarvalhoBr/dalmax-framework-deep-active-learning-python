@@ -485,6 +485,8 @@ so the features should be loaded rather than recomputed; a recompute would only 
 
 ## 6f. KMH wide-top exploration (`kmh_wide`, account B)
 
+**Executed on account B with v4, merged and verified 2026-11-16 (ADR 0018 outcome: no wide-top configuration beats the earlier KMH best or WAAL).** The text below is the original preparation record.
+
 **Prepared 2026-11-15, not executed.** ADR 0018: paper 1's KMH is below WAAL at every query size on the clean
 campaign, and the 55 executed sweep groups favour wide first levels. The new part `kmh_wide` of the KMH sweep manifest
 explores two directions: 13 groups / **39 runs** (nq 10, 50 and 100; seeds 1-3) into
@@ -539,6 +541,8 @@ the seed; it does not depend on the query size or the hierarchy, so the features
    (ADR 0018, a later part, not prepared yet).
 
 ## 6g. KMH feature post-processing (`kmh_norm`, account A)
+
+**Executed on account A with v5, merged and verified 2026-11-16 (ADR 0019 outcome; round 0 identical to the executed KMH runs).** The text below is the original preparation record.
 
 **Prepared 2026-11-15, not executed.** ADR 0019: KMH clusters the raw 2,048-d ImageNet ResNet-50 vectors with a
 Euclidean k-means; this round changes only their geometry before clustering, through the new optional params key
@@ -615,6 +619,8 @@ executes (the new step, behind the new key; with the key absent the behaviour is
 
 ## 6h. Descriptors at query sizes 50 and 10 (`descriptors_nq`, account B), and the headline comparison on seeds 4-6 (`seeds_ext`, account B)
 
+**Executed on account B with v6 on 2026-11-16, merged and verified 2026-11-16/17 (ADR 0020 outcome).** The text below is the original preparation record.
+
 **Prepared 2026-11-16, not executed.** ADR 0020, two config-only parts of the main manifest, both in `part_2_gpu`, run
 in ONE session and shipped in ONE zip:
 
@@ -688,6 +694,8 @@ executes).
    seeds for the headline comparison, three for the ablations) is the author's decision (ADR 0020).
 
 ## 6i. KMH l2 confirmed on seeds 4-6 (`kmh_confirm`, account A)
+
+**Executed on account A with v7 on 2026-11-17, merged and verified 2026-11-17 (ADR 0021 outcome). The campaign is closed: 615 runs, no further runs.** The text below is the original preparation record.
 
 **Prepared 2026-11-16, not executed.** ADR 0021: `kmh_norm` (section 6g) was executed and verified; its `l2` variant
 (chosen on the test set of seeds 1-3, fixed before any seed 4-6 result) is confirmed on the NEW seeds 4, 5, 6 against

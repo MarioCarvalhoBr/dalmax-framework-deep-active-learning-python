@@ -1,6 +1,6 @@
 # ADR 0018: Explore wider KMH hierarchies (part `kmh_wide` of the KMH sweep, account B)
 
-- **Status:** Accepted (author decision 2026-11-15); prepared, not executed
+- **Status:** Accepted (author decision 2026-11-15); executed on account B with v4, merged and verified 2026-11-16 (Outcome section at the end)
 - **Date:** 2026-11-15
 
 ## Context
@@ -145,3 +145,13 @@ reports the `kmh_wide` numbers as exploration, disclosed as selected on the test
   `"texhal_q13"` works as before. Operator steps: `COLAB_RUNBOOK.md` section 6f.
 - Follow-up after execution: record the outcome here and in `.specs/experiments/campaign.md`; if a `kmh_wide`
   configuration becomes paper 1's KMH at some query size, build the confirmation part (seeds 4-6) first.
+
+## Outcome (executed 2026-11-16; recorded 2026-11-18)
+
+Executed on account B with tag `campaign-fixed-v4` (39 runs), merged locally and verified on 2026-11-16 (the final
+`make campaign-verify-all` of 2026-11-17: OK=615, see `.specs/experiments/campaign.md`, "Campaign closed"). Reading
+(final weighted F1, mean of seeds 1-3): no wide-top configuration beats the earlier best KMH sweep configuration or
+WAAL at any query size. Best new configuration per size: nq10 `[600,10]` 0.4968; nq50 `[2400]` 0.6766; nq100
+`[1200,400,100]` 0.7508 (WAAL: 0.5793 / 0.7874 / 0.8077). The hypothesis that a wider top level closes the gap to WAAL
+is not supported. Paper 1's KMH stays the reference-hierarchy baseline (author decision 2026-11-17/18); no
+seeds 4-6 confirmation of a `kmh_wide` configuration was built, because none became paper 1's KMH.

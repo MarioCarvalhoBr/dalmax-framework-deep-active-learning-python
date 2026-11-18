@@ -1,6 +1,6 @@
 # ADR 0019: Post-process the frozen KMH features before clustering (part `kmh_norm` of the KMH sweep, account A)
 
-- **Status:** Accepted (author decision 2026-11-15); prepared, not executed
+- **Status:** Accepted (author decision 2026-11-15); executed on account A with v5, merged and verified 2026-11-16 (Outcome section at the end)
 - **Date:** 2026-11-15
 
 ## Context
@@ -196,3 +196,13 @@ images with no empty cluster and no top-up. The local tree verifies OK=486, MISS
   earlier values keep working. Operator steps: `COLAB_RUNBOOK.md` section 6g.
 - Follow-up after execution: record the outcome here and in `.specs/experiments/campaign.md`; if a variant becomes
   paper 1's KMH at some query size, it goes through the seeds 4-6 confirmation first.
+
+## Outcome (executed 2026-11-16; recorded 2026-11-18)
+
+Executed on account A with tag `campaign-fixed-v5` (27 runs), merged and verified on 2026-11-16 (552 OK at the time;
+615 OK at closure). Round 0 of every run equals the executed KMH runs of the same seed (KI-50 kept on purpose; the
+identity path tested against v4 held). Final weighted F1, mean of seeds 1-3, test set: nq100 `l2` 0.8128 +- 0.0171,
+`pca64_l2` 0.8155 +- 0.0346, `zscore` 0.7526 (reference 0.7921, WAAL 0.8077); nq50 `l2` 0.7086, `zscore` 0.5729,
+`pca64_l2` 0.5589 +- 0.3422 (one seed collapsed) (reference 0.5860, WAAL 0.7874); nq10 `pca64_l2` 0.5575, `l2` 0.4493,
+`zscore` 0.2318 (reference 0.4909, WAAL 0.5793). `l2` was the variant carried to the seeds 4-6 confirmation (ADR
+0021); the result of that confirmation is recorded there. Variants were read on the test set (disclosed).

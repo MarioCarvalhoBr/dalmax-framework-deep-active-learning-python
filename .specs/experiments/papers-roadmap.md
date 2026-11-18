@@ -111,6 +111,12 @@ locally and verified (OK=462, one commit, seed and data-order audits PASS). Auth
   the Q=[5,17] ones as history. The TexHAL row of the comparison tables of papers 2 **and 3** is `texhal/6_1/rep_q13`.
 - `Q=13` is also SSRAE's hidden size (paper 3); the papers should say so explicitly.
 
+> **Status 2026-11-17: the campaign is closed.** All parts described in the sections from "Clean campaign executed" to
+> "KMH l2 confirmed on seeds 4-6" (`texhal_q13`, `kmh_wide`, `kmh_norm`, `descriptors_nq`, `seeds_ext`, `kmh_confirm`) are
+> executed, merged and verified (615 OK; outcomes in ADR 0018-0021 and `experiments/campaign.md`). The "prepared, not
+> executed" phrases in those sections are preparation-time history. Headline comparison at nq100: six seeds; ablations
+> and the 20-strategy benchmark: three. KMH `l2` is confirmed on seeds 4-6 at nq50 only and stays a documented variant.
+
 ## Paper 1 KMH: wide-top exploration (2026-11-15, ADR 0018)
 
 On the clean campaign paper 1's KMH is below WAAL at every query size (final-round weighted F1, best KMH sweep

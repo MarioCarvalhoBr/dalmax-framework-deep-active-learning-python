@@ -8,6 +8,9 @@ comma-separated allowed, or a GPU part `part_1_gpu` | `part_2_gpu`; default `all
 runs training and never writes under `results/`. Since ADR 0016 the manifests describe the clean re-run on
 `DATA/daninhas_full_fixed`; pass both manifests: `M=files_config/campaign/manifest.json,files_config/campaign/manifest_kmh_sweep.json`.
 
+Status at closure (2026-11-17): the campaign is closed; the last `make campaign-verify-all` gave `OK=615 INCOMPLETE=0
+MISSING=0` with six expected commits (v2 to v7). Any other result is a regression to investigate.
+
 Steps:
 
 1. `poetry run python -m dalmax.campaign list --manifest $M --part <part>` -- the expected job table, the counts and

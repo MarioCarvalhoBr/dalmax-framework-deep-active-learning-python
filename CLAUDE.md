@@ -329,8 +329,23 @@ Refactor plan: [`.specs/architecture/refactor-plan.md`](.specs/architecture/refa
   Notebook: `GIT_REF` `campaign-fixed-v7` (account A only; B stays on v6 until its 36 runs are merged), `EXPECTED`
   part_1_gpu (363, 121), `ZIP_ONLY_PART = "kmh_confirm"` (27 checkpoints); account A's audit lists v2, v3, v5, v7.
   `COLAB_RUNBOOK.md` 6i.
+- **Campaign closed (2026-11-17)**: the author closed the campaign at 615 runs, no further runs. `make
+  campaign-verify-all` on 2026-11-17: `OK=615 INCOMPLETE=0 MISSING=0`, six expected commits (v2 `464a5cc` 462 leaves, v4
+  39, v6 36, v5 27, v7 27, v3 24), seed audit PASS for seeds 1-6, data-order audit PASS; `make campaign-report-all`
+  regenerated (main 22 tables, 128/128 groups; KMH sweep 13 tables, 77/77). The parts the bullets above call "prepared,
+  not executed" (`texhal_q13` v3, `kmh_wide` v4, `kmh_norm` v5, `descriptors_nq` + `seeds_ext` v6, `kmh_confirm` v7) were
+  all executed on the two Colab accounts and verified (2026-11-16/17); outcomes in ADR 0018-0021 ("Outcome" sections)
+  and `.specs/experiments/campaign.md`. Headlines: no wide top beats the earlier KMH best or WAAL; `l2` features lift KMH
+  but are confirmed on seeds 4-6 at nq50 only (NOT at nq100, nq10); six-seed nq100 comparison RNHAL 0.8660, TexHAL
+  0.8311, WAAL 0.7679, KMH 0.7379, full supervision 0.8611. Author decisions 2026-11-17/18: headline comparison at nq100
+  on six seeds, ablations and the 20-strategy benchmark on three; paper 1's KMH stays the reference-hierarchy baseline
+  with `l2` as a documented variant; descriptors at nq 50/10 are a robustness analysis. Thesis release v3.0.0
+  (2026-11-18) is written from these 615 runs.
 
-Next milestone: execute the clean re-run (`COLAB_RUNBOOK.md` section 6), then rewrite the thesis numbers from its reports; advisor review of the ablation section
+Next milestone (revised 2026-11-18): no run is outstanding (the commands and "prepared, not executed" notes above are the
+preparation-time record). What remains is the advisor's reading of the thesis and papers, and the separately outstanding
+lab-machine smoke run confirming the Phase 4 and `tools/` moves. Historical text of the previous milestone follows,
+kept for the record: execute the clean re-run (`COLAB_RUNBOOK.md` section 6), then rewrite the thesis numbers from its reports; advisor review of the ablation section
 (`paper_drafts/ablation_section.tex`, weighted-primary/macro-secondary framing still pending
 confirmation, see `.specs/experiments/ablation-study.md`), of the TexHAL `Q=17` decision (already executed and tabulated; superseded by `Q=13`, ADR 0017, whose 24-run `texhal_q13` part was executed with v3, `COLAB_RUNBOOK.md` section 6e; next to execute: the 39-run `kmh_wide` part of ADR 0018 on account B, section 6f, and the 27-run `kmh_norm` part of ADR 0019 on account A, section 6g; then the 36 runs of `descriptors_nq` + `seeds_ext` of
 ADR 0020 on account B, section 6h; then the 27 runs of `kmh_confirm` of ADR 0021 on account A, section 6i) and of the RNHAL

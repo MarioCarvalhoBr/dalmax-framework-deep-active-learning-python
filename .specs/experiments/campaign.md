@@ -13,7 +13,7 @@ by `scripts/campaign/build_manifest.py`; micro mirror `manifest_micro.json`) plu
 `manifest_kmh_sweep.json` (ADR 0012); engine `dalmax/campaign.py`; reports `dalmax/reporting/campaign_report.py`.
 
 > **Two campaigns live in this file.** The section right below ("Clean re-run on `daninhas_full_fixed`", ADR 0016) is
-> the **current** one: prepared 2026-11-11, **not executed**; the committed manifests describe it. Every section after
+> the **current** one: prepared 2026-11-11, **executed and closed 2026-11-17 (615 runs, see "Execution record" and "Campaign closed" below)**; the committed manifests describe it. Every section after
 > the "History" heading is the **first campaign** (executed 2026-09-30 to 2026-11-11 into `results/campaign/` and
 > `results/campaign_kmh/`) on `DATA/daninhas_full`, a dataset with byte-identical duplicates inside and across train
 > and test (KI-46): its numbers are kept as the historical record and are **superseded** for the papers by the clean
@@ -22,7 +22,7 @@ by `scripts/campaign/build_manifest.py`; micro mirror `manifest_micro.json`) plu
 > without the 387 `saved_model.pth` (Drive backup kept): a read-only record, `campaign verify` there would report
 > INCOMPLETE; the paths `results/campaign/` and `results/campaign_kmh/` in the sections below are the original ones.
 
-## Clean re-run on `daninhas_full_fixed` (ADR 0016; prepared 2026-11-11, not executed)
+## Clean re-run on `daninhas_full_fixed` (ADR 0016; prepared 2026-11-11, not executed; executed in full by 2026-11-17, see "Execution record")
 
 > **2026-11-15 (ADR 0017).** The 462 runs of this campaign were executed, merged locally and verified by the author
 > (`make campaign-verify-all`: OK=462, one commit `464a5cc` = tag `campaign-fixed-v2`, seed and data-order audits PASS,
@@ -49,6 +49,10 @@ by `scripts/campaign/build_manifest.py`; micro mirror `manifest_micro.json`) plu
 > played no part in choosing it, a config-only part **`kmh_confirm`** was added to the MAIN manifest, `part_1_gpu`
 > (account A), prepared, not executed (section "KMH l2 confirmed on seeds 4-6" below): 9 groups / 27 runs on seeds 4,
 > 5, 6: main 384 / 128, `part_1_gpu` 363 / 121, both manifests 615.
+>
+> **2026-11-17 (closure).** All parts above were executed, merged and verified (615 OK); the author closed the campaign
+> (no further runs). Outcome per part: "Execution record" and "Campaign closed (2026-11-17)" below. The "prepared, not
+> executed" wording in the sections that follow is the preparation-time record and is kept as history.
 
 **Why**: KI-46 (train/test leakage and duplicated test images in `DATA/daninhas_full`). Author decisions
 (2026-11-11): the new canonical dataset is `DATA/daninhas_full_fixed` (7,230 train / 1,008 test images, plus
@@ -134,7 +138,7 @@ tables `6_2_q5_17` / `6_3_q5_17`, and `comparison`; the TexHAL row of the compar
 (v2 for the 285 earlier leaves, v3 for the 24 new ones), an expected WARN; the run-affecting code is the same.
 Operator steps: `COLAB_RUNBOOK.md` section 6e.
 
-**KMH wide-top exploration (part `kmh_wide`, ADR 0018, author decision 2026-11-15; prepared, not executed).** On
+**KMH wide-top exploration (part `kmh_wide`, ADR 0018, author decision 2026-11-15; prepared, not executed; executed 2026-11-16, verified, see "Execution record").** On
 this campaign (final-round weighted F1, mean of seeds 1-3) paper 1's KMH is below WAAL at every query size: nq100
 0.7921 vs 0.8077, nq50 0.7146 (best sweep configuration, `hier_L3_ref__init_random`) vs 0.7874, nq10 0.5627
 (`hier_L1_k600`) vs 0.5793. The sweep favours a wide first level with the last level equal to the query size at
@@ -169,7 +173,7 @@ cluster (nq10 `[2400]`: 10 images from 10 of the 2,400 clusters; nq10 `[600,10]`
 of the 10 top clusters), and the wrapper returned `n_query` unique ids; repeated at 6,430 points (round 8) for the
 direction-(a) shapes, nq10 `[2400]` and nq10 `[1200,400,10]`, with the same outcome.
 
-**KMH feature post-processing (part `kmh_norm`, ADR 0019, author decision 2026-11-15; prepared, not executed).** KMH
+**KMH feature post-processing (part `kmh_norm`, ADR 0019, author decision 2026-11-15; prepared, not executed; executed 2026-11-16, verified, see "Execution record").** KMH
 feeds the raw 2,048-d pooled ImageNet vectors to a Euclidean k-means. Under the reference hierarchy at nq100, replacing
 them by another descriptor moved the score by several points (TexHAL, VCTex `Q=13`, 0.8341; RNHAL, SSRAE, 0.8608; KMH
 0.7921), while the sweep's hierarchy knobs moved it inside the seed noise. This round changes ONLY the geometry of the
@@ -253,7 +257,7 @@ and NO_DATA for seeds 4-6 (no leaf yet), data-order audit PASS, the 9 duplicate 
 `skipped=102 dry_run=33`, sweep `skipped=90`, long baselines `skipped=24 dry_run=3`); the pilot dry run SKIPs its 3
 executed leaves (`p1/RandomSampling/nq50`, `p1/VAAL/nq50`, `p1/WAAL/nq50`, seed 1).
 
-**KMH l2 confirmed on seeds 4-6 (part `kmh_confirm`, ADR 0021, 2026-11-16; prepared, not executed).** Config-only (no
+**KMH l2 confirmed on seeds 4-6 (part `kmh_confirm`, ADR 0021, 2026-11-16; prepared, not executed; executed 2026-11-17, verified, see "Execution record").** Config-only (no
 params file is new, nothing a trainer run executes changed), in the main manifest, `part_1_gpu` (account A), appended
 after `seeds_ext`, tag `campaign-fixed-v7`, operator steps `COLAB_RUNBOOK.md` section 6i.
 
@@ -547,6 +551,43 @@ section "Descriptors at query sizes 50 and 10, and the headline comparison on se
 executed on account A with tag `campaign-fixed-v5` and verified (552 OK over both manifests, recorded with ADR 0021).
 Part `kmh_confirm` (27 runs, ADR 0021): not executed; local check of 2026-11-16 in the pre-flight paragraph of section
 "KMH l2 confirmed on seeds 4-6" above.
+
+Parts executed after the paragraph above (all recorded at closure, 2026-11-17):
+
+- `kmh_wide` (39 runs, ADR 0018): executed on account B with `campaign-fixed-v4`, merged and verified 2026-11-16. No
+  wide-top configuration beats the earlier KMH best or WAAL at any query size (best new, final weighted F1, seeds 1-3:
+  nq10 `[600,10]` 0.4968; nq50 `[2400]` 0.6766; nq100 `[1200,400,100]` 0.7508).
+- `kmh_norm` (27 runs, ADR 0019): executed on account A with `campaign-fixed-v5`, merged and verified 2026-11-16; round
+  0 identical to the executed KMH runs. Seeds 1-3: nq100 `l2` 0.8128 +- 0.0171, `pca64_l2` 0.8155 +- 0.0346, `zscore`
+  0.7526 (reference 0.7921, WAAL 0.8077); nq50 `l2` 0.7086, `zscore` 0.5729, `pca64_l2` 0.5589 +- 0.3422 (one seed
+  collapsed) (reference 0.5860, WAAL 0.7874); nq10 `pca64_l2` 0.5575, `l2` 0.4493, `zscore` 0.2318 (reference 0.4909,
+  WAAL 0.5793).
+- `descriptors_nq` + `seeds_ext` (36 runs, ADR 0020): executed on account B with `campaign-fixed-v6` on 2026-11-16,
+  merged and verified 2026-11-16/17. Seeds 4-6 at nq100 (mean +- population sd): RNHAL 0.8711 +- 0.0119, TexHAL
+  0.8282 +- 0.0261, BALD 0.8354 +- 0.0420, BADGE 0.8055 +- 0.0169, WAAL 0.7282 +- 0.0660, Random 0.7569 +- 0.0268, KMH
+  reference 0.6837 +- 0.1083, full supervision 0.8548 +- 0.0175. Six seeds: RNHAL 0.8660 +- 0.0190, TexHAL 0.8311 +-
+  0.0229, BALD 0.8114 +- 0.0476, BADGE 0.7958, WAAL 0.7679 +- 0.0635, Random 0.7483, KMH 0.7379 +- 0.1035, full
+  supervision 0.8611 +- 0.0157. Descriptors at small query sizes (seeds 1-3): nq50 RNHAL 0.7775, TexHAL 0.7719 (WAAL
+  0.7874, Random 0.6455); nq10 RNHAL 0.5263, TexHAL 0.5564 (WAAL 0.5793, Random 0.4756).
+- `kmh_confirm` (27 runs, ADR 0021): executed on account A with `campaign-fixed-v7` on 2026-11-17, merged and verified
+  2026-11-17; round 0 of `l2` identical to the reference per seed. Seeds 4-6, by the pre-declared rule: nq100 `l2`
+  0.8029 +- 0.0148 vs reference 0.6837, paired differences +0.152 / -0.038 / +0.244: NOT confirmed; nq50 `l2` 0.7394
+  +- 0.0179 vs 0.5468, +0.192 / +0.205 / +0.181: CONFIRMED (WAAL 0.7859, Random 0.6013); nq10 `l2` 0.4703 vs 0.4302,
+  +0.152 / -0.041 / +0.010: NOT confirmed (WAAL 0.6045, Random 0.3919).
+
+### Campaign closed (2026-11-17)
+
+Final local check of 2026-11-17, `make campaign-verify-all` (both manifests): `Totals: OK=615 INCOMPLETE=0 MISSING=0
+(of 615 jobs)`, exit 0. Code-version audit: WARN with six commits, all expected (ADR 0017 to 0021): v2 `464a5cc` 462
+leaves, v4 `f950b30` 39, v6 `d40150d` 36, v5 `39de20f` 27, v7 `a4fcf5f` 27, v3 `49c9ffe` 24. Seed audit PASS for seeds 1,
+2, 3 (187 runs each) and 4, 5, 6 (16 runs each; `kmh_confirm` of account A and `seeds_ext` of account B compared
+together). Data-order audit PASS (615 runs, one order). `make campaign-report-all` regenerated the reports: main report
+22 tables, 128/128 groups with data; KMH sweep report 13 tables, 77/77.
+
+Author decisions 2026-11-17/18: the campaign is closed (615 runs, no further runs); the papers' headline comparison at
+nq100 uses six seeds, ablations and the 20-strategy benchmark three; paper 1's KMH stays the reference-hierarchy
+baseline with `l2` as a documented variant; descriptors at nq 50/10 are reported as a robustness analysis. Thesis
+release v3.0.0 (2026-11-18) is written from these 615 runs.
 
 ---
 

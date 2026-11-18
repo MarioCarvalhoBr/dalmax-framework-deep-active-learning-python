@@ -1,7 +1,7 @@
 # ADR 0020: Run the descriptor methods at query sizes 50 and 10, and the headline comparison on seeds 4-6 (parts `descriptors_nq` and `seeds_ext`, account B)
 
 - **Status:** Accepted (author decision 2026-11-16, thesis pendencia P36 and the three-seed review criticism);
-  prepared, not executed
+  executed on account B with v6 on 2026-11-16, merged and verified 2026-11-16/17 (Outcome section at the end)
 - **Date:** 2026-11-16
 
 ## Context
@@ -168,3 +168,19 @@ seed 4 must start from the same initial labeled images, and so on. Evidence from
   `kmh_norm` is not merged (OK=588 after it).
 - The seeds-1-3 numbers of every paper are unchanged by this ADR; any six-seed statement in the thesis is new text
   and must name both tables.
+
+## Outcome (executed 2026-11-16; recorded 2026-11-18)
+
+Executed on account B with tag `campaign-fixed-v6` (36 runs in one session), merged and verified 2026-11-16/17.
+Final weighted F1 (population sd over seeds).
+
+- Seeds 4-6 at nq100: RNHAL 0.8711 +- 0.0119, TexHAL 0.8282 +- 0.0261, BALD 0.8354 +- 0.0420, BADGE 0.8055 +- 0.0169,
+  WAAL 0.7282 +- 0.0660, Random 0.7569 +- 0.0268, KMH reference 0.6837 +- 0.1083, full supervision 0.8548 +- 0.0175.
+- Six seeds (1-6) at nq100: RNHAL 0.8660 +- 0.0190, TexHAL 0.8311 +- 0.0229, BALD 0.8114 +- 0.0476, BADGE 0.7958, WAAL
+  0.7679 +- 0.0635, Random 0.7483, KMH 0.7379 +- 0.1035, full supervision 0.8611 +- 0.0157.
+- Descriptors at small query sizes (seeds 1-3): nq50 RNHAL 0.7775, TexHAL 0.7719 (WAAL 0.7874, Random 0.6455); nq10
+  RNHAL 0.5263, TexHAL 0.5564 (WAAL 0.5793, Random 0.4756).
+
+Author decisions 2026-11-17/18: the papers' headline comparison at nq100 uses six seeds, while ablations and the
+20-strategy benchmark keep three; the nq50/nq10 descriptor runs are reported as a robustness analysis. The seeds-1-3
+numbers of every table are unchanged; six-seed statements name both tables.
